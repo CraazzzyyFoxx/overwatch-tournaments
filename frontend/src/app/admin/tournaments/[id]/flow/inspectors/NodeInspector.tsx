@@ -9,16 +9,20 @@ import { Input } from "@/components/ui/input";
 import { STAGE_TYPE_LABELS } from "@/lib/bracket/projection";
 import { isLifecycle } from "@/lib/flow/kinds";
 import type { DraftNode } from "@/lib/flow/flowDraft";
+import type { FlowRead } from "@/types/flow.types";
 import type { Tournament } from "@/types/tournament.types";
 
 import { FormationInspector, FormationMode, RegistrationInspector, StageInspector } from "./LifecycleInspectors";
 import { Field, SelectField } from "./fields";
+import { PureInspector } from "./PureInspectors";
 
 type Patch = Partial<Pick<DraftNode, "name" | "config" | "x" | "y" | "stage">>;
 
 type Props = Readonly<{
   tournamentId: number;
   tournament: Tournament;
+  /** The admin flow read (results and participants for the pure nodes' previews). */
+  read: FlowRead;
   node: DraftNode;
   /** The graph has unsaved edits: the embedded forms save on their own, so they wait. */
   dirty: boolean;
@@ -28,7 +32,7 @@ type Props = Readonly<{
 }>;
 
 /** The side panel of the selected node: its name, then the screens of its kind. */
-export function NodeInspector({ tournamentId, tournament, node, dirty, readOnly, onChange, onClose }: Props) {
+export function NodeInspector({ tournamentId, tournament, read, node, dirty, readOnly, onChange, onClose }: Props) {
   const t = useTranslations("adminTournament.flow.inspector");
   const tKind = useTranslations("common.flow.kind");
   const tStatus = useTranslations("common.flow.status");
@@ -37,39 +41,39 @@ export function NodeInspector({ tournamentId, tournament, node, dirty, readOnly,
   const rename = (name: string) => onChange({ name, ...(node.stage ? { stage: { ...node.stage, name } } : {}) });
 
   let body = null;
-  if (isLifecycle(node.kind)) {
-    if (node.id === null) {
-      body = (
-        <>
-          {node.stage ? (
-            <SelectField
-              label={t("stageType")}
-              value={node.stage.stage_type}
-              options={Object.keys(STAGE_TYPE_LABELS).map((type) => [type, tType(type as never)] as const)}
-              disabled={readOnly}
-              onChange={(stage_type) => onChange({ stage: { ...node.stage!, stage_type } as NonNullable<DraftNode["stage"]> })}
-            />
-          ) : null}
-          <p className="text-caption text-muted-foreground">{t("saveFirst")}</p>
-        </>
-      );
-    } else if (saved) {
-      const mode = String(node.config.mode ?? "manual");
-      body = (
-        <>
-          {node.kind === "formation" ? <FormationMode node={node} readOnly={readOnly} onChange={onChange} /> : null}
-          {dirty ? (
-            <p className="text-caption text-muted-foreground">{t("saveOrDiscard")}</p>
-          ) : node.kind === "registration" ? (
-            <RegistrationInspector tournamentId={tournamentId} tournament={tournament} saved={saved} readOnly={readOnly} />
-          ) : node.kind === "formation" ? (
-            <FormationInspector tournamentId={tournamentId} tournament={tournament} saved={saved} readOnly={readOnly} mode={mode} />
-          ) : (
-            <StageInspector tournamentId={tournamentId} node={node} onClose={onClose} />
-          )}
-        </>
-      );
-    }
+  if (!isLifecycle(node.kind)) {
+    body = <PureInspector node={node} read={read} readOnly={readOnly} onChange={onChange} />;
+  } else if (node.id === null) {
+    body = (
+      <>
+        {node.stage ? (
+          <SelectField
+            label={t("stageType")}
+            value={node.stage.stage_type}
+            options={Object.keys(STAGE_TYPE_LABELS).map((type) => [type, tType(type as never)] as const)}
+            disabled={readOnly}
+            onChange={(stage_type) => onChange({ stage: { ...node.stage!, stage_type } as NonNullable<DraftNode["stage"]> })}
+          />
+        ) : null}
+        <p className="text-caption text-muted-foreground">{t("saveFirst")}</p>
+      </>
+    );
+  } else if (saved) {
+    const mode = String(node.config.mode ?? "manual");
+    body = (
+      <>
+        {node.kind === "formation" ? <FormationMode node={node} readOnly={readOnly} onChange={onChange} /> : null}
+        {dirty ? (
+          <p className="text-caption text-muted-foreground">{t("saveOrDiscard")}</p>
+        ) : node.kind === "registration" ? (
+          <RegistrationInspector tournamentId={tournamentId} tournament={tournament} saved={saved} readOnly={readOnly} />
+        ) : node.kind === "formation" ? (
+          <FormationInspector tournamentId={tournamentId} tournament={tournament} saved={saved} readOnly={readOnly} mode={mode} />
+        ) : (
+          <StageInspector tournamentId={tournamentId} node={node} onClose={onClose} />
+        )}
+      </>
+    );
   }
 
   return (

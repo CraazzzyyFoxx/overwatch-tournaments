@@ -11009,6 +11009,59 @@
           "registered": "Заявленные команды",
           "manual": "Вручную"
         }
+      },
+      "pure": {
+        "mode": "Режим",
+        "keep": "Сколько оставить",
+        "upper": "Верхняя сетка в группе",
+        "from": "С места",
+        "to": "По место",
+        "status": "Статус",
+        "qualified": "Прошли",
+        "eliminated": "Выбыли",
+        "filterModes": {
+          "top": "Топ N",
+          "range": "Диапазон",
+          "per_item_top": "Топ N из группы",
+          "swiss_status": "Статус в швейцарке",
+          "manual": "Ручной выбор"
+        },
+        "mergeHint": "Входы идут в порядке рёбер; повторы после первого отбрасываются.",
+        "buckets": "Корзины",
+        "bucketName": "Название корзины",
+        "bucketSize": "Размер корзины",
+        "rest": "Остальные",
+        "removeBucket": "Удалить корзину",
+        "addBucket": "Добавить корзину",
+        "bucketDefault": "Корзина {n}",
+        "serpentine": "Змейкой",
+        "unit": "Единица",
+        "score": "Очки",
+        "scores": {
+          "stage_points": "Очки стадии",
+          "placement_table": "Очки по местам",
+          "formula": "Формула"
+        },
+        "place": "Место",
+        "points": "Очки",
+        "removePlace": "Удалить место {place}",
+        "addPlace": "Добавить место",
+        "formula": "Формула",
+        "variables": "Переменные: {list}",
+        "aggregateModes": {
+          "sumAll": "Сумма всех",
+          "lastN": "Последние N",
+          "bestN": "Лучшие N",
+          "average": "Среднее"
+        },
+        "count": "Количество",
+        "preview": "Предпросмотр",
+        "previewTentative": "Предпросмотр (предварительно)",
+        "pins": "Закрепления",
+        "participant": "Участник",
+        "position": "Позиция",
+        "removePin": "Убрать закрепление",
+        "addPin": "Добавить закрепление"
       }
     }
   },

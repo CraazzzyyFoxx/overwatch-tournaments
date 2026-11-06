@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
+import { starterRead } from "@/lib/flow/fixtures";
 import type { DraftNode } from "@/lib/flow/flowDraft";
 
 import { NodeInspector } from "./NodeInspector";
@@ -44,7 +45,7 @@ async function render(n: DraftNode, dirty = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={en}>
-        <NodeInspector tournamentId={7} tournament={tournament} node={n} dirty={dirty} readOnly={false} onChange={vi.fn()} onClose={vi.fn()} />
+        <NodeInspector tournamentId={7} tournament={tournament} read={starterRead()} node={n} dirty={dirty} readOnly={false} onChange={vi.fn()} onClose={vi.fn()} />
       </NextIntlClientProvider>
     );
   });

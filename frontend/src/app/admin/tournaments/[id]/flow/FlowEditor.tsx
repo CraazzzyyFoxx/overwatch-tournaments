@@ -143,6 +143,7 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
             key={selected.key}
             tournamentId={tournamentId}
             tournament={tournament}
+            read={read}
             node={selected}
             dirty={dirty}
             readOnly={readOnly}

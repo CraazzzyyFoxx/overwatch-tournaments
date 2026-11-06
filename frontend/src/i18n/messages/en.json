@@ -11009,6 +11009,59 @@
           "registered": "Registered teams",
           "manual": "Manual"
         }
+      },
+      "pure": {
+        "mode": "Mode",
+        "keep": "Participants to keep",
+        "upper": "Upper bracket per group",
+        "from": "From",
+        "to": "To",
+        "status": "Status",
+        "qualified": "Qualified",
+        "eliminated": "Eliminated",
+        "filterModes": {
+          "top": "Top N",
+          "range": "Range",
+          "per_item_top": "Top N per group",
+          "swiss_status": "Swiss status",
+          "manual": "Manual pick"
+        },
+        "mergeHint": "Inputs keep edge order; later duplicates drop.",
+        "buckets": "Buckets",
+        "bucketName": "Bucket name",
+        "bucketSize": "Bucket size",
+        "rest": "Rest",
+        "removeBucket": "Remove bucket",
+        "addBucket": "Add bucket",
+        "bucketDefault": "Bucket {n}",
+        "serpentine": "Snake order",
+        "unit": "Unit",
+        "score": "Score",
+        "scores": {
+          "stage_points": "Stage points",
+          "placement_table": "Points by place",
+          "formula": "Formula"
+        },
+        "place": "Place",
+        "points": "Points",
+        "removePlace": "Remove place {place}",
+        "addPlace": "Add place",
+        "formula": "Formula",
+        "variables": "Variables: {list}",
+        "aggregateModes": {
+          "sumAll": "Sum of all",
+          "lastN": "Last N",
+          "bestN": "Best N",
+          "average": "Average"
+        },
+        "count": "Count",
+        "preview": "Preview",
+        "previewTentative": "Preview (tentative)",
+        "pins": "Pins",
+        "participant": "Participant",
+        "position": "Position",
+        "removePin": "Remove pin",
+        "addPin": "Add pin"
       }
     }
   },
