@@ -29843,6 +29843,8 @@ export interface components {
         /** FlowIssueRead */
         "tournament.FlowIssueRead": {
             /** Code */
+         *
+         *     A new ``stage`` node carries ``stage``: the save creates its Stage with it.
             code: string;
             /**
              * Edge Id
@@ -29875,6 +29877,8 @@ export interface components {
          * @description A node's whole schedule; replaces the stored one.
          */
         "tournament.FlowNodeScheduleSet": {
+            /** @default null */
+            stage: components["schemas"]["tournament.StageCreate"] | null;
             /** Schedule */
             schedule: components["schemas"]["tournament.FlowNodeScheduleEntry"][];
         };

@@ -50146,7 +50146,7 @@
       "type": "object"
     },
     "tournament.FlowNodeUpsert": {
-      "description": "Create (``ref`` set, ``id`` unset) or update (``id`` set) one node. ``stage_id`` only matters for a new node.",
+      "description": "Create (``ref`` set, ``id`` unset) or update (``id`` set) one node. ``stage_id`` only matters for a new node.\n\nA new ``stage`` node carries ``stage``: the save creates its Stage with it.",
       "properties": {
         "config": {
           "additionalProperties": true,
@@ -50182,6 +50182,17 @@
           "default": 0.0,
           "title": "Position Y",
           "type": "number"
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.StageCreate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "ref": {
           "anyOf": [

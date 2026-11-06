@@ -6,8 +6,10 @@ from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from shared.core.enums import FlowNodeKind, FlowNodeStatus, FlowResultState, FlowUnit
+from src.schemas.admin.stage import StageCreate
 
 __all__ = (
     "AdminFlowRead",
@@ -136,7 +138,10 @@ class TournamentFlowNodeRead(BaseModel):
 
 
 class FlowNodeUpsert(BaseModel):
-    """Create (``ref`` set, ``id`` unset) or update (``id`` set) one node. ``stage_id`` only matters for a new node."""
+    """Create (``ref`` set, ``id`` unset) or update (``id`` set) one node. ``stage_id`` only matters for a new node.
+
+    A new ``stage`` node carries ``stage``: the save creates its Stage with it.
+    """
 
     id: int | None = None
     ref: str | None = None
@@ -144,6 +149,7 @@ class FlowNodeUpsert(BaseModel):
     name: str
     config: dict[str, Any] = {}
     stage_id: int | None = None
+    stage: StageCreate | None = None
     position_x: float = 0.0
     position_y: float = 0.0
 
@@ -151,6 +157,14 @@ class FlowNodeUpsert(BaseModel):
     def _id_xor_ref(self) -> FlowNodeUpsert:
         if (self.id is None) == (self.ref is None):
             raise ValueError("exactly one of id and ref must be set")
+        return self
+
+    @model_validator(mode="after")
+    def _stage_payload_on_new_stage_node(self) -> FlowNodeUpsert:
+        if self.stage is not None and not (
+            self.kind == FlowNodeKind.STAGE and self.id is None and self.stage_id is None
+        ):
+            raise PydanticCustomError("flow_node_stage_misplaced", "A stage payload belongs to a new stage node only")
         return self
 
 

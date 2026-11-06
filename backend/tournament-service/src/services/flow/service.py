@@ -23,6 +23,7 @@ from shared.models.tournament.stage import Stage
 from shared.services.flow_queries import downstream_lifecycle_started
 from shared.services.realtime import Resource
 from src.schemas import flow as flow_schemas
+from src.services.admin.stage import stage_service
 from src.services.flow.engine import flow_engine
 from src.services.flow.lifecycle import flow_node_service
 from src.services.tournament.events import publish_tournament_invalidation
@@ -167,9 +168,7 @@ class FlowService:
 
         nodes = {n.id: n for n in stored_nodes if n.id not in deleted}
         for node_id in sorted(deleted):
-            if stored[node_id].kind == FlowNodeKind.STAGE:
-                error("stage_node_managed_by_stage", "A stage node is deleted with its stage", node_id)
-            elif await frozen(node_id):
+            if await frozen(node_id):
                 error("node_frozen", "A started node, or one feeding a started node, cannot be deleted", node_id)
 
         new_node_ids, ref_ids, upserted = count(-1, -1), {}, set()
@@ -179,7 +178,10 @@ class FlowService:
                 ref_ids[u.ref] = node_id
                 spec = FlowNodeSpec(node_id, u.kind, u.config, u.stage_id, None)
                 if u.kind == FlowNodeKind.STAGE:
-                    error("stage_node_managed_by_stage", "A stage node is created with its stage", node_id)
+                    if u.stage is None:
+                        error("stage_node_managed_by_stage", "A stage node is created with its stage", node_id)
+                    else:  # An unsaved stage node names itself as its stage, like any unsaved id (P2/P3).
+                        spec = FlowNodeSpec(node_id, u.kind, u.config, node_id, u.stage.stage_type)
             else:
                 old = stored[u.id]
                 node_id = u.id
@@ -279,7 +281,10 @@ class FlowService:
                 if u.id is None or axis in u.model_fields_set:
                     fields[axis] = getattr(u, axis)
             if u.id is None:
-                created.append(FlowNode(tournament_id=tournament_id, stage_id=u.stage_id, **fields))
+                stage_id = u.stage_id
+                if u.stage is not None:
+                    stage_id = (await stage_service._create_stage_record(session, tournament_id, u.stage)).id  # noqa: SLF001
+                created.append(FlowNode(tournament_id=tournament_id, stage_id=stage_id, **fields))
             else:
                 row = node_rows[u.id]
                 if row.kind == u.kind.value:
@@ -306,6 +311,9 @@ class FlowService:
                     setattr(edge_rows[u.id], name, value)
         await session.flush()
         # Last, so an edge the request re-points has left the deleted node before the cascade.
+        for node_id in changes.delete_node_ids:
+            if node_rows[node_id].kind == FlowNodeKind.STAGE:  # the node row goes with its stage
+                await stage_service._delete_stage_record(session, node_rows[node_id].stage_id)  # noqa: SLF001
         await session.execute(sa.delete(FlowNode).where(FlowNode.id.in_(changes.delete_node_ids)))
 
         await flow_engine.recompute(session, tournament_id)
