@@ -10952,6 +10952,7 @@
       "canvasLabel": "Tournament flow",
       "toolbar": {
         "presets": "Presets",
+        "arrange": "Arrange",
         "save": "Save flow",
         "discard": "Discard",
         "unsaved": "Unsaved changes"

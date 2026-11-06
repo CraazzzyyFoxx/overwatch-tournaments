@@ -10,6 +10,7 @@ import { FLOW_NODE_PARAM } from "@/hooks/useFlowNodeParam";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { toCanvas } from "@/lib/flow/flowCanvas";
+import { arrangeDraft } from "@/lib/flow/autoLayout";
 import { addNode, assignStageOrders, connect, deletedLifecycleNodes, removeEdge, removeNode, updateNode, canDelete } from "@/lib/flow/flowDraft";
 import { applyPreset, hasOnlyStarterNodes, type PresetLabels } from "@/lib/flow/presets";
 import type { FlowNodeKind, FlowStageCreate } from "@/types/flow.types";
@@ -98,6 +99,11 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
         {canUpdate && hasOnlyStarterNodes(read) && !dirty ? (
           <Button type="button" variant="outline" onClick={() => setPresetsOpen(true)}>
             {t("toolbar.presets")}
+          </Button>
+        ) : null}
+        {canUpdate ? (
+          <Button type="button" variant="outline" disabled={editor.saving} onClick={() => apply(arrangeDraft)}>
+            {t("toolbar.arrange")}
           </Button>
         ) : null}
         {canUpdate && dirty ? (
