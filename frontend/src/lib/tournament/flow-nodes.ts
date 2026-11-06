@@ -17,14 +17,27 @@ export function draftFormationNode(
 }
 
 /**
- * The registration node the public site's single register button is bound to: the first one `open`, else the first in
- * `check_in`, else the latest non-`draft` one, else none.
+ * The registration node whose entries a formation screen lists as its pool: the newest of the formation's upstream
+ * registration nodes (`pool_registration_node_ids`, newest first), whose entry decides per member (Decision 9). `null`
+ * for no formation, or a formation no registration feeds.
+ */
+export function poolRegistrationNodeId(formation: Pick<TournamentFlowNode, "pool_registration_node_ids"> | null | undefined): number | null {
+  return formation?.pool_registration_node_ids[0] ?? null;
+}
+
+/**
+ * The registration node the public site's single register button is bound to: the node in `check_in` where the viewer
+ * already has an entry (`entryNodeIds`, so a Day 1 entrant can still check in while Day 2 is `open`), else the first one
+ * `open`, else the first in `check_in`, else the latest non-`draft` one, else none. A viewer with no entry is offered the
+ * `open` intake first: a check-in has nothing for them to confirm.
  */
 export function currentRegistrationNode(
-  tournament: Pick<Tournament, "flow_nodes"> | null | undefined
+  tournament: Pick<Tournament, "flow_nodes"> | null | undefined,
+  entryNodeIds: readonly number[] = []
 ): TournamentFlowNode | null {
   const nodes = nodesOfKind(tournament, "registration");
   return (
+    nodes.find((node) => node.status === "check_in" && entryNodeIds.includes(node.id)) ??
     nodes.find((node) => node.status === "open") ??
     nodes.find((node) => node.status === "check_in") ??
     [...nodes].reverse().find((node) => node.status !== "draft") ??

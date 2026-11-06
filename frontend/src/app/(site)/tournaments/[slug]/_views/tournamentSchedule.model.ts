@@ -27,7 +27,7 @@ export type PhaseSegment = {
   kind: ScheduledKind;
   phase: FlowNodeScheduleEntry["phase"];
   nodeName: string;
-  /** The tournament has several registration nodes, so a registration phase must name its node. */
+  /** The tournament has several nodes of this kind, so the phase must name its node. */
   nodeNamed: boolean;
   /**
    * Derived from the node's status, NEVER from `now` vs `startsAt`. A
@@ -66,10 +66,21 @@ export type PhaseSegment = {
   windowClosed: boolean;
 };
 
-/** The status word a registration phase is named by (`common.statusBadge`); formation and stage phases are named by their node. */
-export function phaseStatusWord(segment: Pick<PhaseSegment, "kind" | "phase">): "registration" | "check_in" | null {
+/**
+ * The i18n key a phase is titled by: the status word for a registration phase, the kind label for a formation (a lone
+ * default node's name is English data, so it never prints); null where the node's own name titles the phase — a stage,
+ * which carries the organizer's stage name, or one of several formations.
+ */
+export function phaseTitleKey(
+  segment: Pick<PhaseSegment, "kind" | "phase" | "nodeNamed">
+):
+  | "common.statusBadge.registration"
+  | "common.statusBadge.check_in"
+  | "tournamentDetail.publicPages.schedule.formation"
+  | null {
+  if (segment.kind === "formation") return segment.nodeNamed ? null : "tournamentDetail.publicPages.schedule.formation";
   if (segment.kind !== "registration") return null;
-  return segment.phase === "open" ? "registration" : "check_in";
+  return segment.phase === "open" ? "common.statusBadge.registration" : "common.statusBadge.check_in";
 }
 
 export type TournamentScheduleModel = {
@@ -127,9 +138,11 @@ export function buildTournamentSchedule({
   tournament,
   now
 }: ScheduleInput): TournamentScheduleModel {
-  const nodeNamed = nodesOfKind(tournament, "registration").length > 1;
   const segments = (["registration", "formation", "stage"] as const)
-    .flatMap((kind) => nodesOfKind(tournament, kind).flatMap((node) => segmentsOf(node, nodeNamed)))
+    .flatMap((kind) => {
+      const nodes = nodesOfKind(tournament, kind);
+      return nodes.flatMap((node) => segmentsOf(node, nodes.length > 1));
+    })
     .sort((left, right) => (epoch(left.startsAt) ?? 0) - (epoch(right.startsAt) ?? 0));
 
   const current = segments.find((segment) => segment.state === "current");
@@ -165,7 +178,7 @@ export function buildTournamentSchedule({
   return { segments, automationOff: !tournament.auto_transitions_enabled };
 }
 
-export type NextPhaseBoundary = Pick<PhaseSegment, "kind" | "phase" | "nodeName"> & {
+export type NextPhaseBoundary = Pick<PhaseSegment, "kind" | "phase" | "nodeName" | "nodeNamed"> & {
   /** ISO-8601 instant of the boundary. */
   at: string;
   /** Whether the boundary opens the phase or closes its action window. */
@@ -189,6 +202,7 @@ export function nextPhaseBoundary(input: ScheduleInput): NextPhaseBoundary | nul
     kind: carrier.kind,
     phase: carrier.phase,
     nodeName: carrier.nodeName,
+    nodeNamed: carrier.nodeNamed,
     at,
     boundary: carrier.countdownTo,
     msLeft: carrier.countdownMs

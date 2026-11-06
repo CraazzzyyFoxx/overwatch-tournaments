@@ -9,7 +9,7 @@ import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { cn } from "@/lib/utils";
 import type { Tournament } from "@/types/tournament.types";
 
-import { buildTournamentSchedule, phaseStatusWord, type PhaseSegment } from "../_views/tournamentSchedule.model";
+import { buildTournamentSchedule, phaseTitleKey, type PhaseSegment } from "../_views/tournamentSchedule.model";
 
 export type PhaseTimelineProps = {
   tournament: Pick<Tournament, "flow_nodes" | "auto_transitions_enabled">;
@@ -74,11 +74,11 @@ export function PhaseTimeline({
 
   const isNow = (segment: PhaseSegment) => segment.state === "current" && !segment.windowClosed;
   const label = (segment: PhaseSegment) => {
-    const word = phaseStatusWord(segment);
+    const key = phaseTitleKey(segment);
     return (
     <>
-      {word ? t(`common.statusBadge.${word}`) : segment.nodeName}
-      {word && segment.nodeNamed ? <Eyebrow className="ml-1.5">{segment.nodeName}</Eyebrow> : null}
+      {key ? t(key) : segment.nodeName}
+      {key && segment.nodeNamed ? <Eyebrow className="ml-1.5">{segment.nodeName}</Eyebrow> : null}
       {segment.windowClosed ? (
         <Eyebrow className="ml-1.5">{t("tournamentDetail.publicPages.schedule.closed")}</Eyebrow>
       ) : null}

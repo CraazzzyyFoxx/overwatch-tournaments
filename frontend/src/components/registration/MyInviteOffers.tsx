@@ -10,10 +10,10 @@ import { Eyebrow } from "@/components/ui/eyebrow";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
+import { useViewerRegistrationNode } from "@/hooks/useViewerRegistrationNode";
 import { notify } from "@/lib/notify";
 import { showsRoles } from "@/lib/roster/ontology";
 import { translateRegistrationTeamError } from "@/lib/registration/team-errors";
-import { currentRegistrationNode } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import registrationTeamService from "@/services/registration-team.service";
 import type { RegistrationTeamInviteOffer } from "@/types/registration-team.types";
@@ -43,7 +43,7 @@ export default function MyInviteOffers({ tournament }: Readonly<{ tournament: To
   // Same derivation MyTeamSection uses: the hook exposes a status, not a boolean,
   // and `authenticated` alone can still carry an undefined profile.
   const isAuthenticated = authStatus === "authenticated" && user != null;
-  const registrationNodeId = currentRegistrationNode(tournament)?.id ?? null;
+  const registrationNodeId = useViewerRegistrationNode(tournament)?.id ?? null;
 
   const offersQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationMyInvites(tournament.workspace_id, tournament.id, registrationNodeId ?? 0),

@@ -8,6 +8,7 @@ import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialo
 import { Button } from "@/components/ui/button";
 import { WizardShell, type WizardStep } from "@/components/kit/WizardShell";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
+import { useFlowErrorNotifier } from "@/hooks/useFlowErrorNotifier";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { notify } from "@/lib/notify";
 import type { RosterShape } from "@/lib/roster/shape";
@@ -81,6 +82,7 @@ export function DraftSetupWizard({
 }: Readonly<DraftSetupWizardProps>) {
   const t = useTranslations("draftAdmin");
   const queryClient = useQueryClient();
+  const notifyFlowError = useFlowErrorNotifier();
   const boardKey = tournamentQueryKeys.draftBoard(tournamentId, formationNodeId);
   const initialSession = board?.session ?? null;
   const [localSession, setLocalSession] = useState<DraftSession | null>(initialSession);
@@ -308,7 +310,7 @@ export function DraftSetupWizard({
       notify.success(t("draftSeeded"));
       await invalidate();
     },
-    onError: (error) => notify.apiError(error, { title: t("seedFailed") })
+    onError: (error) => notifyFlowError(error, t("seedFailed"))
   });
 
   const startMutation = useMutation({
@@ -318,7 +320,7 @@ export function DraftSetupWizard({
       notify.success(t("draftStarted"));
       await invalidate();
     },
-    onError: (error) => notify.apiError(error, { title: t("startFailed") })
+    onError: (error) => notifyFlowError(error, t("startFailed"))
   });
 
   const cancelMutation = useMutation({

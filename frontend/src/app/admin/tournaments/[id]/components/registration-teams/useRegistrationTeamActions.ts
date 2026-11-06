@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
+import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";
 import { notify } from "@/lib/notify";
 import { translateRegistrationTeamError } from "@/lib/registration/team-errors";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
@@ -135,8 +136,9 @@ export function useRegistrationTeamActions({
     invalidateRegistrationTeams(queryClient, workspaceId, tournamentId, registrationNodeId);
   };
 
+  const flowMessage = useFlowErrorMessage();
   const reportError = (error: unknown) =>
-    setActionError(translateRegistrationTeamError(tErr, error, t("admin.actionFailed")));
+    setActionError(flowMessage(error) ?? translateRegistrationTeamError(tErr, error, t("admin.actionFailed")));
 
   const rejectMutation = useMutation({
     mutationFn: (input: { teamId: number; withdrawMembers: boolean; reason: string }) =>

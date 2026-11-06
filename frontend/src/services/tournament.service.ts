@@ -109,6 +109,8 @@ export default class tournamentService {
   static async listTournaments(
     params: TournamentFilterParams & {
       workspaceId?: number | "all" | null;
+      /** Only tournaments with a registration node `open` or in `check_in`: the "Registration" chip. */
+      registrationOpen?: boolean;
       sort?: "start_date" | "participants_count";
       order?: "asc" | "desc";
       page?: number;
@@ -124,6 +126,7 @@ export default class tournamentService {
         sort: params.sort ?? "start_date",
         order: params.order ?? "desc",
         workspace_id: params.workspaceId,
+        registration_open: params.registrationOpen ? true : undefined,
         // `flow_nodes` lets a card say "Registration" or "Check-in" (`displayStatus`) for a tournament that is `live`.
         entities: ["stages", "participants_count", "teams_count", "flow_nodes"],
         ...tournamentFilterQuery(params)

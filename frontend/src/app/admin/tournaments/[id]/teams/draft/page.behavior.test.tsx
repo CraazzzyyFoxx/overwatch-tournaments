@@ -60,7 +60,16 @@ vi.mock("../../hubQueries", () => ({
       workspace_id: 1,
       team_formation: mocks.teamFormation,
       flow_nodes: [
-        { id: 9, kind: "formation", name: "Teams", status: "forming", config: { mode: "draft" }, schedule: [], stage_id: null },
+        {
+          id: 9,
+          kind: "formation",
+          name: "Teams",
+          status: "forming",
+          config: { mode: "draft" },
+          schedule: [],
+          stage_id: null,
+          pool_registration_node_ids: [4]
+        },
         { id: 4, kind: "registration", name: "Registration", status: "closed", config: {}, schedule: [], stage_id: null }
       ]
     },

@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { notify } from "@/lib/notify";
+import { useFlowErrorNotifier } from "@/hooks/useFlowErrorNotifier";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import draftService from "@/services/draft.service";
 import type { DraftBoard } from "@/types/draft.types";
@@ -44,6 +45,7 @@ export function LifecycleControls({
   const [confirmedAction, setConfirmedAction] = useState<ConfirmedAction | null>(null);
   const session = board.session;
   const queryClient = useQueryClient();
+  const notifyFlowError = useFlowErrorNotifier();
   const exportMutation = useMutation({
     mutationFn: () => draftService.exportDraft(tournamentId, session.id),
     onSettled: () => queryClient.invalidateQueries({
@@ -96,7 +98,7 @@ export function LifecycleControls({
     if (action === "export") {
       exportMutation.mutate(undefined, {
         onSuccess: (result) => notifyResult(result.advisories),
-        onError: (error) => notify.apiError(error)
+        onError: (error) => notifyFlowError(error)
       });
       return;
     }

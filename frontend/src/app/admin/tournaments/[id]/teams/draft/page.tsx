@@ -6,9 +6,11 @@ import { useQuery } from "@tanstack/react-query";
 
 import { FlowNodeSelect } from "@/components/kit/FlowNodeSelect";
 import { PhaseStrip } from "@/components/kit/PhaseStrip";
-import { FLOW_NODE_PARAM, REGISTRATION_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
+import { FlowNodeControls } from "@/components/tournaments/FlowNodeControls";
+import { FLOW_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
+import { nodesOfKind, poolRegistrationNodeId } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import draftService from "@/services/draft.service";
 
@@ -32,9 +34,10 @@ export default function TeamsDraftPage() {
   // permission wiring here.
   const tournamentQuery = useHubTournamentQuery(tournamentId);
   const workspaceId = tournamentQuery.data?.workspace_id ?? null;
-  const formationNodeId = useFlowNodeParam(tournamentQuery.data, "formation");
-  // The draft pool is the entries of one registration node.
-  const registrationNodeId = useFlowNodeParam(tournamentQuery.data, "registration", REGISTRATION_NODE_PARAM);
+  const formationNodeId = useFlowNodeParam(tournamentQuery.data, "formation", "draft");
+  const formationNode = nodesOfKind(tournamentQuery.data, "formation").find((node) => node.id === formationNodeId);
+  // The draft pool is what the formation takes as input: the entries of its upstream registration node.
+  const registrationNodeId = poolRegistrationNodeId(formationNode);
   const { setParams } = useQueryParams();
 
   // Same key and fetcher the dashboard mounts, so this is one request shared
@@ -64,12 +67,13 @@ export default function TeamsDraftPage() {
         value={formationNodeId}
         onChange={(nodeId) => setParams({ [FLOW_NODE_PARAM]: nodeId })}
       />
-      <FlowNodeSelect
-        tournament={tournamentQuery.data}
-        kind="registration"
-        value={registrationNodeId}
-        onChange={(nodeId) => setParams({ [REGISTRATION_NODE_PARAM]: nodeId })}
-      />
+      {formationNode && tournamentQuery.data ? (
+        <FlowNodeControls
+          tournament={tournamentQuery.data}
+          node={formationNode}
+          canUpdate={canAccessPermission("tournament.update", workspaceId)}
+        />
+      ) : null}
       {controlRoom ? null : <PhaseStrip phases={phases} />}
       {formationNodeId != null && registrationNodeId != null && (
         <DraftSessionDashboard

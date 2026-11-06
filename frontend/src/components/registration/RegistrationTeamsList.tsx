@@ -14,6 +14,7 @@ import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
+import { useViewerRegistrationNode } from "@/hooks/useViewerRegistrationNode";
 import { getRegistrationTeamStatus, REGISTRATION_TEAM_STATUS_TONE } from "@/lib/registration/team-tone";
 import { slotCodeOrder, slotRank, type RoleOntology } from "@/lib/roster/ontology";
 import type { SlotCode } from "@/lib/roster/shape";
@@ -191,13 +192,14 @@ export default function RegistrationTeamsList({
   const { status: authStatus, user } = useAuthProfile();
   const isAuthenticated = authStatus === "authenticated" && user != null;
 
-  const teamsQuery = useQuery(tournamentRegistrationTeamsQueryOptions(tournament));
+  const registrationNode = useViewerRegistrationNode(tournament);
+  const teamsQuery = useQuery(tournamentRegistrationTeamsQueryOptions(tournament, registrationNode));
   // Same query key `MyTeamSection` already uses, so this is a cache read, not a
   // second request: a captain's own team is already shown in full detail above
   // (`MyTeamPanel`), so showing it again here as a third summary of the same
   // roster and shortfall would be the exact clutter this section exists to avoid.
   const myRegQuery = useQuery({
-    ...tournamentMyRegistrationQueryOptions(tournament),
+    ...tournamentMyRegistrationQueryOptions(tournament, registrationNode),
     enabled: isAuthenticated
   });
   const myTeamId = myRegQuery.data?.team?.id ?? null;

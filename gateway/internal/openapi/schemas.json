@@ -10809,6 +10809,15 @@
           }
         },
         {
+          "name": "registration_open",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Registration Open",
+            "type": "boolean"
+          }
+        },
+        {
           "name": "discipline",
           "required": false,
           "schema": {
@@ -57428,9 +57437,12 @@
           "default": "slot",
           "enum": [
             "slot",
+            "source",
             "avg_sr",
             "total_sr",
-            "random"
+            "random",
+            "cross",
+            "snake"
           ],
           "title": "Seed Ranking",
           "type": "string"
@@ -58120,9 +58132,12 @@
           "default": "slot",
           "enum": [
             "slot",
+            "source",
             "avg_sr",
             "total_sr",
-            "random"
+            "random",
+            "cross",
+            "snake"
           ],
           "title": "Seed Ranking",
           "type": "string"
@@ -58568,9 +58583,12 @@
           "default": "slot",
           "enum": [
             "slot",
+            "source",
             "avg_sr",
             "total_sr",
-            "random"
+            "random",
+            "cross",
+            "snake"
           ],
           "title": "Seed Ranking",
           "type": "string"
@@ -58801,9 +58819,12 @@
           "default": "slot",
           "enum": [
             "slot",
+            "source",
             "avg_sr",
             "total_sr",
-            "random"
+            "random",
+            "cross",
+            "snake"
           ],
           "title": "Seed Ranking",
           "type": "string"
@@ -60897,6 +60918,10 @@
           "title": "Live",
           "type": "integer"
         },
+        "registration_open": {
+          "title": "Registration Open",
+          "type": "integer"
+        },
         "standard": {
           "title": "Standard",
           "type": "integer"
@@ -60910,6 +60935,7 @@
         "total",
         "live",
         "by_status",
+        "registration_open",
         "league",
         "standard"
       ],
@@ -60994,6 +61020,13 @@
           "title": "Name",
           "type": "string"
         },
+        "pool_registration_node_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Pool Registration Node Ids",
+          "type": "array"
+        },
         "schedule": {
           "items": {
             "$ref": "#/components/schemas/tournament.FlowNodeScheduleEntry"
@@ -61023,6 +61056,7 @@
         "status",
         "stage_id",
         "config",
+        "pool_registration_node_ids",
         "schedule"
       ],
       "title": "TournamentFlowNodeRead",
@@ -61283,6 +61317,11 @@
           "default": "",
           "title": "Query",
           "type": "string"
+        },
+        "registration_open": {
+          "default": false,
+          "title": "Registration Open",
+          "type": "boolean"
         },
         "sort": {
           "default": "id",

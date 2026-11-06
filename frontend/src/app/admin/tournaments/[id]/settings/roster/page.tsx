@@ -36,7 +36,9 @@ export default function RosterSettingsPage() {
           />
         );
         return tournament.team_formation === "registration" ? (
-          <RegistrationNodeScope tournament={tournament}>{form}</RegistrationNodeScope>
+          <RegistrationNodeScope tournament={tournament} fallback={form(null)}>
+            {form}
+          </RegistrationNodeScope>
         ) : (
           form(null)
         );

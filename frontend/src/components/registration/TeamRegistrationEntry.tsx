@@ -42,12 +42,11 @@ export default function TeamRegistrationEntry({
   const isAuthenticated = authStatus === "authenticated" && user != null;
   const [open, setOpen] = useState(false);
 
-  const registrationOpen = isSignUpOpen(
-    nodesOfKind(tournament, "registration").find((node) => node.id === registrationNodeId),
-  );
+  const registrationNode = nodesOfKind(tournament, "registration").find((node) => node.id === registrationNodeId) ?? null;
+  const registrationOpen = isSignUpOpen(registrationNode);
 
   const myRegQuery = useQuery({
-    ...tournamentMyRegistrationQueryOptions(tournament),
+    ...tournamentMyRegistrationQueryOptions(tournament, registrationNode),
     enabled: isAuthenticated,
   });
   const formQuery = useQuery({

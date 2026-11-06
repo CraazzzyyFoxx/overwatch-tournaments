@@ -287,9 +287,54 @@
       "announcement": "Announced",
       "registration": "Registration",
       "check_in": "Check-in",
+      "forming": "Starting soon",
       "live": "Live",
       "completed": "Completed",
       "archived": "Archived"
+    },
+    "flowNode": {
+      "kind": {
+        "registration": "Registration",
+        "formation": "Teams"
+      },
+      "open": "Open",
+      "checkIn": "Start check-in",
+      "close": "Close",
+      "reopen": "Reopen",
+      "startForming": "Start forming",
+      "backToDraft": "Back to draft",
+      "complete": "Complete",
+      "error": "Could not move the node",
+      "status": {
+        "draft": "Draft",
+        "open": "Open",
+        "check_in": "Check-in",
+        "closed": "Closed",
+        "forming": "Forming",
+        "completed": "Completed"
+      },
+      "confirm": {
+        "open": {
+          "title": "Open {name}?",
+          "description": "Players can sign up right away, and the community is told that registration is open."
+        },
+        "checkIn": {
+          "title": "Start check-in for {name}?",
+          "description": "Registered players are asked to confirm they are playing, and check-in is announced to the community."
+        },
+        "close": {
+          "title": "Close {name}?",
+          "description": "Players can no longer sign up or check in. Teams can be formed once registration is closed."
+        },
+        "reopen": {
+          "title": "Reopen {name}?",
+          "description": "The step returns to its previous status and its result stops being final. Reopening registration is announced to players."
+        },
+        "complete": {
+          "title": "Complete {name}?",
+          "description": "Team formation is finished and the teams are frozen. Balancing and exports stop until it is reopened."
+        }
+      }
     },
     "roles": {
       "tank": "Tank",
@@ -3635,7 +3680,8 @@
         "title": "Phase schedule",
         "startsRelative": "Starts {relative}",
         "closesRelative": "Closes {relative}",
-        "closed": "Closed"
+        "closed": "Closed",
+        "formation": "Team formation"
       },
       "standings": {
         "tableLabel": "Tournament standings. Scroll horizontally for all ranking metrics."
@@ -7595,6 +7641,19 @@
     }
   },
   "errors": {
+    "flow": {
+      "invalid_node_transition": "This move is not available from the current status.",
+      "input_not_final": "A step this one depends on is not finished yet. For example, close registration before forming teams.",
+      "downstream_started": "A later step has already started, so this one can no longer be reopened.",
+      "node_frozen": "A later step has already started, so this one can no longer be edited.",
+      "flow_invalid": "The tournament flow is not valid. Check how its steps are connected.",
+      "flow_node_not_found": "This step no longer exists. Refresh the page.",
+      "formation_not_forming": "Team formation has not been started. Press Start forming at the top of the page, then try again.",
+      "formation_has_no_teams": "There are no teams yet, so team formation cannot be completed. Export teams first.",
+      "formation_wrong_mode": "This team formation works in another mode, so this export is not available here.",
+      "qualification_not_locked": "Lock the qualification before completing this stage.",
+      "boundary_tie": "Players are tied at the qualification cut-off. Resolve the tie before continuing."
+    },
     "boundary": {
       "title": "Something went wrong",
       "description": "This section failed to load. Try again, or head back to the dashboard.",
@@ -10882,24 +10941,6 @@
     }
   },
   "adminTournaments": {
-    "nodeControls": {
-      "open": "Open",
-      "checkIn": "Start check-in",
-      "close": "Close",
-      "reopen": "Reopen",
-      "startForming": "Start forming",
-      "backToDraft": "Back to draft",
-      "complete": "Complete",
-      "error": "Could not move the node",
-      "status": {
-        "draft": "Draft",
-        "open": "Open",
-        "check_in": "Check-in",
-        "closed": "Closed",
-        "forming": "Forming",
-        "completed": "Completed"
-      }
-    },
     "list": {
       "deleted": "Tournament deleted",
       "columns": {

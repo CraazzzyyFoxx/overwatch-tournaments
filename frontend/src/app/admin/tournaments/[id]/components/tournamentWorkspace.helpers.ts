@@ -42,6 +42,7 @@ export const TOURNAMENT_STATUS_TONE: Record<TournamentDisplayStatus, Tone> = {
   announcement: "info",
   registration: "info",
   check_in: "info",
+  forming: "info",
   live: "danger",
   completed: "success",
   archived: "neutral"

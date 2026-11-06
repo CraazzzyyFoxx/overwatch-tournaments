@@ -11,17 +11,22 @@ import type { Tournament } from "@/types/tournament.types";
 
 /**
  * Scopes a settings screen to one registration node: the picker (only with several nodes), then `children` for the
- * chosen node, remounted when it changes so an unsaved edit never lands on another node. Renders nothing for a
- * tournament without a registration node.
+ * chosen node, remounted when it changes so an unsaved edit never lands on another node. A tournament without a
+ * registration node renders `fallback` (nothing by default).
  */
 export function RegistrationNodeScope({
   tournament,
+  fallback = null,
   children
-}: Readonly<{ tournament: Tournament; children: (node: TournamentFlowNode) => ReactNode }>) {
+}: Readonly<{
+  tournament: Tournament;
+  fallback?: ReactNode;
+  children: (node: TournamentFlowNode) => ReactNode;
+}>) {
   const nodeId = useFlowNodeParam(tournament, "registration");
   const { setParams } = useQueryParams();
   const node = nodesOfKind(tournament, "registration").find((candidate) => candidate.id === nodeId);
-  if (!node) return null;
+  if (!node) return fallback;
   return (
     <>
       <FlowNodeSelect

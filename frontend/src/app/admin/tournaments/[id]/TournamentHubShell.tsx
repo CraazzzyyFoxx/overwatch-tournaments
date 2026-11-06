@@ -17,7 +17,7 @@ import { useInvalidation } from "@/hooks/useInvalidation";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { displayStatus } from "@/lib/tournament/status";
-import { FlowNodeControls } from "./components/FlowNodeControls";
+import { FlowNodeControls } from "@/components/tournaments/FlowNodeControls";
 import { TournamentStatusControl } from "./components/TournamentStatusControl";
 import { TOURNAMENT_STATUS_TONE } from "./components/tournamentWorkspace.helpers";
 import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";

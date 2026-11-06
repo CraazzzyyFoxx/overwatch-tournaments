@@ -31,6 +31,16 @@ const TOURNAMENT_STATUS_META: Record<TournamentDisplayStatus, TournamentStatusMe
     isActive: true,
     isEnded: false
   },
+  // Registration is over and no stage has started: teams are forming. The tournament is `live` in the store, but to a
+  // visitor it has not started, so it takes the amber bucket instead of the rose "Live" one.
+  forming: {
+    variant: "upcoming",
+    textClassName: "text-[color:var(--aqt-amber)]",
+    badgeClassName: "text-[color:var(--aqt-amber)]",
+    dotClassName: "bg-[color:var(--aqt-amber)]",
+    isActive: true,
+    isEnded: false
+  },
   registration: {
     variant: "upcoming",
     textClassName: "text-[color:var(--aqt-amber)]",
@@ -75,16 +85,19 @@ const TOURNAMENT_STATUS_META: Record<TournamentDisplayStatus, TournamentStatusMe
 
 /**
  * The phase a surface shows (Decision 15): `registration` / `check_in` while the tournament is `live` only because a
- * registration node is open / in check-in and no stage is `live`; otherwise the tournament's status. A read without the
+ * registration node is open / in check-in and no stage is `live`; `forming` while it is `live` but no stage has started
+ * or finished and no registration is open (teams forming); otherwise the tournament's status. A read without the
  * `flow_nodes` entity shows the plain status.
  */
 export function displayStatus(tournament: Pick<Tournament, "status" | "flow_nodes">): TournamentDisplayStatus {
   if (tournament.status !== "live") return tournament.status;
-  if ((tournament.flow_nodes ?? []).some((node) => node.kind === "stage" && node.status === "live")) return "live";
+  const nodes = tournament.flow_nodes;
+  if (!nodes) return "live";
+  if (nodes.some((node) => node.kind === "stage" && (node.status === "live" || node.status === "completed"))) return "live";
   const registrations = nodesOfKind(tournament, "registration");
   if (registrations.some((node) => node.status === "open")) return "registration";
   if (registrations.some((node) => node.status === "check_in")) return "check_in";
-  return "live";
+  return "forming";
 }
 
 export function getTournamentStatusMeta(status: TournamentDisplayStatus) {
@@ -103,6 +116,7 @@ export const TOURNAMENT_STATUS_ORDER: TournamentDisplayStatus[] = [
   "live",
   "registration",
   "check_in",
+  "forming",
   "announcement",
   "completed",
   "archived"

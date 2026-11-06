@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { useViewerRegistrationNode } from "@/hooks/useViewerRegistrationNode";
 import {
-  currentRegistrationNode,
   isCheckInOpen,
   isSignUpOpen,
   registrationNodeConfig,
@@ -37,15 +37,15 @@ export default function MyTeamSection({ tournament }: Readonly<{ tournament: Tou
   // a boolean, and `authenticated` alone can still carry an undefined profile.
   const isAuthenticated = authStatus === "authenticated" && user != null;
 
-  const registrationNode = currentRegistrationNode(tournament);
+  const registrationNode = useViewerRegistrationNode(tournament);
   const open = isSignUpOpen(registrationNode);
 
   const myRegQuery = useQuery({
-    ...tournamentMyRegistrationQueryOptions(tournament),
+    ...tournamentMyRegistrationQueryOptions(tournament, registrationNode),
     enabled: isAuthenticated,
   });
   const teamsQuery = useQuery({
-    ...tournamentRegistrationTeamsQueryOptions(tournament),
+    ...tournamentRegistrationTeamsQueryOptions(tournament, registrationNode),
     enabled: isAuthenticated,
   });
 

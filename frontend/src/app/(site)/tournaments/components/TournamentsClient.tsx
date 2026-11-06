@@ -10,7 +10,7 @@ import encounterService from "@/services/encounter.service";
 import statisticsService from "@/services/statistics.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
-import { TOURNAMENT_STATUS_ORDER } from "@/lib/tournament/status";
+import { TOURNAMENT_PHASES } from "@/lib/tournament/lifecycle";
 import type { TournamentStatus } from "@/types/tournament.types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InfiniteScrollFooter } from "@/components/ui/infinite-scroll";
@@ -100,9 +100,10 @@ const TournamentsClient = ({
   const { searchParams, setParams } = useQueryParams();
 
   const statusParam = searchParams?.get("status");
+  // `registration` is not a stored status: it asks for the tournaments whose registration node is open or in check-in.
   const statusFilter: StatusFilter =
-    statusParam && (TOURNAMENT_STATUS_ORDER as string[]).includes(statusParam)
-      ? (statusParam as TournamentStatus)
+    statusParam && (["registration", ...TOURNAMENT_PHASES] as string[]).includes(statusParam)
+      ? (statusParam as StatusFilter)
       : "all";
 
   const typeParam = searchParams?.get("type");
@@ -142,7 +143,7 @@ const TournamentsClient = ({
 
   const filterQuery = {
     workspaceId,
-    status: statusFilter === "all" ? undefined : statusFilter,
+    status: statusFilter === "all" || statusFilter === "registration" ? undefined : statusFilter,
     isLeague: typeFilter === "all" ? undefined : typeFilter === "league",
     query: query || undefined,
     discipline: disciplineFilter
@@ -165,6 +166,7 @@ const TournamentsClient = ({
       tournamentService.listTournaments(
         {
           ...filterQuery,
+          registrationOpen: statusFilter === "registration",
           ...SORT_QUERY[sortBy],
           page: pageParam,
           perPage: PER_PAGE
@@ -260,7 +262,7 @@ const TournamentsClient = ({
 
       <TournamentsFilters
         total={facets?.total ?? 0}
-        statusCounts={facets?.by_status ?? NO_STATUS_COUNTS}
+        statusCounts={{ ...(facets?.by_status ?? NO_STATUS_COUNTS), registration: facets?.registration_open ?? 0 }}
         statusFilter={statusFilter}
         onStatusChange={(value) => setParams({ status: value === "all" ? null : value })}
         typeFilter={typeFilter}

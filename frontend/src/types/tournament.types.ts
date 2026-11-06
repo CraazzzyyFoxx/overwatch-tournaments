@@ -16,9 +16,10 @@ export type TournamentStatus = "announcement" | "live" | "completed" | "archived
 
 /**
  * What a surface calls the phase of a tournament: the status, except `registration` / `check_in` while the
- * tournament is `live` only because a registration node is open (`displayStatus`, `lib/tournament/status`).
+ * tournament is `live` only because a registration node is open, and `forming` while it is `live` before any stage
+ * has started (`displayStatus`, `lib/tournament/status`).
  */
-export type TournamentDisplayStatus = TournamentStatus | "registration" | "check_in";
+export type TournamentDisplayStatus = TournamentStatus | "registration" | "check_in" | "forming";
 
 /** The statuses of a stage node (`NODE_TRANSITIONS.stage`). */
 export type StageNodeStatus = "draft" | "ready" | "live" | "completed";
@@ -299,6 +300,8 @@ export interface TournamentFacets {
   total: number;
   /** Tournaments with a stage node `live`: "matches happening right now". */
   live: number;
+  /** Tournaments with a registration node `open` or in `check_in`: the "Registration" chip. */
+  registration_open: number;
   by_status: Record<TournamentStatus, number>;
   league: number;
   standard: number;

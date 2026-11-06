@@ -6,7 +6,7 @@ import type { Tournament } from "@/types/tournament.types";
 import {
   buildTournamentSchedule,
   nextPhaseBoundary,
-  phaseStatusWord
+  phaseTitleKey
 } from "./tournamentSchedule.model";
 
 const T = (hour: number, minute = 0) =>
@@ -108,9 +108,13 @@ describe("buildTournamentSchedule", () => {
       }
     );
     expect(buildTournamentSchedule({ tournament: two, now: at(9) }).segments.every((s) => s.nodeNamed)).toBe(true);
-    expect(phaseStatusWord({ kind: "registration", phase: "open" })).toBe("registration");
-    expect(phaseStatusWord({ kind: "registration", phase: "check_in" })).toBe("check_in");
-    expect(phaseStatusWord({ kind: "stage", phase: "start" })).toBeNull();
+    expect(phaseTitleKey({ kind: "registration", phase: "open", nodeNamed: false })).toBe("common.statusBadge.registration");
+    expect(phaseTitleKey({ kind: "registration", phase: "check_in", nodeNamed: true })).toBe("common.statusBadge.check_in");
+    expect(phaseTitleKey({ kind: "formation", phase: "start", nodeNamed: false })).toBe(
+      "tournamentDetail.publicPages.schedule.formation"
+    );
+    expect(phaseTitleKey({ kind: "formation", phase: "start", nodeNamed: true })).toBeNull();
+    expect(phaseTitleKey({ kind: "stage", phase: "start", nodeNamed: false })).toBeNull();
   });
 
   it("flags a current phase whose window has closed, and hands the countdown to the next", () => {
@@ -220,6 +224,7 @@ describe("nextPhaseBoundary", () => {
       kind: "registration",
       phase: "open",
       nodeName: "Registration",
+      nodeNamed: false,
       at: T(18),
       boundary: "close",
       msLeft: at(18) - at(12)
@@ -231,6 +236,7 @@ describe("nextPhaseBoundary", () => {
       kind: "registration",
       phase: "check_in",
       nodeName: "Registration",
+      nodeNamed: false,
       at: T(19),
       boundary: "start",
       msLeft: at(19) - at(18, 30)

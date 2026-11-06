@@ -148,6 +148,7 @@ function facets(over: Partial<TournamentFacets> = {}): TournamentFacets {
   return {
     total: 42,
     live: 3,
+    registration_open: 2,
     by_status: {
       live: 2,
       announcement: 5,

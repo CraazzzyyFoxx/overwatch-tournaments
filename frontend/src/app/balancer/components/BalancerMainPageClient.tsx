@@ -17,11 +17,12 @@ import { TeamDistributionPanel } from "@/app/balancer/components/TeamDistributio
 import { VariantSelector } from "@/app/balancer/components/VariantSelector";
 import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTournamentId";
 import { FlowNodeSelect } from "@/components/kit/FlowNodeSelect";
+import { FlowNodeControls } from "@/components/tournaments/FlowNodeControls";
 import {
   UnlinkedRegistrationsNotice,
   countUnlinkedRegistrations
 } from "@/components/kit/UnlinkedRegistrationsNotice";
-import { FLOW_NODE_PARAM, REGISTRATION_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
+import { FLOW_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { useBalancerJob } from "@/app/balancer/components/useBalancerJob";
 import { useBalancerMutations } from "@/app/balancer/components/useBalancerMutations";
@@ -31,7 +32,9 @@ import {
 } from "@/app/balancer/components/useBalancerRealtime";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
+import { nodesOfKind, poolRegistrationNodeId } from "@/lib/tournament/flow-nodes";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { mergeStatusOptions } from "@/lib/registration/balancer-statuses";
@@ -118,6 +121,7 @@ export function BalancerMainPageClient() {
     (state) => state.entityWorkspaceId ?? state.currentWorkspaceId
   );
   const { canAccessPermission } = usePermissions();
+  const flowErrorMessage = useFlowErrorMessage();
   const currentUserId = useAuthProfileStore((state) => state.user?.id ?? null);
   const queryClient = useQueryClient();
   const sidebarRef = useRef<BalancingPoolSidebarHandle>(null);
@@ -175,9 +179,10 @@ export function BalancerMainPageClient() {
     enabled: tournamentId !== null
   });
   // The balance, its config and every export belong to one formation node of the tournament.
-  const formationNodeId = useFlowNodeParam(tournamentQuery.data, "formation");
-  // The pool is the entries of one registration node.
-  const registrationNodeId = useFlowNodeParam(tournamentQuery.data, "registration", REGISTRATION_NODE_PARAM);
+  const formationNodeId = useFlowNodeParam(tournamentQuery.data, "formation", "balancer");
+  const formationNode = nodesOfKind(tournamentQuery.data, "formation").find((node) => node.id === formationNodeId);
+  // The pool is what the formation takes as input: the entries of its upstream registration node (Decision 9).
+  const registrationNodeId = poolRegistrationNodeId(formationNode);
   const { setParams } = useQueryParams();
 
   const registrationsQuery = useQuery({
@@ -646,11 +651,11 @@ export function BalancerMainPageClient() {
           );
         },
         onError: (error) => {
-          setTournamentExportError(getErrorMessage(error, t("errors.exportFailed")));
+          setTournamentExportError(flowErrorMessage(error) ?? getErrorMessage(error, t("errors.exportFailed")));
         }
       }
     );
-  }, [exportToTournamentMutation, handleTournamentExportStageChange, t]);
+  }, [exportToTournamentMutation, handleTournamentExportStageChange, flowErrorMessage, t]);
 
   const savedBalanceId = savedBalanceQuery.data?.id ?? null;
   const startRanksExport = useCallback(() => {
@@ -782,12 +787,13 @@ export function BalancerMainPageClient() {
         value={formationNodeId}
         onChange={(nodeId) => setParams({ [FLOW_NODE_PARAM]: nodeId })}
       />
-      <FlowNodeSelect
-        tournament={tournamentQuery.data}
-        kind="registration"
-        value={registrationNodeId}
-        onChange={(nodeId) => setParams({ [REGISTRATION_NODE_PARAM]: nodeId })}
-      />
+      {formationNode && tournamentQuery.data ? (
+        <FlowNodeControls
+          tournament={tournamentQuery.data}
+          node={formationNode}
+          canUpdate={canAccessPermission("tournament.update", workspaceId)}
+        />
+      ) : null}
       <UnlinkedRegistrationsNotice count={countUnlinkedRegistrations(registrations)} />
       <PresetRunPanel
         counters={[

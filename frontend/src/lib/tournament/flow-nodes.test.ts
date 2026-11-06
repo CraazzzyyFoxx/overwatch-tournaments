@@ -15,6 +15,13 @@ describe("currentRegistrationNode", () => {
     expect(idOf([node(3, "check_in"), node(5, "open"), node(4, "open")])).toBe(4);
   });
 
+  it("prefers the check-in node where the viewer has an entry, even beside an open one", () => {
+    const nodes = [node(3, "check_in"), node(4, "check_in"), node(5, "open")];
+    expect(currentRegistrationNode({ flow_nodes: nodes }, [4])?.id).toBe(4);
+    expect(currentRegistrationNode({ flow_nodes: nodes }, [5])?.id).toBe(5);
+    expect(currentRegistrationNode({ flow_nodes: nodes }, [])?.id).toBe(5);
+  });
+
   it("falls back to the first node in check-in", () => {
     expect(idOf([node(3, "closed"), node(5, "check_in"), node(4, "check_in")])).toBe(4);
   });

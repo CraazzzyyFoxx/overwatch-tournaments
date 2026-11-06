@@ -22204,6 +22204,8 @@ export interface components {
             league: number;
             /** Live */
             live: number;
+            /** Registration Open */
+            registration_open: number;
             /** Standard */
             standard: number;
             /** Total */
@@ -22223,6 +22225,8 @@ export interface components {
             kind: components["schemas"]["tournament.FlowNodeKind"];
             /** Name */
             name: string;
+            /** Pool Registration Node Ids */
+            pool_registration_node_ids: number[];
             /** Schedule */
             schedule: components["schemas"]["tournament.FlowNodeScheduleEntry"][];
             /** Stage Id */
@@ -45915,6 +45919,7 @@ export interface operations {
                 is_league?: boolean | null;
                 workspace_id?: number | null;
                 status?: components["schemas"]["tournament.TournamentStatus"][];
+                registration_open?: boolean;
                 discipline?: string | null;
             };
             header?: never;
@@ -84256,9 +84261,12 @@ export enum TournamentStageReadDe_grand_final_type {
 }
 export enum TournamentStageReadSeed_ranking {
     slot = "slot",
+    source = "source",
     avg_sr = "avg_sr",
     total_sr = "total_sr",
-    random = "random"
+    random = "random",
+    cross = "cross",
+    snake = "snake"
 }
 export enum TournamentStageScoringReadPresetAnyOf0 {
     wins = "wins",
@@ -84270,9 +84278,12 @@ export enum TournamentStageSummaryReadDe_grand_final_type {
 }
 export enum TournamentStageSummaryReadSeed_ranking {
     slot = "slot",
+    source = "source",
     avg_sr = "avg_sr",
     total_sr = "total_sr",
-    random = "random"
+    random = "random",
+    cross = "cross",
+    snake = "snake"
 }
 export enum TournamentStageType {
     round_robin = "round_robin",
@@ -84742,9 +84753,12 @@ export enum TournamentStageCreateDe_grand_final_type {
 }
 export enum TournamentStageCreateSeed_ranking {
     slot = "slot",
+    source = "source",
     avg_sr = "avg_sr",
     total_sr = "total_sr",
-    random = "random"
+    random = "random",
+    cross = "cross",
+    snake = "snake"
 }
 export enum TournamentStageScoringPresetAnyOf0 {
     wins = "wins",
@@ -84756,9 +84770,12 @@ export enum TournamentStageUpdateDe_grand_final_type {
 }
 export enum TournamentStageUpdateSeed_ranking {
     slot = "slot",
+    source = "source",
     avg_sr = "avg_sr",
     total_sr = "total_sr",
-    random = "random"
+    random = "random",
+    cross = "cross",
+    snake = "snake"
 }
 export enum TournamentStatusMetaReadKind {
     builtin = "builtin",

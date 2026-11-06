@@ -10,11 +10,12 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
 import { cn } from "@/lib/utils";
 import { hasPlayStarted } from "@/lib/tournament/stages";
-import { displayStatus, getTournamentStatusMeta } from "@/lib/tournament/status";
+import { displayStatus } from "@/lib/tournament/status";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { useViewerRegistrationNode } from "@/hooks/useViewerRegistrationNode";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import registrationService from "@/services/registration.service";
-import { currentRegistrationNode, isSignUpOpen, nodesOfKind } from "@/lib/tournament/flow-nodes";
+import { isSignUpOpen, nodesOfKind } from "@/lib/tournament/flow-nodes";
 import { tournamentMyRegistrationQueryOptions } from "@/lib/tournament/registrations-query";
 import { tournamentHref } from "@/lib/tournament/url";
 import type { Tournament } from "@/types/tournament.types";
@@ -43,7 +44,7 @@ export default function TournamentRegisterButton({
   const openAuthModal = useAuthModalStore((state) => state.open);
   const isAuthenticated = authStatus === "authenticated" && user !== null;
   const [showModal, setShowModal] = useState(false);
-  const registrationNode = currentRegistrationNode(tournament);
+  const registrationNode = useViewerRegistrationNode(tournament);
   const registrationNodeId = registrationNode?.id ?? null;
 
   const formQuery = useQuery({
@@ -52,7 +53,7 @@ export default function TournamentRegisterButton({
   });
 
   const myRegQuery = useQuery({
-    ...tournamentMyRegistrationQueryOptions(tournament),
+    ...tournamentMyRegistrationQueryOptions(tournament, registrationNode),
     enabled: isAuthenticated
   });
 
@@ -131,7 +132,7 @@ export default function TournamentRegisterButton({
     // Someone may still come to sign up while the tournament registers or
     // checks in. From the forming of the teams on nobody asks, and a dead box
     // would be the loudest thing in the hero.
-    if (getTournamentStatusMeta(displayStatus(tournament)).variant !== "upcoming") return null;
+    if (["forming", "live", "completed", "archived"].includes(displayStatus(tournament))) return null;
     return (
       // A STATE, not a control: the subtle button's box and palette, without the hover a click would need.
       <div

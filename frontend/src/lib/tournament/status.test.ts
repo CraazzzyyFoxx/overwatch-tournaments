@@ -15,6 +15,7 @@ const EXPECTED: Record<TournamentDisplayStatus, boolean> = {
   announcement: false,
   registration: false,
   check_in: false,
+  forming: false,
   live: true,
   completed: false,
   archived: false
@@ -37,6 +38,7 @@ const PAST_BROADCASTS: Record<TournamentDisplayStatus, boolean> = {
   announcement: false,
   registration: false,
   check_in: true,
+  forming: true,
   live: true,
   completed: true,
   archived: true
@@ -77,8 +79,14 @@ describe("displayStatus", () => {
     expect(show("live", [node(1, "registration", "open"), node(2, "stage", "live")])).toBe("live");
   });
 
-  it("shows live when no registration node is open, and when the read has no nodes", () => {
-    expect(show("live", [node(1, "registration", "closed"), node(2, "formation", "forming")])).toBe("live");
+  it("shows live once a stage has completed, and when the read has no nodes", () => {
+    expect(show("live", [node(1, "registration", "closed"), node(2, "stage", "completed")])).toBe("live");
     expect(show("live")).toBe("live");
+  });
+
+  it("shows forming while live with registration closed and no stage started", () => {
+    expect(
+      show("live", [node(1, "registration", "closed"), node(2, "formation", "forming"), node(3, "stage", "ready")])
+    ).toBe("forming");
   });
 });

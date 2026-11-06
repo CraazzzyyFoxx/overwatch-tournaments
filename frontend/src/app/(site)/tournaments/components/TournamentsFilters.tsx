@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-export type StatusFilter = "all" | TournamentStatus;
+/** A stored status, or `registration`: tournaments whose registration node is open or in check-in (a derived phase). */
+export type StatusFilter = "all" | TournamentStatus | "registration";
 export type TypeFilter = "all" | "standard" | "league";
 export type SortBy = "latest" | "oldest" | "participants";
 export type ViewMode = "cards" | "list";
@@ -33,13 +34,19 @@ const VARIANT_DOT: Record<"live" | "upcoming" | "finished", string> = {
   finished: "var(--aqt-fg-dim)"
 };
 
-/** The chips filter by the stored status (what `/tournaments?status=` takes), in the order the bar lists them. */
-const STATUS_CHIPS = ["live", "announcement", "completed", "archived"] as const satisfies readonly TournamentStatus[];
+/** The chips, in the order the bar lists them. `registration` is the derived sign-up phase; the rest are stored statuses. */
+const STATUS_CHIPS = [
+  "registration",
+  "live",
+  "announcement",
+  "completed",
+  "archived"
+] as const satisfies readonly Exclude<StatusFilter, "all">[];
 
 interface TournamentsFiltersProps {
   /** Every visible tournament in the workspace, filters aside. From the facets. */
   total: number;
-  statusCounts: Record<TournamentStatus, number>;
+  statusCounts: Record<Exclude<StatusFilter, "all">, number>;
   statusFilter: StatusFilter;
   onStatusChange: (value: StatusFilter) => void;
   typeFilter: TypeFilter;

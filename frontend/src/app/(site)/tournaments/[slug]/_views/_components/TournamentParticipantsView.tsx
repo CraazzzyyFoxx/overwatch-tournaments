@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/select";
 import { getApiErrorMessage } from "@/lib/api/error";
 import { formatAdmissionRefusal } from "@/lib/registration/admission";
-import { currentRegistrationNode, isCheckInOpen, registrationNodeConfig } from "@/lib/tournament/flow-nodes";
+import { isCheckInOpen, registrationNodeConfig } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import {
   tournamentMyRegistrationQueryOptions,
@@ -41,6 +41,7 @@ import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useViewerRegistrationNode } from "@/hooks/useViewerRegistrationNode";
 import registrationService from "@/services/registration.service";
 import CheckInSubscriptionProof from "@/components/registration/CheckInSubscriptionProof";
 import MyTeamSection from "@/components/registration/MyTeamSection";
@@ -115,16 +116,16 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
 
   const isAuthenticated = authStatus === "authenticated" && user !== null;
 
-  const registrationNode = currentRegistrationNode(tournament);
+  const registrationNode = useViewerRegistrationNode(tournament);
   const registrationNodeId = registrationNode?.id ?? null;
   const requireSubscription = registrationNodeConfig(registrationNode).require_subscription;
 
   const myRegQuery = useQuery({
-    ...tournamentMyRegistrationQueryOptions(tournament),
+    ...tournamentMyRegistrationQueryOptions(tournament, registrationNode),
     enabled: isAuthenticated
   });
 
-  const listQuery = useQuery(tournamentRegistrationsQueryOptions(tournament));
+  const listQuery = useQuery(tournamentRegistrationsQueryOptions(tournament, registrationNode));
 
   const formQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationForm(tournament.workspace_id, tournament.id),

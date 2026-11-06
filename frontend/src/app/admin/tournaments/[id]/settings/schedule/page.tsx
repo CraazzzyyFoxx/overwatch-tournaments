@@ -59,8 +59,11 @@ function ScheduleForm({
             <p className="text-caption text-muted-foreground">{t("noNodes")}</p>
           </SettingGroup>
         ) : (
+          // Each editor carries its own sticky `SaveBar`; a wrapper each keeps them from stacking in this column.
           nodes.map((node) => (
-            <NodeScheduleEditor key={node.id} tournamentId={tournamentId} node={node} disabled={disabled} />
+            <div key={node.id}>
+              <NodeScheduleEditor tournamentId={tournamentId} node={node} disabled={disabled} />
+            </div>
           ))
         )}
 
