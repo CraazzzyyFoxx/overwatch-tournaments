@@ -26,6 +26,7 @@ from shared.domain.flow.validate import validate_flow
 from shared.models.tournament.flow import FlowEdge, FlowNode
 from shared.services.participant_result import write_participant_results
 from src.services.flow.engine import flow_engine
+from src.services.flow.lifecycle import flow_node_service
 from src.services.flow.service import load_flow_specs
 
 __all__ = (
@@ -607,6 +608,8 @@ async def merge_league(session: AsyncSession, entry: LeagueEntry) -> MergeLog:
     )
     log.deleted_tournament_ids = list(entry.others)
     await flow_engine.recompute(session, entry.target_tournament_id)
+    # The target's status and ``is_finished`` follow the merged flow (a finished league becomes ``completed``).
+    await flow_node_service.sync_tournament_status(session, entry.target_tournament_id)
     await write_participant_results(session, entry.target_tournament_id)
     await session.execute(sa.text("SET CONSTRAINTS ALL IMMEDIATE"))  # surface a violation here, not at commit
     return log

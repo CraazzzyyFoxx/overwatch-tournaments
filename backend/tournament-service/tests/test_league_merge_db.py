@@ -125,8 +125,7 @@ class LeagueMergeCase(IsolatedAsyncioTestCase):
                     discipline="overwatch",
                     name=f"{tag} L | Day {n}",
                     slug=f"{tag}-d{n}",
-                    status=enums.TournamentStatus.COMPLETED,
-                    is_finished=True,
+                    status=enums.TournamentStatus.LIVE,
                     start_date=datetime(2026, 1, 7 * n, 18, tzinfo=UTC),
                 )
                 s.add(tournament)
@@ -555,6 +554,10 @@ class LeagueMergeCase(IsolatedAsyncioTestCase):
         # Alpha (m0, m1) won every day: 3 x 10; Bravo (m2 on day 2 only) placed 2nd once: 5.
         assert {k: float(v) for k, v in scores.items()} == {m0: 30.0, m1: 30.0, m2: 5.0}
         assert placed == {m0, m1, m2}
+        async with self.Session() as s:
+            target = await s.get_one(models.Tournament, self.ids["d1"])
+        # Every sink is final, so the merged tournament is derived ``completed``.
+        assert (target.status, target.is_finished) == (enums.TournamentStatus.COMPLETED, True)
 
     async def test_dry_run_writes_nothing(self) -> None:
         (log,) = await apply_mapping(self.Session, [self.entry()], dry_run=True)
