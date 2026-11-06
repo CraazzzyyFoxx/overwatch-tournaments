@@ -183,7 +183,7 @@ export function buildBracketTabs({
       href:
         groupStages.length === 1
           ? tournamentHref(tournament, `/bracket?stage=${groupStages[0].id}`)
-          : tournamentHref(tournament, "/bracket?view=groups"),
+          : tournamentHref(tournament, `/bracket?view=groups&stage=${groupStages[0].id}`),
       label: labels.groupStage,
       disabled: isDead(isGroupViewActive, groupStages.some(groupHasContent))
     });

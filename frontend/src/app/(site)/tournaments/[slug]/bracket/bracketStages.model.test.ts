@@ -34,6 +34,24 @@ function tabs(groups: Stage[], playoff: Stage, activeStageId: number) {
   }).items.map(({ label, disabled }) => [label, disabled]);
 }
 
+describe("buildBracketTabs links", () => {
+  it("the groups view link keeps its branch by naming its first group stage", () => {
+    const a = stage(252, "swiss", [seeded, { ...seeded, id: 3 }]);
+    const b = stage(254, "round_robin", [seeded]);
+    const items = buildBracketTabs({
+      tournament,
+      groupStages: [a, b],
+      eliminationStages: [],
+      activeStageId: 252,
+      viewParam: null,
+      matchCountsKnown: true,
+      stageIdsWithMatches: new Set(),
+      labels: { groupStage: "Group stage", playoff: "Playoff" }
+    }).items;
+    expect(items[0].href).toContain("view=groups&stage=252");
+  });
+});
+
 describe("buildBracketTabs before any match", () => {
   it("keeps a seeded group stage and an unfinished bracket selectable", () => {
     const groups = stage(252, "swiss", [seeded, { ...seeded, id: 3 }]);
