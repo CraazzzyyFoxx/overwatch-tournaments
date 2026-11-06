@@ -1,0 +1,112 @@
+A tournament's structure is a directed graph stored in three tables and read and written through four routes. This article describes the model as an integrator sees it: the tables, the ports and units edges obey, the routes with their request shapes, the realtime resource, and the `breakdown` an aggregate leaves on each result. The organizer's view is in [Tournament flow](/docs/organizers/flow); stages themselves are in [Tournaments, stages and brackets](/docs/dev/tournaments).
+
+## Tables
+
+| Table | One line |
+| --- | --- |
+| `tournament.flow_node` | A step of the graph: `kind` (`registration`, `formation`, `stage`, `filter`, `merge`, `split`, `aggregate`, `leaderboard`), `name`, `status`, per-kind `config` (jsonb, validated on write), `stage_id` (unique, set exactly when `kind = 'stage'`), editor position, `started_at` and `completed_at`. |
+| `tournament.flow_edge` | An arrow: `source_node_id` + `source_port` → `target_node_id` + `target_port`. Both ends cascade on node delete. Whether a target port takes one edge or many is decided by the validator, not by an index. |
+| `tournament.flow_node_result` | The ranked output of a node port: `node_id`, `port`, 1-based `rank`, exactly one of `workspace_member_id` / `team_id`, `stage_item_id` and `item_rank` (stage outputs, so filters work per group), `score`, `tie_group`, `breakdown` (jsonb) and `state` (`tentative` or `final`). The engine rewrites a node's rows as a whole; `final` rows change only through a correction. |
+
+Node statuses by kind: `registration` has `draft`, `open`, `check_in`, `closed`; `formation` has `draft`, `forming`, `completed`; `stage` has `draft`, `ready`, `live`, `completed`; the five pure kinds have `pending`, `tentative`, `final`, written by the engine only.
+
+## Ports and units
+
+Every kind has a fixed set of ports. The catalogue is defined once on the server and every read returns it; a client has no table of its own.
+
+| Kind | In | Out |
+| --- | --- | --- |
+| `registration` | none | `participants` (players) |
+| `formation` | `players` | `teams` |
+| `stage` | `participants` | `ranking`; players for an `individual_swiss` stage, teams otherwise (both ports) |
+| `filter` | `ranking` | `passed` |
+| `merge` | `inputs` (many) | `merged` |
+| `split` | `ranking` | `bucket_1` … `bucket_k`, one per configured bucket |
+| `aggregate` | `inputs` (many) | `ranking`; the unit is `config.unit` |
+| `leaderboard` | `ranking` | `ranking` |
+
+A `filter`, `merge`, `split` and `leaderboard` port takes the unit of its input. An edge joins ports of the same unit, with two exceptions: a `teams` output into `formation.players` (the teams dissolve into their non-substitute players, and substitutes stay substitutes), and a `teams` output into `aggregate.inputs` when `aggregate.unit` is `players` (each team's rank and stage metrics expand to its non-substitute members). Any other mismatch is the issue `unit_mismatch`.
+
+`FlowNodeRead.ports` carries each node's ports with their resolved `unit` (`null` while it cannot be known yet, for example a stage with no input).
+
+## Validation and freezing
+
+The validator returns issues with a `severity` of `error` or `warning`. Errors block a save: a cycle, an unknown port, a unit mismatch, a second edge into a single-input port, an `aggregate` mode that needs `n` larger than its number of inputs. Warnings only inform. A node is frozen once it has left `draft` (pure nodes: once any lifecycle node downstream has); a frozen node cannot be deleted, re-configured or have its incoming edges changed. Adding nodes that lead only into non-frozen nodes is always allowed.
+
+## Routes
+
+Reads and writes need the workspace permissions below; every write goes through `ensure_workspace_permission` and is recorded in the admin audit.
+
+| Route | Subject | Needs | What it does |
+| --- | --- | --- | --- |
+| `GET /api/v1/tournaments/{id}/flow` | `rpc.tournament.get_flow` | none (a hidden tournament follows its visibility rules) | `FlowRead`: `nodes` with `ports`, `edges`, `results`, and `participants` (the names of the participants the results refer to). |
+| `GET /api/v1/admin/tournaments/{id}/flow` | `rpc.tournament.flow_get` | `tournament.read` | `AdminFlowRead`: `FlowRead` plus `issues` of the stored graph, `catalogue` (the port catalogue per kind) and `config_defaults` (the seed config of each kind). |
+| `PUT /api/v1/admin/tournaments/{id}/flow` | `rpc.tournament.flow_apply` | `tournament.update` | Applies a `FlowChanges` in one transaction and answers `AdminFlowRead`. 422 `flow_invalid` for an invalid graph, 409 `node_frozen` for a frozen node. |
+| `POST /api/v1/admin/tournaments/{id}/flow/validate` | `rpc.tournament.flow_validate` | `tournament.update` | The same `FlowChanges`, as a dry run: nothing is written, nothing is audited. |
+| `POST /api/v1/admin/flow-nodes/{node_id}/transition` | `rpc.tournament.flow_node_transition` | `tournament.update` | Body `{"status": "…"}`; the only way to move a lifecycle node. 409 `invalid_node_transition` for a move the state machine does not allow. |
+| `PUT /api/v1/admin/flow-nodes/{node_id}/schedule` | `rpc.tournament.flow_node_schedule_set` | `tournament.update` | Replaces a node's schedule: entries of `phase` (`open`, `check_in`, `start`) with `starts_at` and optional `ends_at`. |
+
+Node config, node moves and the graph itself are all gated by `tournament.update`, the permission of every other write on a tournament. There is no per-node permission, and a role that holds only `team.create` or `tournament.create` cannot change a flow.
+
+### `FlowChanges`
+
+```json
+{
+  "nodes": [
+    {"id": 41, "kind": "filter", "name": "Top 4", "config": {"mode": "top", "n": 4}},
+    {"ref": "playoff", "kind": "stage", "name": "Playoff",
+     "stage": {"name": "Playoff", "stage_type": "single_elimination", "order": 3}}
+  ],
+  "edges": [
+    {"source": 41, "source_port": "passed", "target": "playoff", "target_port": "participants"}
+  ],
+  "delete_node_ids": [],
+  "delete_edge_ids": []
+}
+```
+
+- A node has exactly one of `id` (update) and `ref` (create); `ref` values are unique in the request. An edge endpoint is a node id or the `ref` of a node created by the same request.
+- A new `stage` node carries a `stage` payload: the save creates its `Stage`. Deleting a node whose stage is still `draft` deletes the stage with it. A `stage` payload on any other node is rejected.
+- Only the changes need to be sent: an unchanged node can be left out.
+
+### The dry run
+
+`POST …/flow/validate` takes the same body and answers:
+
+```json
+{
+  "issues": [{"code": "unit_mismatch", "severity": "error", "message": "…", "node_id": -1, "edge_id": null}],
+  "ports": [{"node_id": -1, "ports": [{"name": "participants", "direction": "in", "multi": false, "unit": "teams"}]}],
+  "ref_ids": {"playoff": -1},
+  "new_edge_ids": [-1]
+}
+```
+
+Ids in the answer are the request's own. A node created by `ref` gets a negative id, −1, −2, … in the order of `nodes`; a new edge gets a negative id in the order of `edges`. `ref_ids` maps each `ref` to its negative id and `new_edge_ids` lists the edge ids in the order sent, so a client can put an issue on the box it belongs to before anything is saved. `ports` covers every node of the resulting graph, saved or new, so a client needs no unit rule of its own.
+
+## Realtime
+
+A graph write, a node's status move and a node's schedule change each publish the resource `tournament.flow`, together with `tournament.structure`, in the `data.resources` list of the tournament's `cache.invalidated` event (see [Realtime](/docs/dev/realtime)). A client refetches the public and admin flow reads and the tournament read, whose `flow_nodes` and derived `status` change with it.
+
+## Aggregate results
+
+An `aggregate` result row has `score` = the total, `tie_group` for an unresolved tie, and `breakdown`: one entry per input in which the participant has a row, in edge-id order.
+
+```json
+{
+  "node_id": 17,
+  "port": "ranking",
+  "rank": 1,
+  "workspace_member_id": 301,
+  "score": 47.0,
+  "tie_group": null,
+  "breakdown": [
+    {"node_id": 8,  "place": 1, "score": 25.0, "counted": true},
+    {"node_id": 12, "place": 3, "score": 15.0, "counted": false},
+    {"node_id": 15, "place": 2, "score": 22.0, "counted": true}
+  ],
+  "state": "tentative"
+}
+```
+
+`node_id` in an entry is the source node of that input (a stage), `place` its place there, `score` what the aggregate's score rule gave it, and `counted` whether the aggregate's mode used it: all entries in `sum_all`, the best `n` in `sum_best_n`, the latest `n` in `sum_last_n`. An input without an entry means the participant has no row in it. `state` is `final` only when every input is `final`.

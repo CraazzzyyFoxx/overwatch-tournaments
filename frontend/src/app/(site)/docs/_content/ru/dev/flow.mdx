@@ -1,0 +1,112 @@
+Структура турнира — ориентированный граф в трёх таблицах, который читают и пишут четыре маршрута. Статья описывает модель глазами интегратора: таблицы, порты и единицы, которым подчиняются рёбра, маршруты с формой запросов, ресурс реального времени и `breakdown`, который агрегат оставляет на каждом результате. Взгляд организатора — в [Схеме турнира](/docs/organizers/flow); сами стадии — в [Турнирах, стадиях и сетке](/docs/dev/tournaments).
+
+## Таблицы
+
+| Таблица | Одной строкой |
+| --- | --- |
+| `tournament.flow_node` | Шаг графа: `kind` (`registration`, `formation`, `stage`, `filter`, `merge`, `split`, `aggregate`, `leaderboard`), `name`, `status`, `config` по виду (jsonb, проверяется при записи), `stage_id` (уникален, задан ровно когда `kind = 'stage'`), позиция в редакторе, `started_at` и `completed_at`. |
+| `tournament.flow_edge` | Стрелка: `source_node_id` + `source_port` → `target_node_id` + `target_port`. Оба конца каскадно удаляются вместе с узлом. Один или много рёбер принимает целевой порт, решает валидатор, а не индекс. |
+| `tournament.flow_node_result` | Ранжированный выход порта узла: `node_id`, `port`, `rank` с единицы, ровно одно из `workspace_member_id` / `team_id`, `stage_item_id` и `item_rank` (выходы стадий, чтобы фильтры работали по группам), `score`, `tie_group`, `breakdown` (jsonb) и `state` (`tentative` или `final`). Движок переписывает строки узла целиком; `final` меняются только исправлением. |
+
+Статусы узлов по видам: у `registration` — `draft`, `open`, `check_in`, `closed`; у `formation` — `draft`, `forming`, `completed`; у `stage` — `draft`, `ready`, `live`, `completed`; у пяти вычисляющих видов — `pending`, `tentative`, `final`, их пишет только движок.
+
+## Порты и единицы
+
+У каждого вида фиксированный набор портов. Каталог задан на сервере один раз, и каждое чтение его возвращает; своей таблицы у клиента нет.
+
+| Вид | Вход | Выход |
+| --- | --- | --- |
+| `registration` | нет | `participants` (игроки) |
+| `formation` | `players` | `teams` |
+| `stage` | `participants` | `ranking`; игроки у стадии `individual_swiss`, иначе команды (оба порта) |
+| `filter` | `ranking` | `passed` |
+| `merge` | `inputs` (много) | `merged` |
+| `split` | `ranking` | `bucket_1` … `bucket_k`, по одному на каждую заданную корзину |
+| `aggregate` | `inputs` (много) | `ranking`; единица — `config.unit` |
+| `leaderboard` | `ranking` | `ranking` |
+
+Порты `filter`, `merge`, `split` и `leaderboard` берут единицу своего входа. Ребро соединяет порты одной единицы, с двумя исключениями: выход `teams` во вход `formation.players` (команды распадаются на не-запасных игроков, запасные остаются запасными) и выход `teams` во вход `aggregate.inputs`, когда `aggregate.unit` равно `players` (место и показатели стадии команды раскрываются на её не-запасных игроков). Любое другое несовпадение — замечание `unit_mismatch`.
+
+`FlowNodeRead.ports` несёт порты узла с вычисленной единицей `unit` (`null`, пока её нельзя определить, например у стадии без входа).
+
+## Проверка и заморозка
+
+Валидатор возвращает замечания с `severity` `error` или `warning`. Ошибки блокируют сохранение: цикл, неизвестный порт, несовпадение единиц, второе ребро в порт с одним входом, режим `aggregate`, которому нужно `n` больше числа входов. Предупреждения только сообщают. Узел заморожен, когда покинул `draft` (у вычисляющих узлов — когда покинул любой жизненный узел после него); замороженный узел нельзя удалить, перенастроить или сменить ему входящие рёбра. Добавлять узлы, ведущие только в незамороженные, можно всегда.
+
+## Маршруты
+
+Чтения и записи требуют указанных прав воркспейса; каждая запись проходит `ensure_workspace_permission` и попадает в аудит админ-действий.
+
+| Маршрут | Subject | Требует | Что делает |
+| --- | --- | --- | --- |
+| `GET /api/v1/tournaments/{id}/flow` | `rpc.tournament.get_flow` | ничего (скрытый турнир подчиняется правилам видимости) | `FlowRead`: `nodes` с `ports`, `edges`, `results` и `participants` (имена участников, на которых ссылаются результаты). |
+| `GET /api/v1/admin/tournaments/{id}/flow` | `rpc.tournament.flow_get` | `tournament.read` | `AdminFlowRead`: `FlowRead` плюс `issues` сохранённого графа, `catalogue` (каталог портов по видам) и `config_defaults` (начальная конфигурация каждого вида). |
+| `PUT /api/v1/admin/tournaments/{id}/flow` | `rpc.tournament.flow_apply` | `tournament.update` | Применяет `FlowChanges` одной транзакцией и отвечает `AdminFlowRead`. 422 `flow_invalid` для неверного графа, 409 `node_frozen` для замороженного узла. |
+| `POST /api/v1/admin/tournaments/{id}/flow/validate` | `rpc.tournament.flow_validate` | `tournament.update` | Тот же `FlowChanges`, но как пробный прогон: ничего не пишется и не попадает в аудит. |
+| `POST /api/v1/admin/flow-nodes/{node_id}/transition` | `rpc.tournament.flow_node_transition` | `tournament.update` | Тело `{"status": "…"}`; единственный способ перевести узел с жизненным циклом. 409 `invalid_node_transition`, если автомат такого перехода не допускает. |
+| `PUT /api/v1/admin/flow-nodes/{node_id}/schedule` | `rpc.tournament.flow_node_schedule_set` | `tournament.update` | Заменяет расписание узла: записи с `phase` (`open`, `check_in`, `start`), `starts_at` и необязательным `ends_at`. |
+
+Настройка узлов, переводы узлов и сам граф закрыты правом `tournament.update`, как и любая другая запись по турниру. Прав на отдельный узел нет, а роль только с `team.create` или `tournament.create` менять схему не может.
+
+### `FlowChanges`
+
+```json
+{
+  "nodes": [
+    {"id": 41, "kind": "filter", "name": "Top 4", "config": {"mode": "top", "n": 4}},
+    {"ref": "playoff", "kind": "stage", "name": "Playoff",
+     "stage": {"name": "Playoff", "stage_type": "single_elimination", "order": 3}}
+  ],
+  "edges": [
+    {"source": 41, "source_port": "passed", "target": "playoff", "target_port": "participants"}
+  ],
+  "delete_node_ids": [],
+  "delete_edge_ids": []
+}
+```
+
+- У узла задано ровно одно из `id` (обновление) и `ref` (создание); `ref` в запросе уникальны. Конец ребра — id узла или `ref` узла, созданного тем же запросом.
+- Новый узел `stage` несёт поле `stage`: сохранение создаёт его `Stage`. Удаление узла, чья стадия ещё `draft`, удаляет и стадию. Поле `stage` у любого другого узла отклоняется.
+- Отправлять нужно только изменения: неизменённый узел можно не указывать.
+
+### Пробный прогон
+
+`POST …/flow/validate` принимает то же тело и отвечает:
+
+```json
+{
+  "issues": [{"code": "unit_mismatch", "severity": "error", "message": "…", "node_id": -1, "edge_id": null}],
+  "ports": [{"node_id": -1, "ports": [{"name": "participants", "direction": "in", "multi": false, "unit": "teams"}]}],
+  "ref_ids": {"playoff": -1},
+  "new_edge_ids": [-1]
+}
+```
+
+Id в ответе — собственные id запроса. Узел, созданный через `ref`, получает отрицательный id: −1, −2, … в порядке `nodes`; новое ребро — отрицательный id в порядке `edges`. `ref_ids` сопоставляет каждому `ref` его отрицательный id, а `new_edge_ids` перечисляет id рёбер в порядке отправки, так что клиент может повесить замечание на нужный блок до сохранения. `ports` покрывает каждый узел итогового графа, сохранённый или новый, так что собственных правил единиц клиенту не нужно.
+
+## Реальное время
+
+Запись графа, смена статуса узла и смена его расписания публикуют ресурс `tournament.flow` вместе с `tournament.structure` в списке `data.resources` события `cache.invalidated` турнира (см. [Реальное время](/docs/dev/realtime)). Клиент перечитывает публичную и админскую схему и сам турнир: его `flow_nodes` и производный `status` меняются вместе с ней.
+
+## Результаты агрегата
+
+Строка результата `aggregate` содержит `score` — сумму, `tie_group` для неразрешённого равенства и `breakdown`: по записи на каждый вход, где у участника есть строка, в порядке id рёбер.
+
+```json
+{
+  "node_id": 17,
+  "port": "ranking",
+  "rank": 1,
+  "workspace_member_id": 301,
+  "score": 47.0,
+  "tie_group": null,
+  "breakdown": [
+    {"node_id": 8,  "place": 1, "score": 25.0, "counted": true},
+    {"node_id": 12, "place": 3, "score": 15.0, "counted": false},
+    {"node_id": 15, "place": 2, "score": 22.0, "counted": true}
+  ],
+  "state": "tentative"
+}
+```
+
+`node_id` в записи — узел-источник этого входа (стадия), `place` — место в нём, `score` — то, что дало правило очков агрегата, `counted` — использовал ли запись режим агрегата: все в `sum_all`, лучшие `n` в `sum_best_n`, последние `n` в `sum_last_n`. Нет записи для входа — у участника в нём нет строки. `state` равен `final` только когда `final` каждый вход.

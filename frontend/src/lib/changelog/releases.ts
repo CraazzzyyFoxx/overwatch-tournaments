@@ -31,6 +31,14 @@ export const RELEASES: readonly Release[] = [
     }
   },
   {
+    version: "2.10.0",
+    date: "2026-11-06",
+    title: {
+      ru: "Схема турнира, таблица лиги и вкладка «Формат»",
+      en: "Tournament flow, league table and Format tab"
+    }
+  },
+  {
     version: "2.9.0",
     date: "2026-11-04",
     title: {
