@@ -121,3 +121,16 @@ def register(broker: Any, logger: Any) -> None:
             return _dump(read)
 
         return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.flow_validate")
+    async def _flow_validate(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            tournament_id = _require_id(data)
+            ensure_workspace_permission(
+                user, await auth.get_tournament_workspace_id(session, tournament_id), "tournament", "update"
+            )
+            body = flow_schemas.FlowChanges.model_validate(_payload(data))
+            return _dump(await flow_service.validate_changes(session, tournament_id, body))
+
+        return await _run(logger, op)

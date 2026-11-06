@@ -187,6 +187,7 @@ export const ROUTES: Route[] = [
   {"method":"GET","pattern":"/api/v1/admin/tournaments/{tournament_id}","auth":"required","success":200,"table":"tournament.AdminCrudRoutes"},
   {"method":"PATCH","pattern":"/api/v1/admin/tournaments/{tournament_id}","auth":"required","success":200,"table":"tournament.AdminCrudRoutes"},
   {"method":"POST","pattern":"/api/v1/admin/tournaments/{tournament_id}/archive","auth":"required","success":200,"table":"tournament.AdminMiscRoutes"},
+  {"method":"POST","pattern":"/api/v1/admin/tournaments/{tournament_id}/flow/validate","auth":"required","success":200,"table":"tournament.AdminMiscRoutes"},
   {"method":"GET","pattern":"/api/v1/admin/tournaments/{tournament_id}/flow","auth":"required","success":200,"table":"tournament.AdminMiscRoutes"},
   {"method":"PUT","pattern":"/api/v1/admin/tournaments/{tournament_id}/flow","auth":"required","success":200,"table":"tournament.AdminMiscRoutes"},
   {"method":"DELETE","pattern":"/api/v1/admin/tournaments/{tournament_id}/images/{slot}","auth":"required","success":200,"table":"tournament.AdminCrudRoutes"},

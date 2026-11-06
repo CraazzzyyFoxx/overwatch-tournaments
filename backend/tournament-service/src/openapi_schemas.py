@@ -199,6 +199,7 @@ OPERATIONS: dict[str, Op] = {
         request=flow_schemas.FlowNodeScheduleSet, response=flow_schemas.FlowNodeRead
     ),
     "rpc.tournament.flow_apply": Op(request=flow_schemas.FlowChanges, response=flow_schemas.AdminFlowRead),
+    "rpc.tournament.flow_validate": Op(request=flow_schemas.FlowChanges, response=flow_schemas.FlowValidationRead),
     "rpc.tournament.standing_recalculate": Op(response=schemas.TournamentComputationJobRead),
     "rpc.tournament.standing_pins_set": Op(
         request=schemas.StandingPinsUpdate, response=schemas.TournamentComputationJobRead

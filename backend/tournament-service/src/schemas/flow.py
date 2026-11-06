@@ -9,11 +9,24 @@ from pydantic import BaseModel, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from shared.core.enums import FlowNodeKind, FlowNodeStatus, FlowResultState, FlowUnit
+from shared.domain.flow.config import (
+    AggregateNodeConfig,
+    AggregateScore,
+    FilterNodeConfig,
+    FormationNodeConfig,
+    LeaderboardNodeConfig,
+    MergeNodeConfig,
+    RegistrationNodeConfig,
+    SplitBucket,
+    SplitNodeConfig,
+    StageNodeConfig,
+)
 from src.schemas.admin.stage import StageCreate
 
 __all__ = (
     "AdminFlowRead",
     "FlowChanges",
+    "FlowConfigDefaults",
     "FlowEdgeRead",
     "FlowEdgeUpsert",
     "FlowIssueRead",
@@ -26,7 +39,9 @@ __all__ = (
     "FlowNodeUpsert",
     "FlowPortRead",
     "FlowPortSpecRead",
+    "FlowPreviewPortsRead",
     "FlowRead",
+    "FlowValidationRead",
     "TournamentFlowNodeRead",
 )
 
@@ -101,9 +116,42 @@ class FlowKindPortsRead(BaseModel):
     outputs: list[FlowPortSpecRead]
 
 
+class FlowConfigDefaults(BaseModel):
+    """The config a freshly dropped node of each kind starts with; typed so OpenAPI carries every config class."""
+
+    registration: RegistrationNodeConfig = Field(default_factory=RegistrationNodeConfig)
+    formation: FormationNodeConfig = Field(default_factory=lambda: FormationNodeConfig(mode="manual"))
+    stage: StageNodeConfig = Field(default_factory=StageNodeConfig)
+    filter: FilterNodeConfig = Field(default_factory=lambda: FilterNodeConfig(mode="top", n=1))
+    merge: MergeNodeConfig = Field(default_factory=MergeNodeConfig)
+    split: SplitNodeConfig = Field(default_factory=lambda: SplitNodeConfig(buckets=[SplitBucket(name="Bucket 1")]))
+    aggregate: AggregateNodeConfig = Field(
+        default_factory=lambda: AggregateNodeConfig(
+            unit=FlowUnit.PLAYERS, score=AggregateScore(preset="stage_points"), mode="sum_all"
+        )
+    )
+    leaderboard: LeaderboardNodeConfig = Field(default_factory=LeaderboardNodeConfig)
+
+
 class AdminFlowRead(FlowRead):
     issues: list[FlowIssueRead]
     catalogue: list[FlowKindPortsRead]
+    config_defaults: FlowConfigDefaults = Field(default_factory=FlowConfigDefaults)
+
+
+class FlowPreviewPortsRead(BaseModel):
+    node_id: int
+    ports: list[FlowPortRead]
+
+
+class FlowValidationRead(BaseModel):
+    """A dry run of a ``FlowChanges``: ids are the request's own (new nodes/edges negative); ``ref_ids`` /
+    ``new_edge_ids`` map them back."""
+
+    issues: list[FlowIssueRead]
+    ports: list[FlowPreviewPortsRead]
+    ref_ids: dict[str, int]
+    new_edge_ids: list[int]
 
 
 class FlowNodeTransition(BaseModel):

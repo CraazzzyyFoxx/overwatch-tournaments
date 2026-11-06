@@ -130,6 +130,8 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/admin/tournaments/{tournament_id}/flow", Queue: "rpc.tournament.flow_get", IDParam: "tournament_id", Auth: edge.AuthRequired},
 	// flow graph write — workspace tournament.update in the worker.
 	{Method: "PUT", Pattern: "/api/v1/admin/tournaments/{tournament_id}/flow", Queue: "rpc.tournament.flow_apply", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	// flow graph dry run — workspace tournament.update in the worker; writes nothing.
+	{Method: "POST", Pattern: "/api/v1/admin/tournaments/{tournament_id}/flow/validate", Queue: "rpc.tournament.flow_validate", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
 	// flow node lifecycle — workspace tournament.update in the worker.
 	{Method: "POST", Pattern: "/api/v1/admin/flow-nodes/{node_id}/transition", Queue: "rpc.tournament.flow_node_transition", IDParam: "node_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/v1/admin/flow-nodes/{node_id}/schedule", Queue: "rpc.tournament.flow_node_schedule_set", IDParam: "node_id", Body: true, Auth: edge.AuthRequired},

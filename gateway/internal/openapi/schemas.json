@@ -9679,7 +9679,7 @@
       "summary": "Get FFA stage lobbies (organizer view)"
     },
     "rpc.tournament.flow_apply": {
-      "description": "Permission: workspace `tournament.update`. Replaces part of the tournament's node graph in one transaction: `nodes` creates (`ref`) or updates (`id`) nodes, `edges` wires them (an endpoint is a node id or a new node's `ref`), `delete_node_ids` / `delete_edge_ids` remove. A started node, or a pure node with a started lifecycle node downstream, cannot be deleted, re-configured or re-wired (`node_frozen`, 409); stage nodes are created and deleted with their stage; an invalid graph answers 422 `flow_invalid`. Answers the admin flow read.",
+      "description": "Permission: workspace `tournament.update`. Replaces part of the tournament's node graph in one transaction: `nodes` creates (`ref`) or updates (`id`) nodes, `edges` wires them (an endpoint is a node id or a new node's `ref`), `delete_node_ids` / `delete_edge_ids` remove. A started node, or a pure node with a started lifecycle node downstream, cannot be deleted, re-configured or re-wired (`node_frozen`, 409); a new `stage` node carries a `stage` payload and the save creates its stage, and deleting a draft stage node deletes its stage; an invalid graph answers 422 `flow_invalid`. Answers the admin flow read.",
       "request": {
         "array": false,
         "ref": "tournament.FlowChanges"
@@ -9691,7 +9691,7 @@
       "summary": "Change a tournament's flow graph"
     },
     "rpc.tournament.flow_get": {
-      "description": "Permission: workspace `tournament.read` on the tournament's workspace. The public flow read plus the validator's issues on the stored graph and the port catalogue per node kind.",
+      "description": "Permission: workspace `tournament.read` on the tournament's workspace. The public flow read plus the validator's issues on the stored graph, the port catalogue per node kind and the config each kind starts with (`config_defaults`).",
       "response": {
         "array": false,
         "ref": "tournament.AdminFlowRead"
@@ -9721,6 +9721,18 @@
         "ref": "tournament.FlowNodeRead"
       },
       "summary": "Move a flow node along its lifecycle"
+    },
+    "rpc.tournament.flow_validate": {
+      "description": "Permission: workspace `tournament.update` on the tournament's workspace. Validates a `FlowChanges` diff exactly like `PUT \u2026/flow` (frozen-node rules included) and returns the issues and the resolved ports of every node, new ones under their negative ids (`ref_ids`, `new_edge_ids` map them back). Writes nothing.",
+      "request": {
+        "array": false,
+        "ref": "tournament.FlowChanges"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.FlowValidationRead"
+      },
+      "summary": "Validate flow changes (dry run)"
     },
     "rpc.tournament.get_encounter": {
       "description": "Permission: public; no authentication required \u2014 a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one encounter by id with optionally hydrated related entities selected via the entities query param.",
@@ -40374,6 +40386,9 @@
           "title": "Catalogue",
           "type": "array"
         },
+        "config_defaults": {
+          "$ref": "#/components/schemas/tournament.FlowConfigDefaults"
+        },
         "edges": {
           "items": {
             "$ref": "#/components/schemas/tournament.FlowEdgeRead"
@@ -41150,6 +41165,101 @@
         "actor"
       ],
       "title": "AdmissionReasonRead",
+      "type": "object"
+    },
+    "tournament.AggregateNodeConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "sum_all",
+            "sum_last_n",
+            "sum_best_n",
+            "average"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "score": {
+          "$ref": "#/components/schemas/tournament.AggregateScore"
+        },
+        "tiebreak": {
+          "default": [
+            "best_places",
+            "last_input"
+          ],
+          "items": {
+            "enum": [
+              "best_places",
+              "last_input"
+            ],
+            "type": "string"
+          },
+          "title": "Tiebreak",
+          "type": "array"
+        },
+        "unit": {
+          "$ref": "#/components/schemas/tournament.FlowUnit"
+        }
+      },
+      "required": [
+        "unit",
+        "score",
+        "mode"
+      ],
+      "title": "AggregateNodeConfig",
+      "type": "object"
+    },
+    "tournament.AggregateScore": {
+      "additionalProperties": false,
+      "properties": {
+        "formula": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Formula"
+        },
+        "preset": {
+          "enum": [
+            "stage_points",
+            "placement_table",
+            "formula"
+          ],
+          "title": "Preset",
+          "type": "string"
+        },
+        "table": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Table",
+          "type": "object"
+        }
+      },
+      "required": [
+        "preset"
+      ],
+      "title": "AggregateScore",
       "type": "object"
     },
     "tournament.BalancerGoogleSheetFeedRead": {
@@ -49613,6 +49723,120 @@
           "anyOf": [
             {
               "type": "string"
+    "tournament.FilterNodeConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "From"
+        },
+        "manual": {
+          "default": [],
+          "items": {
+            "type": "integer"
+          },
+          "title": "Manual",
+          "type": "array"
+        },
+        "mode": {
+          "enum": [
+            "top",
+            "range",
+            "per_item_top",
+            "swiss_status",
+            "manual"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "per_item": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "default": {},
+          "title": "Per Item",
+          "type": "object"
+        },
+        "per_item_upper": {
+          "additionalProperties": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "default": {},
+          "title": "Per Item Upper",
+          "type": "object"
+        },
+        "swiss_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "qualified",
+                "eliminated"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Swiss Status"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "To"
+        },
+        "upper": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "FilterNodeConfig",
+      "type": "object"
+    },
             },
             {
               "type": "null"
@@ -49665,6 +49889,37 @@
           },
           "title": "Edges",
           "type": "array"
+    "tournament.FlowConfigDefaults": {
+      "description": "The config a freshly dropped node of each kind starts with; typed so OpenAPI carries every config class.",
+      "properties": {
+        "aggregate": {
+          "$ref": "#/components/schemas/tournament.AggregateNodeConfig"
+        },
+        "filter": {
+          "$ref": "#/components/schemas/tournament.FilterNodeConfig"
+        },
+        "formation": {
+          "$ref": "#/components/schemas/tournament.FormationNodeConfig"
+        },
+        "leaderboard": {
+          "$ref": "#/components/schemas/tournament.LeaderboardNodeConfig"
+        },
+        "merge": {
+          "$ref": "#/components/schemas/tournament.MergeNodeConfig"
+        },
+        "registration": {
+          "$ref": "#/components/schemas/tournament.RegistrationNodeConfig"
+        },
+        "split": {
+          "$ref": "#/components/schemas/tournament.SplitNodeConfig"
+        },
+        "stage": {
+          "$ref": "#/components/schemas/tournament.StageNodeConfig"
+        }
+      },
+      "title": "FlowConfigDefaults",
+      "type": "object"
+    },
         },
         "nodes": {
           "items": {
@@ -50183,17 +50438,6 @@
           "title": "Position Y",
           "type": "number"
         },
-        "stage": {
-          "anyOf": [
-            {
-              "$ref": "#/components/schemas/tournament.StageCreate"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
         "ref": {
           "anyOf": [
             {
@@ -50205,6 +50449,17 @@
           ],
           "default": null,
           "title": "Ref"
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.StageCreate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "stage_id": {
           "anyOf": [
@@ -50287,6 +50542,27 @@
             "input"
           ],
           "title": "Unit Rule",
+    "tournament.FlowPreviewPortsRead": {
+      "properties": {
+        "node_id": {
+          "title": "Node Id",
+          "type": "integer"
+        },
+        "ports": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowPortRead"
+          },
+          "title": "Ports",
+          "type": "array"
+        }
+      },
+      "required": [
+        "node_id",
+        "ports"
+      ],
+      "title": "FlowPreviewPortsRead",
+      "type": "object"
+    },
           "type": "string"
         }
       },
@@ -50335,6 +50611,47 @@
       "enum": [
         "tentative",
         "final"
+    "tournament.FlowValidationRead": {
+      "description": "A dry run of a ``FlowChanges``: ids are the request's own (new nodes/edges negative); ``ref_ids`` /\n``new_edge_ids`` map them back.",
+      "properties": {
+        "issues": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowIssueRead"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "new_edge_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "New Edge Ids",
+          "type": "array"
+        },
+        "ports": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowPreviewPortsRead"
+          },
+          "title": "Ports",
+          "type": "array"
+        },
+        "ref_ids": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Ref Ids",
+          "type": "object"
+        }
+      },
+      "required": [
+        "issues",
+        "ports",
+        "ref_ids",
+        "new_edge_ids"
+      ],
+      "title": "FlowValidationRead",
+      "type": "object"
+    },
       ],
       "title": "FlowResultState",
       "type": "string"
@@ -50715,6 +51032,26 @@
             }
           ],
           "default": null,
+    "tournament.FormationNodeConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "balancer",
+            "draft",
+            "registered",
+            "manual"
+          ],
+          "title": "Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "FormationNodeConfig",
+      "type": "object"
+    },
           "title": "Recommended Min"
         },
         "role": {
@@ -50999,6 +51336,42 @@
         "created_at": {
           "format": "date-time",
           "title": "Created At",
+    "tournament.LeaderboardNodeConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "pins": {
+          "default": [],
+          "items": {
+            "$ref": "#/components/schemas/tournament.LeaderboardPin"
+          },
+          "title": "Pins",
+          "type": "array"
+        }
+      },
+      "title": "LeaderboardNodeConfig",
+      "type": "object"
+    },
+    "tournament.LeaderboardPin": {
+      "additionalProperties": false,
+      "description": "An admin-fixed place on a leaderboard, like ``StandingPin`` on a stage table.",
+      "properties": {
+        "participant_id": {
+          "title": "Participant Id",
+          "type": "integer"
+        },
+        "position": {
+          "minimum": 1,
+          "title": "Position",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "participant_id",
+        "position"
+      ],
+      "title": "LeaderboardPin",
+      "type": "object"
+    },
           "type": "string"
         }
       },
@@ -52204,6 +52577,12 @@
             },
             {
               "type": "null"
+    "tournament.MergeNodeConfig": {
+      "additionalProperties": false,
+      "properties": {},
+      "title": "MergeNodeConfig",
+      "type": "object"
+    },
             }
           ],
           "default": null,
@@ -54892,6 +55271,119 @@
         "roles": {
           "items": {
             "$ref": "#/components/schemas/tournament.RoleRef"
+    "tournament.RegistrationNodeConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_late_registration": {
+          "default": false,
+          "title": "Allow Late Registration",
+          "type": "boolean"
+        },
+        "auto_approve": {
+          "default": false,
+          "title": "Auto Approve",
+          "type": "boolean"
+        },
+        "check_in": {
+          "default": false,
+          "title": "Check In",
+          "type": "boolean"
+        },
+        "intake": {
+          "default": "solo",
+          "enum": [
+            "solo",
+            "team"
+          ],
+          "title": "Intake",
+          "type": "string"
+        },
+        "max_participants": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Participants"
+        },
+        "max_substitutes": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Max Substitutes",
+          "type": "integer"
+        },
+        "require_subscription": {
+          "default": false,
+          "title": "Require Subscription",
+          "type": "boolean"
+        },
+        "subscription_scope": {
+          "default": "player",
+          "enum": [
+            "player",
+            "team"
+          ],
+          "title": "Subscription Scope",
+          "type": "string"
+        },
+        "subscription_stage": {
+          "$ref": "#/components/schemas/tournament.SubscriptionEnforcementStage",
+          "default": "check_in"
+        },
+        "team_max_rank_spread": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Max Rank Spread"
+        },
+        "team_rank_max": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Rank Max"
+        },
+        "team_rank_min": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Rank Min"
+        },
+        "team_require_discord_guild": {
+          "default": false,
+          "title": "Team Require Discord Guild",
+          "type": "boolean"
+        },
+        "team_unique_identity": {
+          "default": false,
+          "title": "Team Unique Identity",
+          "type": "boolean"
+        }
+      },
+      "title": "RegistrationNodeConfig",
+      "type": "object"
+    },
           },
           "title": "Roles",
           "type": "array"
@@ -57212,6 +57704,57 @@
         "user_id",
         "provider",
         "username"
+    "tournament.SplitBucket": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SplitBucket",
+      "type": "object"
+    },
+    "tournament.SplitNodeConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "buckets": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.SplitBucket"
+          },
+          "minItems": 1,
+          "title": "Buckets",
+          "type": "array"
+        },
+        "serpentine": {
+          "default": false,
+          "title": "Serpentine",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "buckets"
+      ],
+      "title": "SplitNodeConfig",
+      "type": "object"
+    },
       ],
       "title": "SocialAccountRead",
       "type": "object"
@@ -57742,6 +58285,12 @@
         "stage_id",
         "name",
         "type",
+    "tournament.StageNodeConfig": {
+      "additionalProperties": false,
+      "properties": {},
+      "title": "StageNodeConfig",
+      "type": "object"
+    },
         "order"
       ],
       "title": "StageItemRead",
@@ -59183,6 +59732,15 @@
           "title": "Draw"
         },
         "lose": {
+    "tournament.SubscriptionEnforcementStage": {
+      "description": "The EARLIEST admission gate a subscription requirement blocks at.\n\nOrdered, not a set: ``registration`` implies check-in too. Requiring a\nsubscription to sign up while admitting an unsubscribed player at check-in\nwould be incoherent, so there is no \"registration only\" value to pick wrongly.\n\nOff is not a member -- that is the registration node's ``require_subscription``\nbeing false. Same shape as ``require_open_profile`` + ``open_profile_scope``\nin the same table: one flag for whether, one value for how.",
+      "enum": [
+        "registration",
+        "check_in"
+      ],
+      "title": "SubscriptionEnforcementStage",
+      "type": "string"
+    },
           "anyOf": [
             {
               "type": "integer"

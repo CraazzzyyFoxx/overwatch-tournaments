@@ -242,6 +242,22 @@ class FlowService:
         issues += [i for i in flow_issues if not (i.code == "invalid_config" and i.node_id in upserted)]
         return FlowChangePlan(list(nodes.values()), list(edges.values()), issues, ref_ids, new_edges)
 
+    async def validate_changes(
+        self, session: AsyncSession, tournament_id: int, changes: flow_schemas.FlowChanges
+    ) -> flow_schemas.FlowValidationRead:
+        """The dry run of ``apply_changes``: its issues and the resolved ports of every node, under the plan's ids."""
+        plan = await self.plan_changes(session, tournament_id, changes)
+        ports = resolve_ports(plan.nodes, plan.edges)
+        return flow_schemas.FlowValidationRead(
+            issues=[flow_schemas.FlowIssueRead(**asdict(i)) for i in plan.issues],
+            ports=[
+                flow_schemas.FlowPreviewPortsRead(node_id=n.id, ports=[asdict(p) for p in ports[n.id]])
+                for n in plan.nodes
+            ],
+            ref_ids=plan.ref_ids,
+            new_edge_ids=plan.new_edge_ids,
+        )
+
     async def apply_changes(
         self, session: AsyncSession, tournament_id: int, changes: flow_schemas.FlowChanges, *, actor: models.AuthUser
     ) -> flow_schemas.AdminFlowRead:

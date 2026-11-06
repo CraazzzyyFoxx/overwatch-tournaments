@@ -287,3 +287,21 @@ func TestPlayerSubRoleListForwardsExplicitDiscipline(t *testing.T) {
 		t.Fatalf("lost concrete sub-role scope: %#v", sent.Query)
 	}
 }
+
+// TestFlowValidateRouteContract pins the editor's dry run: a body-carrying POST
+// on the tournament id, authenticated, onto the typed validate subject.
+func TestFlowValidateRouteContract(t *testing.T) {
+	const pattern = "/api/v1/admin/tournaments/{tournament_id}/flow/validate"
+	var got *edge.RouteSpec
+	for i, r := range AdminMiscRoutes {
+		if r.Pattern == pattern && r.Method == "POST" {
+			got = &AdminMiscRoutes[i]
+		}
+	}
+	if got == nil {
+		t.Fatalf("POST %s is not registered", pattern)
+	}
+	if got.Queue != "rpc.tournament.flow_validate" || got.IDParam != "tournament_id" || !got.Body || got.Auth != edge.AuthRequired {
+		t.Fatalf("unexpected flow_validate contract: %#v", *got)
+	}
+}
