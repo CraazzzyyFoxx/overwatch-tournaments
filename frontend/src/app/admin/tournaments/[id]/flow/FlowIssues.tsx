@@ -20,7 +20,19 @@ export function FlowIssues({
   const entries: Entry[] = [
     ...[...keyed.nodeIssues].flatMap(([key, list]) => list.map((issue) => ({ issue, key }))),
     ...[...keyed.edgeIssues].flatMap(([key, list]) => list.map((issue) => ({ issue, key: edgeNode(key) }))),
-    ...keyed.general.map((issue) => ({ issue, key: null }))
+    ...keyed.general.map((issue) => ({ issue, key: null })),
+    ...draft.nodes
+      .filter((n) => n.serverChanged)
+      .map((n) => ({
+        issue: {
+          code: "changed_on_server",
+          severity: "warning",
+          message: t("serverChanged", { name: n.name }),
+          node_id: null,
+          edge_id: null
+        } as FlowIssueRead,
+        key: n.key
+      }))
   ].sort((a, b) => Number(b.issue.severity === "error") - Number(a.issue.severity === "error"));
 
   return (

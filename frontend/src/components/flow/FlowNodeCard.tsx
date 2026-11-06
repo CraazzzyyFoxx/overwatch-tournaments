@@ -32,6 +32,11 @@ export function FlowNodeCard({ data }: NodeProps<Node<FlowNodeData>>) {
             {data.issueCount}
           </Badge>
         ) : null}
+        {data.serverChanged ? (
+          <Badge tone="warning" size="sm">
+            {t("serverChanged")}
+          </Badge>
+        ) : null}
       </div>
       {data.ports.map((port, index) => {
         const unit = port.unit as FlowUnit | null;

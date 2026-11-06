@@ -15,7 +15,8 @@ export const FLOW_ERROR_CODES = [
   "formation_has_no_teams",
   "formation_wrong_mode",
   "qualification_not_locked",
-  "boundary_tie"
+  "boundary_tie",
+  "node_has_dependents"
 ] as const;
 
 export type FlowErrorCode = (typeof FLOW_ERROR_CODES)[number];

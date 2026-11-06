@@ -41,7 +41,7 @@
 | --- | --- | --- | --- |
 | `GET /api/v1/tournaments/{id}/flow` | `rpc.tournament.get_flow` | ничего (скрытый турнир подчиняется правилам видимости) | `FlowRead`: `nodes` с `ports`, `edges`, `results` и `participants` (имена участников, на которых ссылаются результаты). |
 | `GET /api/v1/admin/tournaments/{id}/flow` | `rpc.tournament.flow_get` | `tournament.read` | `AdminFlowRead`: `FlowRead` плюс `issues` сохранённого графа, `catalogue` (каталог портов по видам) и `config_defaults` (начальная конфигурация каждого вида). |
-| `PUT /api/v1/admin/tournaments/{id}/flow` | `rpc.tournament.flow_apply` | `tournament.update` | Применяет `FlowChanges` одной транзакцией и отвечает `AdminFlowRead`. 422 `flow_invalid` для неверного графа, 409 `node_frozen` для замороженного узла. |
+| `PUT /api/v1/admin/tournaments/{id}/flow` | `rpc.tournament.flow_apply` | `tournament.update` | Применяет `FlowChanges` одной транзакцией и отвечает `AdminFlowRead`. 422 `flow_invalid` для неверного графа, 409 `node_frozen` для замороженного узла, 409 `node_has_dependents`, когда у удаляемого черновика регистрации или формирования остались заявки, команды, игроки или таблицы-фиды. |
 | `POST /api/v1/admin/tournaments/{id}/flow/validate` | `rpc.tournament.flow_validate` | `tournament.update` | Тот же `FlowChanges`, но как пробный прогон: ничего не пишется и не попадает в аудит. |
 | `POST /api/v1/admin/flow-nodes/{node_id}/transition` | `rpc.tournament.flow_node_transition` | `tournament.update` | Тело `{"status": "…"}`; единственный способ перевести узел с жизненным циклом. 409 `invalid_node_transition`, если автомат такого перехода не допускает. |
 | `PUT /api/v1/admin/flow-nodes/{node_id}/schedule` | `rpc.tournament.flow_node_schedule_set` | `tournament.update` | Заменяет расписание узла: записи с `phase` (`open`, `check_in`, `start`), `starts_at` и необязательным `ends_at`. |
@@ -67,7 +67,7 @@
 
 - У узла задано ровно одно из `id` (обновление) и `ref` (создание); `ref` в запросе уникальны. Конец ребра — id узла или `ref` узла, созданного тем же запросом.
 - Новый узел `stage` несёт поле `stage`: сохранение создаёт его `Stage`. Удаление узла, чья стадия ещё `draft`, удаляет и стадию. Поле `stage` у любого другого узла отклоняется.
-- Отправлять нужно только изменения: неизменённый узел можно не указывать.
+- Отправленный узел записывается целиком: `config` заменяет сохранённый (upsert без него сбрасывает его в `{}`), поэтому вместе с любым изменением отправляйте текущий `config` узла. Узел, которого нет в запросе, не затрагивается.
 
 ### Пробный прогон
 

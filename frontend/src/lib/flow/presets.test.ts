@@ -89,6 +89,11 @@ describe("presets", () => {
     expect(wires(c)).toContain(`${aggregate}.ranking>${board}.ranking`);
   });
 
+  it("gives each league day a phase of its own, in day order", () => {
+    const c = run("league", { days: 3, best: 2 });
+    expect(c.nodes.filter((n) => n.stage).map((n) => [n.name, n.stage?.order])).toEqual([["Day 1", 1], ["Day 2", 2], ["Day 3", 3]]);
+  });
+
   it("counts every day when best equals days, and refuses best above days and fewer than two days", () => {
     expect(run("league", { days: 2, best: 2 }).nodes.find((n) => n.kind === "aggregate")?.config).toMatchObject({ mode: "sum_all", n: null });
     expect(() => run("league", { days: 3, best: 4 })).toThrow(RangeError);

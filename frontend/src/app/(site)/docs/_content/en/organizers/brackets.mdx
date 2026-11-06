@@ -57,14 +57,13 @@ A stage wired to earlier stages in the flow cannot be marked ready until they ar
 The **Seeding** block of **Settings**.
 
 - **Bracket seeds** decides who is seed 1 in the generated bracket: **Slot order (manual / standings)**, **Highest team avg SR first**, **Highest team total SR first** or **Random (stable per stage)**.
-- **Teams advancing to playoff (per group)** is how many teams leave each group. Leave it empty to derive the number from the bracket wiring. **Advance count per group** below overrides it for a single group.
-- **Wire seeds from** plus the **Wire** button names the group stage that feeds this bracket. It is required when two divisions run in parallel.
-- The **Seed by SR** menu item spreads teams across the groups with a snake SR draft. Every manual assignment in the stage is cleared first.
-- **Auto-wire from groups** links the playoff to the group stage for you.
+- **Seed by SR** (a menu item of the stage actions) spreads teams across the groups with a snake SR draft. Every manual assignment in the stage is cleared first.
+- Who feeds the stage, and how many teams leave each group, are not set here. The arrows into the stage and the filter node before it decide that, in the **Flow** tab: for groups → playoff, put a **Top N per group** filter after the groups and draw its **passed** output into the playoff (or start from the **Groups → playoff** preset). See [The Flow tab](/docs/organizers/flow).
+- The stage seats its teams from its input when it turns **Ready**; the **Seeding** block's **Bracket seeds** decides the order they are placed in.
 
 ### Lower-bracket seeds in double elimination
 
-On the **group** stage, **Of them to upper bracket (per group)** says how many of each group's advancing teams start in the upper bracket. Leave it empty and every advancing team starts upper. The rest start in the lower bracket, and the **upper** field next to a group in **Advance count per group** overrides the number for that one group.
+On the **Flow** tab, the **Top N per group** filter between the group stage and the playoff has an **Upper bracket per group** field: how many of each group's passed teams start in the upper bracket. Leave it empty and every passed team starts upper. The rest start in the lower bracket.
 
 The playoff's **Lower bracket** item is created for you when the stages are wired — you do not add it by hand.
 
@@ -86,7 +85,7 @@ Each switch works on its own. Once fewer than two teams are left undecided, no f
 
 Under a switched-on threshold, **Best-of of a qualification match** and **Best-of of an elimination match** set the series length of a match in which a team is one win from qualifying or one loss from elimination. It overrides the round's best-of; a match that is both plays the longer series. **Regular** keeps the usual rule.
 
-Qualified and eliminated teams keep their places in the **Standings**, marked **Qualified** or **Eliminated**. Who goes on to the playoff is still decided by place, through **Teams advancing to playoff (per group)**. With equal thresholds exactly half of an even group qualifies, and the card warns when the advance count says otherwise.
+Qualified and eliminated teams keep their places in the **Standings**, marked **Qualified** or **Eliminated**. Who goes on to the playoff is decided by a filter node in the **Flow** tab: **Top N**, **Top N per group** or **Swiss status**. See [The Flow tab](/docs/organizers/flow). With equal thresholds exactly half of an even group qualifies, so a **Swiss status** filter set to **Qualified** passes that half.
 
 ## Points and tiebreakers
 

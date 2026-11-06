@@ -4,12 +4,13 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { FlowCanvas } from "@/components/flow/FlowCanvas";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { FLOW_NODE_PARAM } from "@/hooks/useFlowNodeParam";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { toCanvas } from "@/lib/flow/flowCanvas";
-import { addNode, canDelete, connect, removeEdge, removeNode, updateNode } from "@/lib/flow/flowDraft";
+import { addNode, assignStageOrders, connect, deletedLifecycleNodes, removeEdge, removeNode, updateNode, canDelete } from "@/lib/flow/flowDraft";
 import { applyPreset, hasOnlyStarterNodes, type PresetLabels } from "@/lib/flow/presets";
 import type { FlowNodeKind, FlowStageCreate } from "@/types/flow.types";
 
@@ -31,6 +32,7 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
   const { canAccessPermission } = usePermissions();
   const { searchParams, setParams } = useQueryParams({ shallow: true, resetOnChange: [] });
   const [presetsOpen, setPresetsOpen] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const editor = useFlowEditor(tournamentId);
   const tournament = useHubTournamentQuery(tournamentId).data;
@@ -54,6 +56,8 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
   const select = (key: string | null) => setParams({ [FLOW_NODE_PARAM]: key });
   const issueCounts = new Map([...keyed.nodeIssues].map(([key, list]) => [key, list.length]));
   const { nodes, edges } = toCanvas(draft, keyed.ports, issueCounts, new Set(keyed.edgeIssues.keys()), readOnly);
+  const savedOrders = new Map((tournament?.stages ?? []).map((stage) => [stage.id, stage.order] as const));
+  const doomed = deletedLifecycleNodes(draft);
 
   const add = (kind: FlowNodeKind, at?: { x: number; y: number }) =>
     apply((d) => {
@@ -61,14 +65,17 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
       const rightmost = d.nodes.reduce<(typeof d.nodes)[number] | null>((r, n) => (!r || n.x > r.x ? n : r), null);
       const { x, y } = at ?? { x: (rightmost?.x ?? 0) + CLICK_OFFSET, y: rightmost?.y ?? 0 };
       const seed = (read.config_defaults?.[kind as keyof typeof read.config_defaults] ?? {}) as Record<string, unknown>;
-      return addNode(d, {
-        kind,
-        name,
-        config: structuredClone(seed),
-        stage: kind === "stage" ? ({ name, stage_type: "round_robin" } as FlowStageCreate) : null,
-        x,
-        y
-      });
+      return assignStageOrders(
+        addNode(d, {
+          kind,
+          name,
+          config: structuredClone(seed),
+          stage: kind === "stage" ? ({ name, stage_type: "round_robin" } as FlowStageCreate) : null,
+          x,
+          y
+        }),
+        savedOrders
+      );
     });
 
   const labels: PresetLabels = {
@@ -96,7 +103,7 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
         {canUpdate && dirty ? (
           <>
             <span className="text-caption text-muted-foreground">{t("toolbar.unsaved")}</span>
-            <Button type="button" disabled={editor.saving} onClick={editor.save}>
+            <Button type="button" disabled={editor.saving} onClick={() => (doomed.length > 0 ? setConfirmingDelete(true) : editor.save())}>
               {t("toolbar.save")}
             </Button>
             <Button type="button" variant="outline" disabled={editor.saving} onClick={editor.discard}>
@@ -121,7 +128,8 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
             onNodeClick={select}
             onDropKind={add}
             onConnect={({ source, sourceHandle, target, targetHandle }) => {
-              if (sourceHandle && targetHandle) apply((d) => connect(d, { source, sourceHandle, target, targetHandle }));
+              if (sourceHandle && targetHandle)
+                apply((d) => assignStageOrders(connect(d, { source, sourceHandle, target, targetHandle }), savedOrders));
             }}
             onNodesChange={(changes) =>
               apply((d) =>
@@ -161,6 +169,23 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
         onApply={(preset, params) => {
           apply((d) => applyPreset(d, preset, params, labels));
           setPresetsOpen(false);
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        onOpenChange={setConfirmingDelete}
+        intent={{
+          title: t("confirmDelete.title"),
+          description: t("confirmDelete.description"),
+          confirmLabel: t("confirmDelete.confirm"),
+          tone: "danger",
+          cascade: doomed.map((n) => t(`confirmDelete.${n.kind as "registration"}`, { name: n.name }))
+        }}
+        pending={editor.saving}
+        onConfirm={() => {
+          setConfirmingDelete(false);
+          editor.save();
         }}
       />
     </div>

@@ -1,7 +1,9 @@
 "use client";
 
-import type { CSSProperties, DragEvent } from "react";
+import { useState, type CSSProperties, type DragEvent } from "react";
 import {
+  applyEdgeChanges,
+  applyNodeChanges,
   Background,
   Controls,
   MiniMap,
@@ -37,6 +39,15 @@ const XY_THEME = {
 
 const nodeTypes = { flowNode: FlowNodeCard };
 
+/** The next props' elements, each keeping the xyflow-owned fields of the element it replaces (matched by id). */
+function carryOver<T extends { id: string }>(current: T[], next: T[], keys: (keyof T)[]): T[] {
+  const byId = new Map(current.map((element) => [element.id, element]));
+  return next.map((element) => {
+    const previous = byId.get(element.id);
+    return previous ? { ...element, ...Object.fromEntries(keys.map((key) => [key, previous[key]])) } : element;
+  });
+}
+
 type FlowCanvasProps = {
   nodes: Node<FlowNodeData>[];
   edges: Edge[];
@@ -64,6 +75,29 @@ function Canvas({
 }: Readonly<FlowCanvasProps>) {
   const { screenToFlowPosition } = useReactFlow();
 
+  // xyflow's own state (selection, measured sizes, drag flags) lives here: a controlled canvas applies only the
+  // changes the app applies, so dropping `select`/`dimensions` would leave nothing selectable and every node unmeasured.
+  // The props stay the source of truth for what exists and where, and only position and removal go back to the parent.
+  const [rfNodes, setRfNodes] = useState(nodes);
+  const [rfEdges, setRfEdges] = useState(edges);
+  const [synced, setSynced] = useState({ nodes, edges });
+  if (synced.nodes !== nodes || synced.edges !== edges) {
+    setSynced({ nodes, edges });
+    setRfNodes((current) => carryOver(current, nodes, ["measured", "selected", "dragging"]));
+    setRfEdges((current) => carryOver(current, edges, ["selected"]));
+  }
+
+  const handleNodesChange: OnNodesChange<Node<FlowNodeData>> = (changes) => {
+    setRfNodes((current) => applyNodeChanges(changes, current));
+    const edits = changes.filter((change) => change.type === "position" || change.type === "remove");
+    if (!readOnly && edits.length > 0) onNodesChange?.(edits);
+  };
+  const handleEdgesChange: OnEdgesChange = (changes) => {
+    setRfEdges((current) => applyEdgeChanges(changes, current));
+    const edits = changes.filter((change) => change.type === "remove");
+    if (!readOnly && edits.length > 0) onEdgesChange?.(edits);
+  };
+
   const onDragOver = (e: DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
@@ -80,11 +114,11 @@ function Canvas({
       className={`${heightClass} w-full rounded-lg border bg-background [&_.flow-edge-invalid_.react-flow__edge-path]:stroke-[color:var(--aqt-rose)]!`}
     >
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={rfNodes}
+        edges={rfEdges}
         nodeTypes={nodeTypes}
-        onNodesChange={readOnly ? undefined : onNodesChange}
-        onEdgesChange={readOnly ? undefined : onEdgesChange}
+        onNodesChange={handleNodesChange}
+        onEdgesChange={handleEdgesChange}
         onConnect={readOnly ? undefined : onConnect}
         onNodeClick={onNodeClick ? (_event, node) => onNodeClick(node.id) : undefined}
         onDragOver={readOnly ? undefined : onDragOver}

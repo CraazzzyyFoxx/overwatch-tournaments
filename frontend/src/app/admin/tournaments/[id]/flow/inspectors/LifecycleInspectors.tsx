@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { FlowNodeControls } from "@/components/tournaments/FlowNodeControls";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { DraftNode } from "@/lib/flow/flowDraft";
-import { poolRegistrationNodeId } from "@/lib/tournament/flow-nodes";
+import { poolRegistrationNodeIds } from "@/lib/tournament/flow-nodes";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import type { TournamentFlowNode } from "@/types/flow.types";
 import type { Tournament } from "@/types/tournament.types";
@@ -63,7 +63,7 @@ export function FormationInspector({
 }: SavedProps & Readonly<{ mode: string }>) {
   const t = useTranslations("adminTournament.flow.inspector");
   const { canAccessPermission } = usePermissions();
-  const registrationNodeId = poolRegistrationNodeId(saved);
+  const registrationNodeIds = poolRegistrationNodeIds(saved);
   const link = (href: string, label: string) => (
     <Button asChild variant="outline">
       <Link href={href}>{label}</Link>
@@ -73,11 +73,11 @@ export function FormationInspector({
   return (
     <div className="space-y-4">
       <FlowNodeControls tournament={tournament} node={saved} canUpdate={!readOnly} />
-      {mode === "draft" && registrationNodeId !== null ? (
+      {mode === "draft" && registrationNodeIds.length > 0 ? (
         <DraftSessionDashboard
           tournamentId={tournamentId}
           formationNodeId={saved.id}
-          registrationNodeId={registrationNodeId}
+          registrationNodeIds={registrationNodeIds}
           canManage={canAccessPermission("team.create", tournament.workspace_id)}
         />
       ) : null}

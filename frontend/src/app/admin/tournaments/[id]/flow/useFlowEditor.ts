@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useUnsavedGuard } from "@/components/kit/useUnsavedGuard";
+import { useFlowErrorNotifier } from "@/hooks/useFlowErrorNotifier";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { portsFromRead } from "@/lib/flow/flowCanvas";
 import {
@@ -14,7 +15,6 @@ import {
   isDirty,
   type FlowDraft
 } from "@/lib/flow/flowDraft";
-import { notify } from "@/lib/notify";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import flowService from "@/services/flow.service";
 import type { FlowChanges } from "@/types/flow.types";
@@ -27,6 +27,7 @@ const noop = () => undefined;
 /** The Flow tab's state: the admin read, the local draft, the debounced dry run, and Save. */
 export function useFlowEditor(tournamentId: number) {
   const queryClient = useQueryClient();
+  const notifyFlowError = useFlowErrorNotifier();
   const flowKey = adminQueryKeys.tournamentFlow(tournamentId);
   const readQuery = useQuery({ queryKey: flowKey, queryFn: () => flowService.getAdmin(tournamentId) });
   const read = readQuery.data;
@@ -68,7 +69,7 @@ export function useFlowEditor(tournamentId: number) {
       void queryClient.invalidateQueries({ queryKey: flowKey });
       void invalidateTournamentWorkspace(queryClient, tournamentId);
     },
-    onError: (error) => notify.apiError(error)
+    onError: (error) => notifyFlowError(error)
   });
 
   useUnsavedGuard({ dirty, guardNavigation: false, onNavigationBlocked: noop });

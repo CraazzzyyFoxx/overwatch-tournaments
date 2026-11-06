@@ -24,6 +24,8 @@ export type FlowNodeData = {
   ports: FlowPortRead[];
   issueCount: number;
   readOnly: boolean;
+  /** The server changed this node while the admin's edit of it was pending. */
+  serverChanged: boolean;
 };
 
 /** Every node's ports as the server resolved them, in the shape `keyedValidation` takes. */
@@ -49,7 +51,8 @@ export function toCanvas(
       status: node.status,
       ports: ports.get(node.key) ?? [],
       issueCount: issueCounts.get(node.key) ?? 0,
-      readOnly
+      readOnly,
+      serverChanged: node.serverChanged === true
     }
   }));
   const edges = draft.edges.map((edge): Edge => {

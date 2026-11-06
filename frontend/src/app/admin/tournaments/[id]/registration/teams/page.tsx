@@ -7,7 +7,7 @@ import { FlowNodeControls } from "@/components/tournaments/FlowNodeControls";
 import { FLOW_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
-import { nodesOfKind, poolRegistrationNodeId } from "@/lib/tournament/flow-nodes";
+import { nodesOfKind, poolRegistrationNodeIds } from "@/lib/tournament/flow-nodes";
 
 import { RegistrationTeamsBrowser } from "../../components/RegistrationTeamsBrowser";
 import { tabError, tabFallback, useHubTournamentQuery } from "../../hubQueries";
@@ -35,7 +35,9 @@ export default function RegistrationTeamsPage() {
   const tournament = tournamentQuery.data;
   const formationNodeId = useFlowNodeParam(tournament, "formation", "registered");
   const formationNode = nodesOfKind(tournament, "formation").find((node) => node.id === formationNodeId);
-  const registrationNodeId = poolRegistrationNodeId(formationNode) ?? nodesOfKind(tournament, "registration")[0]?.id ?? null;
+  const poolNodeIds = poolRegistrationNodeIds(formationNode);
+  const registrationNodeIds =
+    poolNodeIds.length > 0 ? poolNodeIds : nodesOfKind(tournament, "registration").slice(0, 1).map((node) => node.id);
   const { setParams } = useQueryParams();
 
   if (tournamentQuery.isLoading) return tabFallback;
@@ -43,7 +45,7 @@ export default function RegistrationTeamsPage() {
     return tabError(() => void tournamentQuery.refetch());
   }
 
-  if (registrationNodeId == null) return tabError(() => void tournamentQuery.refetch());
+  if (registrationNodeIds.length === 0) return tabError(() => void tournamentQuery.refetch());
 
   return (
     <div className="space-y-4">
@@ -64,7 +66,7 @@ export default function RegistrationTeamsPage() {
         tournamentId={validTournamentId}
         workspaceId={tournament.workspace_id}
         discipline={tournament.discipline}
-        registrationNodeId={registrationNodeId}
+        registrationNodeIds={registrationNodeIds}
         formationNodeId={formationNodeId}
       />
     </div>

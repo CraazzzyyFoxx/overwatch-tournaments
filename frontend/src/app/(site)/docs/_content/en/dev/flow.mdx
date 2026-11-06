@@ -41,7 +41,7 @@ Reads and writes need the workspace permissions below; every write goes through 
 | --- | --- | --- | --- |
 | `GET /api/v1/tournaments/{id}/flow` | `rpc.tournament.get_flow` | none (a hidden tournament follows its visibility rules) | `FlowRead`: `nodes` with `ports`, `edges`, `results`, and `participants` (the names of the participants the results refer to). |
 | `GET /api/v1/admin/tournaments/{id}/flow` | `rpc.tournament.flow_get` | `tournament.read` | `AdminFlowRead`: `FlowRead` plus `issues` of the stored graph, `catalogue` (the port catalogue per kind) and `config_defaults` (the seed config of each kind). |
-| `PUT /api/v1/admin/tournaments/{id}/flow` | `rpc.tournament.flow_apply` | `tournament.update` | Applies a `FlowChanges` in one transaction and answers `AdminFlowRead`. 422 `flow_invalid` for an invalid graph, 409 `node_frozen` for a frozen node. |
+| `PUT /api/v1/admin/tournaments/{id}/flow` | `rpc.tournament.flow_apply` | `tournament.update` | Applies a `FlowChanges` in one transaction and answers `AdminFlowRead`. 422 `flow_invalid` for an invalid graph, 409 `node_frozen` for a frozen node, 409 `node_has_dependents` when a deleted draft registration or formation node still owns entries, teams, players or sheet feeds. |
 | `POST /api/v1/admin/tournaments/{id}/flow/validate` | `rpc.tournament.flow_validate` | `tournament.update` | The same `FlowChanges`, as a dry run: nothing is written, nothing is audited. |
 | `POST /api/v1/admin/flow-nodes/{node_id}/transition` | `rpc.tournament.flow_node_transition` | `tournament.update` | Body `{"status": "…"}`; the only way to move a lifecycle node. 409 `invalid_node_transition` for a move the state machine does not allow. |
 | `PUT /api/v1/admin/flow-nodes/{node_id}/schedule` | `rpc.tournament.flow_node_schedule_set` | `tournament.update` | Replaces a node's schedule: entries of `phase` (`open`, `check_in`, `start`) with `starts_at` and optional `ends_at`. |
@@ -67,7 +67,7 @@ Node config, node moves and the graph itself are all gated by `tournament.update
 
 - A node has exactly one of `id` (update) and `ref` (create); `ref` values are unique in the request. An edge endpoint is a node id or the `ref` of a node created by the same request.
 - A new `stage` node carries a `stage` payload: the save creates its `Stage`. Deleting a node whose stage is still `draft` deletes the stage with it. A `stage` payload on any other node is rejected.
-- Only the changes need to be sent: an unchanged node can be left out.
+- A node you send is written whole: `config` replaces the stored config (an upsert that leaves it out resets it to `{}`), so send the node's current config along with any change. A node you leave out is untouched.
 
 ### The dry run
 

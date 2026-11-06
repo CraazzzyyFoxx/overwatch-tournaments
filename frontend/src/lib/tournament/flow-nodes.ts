@@ -17,12 +17,14 @@ export function draftFormationNode(
 }
 
 /**
- * The registration node whose entries a formation screen lists as its pool: the newest of the formation's upstream
- * registration nodes (`pool_registration_node_ids`, newest first), whose entry decides per member (Decision 9). `null`
- * for no formation, or a formation no registration feeds.
+ * Every registration node feeding a formation, newest first (`pool_registration_node_ids`): a formation screen lists the
+ * union of their entries, the newest node's entry deciding per member (Decision 9). Empty for no formation, or a
+ * formation no registration feeds.
  */
-export function poolRegistrationNodeId(formation: Pick<TournamentFlowNode, "pool_registration_node_ids"> | null | undefined): number | null {
-  return formation?.pool_registration_node_ids[0] ?? null;
+export function poolRegistrationNodeIds(
+  formation: Pick<TournamentFlowNode, "pool_registration_node_ids"> | null | undefined
+): number[] {
+  return formation?.pool_registration_node_ids ?? [];
 }
 
 /**

@@ -3,15 +3,18 @@ import { describe, expect, it } from "vitest";
 import { starterRead, port } from "./fixtures";
 import {
   addNode,
+  assignStageOrders,
   canDelete,
   connect,
+  deletedLifecycleNodes,
   draftFromRead,
   isDirty,
   keyedValidation,
   refreshDraft,
   removeNode,
   toChanges,
-  updateNode
+  updateNode,
+  type FlowDraft
 } from "./flowDraft";
 
 const EMPTY = { nodes: [], edges: [], delete_node_ids: [], delete_edge_ids: [] };
@@ -115,5 +118,98 @@ describe("flow draft", () => {
       ["2", true],
       ["new-1", true]
     ]);
+  });
+
+  describe("refetch while dirty", () => {
+    const edited = () => updateNode(draftFromRead(starterRead()), "2", { config: { mode: "draft" } });
+    const serverRead = (over: { reg?: Record<string, unknown>; form?: Record<string, unknown>; formName?: string }) => {
+      const read = starterRead();
+      read.nodes[0].config = { ...read.nodes[0].config, ...over.reg };
+      read.nodes[1].config = { ...read.nodes[1].config, ...over.form };
+      if (over.formName) read.nodes[1].name = over.formName;
+      return read;
+    };
+
+    it("adopts the server's config into nodes the admin did not touch, so Save does not send them", () => {
+      const next = refreshDraft(edited(), serverRead({ reg: { check_in: true } }));
+      expect(next.nodes.find((n) => n.key === "1")?.config).toEqual({ check_in: true });
+      expect(toChanges(next).nodes.map((n) => n.id)).toEqual([2]);
+    });
+
+    it("keeps the admin's edit and flags the node when the server changed the same config", () => {
+      const next = refreshDraft(edited(), serverRead({ form: { mode: "manual" } }));
+      const node = next.nodes.find((n) => n.key === "2")!;
+      expect(node.config).toEqual({ mode: "draft" });
+      expect(node.serverChanged).toBe(true);
+      expect(next.nodes.find((n) => n.key === "1")?.serverChanged).toBe(false);
+      expect(toChanges(next).nodes).toEqual([expect.objectContaining({ id: 2, config: { mode: "draft" } })]);
+    });
+
+    it("does not flag a node whose server config already equals the admin's edit", () => {
+      const next = refreshDraft(edited(), serverRead({ form: { mode: "draft" } }));
+      expect(next.nodes.find((n) => n.key === "2")?.serverChanged).toBe(false);
+    });
+
+    it("flags a renamed node the server renamed too, and keeps the flag across a later refetch", () => {
+      const renamed = updateNode(draftFromRead(starterRead()), "2", { name: "Mine" });
+      const once = refreshDraft(renamed, serverRead({ formName: "Theirs" }));
+      expect(once.nodes.find((n) => n.key === "2")).toMatchObject({ name: "Mine", serverChanged: true });
+      const twice = refreshDraft(once, serverRead({ formName: "Theirs" }));
+      expect(twice.nodes.find((n) => n.key === "2")?.serverChanged).toBe(true);
+    });
+  });
+
+  describe("stage phases", () => {
+    const stage = (name: string, order?: number) => ({
+      kind: "stage" as const,
+      name,
+      config: {},
+      stage: { name, stage_type: "round_robin", ...(order === undefined ? {} : { order }) } as never,
+      x: 0,
+      y: 0
+    });
+    const link = (d: FlowDraft, source: string, target: string, port = "participants") =>
+      connect(d, { source, sourceHandle: "ranking", target, targetHandle: port });
+
+    it("puts a palette stage after every other stage, and the first at 0", () => {
+      const first = assignStageOrders(addNode(draftFromRead(starterRead()), stage("Groups")), new Map());
+      expect(first.nodes.at(-1)?.stage?.order).toBe(0);
+      const second = assignStageOrders(addNode(first, stage("Playoff")), new Map());
+      expect(second.nodes.at(-1)?.stage?.order).toBe(1);
+      const afterSaved = assignStageOrders(addNode(draftFromRead(starterRead()), stage("Late")), new Map());
+      expect(afterSaved.nodes.at(-1)?.stage?.order).toBe(0);
+    });
+
+    it("counts saved stages in, by their id", () => {
+      const read = starterRead();
+      (read.nodes as unknown[]).push({ id: 3, kind: "stage", name: "Groups", status: "draft", config: {}, stage_id: 40, position_x: 0, position_y: 0, ports: [] });
+      const draft = assignStageOrders(addNode(draftFromRead(read), stage("Playoff")), new Map([[40, 3]]));
+      expect(draft.nodes.at(-1)?.stage?.order).toBe(4);
+    });
+
+    it("follows the stages feeding it, through filters", () => {
+      let d = addNode(draftFromRead(starterRead()), stage("Groups", 2));
+      d = addNode(d, { kind: "filter", name: "Top", config: {}, x: 0, y: 0 });
+      d = addNode(d, stage("Playoff", 0));
+      d = link(d, "new-1", "new-2");
+      d = link(d, "new-2", "new-3");
+      expect(assignStageOrders(d, new Map()).nodes.find((n) => n.key === "new-3")?.stage?.order).toBe(3);
+    });
+
+    it("survives a cycle of stages", () => {
+      let d = addNode(addNode(draftFromRead(starterRead()), stage("A", 1)), stage("B", 1));
+      d = link(link(d, "new-1", "new-2"), "new-2", "new-1");
+      expect(() => assignStageOrders(d, new Map())).not.toThrow();
+    });
+  });
+
+  it("lists the saved lifecycle nodes a draft deletes", () => {
+    let draft = addNode(draftFromRead(starterRead()), filter);
+    draft = removeNode(removeNode(removeNode(draft, "new-1"), "2"), "1");
+    expect(deletedLifecycleNodes(draft).map((n) => n.key)).toEqual(["1", "2"]);
+    const pure = draftFromRead(starterRead());
+    pure.nodes[1].kind = "filter" as never;
+    pure.base = pure.nodes;
+    expect(deletedLifecycleNodes(removeNode(pure, "2"))).toEqual([]);
   });
 });

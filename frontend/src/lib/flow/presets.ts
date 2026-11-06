@@ -3,8 +3,13 @@ import type { FlowRead, FlowStageCreate } from "@/types/flow.types";
 import { addNode, connect, removeEdge, updateNode, type FlowDraft, type NewNode } from "./flowDraft";
 import { kindOf } from "./kinds";
 
-/** The stage fields a preset sets beyond name, type and order; the server fills every other one. */
-type StageExtra = { seed_ranking?: `${NonNullable<FlowStageCreate["seed_ranking"]>}`; playoff_team_count?: number };
+/** The stage fields a preset sets beyond name and type (the phase defaults to the node's column); the server fills every other one. */
+type StageExtra = {
+  seed_ranking?: `${NonNullable<FlowStageCreate["seed_ranking"]>}`;
+  playoff_team_count?: number;
+  /** Replaces the default phase, the column. */
+  order?: number;
+};
 
 export type PresetId = "single" | "groups_playoff" | "groups_reformation_playoff" | "swiss_draft_playoff" | "league";
 
@@ -120,7 +125,7 @@ export function applyPreset(
         teams = formed(labels.dayTeams(i), 1, row);
         wire(intake, "participants", teams, "players");
       }
-      const dayStage = stage(labels.day(i), "round_robin", 2, row);
+      const dayStage = stage(labels.day(i), "round_robin", 2, row, { order: i });
       wire(teams, "teams", dayStage, "participants");
       dayStages.push(dayStage);
     }

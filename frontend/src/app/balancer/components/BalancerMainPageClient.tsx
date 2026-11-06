@@ -34,8 +34,9 @@ import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
-import { nodesOfKind, poolRegistrationNodeId } from "@/lib/tournament/flow-nodes";
+import { nodesOfKind, poolRegistrationNodeIds } from "@/lib/tournament/flow-nodes";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
+import { usePoolRegistrations } from "@/hooks/usePoolRegistrations";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { mergeStatusOptions } from "@/lib/registration/balancer-statuses";
 import { ratedDimension, slotCodeOrder } from "@/lib/roster/ontology";
@@ -181,18 +182,15 @@ export function BalancerMainPageClient() {
   // The balance, its config and every export belong to one formation node of the tournament.
   const formationNodeId = useFlowNodeParam(tournamentQuery.data, "formation", "balancer");
   const formationNode = nodesOfKind(tournamentQuery.data, "formation").find((node) => node.id === formationNodeId);
-  // The pool is what the formation takes as input: the entries of its upstream registration node (Decision 9).
-  const registrationNodeId = poolRegistrationNodeId(formationNode);
+  // The pool is what the formation takes as input: the entries of every upstream registration node (Decision 9).
+  const registrationNodeIds = poolRegistrationNodeIds(formationNode);
   const { setParams } = useQueryParams();
 
-  const registrationsQuery = useQuery({
-    queryKey: balancerQueryKeys.registrations(tournamentId, registrationNodeId),
-    queryFn: () =>
-      balancerAdminService.listRegistrations(tournamentId as number, registrationNodeId as number, {
-        include_deleted: false
-      }),
-    enabled: tournamentId !== null && registrationNodeId !== null,
-    refetchOnWindowFocus: false
+  const registrationsQuery = usePoolRegistrations({
+    tournamentId,
+    nodeIds: registrationNodeIds,
+    includeDeleted: false,
+    queryKey: (nodeId) => balancerQueryKeys.registrations(tournamentId, nodeId)
   });
 
   const savedBalanceQuery = useQuery({
@@ -419,13 +417,17 @@ export function BalancerMainPageClient() {
       includePrivate: boolean;
     }) => {
       const selectedTournamentId = tournamentId;
-      if (!selectedTournamentId || registrationNodeId === null) throw new Error(t("errors.noTournament"));
-      const payload = await balancerAdminService.exportPlayers(
-        selectedTournamentId,
-        registrationNodeId,
-        format,
-        includePrivate
+      if (!selectedTournamentId || registrationNodeIds.length === 0) throw new Error(t("errors.noTournament"));
+      // One export per feeding node, merged oldest first so the newest node's row wins per player.
+      const payloads = await Promise.all(
+        registrationNodeIds.map((nodeId) =>
+          balancerAdminService.exportPlayers(selectedTournamentId, nodeId, format, includePrivate)
+        )
       );
+      const payload = {
+        ...payloads[0]!,
+        players: Object.assign({}, ...[...payloads].reverse().map((exported) => exported.players))
+      };
       return { payload, tournamentId: selectedTournamentId };
     },
     onSuccess: ({ payload, tournamentId: exportedTournamentId }) => {
@@ -502,7 +504,7 @@ export function BalancerMainPageClient() {
   } = useBalancerMutations({
     tournamentId,
     formationNodeId,
-    registrationNodeId,
+    registrationNodeIds,
     workspaceId,
     queryClient,
     dispatchJob,

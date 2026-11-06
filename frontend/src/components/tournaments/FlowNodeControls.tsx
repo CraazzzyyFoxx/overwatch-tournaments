@@ -47,26 +47,13 @@ const STATUS_TONE: Record<string, Tone> = {
 };
 
 /**
- * Whether a stage has started or the tournament is over: past that a registration or formation "Reopen" always answers
- * 409 `downstream_started`, so it is not offered. Only what the tournament read carries decides; a finer refusal
- * (a downstream node that left `draft`) still surfaces as its translated error.
- */
-function playStarted(tournament: Tournament) {
-  return (
-    tournament.status === "completed" ||
-    tournament.status === "archived" ||
-    (tournament.flow_nodes ?? []).some(
-      (node) => node.kind === "stage" && (node.status === "live" || node.status === "completed")
-    )
-  );
-}
-
-/**
  * Where an admin moves the registration and formation nodes (a stage moves from the Bracket tab): each node's label,
  * status and one button per move `NODE_TRANSITIONS` allows from there, every one a `POST /admin/flow-nodes/{id}/transition`.
  * A node is named by its own name only when the tournament has several of its kind; a lone default node reads as its kind.
  * Moves that announce, freeze or end something go through a confirmation. `node` limits it to that one node, for a screen
  * that embeds it (the hub header, the formation tools). Without `canUpdate` (`tournament.update`) only the status shows.
+ * A move is offered whenever `NODE_TRANSITIONS` allows it; the server decides (a reopen after a downstream start answers
+ * 409 `downstream_started`, reported as its translated message).
  */
 export function FlowNodeControls({
   tournament,
@@ -96,7 +83,6 @@ export function FlowNodeControls({
   ).filter((current) => current.kind === "registration" || current.kind === "formation");
   if (nodes.length === 0) return null;
 
-  const started = playStarted(tournament);
   const label = (current: TournamentFlowNode) =>
     nodesOfKind(tournament, current.kind as ControlledKind).length > 1
       ? current.name
@@ -119,7 +105,6 @@ export function FlowNodeControls({
             </StatusPill>
             {moves.flatMap((target) => {
               const move = MOVES[`${kind}.${current.status}>${target}`];
-              if (move === "reopen" && started) return [];
               return [
                 <Button
                   key={target}

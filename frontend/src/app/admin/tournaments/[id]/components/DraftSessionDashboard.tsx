@@ -21,15 +21,15 @@ import { EmptyNote } from "@/components/kit/EmptyNote";
 interface DraftSessionDashboardProps {
   tournamentId: number;
   formationNodeId: number;
-  /** The registration node whose entries the draft pool is read from. */
-  registrationNodeId: number;
+  /** Every registration node whose entries the draft pool is read from. */
+  registrationNodeIds: readonly number[];
   canManage: boolean;
 }
 
 export function DraftSessionDashboard({
   tournamentId,
   formationNodeId,
-  registrationNodeId,
+  registrationNodeIds,
   canManage
 }: Readonly<DraftSessionDashboardProps>) {
   const t = useTranslations("draftAdmin");
@@ -81,7 +81,7 @@ export function DraftSessionDashboard({
       key={`${formationNodeId}:${wizardEpoch}`}
       tournamentId={tournamentId}
       formationNodeId={formationNodeId}
-      registrationNodeId={registrationNodeId}
+      registrationNodeIds={registrationNodeIds}
       board={terminalSession ? null : board}
       rosterShape={rosterShape}
       // Past sessions sit under the step rail (F5 ·4), collapsed: they are

@@ -35,6 +35,8 @@ let adminRead = { ...starterRead(), issues: [] as unknown[], catalogue: [], conf
 const getAdmin = vi.fn(async () => adminRead);
 const validate = vi.fn(async () => ({ issues: [], ports: [], ref_ids: {}, new_edge_ids: [] }));
 const applyChanges = vi.fn(async () => starterRead());
+let savedStages: { id: number; order: number }[] = [];
+let canvas: { onNodesChange: (changes: unknown[]) => void };
 
 vi.mock("@/services/flow.service", () => ({
   default: {
@@ -44,16 +46,19 @@ vi.mock("@/services/flow.service", () => ({
   }
 }));
 vi.mock("@/components/flow/FlowCanvas", () => ({
-  FlowCanvas: ({ nodes }: { nodes: { id: string; data: { name: string } }[] }) => (
-    <ul aria-label="canvas">
-      {nodes.map((n) => (
-        <li key={n.id}>{n.data.name}</li>
-      ))}
-    </ul>
-  )
+  FlowCanvas: (props: { nodes: { id: string; data: { name: string } }[]; onNodesChange: (changes: unknown[]) => void }) => {
+    canvas = props;
+    return (
+      <ul aria-label="canvas">
+        {props.nodes.map((n) => (
+          <li key={n.id}>{n.data.name}</li>
+        ))}
+      </ul>
+    );
+  }
 }));
 vi.mock("../hubQueries", () => ({
-  useHubTournamentQuery: () => ({ data: { id: 7, workspace_id: 3, flow_nodes: [] }, isLoading: false }),
+  useHubTournamentQuery: () => ({ data: { id: 7, workspace_id: 3, flow_nodes: [], stages: savedStages }, isLoading: false }),
   tabFallback: null
 }));
 vi.mock("@/hooks/usePermissions", () => ({ usePermissions: () => ({ canAccessPermission: () => true, isSuperuser: false }) }));
@@ -89,6 +94,7 @@ const button = (name: string) =>
 
 beforeEach(() => {
   adminRead = { ...starterRead(), issues: [], catalogue: [], config_defaults: SEEDS };
+  savedStages = [];
   vi.clearAllMocks();
 });
 afterEach(() => {
@@ -122,5 +128,38 @@ describe("Flow tab", () => {
     await mount();
     expect(container.textContent).toContain("Teams has no input");
     expect(button("Teams")).toBeDefined();
+  });
+
+  it("a palette stage takes the phase after the saved stages", async () => {
+    const read = starterRead();
+    (read.nodes as unknown[]).push({ id: 3, kind: "stage", name: "Groups", status: "draft", config: {}, stage_id: 40, position_x: 520, position_y: 0, ports: [] });
+    adminRead = { ...adminRead, ...read };
+    savedStages = [{ id: 40, order: 3 }];
+    await mount();
+    await act(async () => button("Add Stage").click());
+    await wait(VALIDATE_DEBOUNCE_MS + 50);
+    const [, changes] = validate.mock.calls.at(-1) as unknown as [number, { nodes: { stage?: { order: number } }[] }];
+    expect(changes.nodes[0].stage?.order).toBe(4);
+  });
+
+  it("asks before Save deletes a saved lifecycle node, naming what goes with it", async () => {
+    await mount();
+    await act(async () => canvas.onNodesChange([{ type: "remove", id: "2" }]));
+    await act(async () => button("Save flow").click());
+
+    expect(applyChanges).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("Delete these steps?");
+    expect(document.body.textContent).toContain("Teams (formation): its balancer config, saved balances and draft sessions");
+
+    const confirm = [...document.body.querySelectorAll("button")].find((b) => b.textContent === "Save and delete")!;
+    await act(async () => confirm.click());
+    expect(applyChanges).toHaveBeenCalledWith(7, expect.objectContaining({ delete_node_ids: [2] }));
+  });
+
+  it("saves a pure-node deletion without asking", async () => {
+    await mount();
+    await act(async () => button("Add Filter").click());
+    await act(async () => canvas.onNodesChange([{ type: "remove", id: "new-1" }]));
+    expect(button("Save flow")).toBeUndefined();
   });
 });

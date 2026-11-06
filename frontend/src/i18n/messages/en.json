@@ -94,7 +94,8 @@
         "players": "Players",
         "teams": "Teams"
       },
-      "port": "{port} · {unit}"
+      "port": "{port} · {unit}",
+      "serverChanged": "Changed on server"
     },
     "matches": "Matches",
     "heroes": "Heroes",
@@ -7694,7 +7695,8 @@
       "formation_has_no_teams": "There are no teams yet, so team formation cannot be completed. Export teams first.",
       "formation_wrong_mode": "This team formation works in another mode, so this export is not available here.",
       "qualification_not_locked": "Lock the qualification before completing this stage.",
-      "boundary_tie": "Players are tied at the qualification cut-off. Resolve the tie before continuing."
+      "boundary_tie": "Players are tied at the qualification cut-off. Resolve the tie before continuing.",
+      "node_has_dependents": "This step still has data attached to it (teams, registrations or sheet feeds). Remove or move that data first, then delete the step."
     },
     "boundary": {
       "title": "Something went wrong",
@@ -10965,7 +10967,16 @@
         "title": "Issues",
         "none": "No issues",
         "error": "Error",
-        "warning": "Warning"
+        "warning": "Warning",
+        "serverChanged": "“{name}” changed on the server while you were editing. Your edit is kept and replaces the server's version on Save."
+      },
+      "confirmDelete": {
+        "title": "Delete these steps?",
+        "description": "Saving removes the steps below, with everything attached to them. This cannot be undone.",
+        "confirm": "Save and delete",
+        "registration": "{name} (registration): its entries",
+        "formation": "{name} (formation): its balancer config, saved balances and draft sessions",
+        "stage": "{name} (stage): its groups, seats, bracket layout and matches"
       },
       "presets": {
         "title": "Start from a preset",

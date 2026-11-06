@@ -14,7 +14,6 @@ import { notify } from "@/lib/notify";
 import type { RosterShape } from "@/lib/roster/shape";
 import { roleOf, toRoleRef } from "@/lib/roster/role-ref";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
-import balancerAdminService from "@/services/balancer-admin.service";
 import draftService from "@/services/draft.service";
 import type {
   DraftBoard,
@@ -56,6 +55,7 @@ import {
   countUnlinkedRegistrations
 } from "@/components/kit/UnlinkedRegistrationsNotice";
 import { captainSeat, isInDraftPool, poolRegistrationSummary } from "./setup-types";
+import { usePoolRegistrations } from "@/hooks/usePoolRegistrations";
 import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import adminService from "@/services/admin.service";
@@ -63,8 +63,8 @@ import adminService from "@/services/admin.service";
 interface DraftSetupWizardProps {
   tournamentId: number;
   formationNodeId: number;
-  /** The registration node whose entries make the pool. */
-  registrationNodeId: number;
+  /** Every registration node whose entries make the pool, newest first. */
+  registrationNodeIds: readonly number[];
   board: DraftBoard | null;
   /** Resolved tournament roster shape; a live session's own shape wins over it. */
   rosterShape: RosterShape;
@@ -75,7 +75,7 @@ interface DraftSetupWizardProps {
 export function DraftSetupWizard({
   tournamentId,
   formationNodeId,
-  registrationNodeId,
+  registrationNodeIds,
   board,
   rosterShape,
   aside
@@ -128,10 +128,11 @@ export function DraftSetupWizard({
     setStep("config");
   };
 
-  const poolQuery = useQuery({
-    queryKey: balancerQueryKeys.draftSetupPool(tournamentId, registrationNodeId),
-    queryFn: () =>
-      balancerAdminService.listRegistrations(tournamentId, registrationNodeId, { include_deleted: true })
+  const poolQuery = usePoolRegistrations({
+    tournamentId,
+    nodeIds: registrationNodeIds,
+    includeDeleted: true,
+    queryKey: (nodeId) => balancerQueryKeys.draftSetupPool(tournamentId, nodeId)
   });
   const allRegistrations = poolQuery.data ?? [];
   const pool = useMemo(() => allRegistrations.filter(isInDraftPool), [allRegistrations]);

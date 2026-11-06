@@ -10,7 +10,7 @@ import { FlowNodeControls } from "@/components/tournaments/FlowNodeControls";
 import { FLOW_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
-import { nodesOfKind, poolRegistrationNodeId } from "@/lib/tournament/flow-nodes";
+import { nodesOfKind, poolRegistrationNodeIds } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import draftService from "@/services/draft.service";
 
@@ -36,8 +36,8 @@ export default function TeamsDraftPage() {
   const workspaceId = tournamentQuery.data?.workspace_id ?? null;
   const formationNodeId = useFlowNodeParam(tournamentQuery.data, "formation", "draft");
   const formationNode = nodesOfKind(tournamentQuery.data, "formation").find((node) => node.id === formationNodeId);
-  // The draft pool is what the formation takes as input: the entries of its upstream registration node.
-  const registrationNodeId = poolRegistrationNodeId(formationNode);
+  // The draft pool is what the formation takes as input: the entries of every upstream registration node.
+  const registrationNodeIds = poolRegistrationNodeIds(formationNode);
   const { setParams } = useQueryParams();
 
   // Same key and fetcher the dashboard mounts, so this is one request shared
@@ -75,11 +75,11 @@ export default function TeamsDraftPage() {
         />
       ) : null}
       {controlRoom ? null : <PhaseStrip phases={phases} />}
-      {formationNodeId != null && registrationNodeId != null && (
+      {formationNodeId != null && registrationNodeIds.length > 0 && (
         <DraftSessionDashboard
           tournamentId={tournamentId}
           formationNodeId={formationNodeId}
-          registrationNodeId={registrationNodeId}
+          registrationNodeIds={registrationNodeIds}
           canManage={canAccessPermission("team.create", workspaceId)}
         />
       )}

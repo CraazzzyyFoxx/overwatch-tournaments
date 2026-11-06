@@ -31,6 +31,8 @@ Open **Admin → Tournaments →** your tournament **→ Flow**.
 4. Watch the **Issues** list: it re-checks the graph while you work. An **Error** blocks saving (an arrow loop, mismatched colours, two arrows into a one-input dot, an aggregate that needs more inputs than it has). A **Warning** only points something out.
 5. Press **Save flow**. The whole change is saved at once, or not at all. **Discard** drops the unsaved changes.
 
+If your save would delete a registration, formation or stage box that was already saved, you are asked to confirm first: the dialog lists what goes with each box (entries, balancer config and draft sessions, stage groups and matches). A box that still owns teams, entries or sheet feeds cannot be deleted until you remove those. If someone else changes a box on the server while you are editing, your edit is kept, the box shows **Changed on server** and the **Issues** list says so; boxes you did not touch simply take the new server settings.
+
 While the graph has unsaved changes, the settings of registration, formation and stage nodes ask you to save or discard first, because those forms save on their own.
 
 A node you added appears with the status **Draft**. A stage needs its groups or brackets: add them in the stage's settings under **Items** before you start it.
@@ -69,6 +71,8 @@ What freezes:
 - You can always add a new step at the end: a new day, a new group stage. A running league appends its next day this way.
 
 A formation that is **Completed** can go back to **Forming** only while nothing after it has started.
+
+**Reopen** is offered on every closed registration and completed formation. If a later step has already started, the platform refuses and says so.
 
 ## League season
 

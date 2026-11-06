@@ -125,17 +125,18 @@ describe("FlowNodeControls", () => {
     expect(labels()).toEqual(["Start check-in", "Close", "Back to draft", "Complete"]);
   });
 
-  it("withholds Reopen once a stage has started or the tournament is over", async () => {
+  it("offers Reopen whenever the node's status allows it; the server refuses a started downstream", async () => {
     await mount(tournament([node(21, "registration", "closed"), node(23, "stage", "live")]));
-    expect(labels()).toEqual([]);
-
-    document.body.innerHTML = "";
-    await mount(tournament([node(21, "registration", "closed")], "completed"));
-    expect(labels()).toEqual([]);
-
-    document.body.innerHTML = "";
-    await mount(tournament([node(21, "registration", "closed"), node(23, "stage", "draft")]));
     expect(labels()).toEqual(["Reopen"]);
+  });
+
+  it("reports a refused Reopen as its translated message", async () => {
+    transitionNode.mockRejectedValue(new ApiError(409, [{ code: "downstream_started", msg: "A later step has started" }]));
+    await mount(tournament([node(21, "registration", "closed"), node(23, "stage", "live")]));
+
+    await click(document.querySelector("button"));
+    await click([...document.querySelectorAll("button")].filter((button) => button.textContent?.trim() === "Reopen").at(-1));
+    expect(notifyError).toHaveBeenCalledWith(expect.stringContaining("can no longer be reopened"));
   });
 
   it("limits itself to the given node", async () => {

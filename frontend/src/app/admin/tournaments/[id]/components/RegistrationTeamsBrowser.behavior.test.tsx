@@ -68,6 +68,7 @@ const renameAdmin = vi.fn();
 const notifySuccess = vi.fn();
 const notifyInfo = vi.fn();
 const notifyError = vi.fn();
+let nodeIds = [7];
 
 vi.mock("@/services/registration-team.service", () => ({
   default: {
@@ -179,7 +180,7 @@ function Harness() {
       tournamentId={TOURNAMENT_ID}
       workspaceId={WORKSPACE_ID}
       discipline="overwatch"
-      registrationNodeId={7}
+      registrationNodeIds={nodeIds}
       formationNodeId={9}
     />;
 }
@@ -325,6 +326,7 @@ beforeEach(() => {
     removeListener: () => undefined,
     dispatchEvent: () => false
   })) as unknown as typeof window.matchMedia;
+  nodeIds = [7];
 });
 
 afterEach(async () => {
@@ -622,5 +624,22 @@ describe("RegistrationTeamsBrowser", () => {
     await submit(dialog);
 
     expect(renameAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, 1, "Wolves");
+  });
+
+  it("lists the teams of every registration node feeding the formation", async () => {
+    nodeIds = [8, 7];
+    listAdmin.mockImplementation(async (_tournament: number, node: number) => ({
+      items: node === 7 ? [team()] : [team({ id: 3, name: "Day 2 Wolves", registration_node_id: 8 })],
+      total: 1
+    }));
+    const scope = await mount();
+
+    expect(row(scope, "Team Alpha")).toBeDefined();
+    expect(row(scope, "Day 2 Wolves")).toBeDefined();
+    expect(listAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, 8, { includeTerminal: true });
+    expect(listAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, 7, { includeTerminal: true });
+
+    await click(menuItem(await rowMenu(scope, "Day 2 Wolves"), "Place player"));
+    expect(listFreeAgents).toHaveBeenCalledWith(TOURNAMENT_ID, 8);
   });
 });
