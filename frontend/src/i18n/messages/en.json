@@ -3621,6 +3621,9 @@
         "ties": "Ties go to the most best places, then to the place in the latest result."
       }
     },
+    "format": {
+      "hint": "Each box is a step of the tournament; arrows show who moves on."
+    },
     "registerCards": {
       "title": "Registration",
       "registerFor": "Register for {name}"

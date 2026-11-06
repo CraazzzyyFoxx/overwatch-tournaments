@@ -17,7 +17,8 @@ import {
   Radio,
   Scale,
   Table as TableIcon,
-  Users
+  Users,
+  Workflow
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusDot } from "@/components/ui/status-dot";
@@ -39,6 +40,7 @@ const icons: Record<TournamentSectionId, React.ComponentType<{ className?: strin
   bracket: LayoutGrid,
   ranking: ListOrdered,
   table: TableIcon,
+  format: Workflow,
   teams: Users,
   matches: Calendar,
   maps: MapIcon,

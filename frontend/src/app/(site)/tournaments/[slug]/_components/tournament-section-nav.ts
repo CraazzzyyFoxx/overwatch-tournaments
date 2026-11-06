@@ -3,7 +3,7 @@ import type { StreamVods, TournamentStreams } from "@/types/stream.types";
 import type { StageSummary, TournamentDisplayStatus } from "@/types/tournament.types";
 
 export type TournamentSectionId =
-  | "overview" | "rules" | "bracket" | "ranking" | "table" | "teams" | "matches" | "maps" | "stats" | "stream" | "participants";
+  | "overview" | "rules" | "bracket" | "ranking" | "table" | "format" | "teams" | "matches" | "maps" | "stats" | "stream" | "participants";
 
 type TournamentNavReasonKey =
   | "tournamentDetail.nav.reasons.competitionNotStarted"
@@ -76,6 +76,7 @@ const preCompetitionOrder: TournamentSectionId[] = [
   // what a dispute is settled by. Neither is a thing to hunt for at the far end
   // of the rail.
   "rules",
+  "format",
   "participants",
   // Which maps the tournament plays is reference data a registering player
   // reads before anything about the bracket, so it sits ahead of it.
@@ -98,6 +99,7 @@ const competitionOrder: TournamentSectionId[] = [
   "matches",
   "maps",
   "stats",
+  "format",
   "stream",
   "participants"
 ];

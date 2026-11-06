@@ -48,7 +48,7 @@ export type PageRoute = {
 export const MISSING_ID = 2_147_483_647;
 
 /** Public tournament tabs ("" = overview). */
-export const TOURNAMENT_TABS = ["", "rules", "participants", "maps", "teams", "bracket", "matches", "stats", "stream", "table"] as const;
+export const TOURNAMENT_TABS = ["", "rules", "participants", "maps", "teams", "bracket", "matches", "stats", "stream", "table", "format"] as const;
 
 const site = (file: string, url: PageRoute["url"], extra: Partial<PageRoute> = {}): PageRoute => ({
   file: `(site)/${file}/page.tsx`,
