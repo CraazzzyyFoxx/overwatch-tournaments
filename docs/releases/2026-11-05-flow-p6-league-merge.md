@@ -33,8 +33,10 @@ ones are stripped by `flowP6_02`), `TournamentFacets.league`/`.standard`, the le
 One PR, migrations `flowP6_01_deferrable_fks` → … → `flowP6_02_drop_is_league` (chained on the current head). Production
 order, run by the owner from the release SHA:
 
-1. Against production: `uv run alembic upgrade flowP6_01_deferrable_fks` (the deployed services keep running; the FKs
-   only became deferrable).
+1. Against production, in the order of the P4 note ([`2026-11-05-flow-p4-transition-nodes.md`](./2026-11-05-flow-p4-transition-nodes.md)):
+   `uv run alembic upgrade flowP3_06`, then `python recompute_flows.py` (in `backend/tournament-service`), then
+   `uv run alembic upgrade flowP6_01_deferrable_fks`. `flowP4_01` sits in front of `flowP6_01` and aborts without the
+   recompute. The deployed services keep running; the FKs only became deferrable.
 2. `python -m scripts.league_merge plan` (each season is named `<league> · Season N`; rename it) → the owner fills every
    `aggregate` → `apply --dry-run` → `apply` → wait for the queued evaluation runs → `grant --granted-by <auth user id>`.
    Keep `league_merge.json` and `league_merge.snapshot.json` outside the container filesystem (a mounted path, or
@@ -42,7 +44,8 @@ order, run by the owner from the release SHA:
    failure fix the cause, drop the merged leagues from the mapping and run `apply` again; `grant` refuses a snapshot
    with no evaluation run. If `apply` prints `skipped: job N active` for a workspace, queue an analytics `compute`
    job from its earliest target once that job finishes.
-3. Normal deploy (`alembic upgrade head` passes the `flowP6_02` guard because no league row remains).
+3. Normal deploy (`alembic upgrade head` passes the `flowP6_02` guard because no league row remains; `flowP4_03` then
+   backfills `completed_at` of the merged day nodes from their encounters, which the aggregate's recency reads).
 
 A deploy started before step 2 stops at `flowP6_02` with "N league tournaments remain" and changes nothing past the
 revisions before it. On a database without leagues (CI, fresh installs) the PR deploys alone. Rehearse on a restored
