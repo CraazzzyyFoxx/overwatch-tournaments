@@ -5,7 +5,7 @@
 	app-logs identity-logs stats-logs frontend-logs discord-logs balancer-logs stream-logs \
 	app-restart identity-restart stats-restart frontend-restart \
 	monitoring-up monitoring-down monitoring-logs monitoring-ps \
-	backup-up backup-down backup-logs backup-run backup-ls cleanup-run \
+	backup-up backup-down backup-logs backup-run backup-ls backup-restore-local cleanup-run \
 	app-rebuild identity-rebuild stats-rebuild frontend-rebuild \
 	loadtest loadtest-ui e2e-up e2e-down e2e
 
@@ -95,6 +95,7 @@ help:
 	@echo "  make backup-run     - Run a backup now (pg_dump -> Timeweb S3)"
 	@echo "  make cleanup-run    - Run disk cleanup now (see docs/disk-cleanup.md)"
 	@echo "  make backup-ls      - List objects in the backup bucket"
+	@echo "  make backup-restore-local DUMP=... - Restore a backup into a local postgres:18 (127.0.0.1:55433, db owt_restore)"
 	@echo "  make backup-up      - Start local rustfs (optional, unused on Moscow)"
 	@echo "  make backup-down    - Stop local rustfs"
 	@echo "  make backup-logs    - Follow local rustfs logs"
@@ -370,6 +371,9 @@ backup-run:
 
 backup-ls:
 	@bash -c 'set -a; . $(BACKUP_ENV); set +a; docker run --rm --env-file $(BACKUP_ENV) rclone/rclone lsf "tw:$$BUCKET/pg/" -R'
+
+backup-restore-local:
+	ENVFILE=$(BACKUP_ENV) DUMP=$(DUMP) ops/backup/restore-local.sh
 
 cleanup-run:
 	ops/cleanup/cleanup.sh
