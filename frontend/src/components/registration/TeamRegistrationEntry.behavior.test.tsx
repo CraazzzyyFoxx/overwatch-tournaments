@@ -102,7 +102,6 @@ function tournament(slots: RosterSlotMap, discipline = "overwatch"): Tournament 
     workspace_id: 3,
     name: "Widow's Deadly Kiss",
     slug: "widows-deadly-kiss",
-    team_formation: "registration",
     status: "live",
     flow_nodes: [
       {

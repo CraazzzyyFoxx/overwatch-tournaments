@@ -15,7 +15,7 @@ import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useViewerRegistrationNode } from "@/hooks/useViewerRegistrationNode";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import registrationService from "@/services/registration.service";
-import { isSignUpOpen, nodesOfKind } from "@/lib/tournament/flow-nodes";
+import { isSignUpOpen, nodesOfKind, registrationIntake } from "@/lib/tournament/flow-nodes";
 import { tournamentMyRegistrationQueryOptions } from "@/lib/tournament/registrations-query";
 import { tournamentHref } from "@/lib/tournament/url";
 import type { Tournament } from "@/types/tournament.types";
@@ -169,7 +169,7 @@ export default function TournamentRegisterButton({
   // slot nobody had asked them for — and once spent, founding a team is
   // foreclosed. `TeamRegistrationEntry` hides itself for a viewer who cannot act,
   // so this renders nothing rather than a dead control.
-  if (tournament.team_formation === "registration") {
+  if (registrationIntake(tournament, registrationNode) === "team") {
     return <TeamRegistrationEntry tournament={tournament} registrationNodeId={registrationNodeId} />;
   }
 

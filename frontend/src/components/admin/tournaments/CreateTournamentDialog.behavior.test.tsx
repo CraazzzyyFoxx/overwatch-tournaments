@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 //
 // "Create tournament" creates the tournament Unpublished in one request (two for a Challonge import, whose
-// endpoint takes neither visibility nor formation) and hands it to the caller. A Challonge import that cannot be
+// endpoint takes no visibility) and hands it to the caller. A manual tournament then starts from its preset (the starter
+// graph grown through the flow endpoint). A Challonge import that cannot be
 // hidden afterwards must still hand it over: failing the create there would invite a retry that imports twice.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
@@ -9,6 +10,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { starterRead } from "@/lib/flow/fixtures";
 import en from "@/i18n/messages/en.json";
 import { LOL_METADATA, OW_METADATA } from "@/test/discipline-metadata";
 import type { Tournament } from "@/types/tournament.types";
@@ -20,13 +22,15 @@ declare global {
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-const { service, warning } = vi.hoisted(() => ({
+const { service, flow, warning } = vi.hoisted(() => ({
   service: { createTournament: vi.fn(), createTournamentWithGroups: vi.fn(), updateTournament: vi.fn() },
+  flow: { getAdmin: vi.fn(), applyChanges: vi.fn() },
   warning: vi.fn()
 }));
 
 vi.mock("next/navigation", async () => (await import("@/test/url-navigation")).nextNavigationMock);
 vi.mock("@/services/admin.service", () => ({ default: service }));
+vi.mock("@/services/flow.service", () => ({ default: flow }));
 vi.mock("@/lib/notify", () => ({ notify: { success: vi.fn(), warning, apiError: vi.fn() } }));
 // The calendar popover is not the subject: a stand-in that picks a fixed range.
 vi.mock("@/components/ui/date-range-picker", () => ({
@@ -64,7 +68,9 @@ async function type(id: string, value: string) {
 const submit = () => click(byText("button", "Create tournament"));
 
 beforeEach(async () => {
-  for (const fn of [...Object.values(service), warning, onCreated]) fn.mockReset();
+  for (const fn of [...Object.values(service), ...Object.values(flow), warning, onCreated]) fn.mockReset();
+  flow.getAdmin.mockResolvedValue(starterRead());
+  flow.applyChanges.mockResolvedValue({});
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -117,11 +123,28 @@ describe("CreateTournamentDialog", () => {
       discipline: "lol",
       name: "Autumn Cup",
       is_hidden: true,
-      team_formation: "balancer",
       start_date: "2026-11-01",
       end_date: "2026-11-03"
     });
+    // The preset grows the starter graph the server created: one Playoff stage off the formation.
+    expect(flow.getAdmin).toHaveBeenCalledWith(41);
+    expect(flow.applyChanges).toHaveBeenCalledWith(
+      41,
+      expect.objectContaining({ nodes: [expect.objectContaining({ kind: "stage", name: "Playoff" })] })
+    );
     expect(onCreated).toHaveBeenCalledWith(created);
+  });
+
+  it("hands the tournament over with a warning when its preset cannot be applied", async () => {
+    service.createTournament.mockResolvedValue(created);
+    flow.applyChanges.mockRejectedValue(new Error("down"));
+
+    await type("create-tournament-name", "Autumn Cup");
+    await click(byText("button", "pick dates"));
+    await submit();
+
+    expect(service.createTournament).toHaveBeenCalledTimes(1);
+    expect(warning).toHaveBeenCalledOnce();
   });
 
   it("imports from Challonge once and still hands the import over when hiding it fails", async () => {
@@ -138,7 +161,9 @@ describe("CreateTournamentDialog", () => {
     expect(service.createTournamentWithGroups).toHaveBeenCalledWith(
       expect.objectContaining({ workspace_id: 7, discipline: "overwatch", challonge_slug: "my-cup" })
     );
-    expect(service.updateTournament).toHaveBeenCalledWith(42, { is_hidden: true, team_formation: "balancer" });
+    expect(service.updateTournament).toHaveBeenCalledWith(42, { is_hidden: true });
+    // A Challonge import brings its own stages: no preset is applied.
+    expect(flow.applyChanges).not.toHaveBeenCalled();
     expect(warning).toHaveBeenCalledOnce();
     expect(onCreated).toHaveBeenCalledWith(imported);
   });

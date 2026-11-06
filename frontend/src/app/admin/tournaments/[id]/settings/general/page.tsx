@@ -110,23 +110,6 @@ function GeneralForm({
       </SettingGroup>
 
       <SettingGroup id="format" title={t("groups.format.title")}>
-        <SettingRow htmlFor="settings-team-formation" label={t("formation")}>
-          <Select
-            value={form.team_formation}
-            disabled={disabled}
-            onValueChange={(value) => patch({ team_formation: value })}
-          >
-            <SelectTrigger id="settings-team-formation">
-              <SelectValue placeholder={t("formationPlaceholder")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="balancer">{t("balancer")}</SelectItem>
-              <SelectItem value="draft">{t("liveDraft")}</SelectItem>
-              <SelectItem value="registration">{t("teamRegistration")}</SelectItem>
-              <SelectItem value="solo">{t("soloRegistration")}</SelectItem>
-            </SelectContent>
-          </Select>
-        </SettingRow>
         <SettingRow htmlFor="settings-division-grid-version" label={t("divisionGrid")}>
           {gridsQuery.isLoading ? (
             <div role="status" className="w-full">

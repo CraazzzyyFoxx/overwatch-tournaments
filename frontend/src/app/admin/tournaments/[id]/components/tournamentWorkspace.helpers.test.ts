@@ -16,7 +16,6 @@ function form(partial: Partial<TournamentFormState> = {}): TournamentFormState {
     end_date: "2026-04-19",
     auto_transitions_enabled: true,
     division_grid_version_id: null,
-    team_formation: "balancer",
     ...partial
   };
 }

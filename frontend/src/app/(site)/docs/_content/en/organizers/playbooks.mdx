@@ -9,7 +9,7 @@ The admin panel is English-only, so section, tab and button names below are give
 The most common format: players sign up individually and the balancer builds the teams.
 
 1. **Admin → Tournaments → New tournament**. On the **Basics** step enter a name and the dates. From there you can press **Save as draft** — the tournament is created hidden and nobody sees it yet.
-2. **Settings → General**: **Team formation** → **Auto-balance (Balancer)**. Pick a **Division grid version** here too if this tournament needs its own.
+2. **Flow**: the formation box's **Team formation** is **Balancer** from the start. **Settings → General**: pick a **Division grid version** if this tournament needs its own.
 3. **Settings → Roster shape**: leave **Inherit from the workspace** or choose **Overwatch 5v5 · 1/2/2**.
 4. **Settings → Schedule**: set the windows for the **Registration**, **Check-in** and **Live** phases and turn on **Automatic phase transitions**. See [Phases and schedule](/docs/organizers/schedule).
 5. **Settings → Registration**: decide whether you want **Auto-approve**, and build the questionnaire through **Open the form builder**. See [Registration and entries](/docs/organizers/registration).
@@ -25,7 +25,7 @@ The most common format: players sign up individually and the balancer builds the
 
 The same tournament, except captains build the teams live instead of the balancer.
 
-1. Steps 1–7 of the previous scenario, but in **Settings → General** choose **Team formation** → **Captain draft**.
+1. Steps 1–7 of the previous scenario, but on the **Flow** tab select the formation box and set **Team formation** to **Draft**; choose the pick order under **Draft format** there.
 2. **Settings → Schedule**: add a window for the **Team formation** phase — it only appears in the schedule for draft tournaments.
 3. **Settings → Roster shape** decides how many rounds the draft has: one fewer than the players per team. The shape cannot be changed once a draft session exists.
 4. When the pool is ready, open **Teams → Draft** and walk the wizard: **Parameters**, **Pool**, **Captains**, **Order**, **Review**, **Ready**.
@@ -34,7 +34,7 @@ The same tournament, except captains build the teams live instead of the balance
 7. The rest is the usual run: **Bracket**, **Matches**, logs, **Completed**.
 
 <Callout type="warning">
-While a draft session is alive you cannot change the roster shape or the team formation method. Complete or cancel the session first.
+While a draft session is alive you cannot change the roster shape or the draft format. Complete or cancel the session first.
 </Callout>
 
 ## A tournament of pre-made captain teams
@@ -42,7 +42,7 @@ While a draft session is alive you cannot change the roster shape or the team fo
 Captains assemble their rosters in advance; the platform only checks and admits them.
 
 1. **Admin → Tournaments → New tournament**, as in the first scenario.
-2. **Settings → General**: **Team formation** → **Team registration**.
+2. **Flow**: in the registration box set **Who registers** to **Teams (captains register)**, and in the formation box set **Team formation** to **Registered teams**.
 3. **Settings → Roster shape**: set the shape and, if you want a bench, **Substitutes per team**. That field exists only on team-registration tournaments.
 4. **Settings → Admission**, the **Registered teams** group: **Minimum starter rank**, **Maximum starter rank**, **Maximum rank spread**, **Unique Discord identity**, **Require Discord server membership**. The rank rules apply to starters only; substitutes are ignored.
 5. If the tournament is paid, choose **Who pays** in the same area: **Each player** or **The team (captain pays)**.

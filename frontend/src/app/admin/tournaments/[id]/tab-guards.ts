@@ -93,7 +93,6 @@ export const SETTINGS_SECTIONS = [
   "scoring",
   "schedule",
   "roster",
-  "draft",
   "registration",
   "admission",
   "pre-game",
@@ -114,7 +113,8 @@ export interface TabAccess {
   canTeamCreate: boolean;
   canReadTournamentLink: boolean;
   canDeleteTournament: boolean;
-  teamFormation: "balancer" | "draft";
+  /** The graph has a formation node in `draft` mode. */
+  hasDraftFormation: boolean;
 }
 
 export function allowedTab(tab: TabKey, p: TabAccess): boolean {
@@ -129,7 +129,7 @@ export function allowedTab(tab: TabKey, p: TabAccess): boolean {
 }
 
 export function allowedTeamsSubTab(tab: TeamsSubTab, p: TabAccess): boolean {
-  return tab === "draft" ? p.teamFormation === "draft" : true;
+  return tab === "draft" ? p.hasDraftFormation : true;
 }
 
 /**
@@ -146,10 +146,6 @@ export function allowedSettingsSection(section: SettingsSection, p: TabAccess): 
       return p.canReadTournamentLink;
     case "danger":
       return p.canDeleteTournament;
-    // The format only means something where teams are drafted, the same gate
-    // the Teams › Draft sub-tab uses.
-    case "draft":
-      return p.canUpdateTournament && p.teamFormation === "draft";
     // Both write the registration form, whose upsert is gated on `team.create`
     // server-side. Reaching the tab at all still needs `tournament.update`
     // (`allowedTab`), so this narrows rather than widens.

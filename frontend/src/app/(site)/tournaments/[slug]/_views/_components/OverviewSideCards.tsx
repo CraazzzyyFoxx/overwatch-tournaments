@@ -25,7 +25,8 @@ import { slotCodesOf } from "@/lib/roster/shape";
 import { showsRoles } from "@/lib/roster/ontology";
 import { groupTournamentStageFlow } from "@/lib/tournament/stages";
 import { cn } from "@/lib/utils";
-import type { TeamFormation, Tournament } from "@/types/tournament.types";
+import { primaryFormationMode } from "@/lib/tournament/flow-nodes";
+import type { Tournament } from "@/types/tournament.types";
 
 import { flowQueryOptions } from "../../_queries/flow";
 import { PhaseTimeline } from "../../_components/PhaseTimeline";
@@ -214,7 +215,8 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
     );
   };
 
-  const showFormationText = !introText;
+  const formation = primaryFormationMode(tournament);
+  const showFormationText = !introText && formation !== null;
   const showTeam = showFormationText || showGlyphs;
   const loading = flowQuery.isPending;
 
@@ -286,9 +288,7 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
         <dl className={cn("grid gap-1", steps.length > 0 && "mt-4")}>
           <Eyebrow as="dt">{t("tournamentDetail.overview.format.team")}</Eyebrow>
           <dd className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-ui text-[color:var(--aqt-fg)]">
-            {showFormationText
-              ? t(`common.${(tournament.team_formation ?? "balancer") as TeamFormation}`)
-              : null}
+            {showFormationText && formation ? t(`common.formationMode.${formation}`) : null}
             {/* One role: every slot is it, so the glyph row would say nothing. */}
             {showGlyphs ? (
               <span className="inline-flex items-center gap-2">

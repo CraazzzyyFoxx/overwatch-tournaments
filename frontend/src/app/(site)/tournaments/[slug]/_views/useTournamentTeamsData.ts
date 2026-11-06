@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { registrationIntake } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { tournamentRegistrationsQueryOptions } from "@/lib/tournament/registrations-query";
 import { tournamentTeamsQueryOptions } from "@/lib/tournament/teams-query";
@@ -44,7 +45,7 @@ export function useTournamentTeamsData(tournament: Tournament) {
   // section's own list and hero catalogue, so both are cache reads after one
   // visit there. Only draft/balancer tournaments register players one by one;
   // a team-registration read would come back without per-player picks.
-  const hasPlayerRegistrations = tournament.team_formation !== "registration";
+  const hasPlayerRegistrations = registrationIntake(tournament) !== "team";
   const registrationsQuery = useQuery({
     ...tournamentRegistrationsQueryOptions(tournament),
     enabled: hasPlayerRegistrations

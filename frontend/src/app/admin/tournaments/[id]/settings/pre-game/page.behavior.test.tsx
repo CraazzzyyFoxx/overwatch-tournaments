@@ -440,7 +440,7 @@ async function mount({
   getHeroes.mockResolvedValue({ results: HEROES });
   getMaps.mockResolvedValue({ results: maps });
   getStages.mockResolvedValue(stages);
-  getTournament.mockResolvedValue({ id: 84, workspace_id: 3, team_formation: "balancer", discipline });
+  getTournament.mockResolvedValue({ id: 84, workspace_id: 3, discipline });
   getEncounters.mockResolvedValue({ results: encounters });
 
   search = new URL(url, "http://localhost").search;

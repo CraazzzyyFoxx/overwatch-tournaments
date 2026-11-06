@@ -79,7 +79,6 @@ const TOURNAMENT = {
   workspace_id: 1,
   name: "OWT 64",
   slug: "owt-64",
-  team_formation: "balancer",
   status: "live",
   stages: []
 } as unknown as Tournament;

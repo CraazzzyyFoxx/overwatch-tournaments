@@ -21,7 +21,7 @@ function readiness(overrides: Partial<TournamentReadiness> = {}): TournamentRead
   return {
     tournament_id: 7,
     status: "live",
-    team_formation: "balancer",
+    formation_modes: ["balancer"],
     schedule_configured: true,
     grid_selected: true,
     stages_total: 2,
@@ -193,16 +193,16 @@ describe("buildChecklist", () => {
     expect(byKey(at("completed"), "standings").state).toBe("done");
   });
 
-  it("formation items follow team_formation", () => {
-    const balancer = keys(at("live", { team_formation: "balancer" }));
+  it("formation items follow the formation modes", () => {
+    const balancer = keys(at("live", { formation_modes: ["balancer"] }));
     expect(balancer).toEqual(expect.arrayContaining(["pool_ready", "balance_saved", "balance_exported"]));
     expect(balancer).not.toContain("draft_completed");
 
-    const draft = at("live", { team_formation: "draft", draft_session_status: "completed" });
+    const draft = at("live", { formation_modes: ["draft"], draft_session_status: "completed" });
     expect(keys(draft)).not.toContain("pool_ready");
     expect(byKey(draft, "draft_completed").state).toBe("done");
 
-    const draftPending = byKey(at("live", { team_formation: "draft", draft_session_status: "live" }), "draft_completed");
+    const draftPending = byKey(at("live", { formation_modes: ["draft"], draft_session_status: "live" }), "draft_completed");
     expect(draftPending.state).toBe("todo");
     // The session status is translated, never the raw enum, and the row leads to the board.
     expect(draftPending.detail).toBe("Draft is live");

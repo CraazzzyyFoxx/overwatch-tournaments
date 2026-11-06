@@ -75,9 +75,12 @@ describe("lifecycle node inspectors", () => {
   it("a formation embeds the draft by mode, or links the balancer with its node", async () => {
     await render(node({ key: "2", id: 2, kind: "formation", name: "Day 1 teams", status: "draft", config: { mode: "draft" } }));
     expect(container.textContent).toContain("draft 2");
+    expect(container.textContent).toContain(en.draftAdmin.format);
     unmount();
     await render(node({ key: "2", id: 2, kind: "formation", status: "draft", config: { mode: "balancer" } }));
     expect(container.querySelector('a[href="/balancer?tournament=7&node=2"]')).not.toBeNull();
+    // The draft format rule is edited on a draft-mode node only.
+    expect(container.textContent).not.toContain(en.draftAdmin.format);
   });
 
   it("a stage node embeds the stage editor of its stage", async () => {

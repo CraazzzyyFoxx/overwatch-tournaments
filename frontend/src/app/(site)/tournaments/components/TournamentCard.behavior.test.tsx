@@ -93,7 +93,6 @@ function tournament(over: Partial<Tournament> = {}): Tournament {
     challonge_slug: null,
     is_finished: false,
     is_hidden: false,
-    team_formation: "balancer",
     // `live` because a registration node is open: the card reads "Registration" (`displayStatus`).
     status: "live",
     flow_nodes: [{ id: 1, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null }],

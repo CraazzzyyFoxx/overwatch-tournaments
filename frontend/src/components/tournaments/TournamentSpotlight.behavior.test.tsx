@@ -66,7 +66,6 @@ function tournament(id: number, name: string): Tournament {
     challonge_slug: null,
     is_finished: true,
     is_hidden: false,
-    team_formation: "balancer",
     status: "completed",
     auto_transitions_enabled: false,
     stages: [],

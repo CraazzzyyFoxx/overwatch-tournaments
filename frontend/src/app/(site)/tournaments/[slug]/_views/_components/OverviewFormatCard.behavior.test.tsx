@@ -48,7 +48,6 @@ const tournament = {
   slug: "owal",
   workspace_id: 1,
   discipline: "overwatch",
-  team_formation: "balancer",
   roster_shape: null,
   status: "live",
   stages: [stage(31, "Day 1", "completed"), stage(32, "Day 2", "live"), stage(33, "Day 3", "draft")]

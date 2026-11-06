@@ -11,7 +11,8 @@ import { formatDateRange } from "@/lib/datetime";
 import { useFormatter } from "@/lib/datetime/client";
 import { stageProgress } from "@/lib/tournament/stage-progress";
 import { getTournamentStatusMeta, displayStatus } from "@/lib/tournament/status";
-import type { TeamFormation, Tournament } from "@/types/tournament.types";
+import { primaryFormationMode } from "@/lib/tournament/flow-nodes";
+import type { Tournament } from "@/types/tournament.types";
 
 interface TournamentHeroProps {
   /** Null before a tournament is picked — the hero still renders the prompt and the pickers. */
@@ -69,9 +70,10 @@ export default function TournamentHero({ tournament, parts, picker }: Readonly<T
 
   const statusLabel = t(`common.statusBadge.${displayStatus(tournament)}`);
   const stage = stageProgress(tournament, displayStatus(tournament), t);
+  const formation = primaryFormationMode(tournament);
   const facts = [
     t("analytics.hero.formatCup"),
-    tournament.team_formation ? t(`common.${tournament.team_formation as TeamFormation}`) : null,
+    formation ? t(`common.formationMode.${formation}`) : null,
     parts.counts
       ? t("tournamentDetail.header.teamsAndPlayers", {
           teams: parts.counts.teams,

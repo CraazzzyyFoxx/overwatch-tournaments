@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 
 import type { LinkTabItem } from "@/components/kit/LinkTabs";
 import { usePermissions } from "@/hooks/usePermissions";
+import { hasTeamIntake } from "@/lib/tournament/flow-nodes";
 import { useHubTournamentQuery } from "../hubQueries";
 import { SubTabShell, useSubTabSegment } from "../sub-tabs";
 import { REGISTRATION_SUB_TABS, type RegistrationSubTab } from "../tab-guards";
@@ -41,9 +42,7 @@ export default function RegistrationLayout({ children }: Readonly<{ children: Re
    * `null` while the tournament is still loading — a `false` there would bounce
    * a legitimate deep link to `teams` before the answer arrived.
    */
-  const teamsOffered = tournamentQuery.data
-    ? tournamentQuery.data.team_formation === "registration"
-    : null;
+  const teamsOffered = tournamentQuery.data ? hasTeamIntake(tournamentQuery.data) : null;
   const known = isKnown && (requested !== "teams" || teamsOffered !== false);
   const active: RegistrationSubTab = known ? requested : DEFAULT_SUB_TAB;
 

@@ -66,7 +66,7 @@ export default function PublicDraftRoomPage() {
     return () => clearInterval(timer);
   }, [followedEnded, refetchLookup]);
 
-  if (tournament && tournament.team_formation !== "draft") {
+  if (tournament && !draftFormationNode(tournament)) {
     redirect(tournamentHref(tournament));
   }
 

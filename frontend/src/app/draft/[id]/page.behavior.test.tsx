@@ -26,7 +26,6 @@ const TOURNAMENT = {
   name: "Cup #41",
   workspace_id: 2,
   discipline: "overwatch",
-  team_formation: "draft",
   division_grid_version: null,
   flow_nodes: [{ id: 9, kind: "formation", name: "Teams", status: "forming", config: { mode: "draft" }, schedule: [], stage_id: null }]
 };

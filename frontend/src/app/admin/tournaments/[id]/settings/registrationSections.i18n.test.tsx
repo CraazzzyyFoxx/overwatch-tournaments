@@ -115,8 +115,7 @@ beforeEach(() => {
     workspace_id: 3,
     discipline: "overwatch",
     identity_provider: "battlenet",
-    team_formation: "registration",
-    flow_nodes: [REGISTRATION_NODE]
+    flow_nodes: [{ ...REGISTRATION_NODE, config: { ...REGISTRATION_NODE.config, intake: "team" } }]
   });
   getRegistrationForm.mockReset().mockResolvedValue({
     id: 9,
@@ -180,7 +179,6 @@ describe("registration settings sections i18n", () => {
       workspace_id: 3,
       discipline: "overwatch",
       identity_provider: "battlenet",
-      team_formation: "balancer",
       flow_nodes: [REGISTRATION_NODE]
     } as never);
 

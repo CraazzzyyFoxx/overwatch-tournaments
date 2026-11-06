@@ -130,7 +130,6 @@ function makeTournament(phase: "check_in" | "registration", window: { starts_at:
     challonge_slug: null,
     is_finished: false,
     is_hidden: false,
-    team_formation: "balancer",
     // `live` because the registration node is: the phase reads registration or check-in.
     status: "live",
     auto_transitions_enabled: true,

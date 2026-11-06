@@ -161,9 +161,9 @@ export function buildChecklist(
     });
   }
 
-  // ── Formation (by team_formation, §3) ──────────────────────────────────
+  // ── Formation (by the formation nodes' modes, §3) ──────────────────────
   if (during("live", "live")) {
-    if (readiness.team_formation === "draft") {
+    if (readiness.formation_modes.includes("draft")) {
       const draftStatus = readiness.draft_session_status;
       items.push({
         key: "draft_completed",

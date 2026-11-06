@@ -2,14 +2,14 @@ Teams can be built in two ways: hand the pool to a solver, or run a live captain
 
 ## Team formation
 
-`tournament.team_formation` is a string defaulting to `balancer`. Two values are used in the code:
+The method is the `mode` of a formation node in the tournament's flow (`formation` node config), one of `balancer`, `draft`, `registered` or `manual`; a tournament can have several formation nodes. Whether a registration node takes players or whole teams is that node's `intake` (`solo` or `team`), and a team intake feeds only a `registered` formation. A draft formation node also carries its `draft_format` in its config (the format rule below, `null` meaning snake). There is no tournament-level formation field.
 
-| Value | What happens |
+| Mode | What happens |
 | --- | --- |
 | `balancer` | The pool goes to the solver; an organizer accepts one variant and exports it into tournament teams |
 | `draft` | Captains pick through the pool live, and the export comes from the finished draft session |
 
-Teams that captains assembled during registration are a third, separate export path into tournament teams; they are covered in [Registration and rosters](/docs/dev/registration). Changing `team_formation` or the roster shape while a draft session is active is refused with 400, naming the status of the session in the way.
+Teams that captains assembled during registration are a third, separate export path into tournament teams; they are covered in [Registration and rosters](/docs/dev/registration). Changing a formation node's mode or `draft_format` while a draft session of that node is unfinished is refused with 409 `draft_session_active`; changing the roster shape in that case is refused with 400, naming the status of the session in the way.
 
 ## The balancer
 

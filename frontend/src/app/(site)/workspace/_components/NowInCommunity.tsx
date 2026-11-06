@@ -23,7 +23,7 @@ import { Eyebrow } from "@/components/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getFormatter } from "@/lib/datetime/server";
 import { getPlayerSlug } from "@/lib/player";
-import { playStartsAt, registrationClosesAt } from "@/lib/tournament/flow-nodes";
+import { playStartsAt, registrationClosesAt, registrationIntake } from "@/lib/tournament/flow-nodes";
 import { getFinishedTournaments, type FinishedTournament } from "@/lib/tournament/finished";
 import { displayStatus, getTournamentStatusMeta } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
@@ -264,10 +264,9 @@ async function LeadActive({ tournament }: Readonly<{ tournament: Tournament }>) 
           <Link href={tournamentHref(tournament)} prefetch={false} className={FEAT_NAME_CLASS}>
             {tournament.name}
           </Link>
-          {/* Mock wording: a team registration takes team entries, every other
-              formation (balancer, draft, solo) takes players one by one. */}
+          {/* A team intake takes team entries, a solo one takes players one by one. */}
           <div className={FEAT_META_CLASS}>
-            {tSite(tournament.team_formation === "registration" ? "entry.team" : "entry.solo")}
+            {tSite(registrationIntake(tournament) === "team" ? "entry.team" : "entry.solo")}
           </div>
         </>
       }

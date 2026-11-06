@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/select";
 import { getApiErrorMessage } from "@/lib/api/error";
 import { formatAdmissionRefusal } from "@/lib/registration/admission";
-import { isCheckInOpen, registrationNodeConfig } from "@/lib/tournament/flow-nodes";
+import { isCheckInOpen, registrationIntake, registrationNodeConfig } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import {
   tournamentMyRegistrationQueryOptions,
@@ -81,7 +81,7 @@ import { ViewSegment } from "../../_components/ViewSegment";
 import { MyRegistrationCard } from "./MyRegistrationCard";
 import {
   ADMIN_ONLY_COLUMN_IDS,
-  POOL_TEAM_FORMATIONS,
+  hasPoolFormation,
   STATUS_FILTER_META,
   STATUS_FILTER_ORDER,
   type StatusFilter
@@ -339,7 +339,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
   // what is its state" for every reader, which is what the section is opened
   // for. The by-role pool is the second read, offered only where a pool exists
   // (balancer/draft) — team registration has no pool to show.
-  const hasPoolView = POOL_TEAM_FORMATIONS[tournament.team_formation] === true;
+  const hasPoolView = hasPoolFormation(tournament);
   const defaultView: ParticipantView = "table";
 
   const participantUrl = useMemo(
@@ -577,7 +577,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
 
           Both components self-gate and render nothing when they have nothing to
           say, so a solo tournament pays no vertical space. */}
-      {tournament.team_formation === "registration" && (
+      {registrationIntake(tournament, registrationNode) === "team" && (
         <>
           <MyInviteOffers tournament={tournament} />
           <MyTeamSection tournament={tournament} />

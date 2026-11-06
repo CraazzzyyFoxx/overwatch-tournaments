@@ -18,7 +18,8 @@ import { TournamentCover } from "@/components/tournaments/TournamentCover";
 import { Progress } from "@/components/ui/progress";
 import { GameLabel } from "@/components/workspace/GameLabel";
 import type { DisciplineDescriptor } from "@/types/discipline.types";
-import type { TeamFormation, Tournament } from "@/types/tournament.types";
+import type { Tournament } from "@/types/tournament.types";
+import { primaryFormationMode } from "@/lib/tournament/flow-nodes";
 
 /**
  * One tournament in the card view.
@@ -44,6 +45,7 @@ const TournamentCard = ({
   const { variant } = getTournamentStatusMeta(displayStatus(tournament));
   const isFinished = variant === "finished";
   const stage = stageProgress(tournament, displayStatus(tournament), t);
+  const formation = primaryFormationMode(tournament);
   const players = tournament.participants_count ?? 0;
   const teams = tournament.teams_count;
   // Only a card without a cover reads anything for its picture: the map last
@@ -107,10 +109,10 @@ const TournamentCard = ({
               <GameLabel code={tournament.discipline} games={games} />
             </>
           ) : null}
-          {tournament.team_formation && (
+          {formation && (
             <>
               <span aria-hidden className="text-[color:var(--aqt-fg-dim)]">·</span>
-              <span>{t(`common.${tournament.team_formation as TeamFormation}`)}</span>
+              <span>{t(`common.formationMode.${formation}`)}</span>
             </>
           )}
         </p>

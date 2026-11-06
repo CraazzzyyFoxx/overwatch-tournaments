@@ -24,7 +24,7 @@ const NO_PERMS = {
   canReadTournamentLink: false,
   canTeamCreate: false,
   canDeleteTournament: false,
-  teamFormation: "balancer"
+  hasDraftFormation: false
 } as const;
 
 const ALL_PERMS = {
@@ -34,7 +34,7 @@ const ALL_PERMS = {
   canReadTournamentLink: true,
   canTeamCreate: true,
   canDeleteTournament: true,
-  teamFormation: "draft"
+  hasDraftFormation: true
 } as const;
 
 describe("hub tabs", () => {
@@ -151,7 +151,6 @@ describe("settings sections", () => {
       "scoring",
       "schedule",
       "roster",
-      "draft",
       "registration",
       "admission",
       "pre-game",
@@ -210,23 +209,13 @@ describe("settings sections", () => {
     );
   });
 
-  // The format is a rule only a drafted tournament has; elsewhere the section
-  // would edit a value nothing reads.
-  test("draft needs tournament.update on a drafted tournament", () => {
-    const drafted = { ...NO_PERMS, canUpdateTournament: true, teamFormation: "draft" as const };
-    expect(allowedSettingsSection("draft", drafted)).toBe(true);
-    expect(allowedSettingsSection("draft", { ...drafted, teamFormation: "balancer" })).toBe(false);
-    expect(allowedSettingsSection("draft", { ...drafted, canUpdateTournament: false })).toBe(false);
-  });
-
   test("every other section needs tournament.update", () => {
     const inherited: SettingsSection[] = [
       "pre-game",
       "links",
       "danger",
       "registration",
-      "admission",
-      "draft"
+      "admission"
     ];
     for (const section of SETTINGS_SECTIONS) {
       if (inherited.includes(section)) continue;

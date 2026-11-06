@@ -57,7 +57,6 @@
     "players": "players",
     "inTeams": "in teams",
     "done": "done",
-    "teamFormation": "Team Formation",
     "stages": "Stages",
     "teams": "Teams",
     "participants": "Participants",
@@ -471,8 +470,12 @@
       "add": "Add to favorites",
       "remove": "Remove from favorites"
     },
-    "registration": "Team registration",
-    "solo": "Solo registration",
+    "formationMode": {
+      "balancer": "Balancer",
+      "draft": "Draft",
+      "registered": "Team registration",
+      "manual": "Manual"
+    },
     "connection": {
       "idle": "Not connected",
       "connecting": "Connecting",
@@ -6792,18 +6795,13 @@
     "teamCountMax": "Max",
     "teamCountMaxHint": "The pool supports up to {count, plural, one {# team} other {# teams}}.",
     "teamCountLocked": "The session has already been created, so the team count is locked. Cancel it to change the count.",
-    "changeFormatInSettings": "Change in tournament settings",
+    "changeFormatInFlow": "Change in the Flow tab",
     "formatLockedByDraft": "A draft of this tournament is in progress, so its format is locked. Finish or cancel the draft to change it.",
     "rounds": "Rounds",
     "roundsDerived": "{rounds, plural, one {# pick per team} other {# picks per team}}. The captain fills the first slot.",
     "pickTime": "Time per pick",
     "customPickTime": "Custom time per pick in seconds",
     "format": "Draft format",
-    "groups": {
-      "format": {
-        "title": "Pick order"
-      }
-    },
     "formats": {
       "snake": {
         "title": "Snake",
@@ -7984,6 +7982,13 @@
       },
       "capacity": {
         "title": "Capacity"
+      },
+      "intake": {
+        "title": "Entry type",
+        "label": "Who registers",
+        "hint": "Players one by one, or whole teams their captains register. Team entries feed only a formation in Registered teams mode.",
+        "solo": "Players one by one",
+        "team": "Teams (captains register)"
       },
       "questionnaire": {
         "title": "Questionnaire"
@@ -10505,7 +10510,6 @@
         "scoring": "Results",
         "schedule": "Schedule",
         "roster": "Roster shape",
-        "draft": "Draft format",
         "registration": "Registration",
         "admission": "Admission",
         "preGame": "Pre-game phase",
@@ -10748,12 +10752,6 @@
       "slugHint": "Used in the public tournament URL. Changing it keeps the previous link working via a redirect.",
       "descriptionLabel": "Description",
       "descriptionPlaceholder": "Optional tournament description…",
-      "formation": "Team formation",
-      "formationPlaceholder": "Select method",
-      "balancer": "Auto-balance (Balancer)",
-      "liveDraft": "Captain draft",
-      "teamRegistration": "Team registration",
-      "soloRegistration": "Solo registration",
       "divisionGrid": "Division grid version",
       "loadingDivisionGrids": "Loading division grids…",
       "selectVersion": "Select version",
@@ -10911,8 +10909,7 @@
       }
     },
     "screenDescriptions": {
-      "preGame": "Map veto and hero pick/ban per scope. Child scopes inherit until overridden.",
-      "draft": "The pick order every draft of this tournament follows. Timers and autopick are set per draft."
+      "preGame": "Map veto and hero pick/ban per scope. Child scopes inherit until overridden."
     },
     "logsExtra": {
       "titleHint": "{filename}\\n{source} by {uploader}{attempts, plural, =0 {} other {\\n# processing attempts}}",
@@ -11171,26 +11168,23 @@
       "challongePlaceholder": "e.g. my-tournament or https://challonge.com/my-tournament",
       "challongeHelp": "The Challonge bracket must have group stages enabled (two-stage).",
       "dateRange": "Date range",
-      "teamFormation": "Team formation",
-      "formation": {
-        "balancer": "Auto-balance (Balancer)",
-        "draft": "Captain draft",
-        "registration": "Team registration",
-        "solo": "Solo registration"
-      },
-      "teamFormationHelp": "How teams are formed. It decides which phases the tournament has.",
+      "preset": "Starting format",
+      "presetHelp": "The stages and teams the tournament starts with. Change them later in the Flow tab.",
       "submit": "Create tournament",
       "submitting": "Creating…",
       "validation": {
         "nameRequired": "Enter a tournament name.",
         "challongeRequired": "Enter a Challonge URL or slug.",
-        "datesRequired": "Pick a start and an end date."
+        "datesRequired": "Pick a start and an end date.",
+        "presetInvalid": "A league needs 2 to 10 days, and the counted results cannot exceed the days."
       },
       "created": "Tournament created",
       "createdDescription": "It stays Unpublished until you publish it in Settings › Preview allowlist.",
       "createError": "Could not create the tournament",
       "importHideWarning": "Imported from Challonge, but hiding it failed",
-      "importHideDescription": "The tournament is temporarily public. Hide it in Settings › Preview allowlist if needed."
+      "importHideDescription": "The tournament is temporarily public. Hide it in Settings › Preview allowlist if needed.",
+      "presetWarning": "Created, but the starting format could not be applied",
+      "presetWarningDescription": "Open the Flow tab and pick a preset there, or build the graph by hand."
     },
     "arrange": {
       "empty": "No standings to arrange yet. Recalculate to build them first.",

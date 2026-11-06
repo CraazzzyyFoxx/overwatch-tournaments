@@ -9,13 +9,13 @@ import { Separator } from "@/components/ui/separator";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { useFormatter } from "@/lib/datetime/client";
-import { nodesOfKind } from "@/lib/tournament/flow-nodes";
+import { formationModes, nodesOfKind, registrationIntake } from "@/lib/tournament/flow-nodes";
 import { displayStatus } from "@/lib/tournament/status";
 import { roleColor, type RoleOntology } from "@/lib/roster/ontology";
 import type { Registration, RegistrationListResponse } from "@/types/registration.types";
 import type { Tournament } from "@/types/tournament.types";
 
-import { POOL_TEAM_FORMATIONS } from "../participants.model";
+import { hasPoolFormation } from "../participants.model";
 import { baseRole, isTournamentRole, ROLE_ORDER } from "../tournamentInsights.model";
 import { registrationDisplay } from "../tournamentOverview.model";
 import { AboutTournamentCard, CardColumns, OverviewSection, SectionLink } from "./OverviewCards";
@@ -76,7 +76,7 @@ export function OverviewPreStartView({
           main={
             <>
               {/* Only a pool is cut into rosters by role: solo and team-registration fields have no shape to fill. */}
-              {POOL_TEAM_FORMATIONS[tournament.team_formation] ? (
+              {hasPoolFormation(tournament) ? (
                 <FieldCard
                   tournament={tournament}
                   registrations={phase === "check_in" ? active.filter((r) => r.checked_in) : active}
@@ -102,7 +102,7 @@ export function OverviewPreStartView({
                 active={active}
                 phase={phase}
                 capacity={registrationList?.max_participants ?? null}
-                teamRegistration={tournament.team_formation === "registration"}
+                teamRegistration={registrationIntake(tournament) === "team"}
               />
               {phase === "registration" ? (
                 <LatestCard active={active} ontology={ontology} />
@@ -422,12 +422,12 @@ function AnnouncementCard({ tournament }: Readonly<{ tournament: Tournament }>) 
             day: "numeric",
             month: "long"
           })}
-          sub={t(`overview.formation.${tournament.team_formation === "draft" ? "draft" : "other"}`)}
+          sub={t(`overview.formation.${formationModes(tournament).has("draft") ? "draft" : "other"}`)}
         />
       </div>
       <p className="mt-5 max-w-[62ch] text-caption text-[color:var(--aqt-fg-muted)]">
         {t(
-          tournament.team_formation === "draft"
+          formationModes(tournament).has("draft")
             ? "overview.announcement.howDraft"
             : "overview.announcement.howOther"
         )}
