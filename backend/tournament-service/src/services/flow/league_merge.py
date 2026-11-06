@@ -1,7 +1,8 @@
-"""League merge (spec §15): the mapping file and the season planner.
+"""League merge (spec §15): the mapping file, the season planner and the day merge.
 
 `plan_leagues` proposes `league_merge.json` from the legacy `is_league` tournaments; the owner completes the
-`aggregate` of every entry by hand and `load_mapping` refuses a file that still lacks one.
+`aggregate` of every entry by hand and `load_mapping` refuses a file that still lacks one. `merge_league` re-points one
+league's day tournaments to the earliest day inside the caller's transaction.
 """
 
 from __future__ import annotations
@@ -9,10 +10,10 @@ from __future__ import annotations
 import itertools
 import json
 from collections import defaultdict
-from collections.abc import Iterable
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 import sqlalchemy as sa
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -22,13 +23,18 @@ from shared.core.chrono import chrono_sort_key
 from shared.domain.flow.config import AggregateNodeConfig
 
 __all__ = (
+    "REGISTRATION_FKS",
+    "TOURNAMENT_FKS",
+    "Dropped",
     "LeagueDay",
     "LeagueEntry",
     "LeagueSourceRow",
     "MappingError",
     "MergeError",
+    "MergeLog",
     "fetch_league_rows",
     "load_mapping",
+    "merge_league",
     "plan_leagues",
 )
 
@@ -166,3 +172,337 @@ async def fetch_league_rows(session: AsyncSession) -> list[LeagueSourceRow]:
         )
     )
     return [LeagueSourceRow(*r) for r in result.all()]
+
+
+Rule = tuple[Literal["move", "keep_latest", "dedupe", "drop", "leave", "special"], tuple[str, ...]]
+
+
+def _rule(kind: Literal["move", "keep_latest", "dedupe", "drop", "leave", "special"], *keys: str) -> Rule:
+    return (kind, keys)
+
+
+#: Every column carrying a tournament id, classified by the nearest rule of spec §15.3 step 4 (the guard test fails on an
+#: unclassified one). Keys are ``schema.table.column``; the second item of a rule is the ``dedupe`` key.
+#: ``leave`` = cascades with the emptied day; ``special`` = collapsed by a dedicated step first, then moved.
+#: Flow nodes, edges, schedules and results move with their node; registration entries follow their node.
+TOURNAMENT_FKS: dict[str, Rule] = {
+    "achievements.evaluation_result.tournament_id": _rule("leave"),  # Spec issue 10: collides, re-evaluated
+    "achievements.evaluation_run.tournament_id": _rule("leave"),  # audit, SET NULL on delete
+    "achievements.override.tournament_id": _rule("move"),
+    "analytics.anomaly_feedback.tournament_id": _rule("move"),
+    "analytics.job.tournament_id": _rule("move"),
+    "analytics.ml_model_artifact.training_cutoff_tournament_id": _rule("move"),
+    "analytics.performance.tournament_id": _rule("move"),
+    "analytics.player_anomaly.tournament_id": _rule("move"),
+    "analytics.player_shift.tournament_id": _rule("move"),
+    "analytics.shifts.tournament_id": _rule("move"),
+    "analytics.standings_distribution.tournament_id": _rule("move"),
+    "balancer.balance.tournament_id": _rule("move"),
+    "balancer.tournament_config.tournament_id": _rule("move"),
+    "draft.session.tournament_id": _rule("move"),
+    "encounter.encounter.tournament_id": _rule("move"),
+    "encounter.team.tournament_id": _rule("move"),
+    "registration.form.tournament_id": _rule("special"),
+    "registration.google_sheet_feed.tournament_id": _rule("keep_latest"),
+    "registration.registration.tournament_id": _rule("special"),
+    "registration.team.tournament_id": _rule("special"),
+    "roster.team_format.tournament_id": _rule("keep_latest"),
+    "stats.discord_channel.tournament_id": _rule("keep_latest"),
+    "stats.ingest_job.hint_tournament_id": _rule("move"),
+    "stats.match_fetch.hint_tournament_id": _rule("move"),
+    "stream.session.tournament_id": _rule("dedupe", "stream_id"),
+    "tournament.bracket_encounter.tournament_id": _rule("move"),
+    "tournament.challonge_source.tournament_id": _rule("dedupe", "challonge_tournament_id"),
+    "tournament.challonge_sync_log.tournament_id": _rule("move"),
+    "tournament.computation_job.tournament_id": _rule("drop"),
+    "tournament.encounter_link.tournament_id": _rule("move"),
+    "tournament.encounter_report_form.tournament_id": _rule("keep_latest"),
+    "tournament.flow_edge.tournament_id": _rule("move"),
+    "tournament.flow_node.tournament_id": _rule("move"),
+    "tournament.participant_result.tournament_id": _rule("drop"),
+    "tournament.pick_ban_config.tournament_id": _rule("dedupe", "kind", "stage_id", "round"),
+    "tournament.player.tournament_id": _rule("move"),
+    "tournament.player_standing.tournament_id": _rule("move"),
+    "tournament.recalculation_state.tournament_id": _rule("drop"),
+    "tournament.scrim_room.tournament_id": _rule("move"),
+    "tournament.slug_redirect.tournament_id": _rule("move"),
+    "tournament.stage.tournament_id": _rule("move"),
+    "tournament.standing.tournament_id": _rule("move"),
+    "tournament.standing_pin.tournament_id": _rule("move"),
+    "tournament.team.tournament_id": _rule("move"),
+    "tournament.tournament_link.tournament_id": _rule("dedupe", "kind", "url"),
+    "tournament.tournament_preview_access.tournament_id": _rule("dedupe", "auth_user_id"),
+    "tournament.voice_channel.tournament_id": _rule("dedupe", "slot_key"),
+    "tournament.voice_settings.tournament_id": _rule("keep_latest"),
+}
+
+#: Every FK into ``registration.registration``: ``repoint`` moves a dropped profile's rows to the kept profile,
+#: ``owned`` rows go with the dropped profile (CASCADE).
+REGISTRATION_FKS: dict[str, Literal["repoint", "owned"]] = {
+    "draft.player.registration_id": "repoint",
+    "registration.google_sheet_binding.registration_id": "owned",
+    "registration.identity.registration_id": "owned",
+    "registration.registration_entry.registration_id": "repoint",
+    "registration.role.registration_id": "owned",
+    "registration.team.captain_registration_id": "repoint",
+    "registration.team_invite.accepted_registration_id": "repoint",
+    "tournament.player_standing.registration_id": "repoint",
+}
+
+
+@dataclass(frozen=True)
+class Dropped:
+    table: str
+    row_id: int
+    tournament_id: int
+    key: dict[str, Any]
+
+
+@dataclass
+class MergeLog:
+    target_tournament_id: int
+    deleted_tournament_ids: list[int]
+    dropped: list[Dropped] = field(default_factory=list)
+    moved: dict[str, int] = field(default_factory=dict)
+
+
+def _ids(values: Sequence[int]) -> dict[str, list[int]]:
+    return {"ids": list(values)}
+
+
+async def _check_days(session: AsyncSession, entry: LeagueEntry) -> None:
+    rows = (
+        await session.execute(
+            sa.text(
+                "SELECT id, workspace_id, discipline FROM tournament.tournament "
+                "WHERE id = ANY(CAST(:ids AS bigint[])) FOR UPDATE"
+            ),
+            _ids([d.tournament_id for d in entry.days]),
+        )
+    ).all()
+    found = {r.id: r for r in rows}
+    for day in entry.days:
+        if day.tournament_id not in found:
+            raise MergeError(f"tournament {day.tournament_id} does not exist")
+    target = found[entry.target_tournament_id]
+    for day in entry.days:
+        row = found[day.tournament_id]
+        if (row.workspace_id, row.discipline) != (target.workspace_id, target.discipline):
+            raise MergeError(f"tournament {row.id} is not in workspace {target.workspace_id} / {target.discipline}")
+
+
+async def _assign_formations(session: AsyncSession, entry: LeagueEntry) -> None:
+    """Teams and players still owned by the whole tournament belong to their day's one formation node."""
+    for day in entry.days:
+        params = {"day": day.tournament_id}
+        nodes = list(
+            await session.scalars(
+                sa.text(
+                    "SELECT id FROM tournament.flow_node WHERE tournament_id = :day AND kind = 'formation' ORDER BY id"
+                ),
+                params,
+            )
+        )
+        unowned = (
+            await session.execute(
+                sa.text(
+                    "SELECT (SELECT count(*) FROM tournament.team WHERE tournament_id = :day AND formation_node_id IS NULL)"
+                    " + (SELECT count(*) FROM tournament.player WHERE tournament_id = :day AND formation_node_id IS NULL)"
+                ),
+                params,
+            )
+        ).scalar_one()
+        if not unowned:
+            continue
+        if len(nodes) != 1:
+            raise MergeError(f"day {day.day}: expected one formation node, found {len(nodes)}")
+        for table in ("tournament.team", "tournament.player"):
+            await session.execute(
+                sa.text(
+                    f"UPDATE {table} SET formation_node_id = :node WHERE tournament_id = :day AND formation_node_id IS NULL"
+                ),
+                {**params, "node": nodes[0]},
+            )
+
+
+def _losers(rows: Sequence[Any], days_latest_first: Sequence[int], key: Callable[[Any], Any]) -> list[tuple[int, int]]:
+    """``(dropped id, kept id)`` for every row whose ``key`` repeats; the latest day's row is the one kept."""
+    rank = {day: i for i, day in enumerate(days_latest_first)}
+    kept: dict[Any, int] = {}
+    losers: list[tuple[int, int]] = []
+    for row in sorted(rows, key=lambda r: (rank[r.tournament_id], -r.id)):
+        if (k := key(row)) in kept:
+            losers.append((row.id, kept[k]))
+        else:
+            kept[k] = row.id
+    return losers
+
+
+async def _repoint(session: AsyncSession, table: str, column: str, losers: Sequence[tuple[int, int]]) -> None:
+    if losers:
+        await session.execute(
+            sa.text(
+                f"UPDATE {table} AS t SET {column} = m.kept FROM unnest(CAST(:dropped AS bigint[]), "
+                f"CAST(:kept AS bigint[])) AS m(dropped, kept) WHERE t.{column} = m.dropped"
+            ),
+            {"dropped": [d for d, _ in losers], "kept": [k for _, k in losers]},
+        )
+
+
+async def _delete_rows(
+    session: AsyncSession, table: str, ids: Sequence[int], log: MergeLog, key: Sequence[str] = ()
+) -> None:
+    if not ids:
+        return
+    columns = ", ".join(("id", "tournament_id", *key))
+    rows = await session.execute(
+        sa.text(f"DELETE FROM {table} WHERE id = ANY(CAST(:ids AS bigint[])) RETURNING {columns}"), _ids(ids)
+    )
+    log.dropped.extend(
+        Dropped(table, r["id"], r["tournament_id"], {c: r[c] for c in key})
+        for r in sorted(rows.mappings(), key=lambda r: r["id"])
+    )
+
+
+async def _active_rows(session: AsyncSession, table: str, days: Sequence[int], *columns: str) -> list[Any]:
+    result = await session.execute(
+        sa.text(
+            f"SELECT id, tournament_id, {', '.join(columns)} FROM {table} "
+            "WHERE tournament_id = ANY(CAST(:ids AS bigint[])) AND deleted_at IS NULL"
+        ),
+        _ids(days),
+    )
+    return list(result.all())
+
+
+async def _collapse_registered_teams(session: AsyncSession, days: Sequence[int], log: MergeLog) -> None:
+    """A same-name registered team of several days is one team: the latest day's (Decision 12)."""
+    rows = await _active_rows(session, "registration.team", days, "name_normalized")
+    losers = _losers(rows, days, lambda r: r.name_normalized)
+    await _repoint(session, "registration.registration", "registration_team_id", losers)
+    await _delete_rows(session, "registration.team", [d for d, _ in losers], log, ("name_normalized",))
+
+
+async def _collapse_profiles(session: AsyncSession, days: Sequence[int], log: MergeLog) -> None:
+    """A member keeps the latest day's profile; the other days' participation and links move onto it (Decision 13)."""
+    rows = [
+        r
+        for r in await _active_rows(session, "registration.registration", days, "workspace_member_id")
+        if r.workspace_member_id is not None
+    ]
+    losers = _losers(rows, days, lambda r: r.workspace_member_id)
+    for key, role in REGISTRATION_FKS.items():
+        if role == "repoint":
+            table, column = key.rsplit(".", 1)
+            await _repoint(session, table, column, losers)
+    await _delete_rows(session, "registration.registration", [d for d, _ in losers], log, ("workspace_member_id",))
+
+
+async def _collapse_forms(session: AsyncSession, days: Sequence[int], log: MergeLog) -> None:
+    """One form per tournament: the latest day's keeps every other form's versions, renumbered after its own."""
+    rows = (
+        await session.execute(
+            sa.text(
+                "SELECT id, tournament_id FROM registration.form WHERE tournament_id = ANY(CAST(:ids AS bigint[]))"
+            ),
+            _ids(days),
+        )
+    ).all()
+    for old, kept in _losers(rows, days, lambda _: None):
+        await session.execute(
+            sa.text(
+                "UPDATE registration.form_version SET form_id = :kept, number = number + "
+                "(SELECT coalesce(max(number), 0) FROM registration.form_version WHERE form_id = :kept) "
+                "WHERE form_id = :old"
+            ),
+            {"kept": kept, "old": old},
+        )
+        await _delete_rows(session, "registration.form", [old], log)
+
+
+async def _drop_collisions(
+    session: AsyncSession, table: str, column: str, days: Sequence[int], key: Sequence[str], log: MergeLog
+) -> None:
+    """Delete every row but the latest day's of each ``key`` (one partition when ``key`` is empty)."""
+    partition = ", ".join(key) or "1"
+    returning = ", ".join(("t.id", f"t.{column}", *(f"t.{c}" for c in key)))
+    rows = await session.execute(
+        sa.text(
+            f"""
+        DELETE FROM {table} AS t USING (
+          SELECT id, row_number() OVER (
+            PARTITION BY {partition} ORDER BY array_position(CAST(:days AS bigint[]), {column})) AS rn
+          FROM {table} WHERE {column} = ANY(CAST(:days AS bigint[]))
+        ) AS ranked
+        WHERE t.id = ranked.id AND ranked.rn > 1
+        RETURNING {returning}"""
+        ),
+        {"days": list(days)},
+    )
+    log.dropped.extend(
+        Dropped(table, r["id"], r[column], {c: r[c] for c in key})
+        for r in sorted(rows.mappings(), key=lambda r: r["id"])
+    )
+
+
+async def _apply_rules(session: AsyncSession, entry: LeagueEntry, log: MergeLog) -> None:
+    others = entry.others
+    for qualified, (kind, key) in TOURNAMENT_FKS.items():
+        table, column = qualified.rsplit(".", 1)
+        if kind == "leave":
+            continue
+        if kind == "drop":
+            await session.execute(
+                sa.text(f"DELETE FROM {table} WHERE {column} = ANY(CAST(:ids AS bigint[]))"), _ids(others)
+            )
+            continue
+        if kind in ("keep_latest", "dedupe"):
+            await _drop_collisions(session, table, column, entry.days_latest_first, key, log)
+        moved = await session.execute(
+            sa.text(f"UPDATE {table} SET {column} = :target WHERE {column} = ANY(CAST(:ids AS bigint[]))"),
+            {"target": entry.target_tournament_id, **_ids(others)},
+        )
+        log.moved[qualified] = moved.rowcount
+
+
+async def merge_league(session: AsyncSession, entry: LeagueEntry) -> MergeLog:
+    """Re-point every day of ``entry`` to its target tournament and delete the emptied days (spec §15.3).
+
+    Flushes, never commits. The composite FKs are deferred for the whole transaction and checked once at the end.
+    """
+    await _check_days(session, entry)
+    await session.execute(sa.text("SET CONSTRAINTS ALL DEFERRED"))
+    log = MergeLog(entry.target_tournament_id, [])
+    days = entry.days_latest_first
+    await _assign_formations(session, entry)
+    await _collapse_registered_teams(session, days, log)
+    await _collapse_profiles(session, days, log)
+    await _collapse_forms(session, days, log)
+    await _apply_rules(session, entry, log)
+    await session.execute(
+        sa.text(
+            "UPDATE tournament.tournament SET name = :name, end_date = ("
+            "SELECT max(coalesce(end_date, start_date)) FROM tournament.tournament WHERE id = ANY(CAST(:ids AS bigint[])))"
+            " WHERE id = :target"
+        ),
+        {"name": entry.name, "target": entry.target_tournament_id, **_ids(days)},
+    )
+    has_league_flag = await session.scalar(
+        sa.text(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = 'tournament' "
+            "AND table_name = 'tournament' AND column_name = 'is_league'"
+        )
+    )
+    if has_league_flag:
+        # shortcut: the column exists only before flowP6_02; the production merge runs at flowP6_01
+        await session.execute(
+            sa.text("UPDATE tournament.tournament SET is_league = false WHERE id = :target"),
+            {"target": entry.target_tournament_id},
+        )
+    await session.execute(
+        sa.text("DELETE FROM tournament.tournament WHERE id = ANY(CAST(:ids AS bigint[]))"), _ids(entry.others)
+    )
+    log.deleted_tournament_ids = list(entry.others)
+    await session.execute(sa.text("SET CONSTRAINTS ALL IMMEDIATE"))
+    await session.flush()
+    return log
