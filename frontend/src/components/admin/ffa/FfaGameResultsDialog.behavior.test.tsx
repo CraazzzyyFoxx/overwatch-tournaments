@@ -97,7 +97,6 @@ function lobby(rows: FfaLobbyRow[], extra: Partial<FfaLobby> = {}): FfaLobby {
     result_status: "none",
     best_of: 3,
     scheduled_at: null,
-    advance_count: 2,
     rules: rules(),
     rows,
     ...extra

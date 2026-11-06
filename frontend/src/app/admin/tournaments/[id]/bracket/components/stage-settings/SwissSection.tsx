@@ -57,24 +57,7 @@ export function SwissSection({ stage, form, onChange }: SectionProps) {
   // The longest road to a verdict: N-1 wins and M-1 losses, then the decider.
   const needed = wins != null && losses != null ? wins + losses - 1 : null;
 
-  // Equal thresholds split an even group exactly in half, so an advance count
-  // that says otherwise either strands qualified teams or advances eliminated ones.
-  const stageAdvance = form.advanceCount !== "" ? Number(form.advanceCount) : null;
-  const halfMismatches =
-    wins != null && wins === losses
-      ? stage.items.flatMap((item) => {
-          const size = item.inputs.length;
-          const advance = item.advance_count ?? stageAdvance;
-          return size > 0 && size % 2 === 0 && advance != null && advance !== size / 2
-            ? [{ group: item.name, size, advance }]
-            : [];
-        })
-      : [];
-
-  const warnings = [
-    ...(needed != null && rounds < needed ? [t("swissRoundsShort", { needed, rounds })] : []),
-    ...halfMismatches.map((mismatch) => t("swissHalfMismatch", mismatch))
-  ];
+  const warnings = needed != null && rounds < needed ? [t("swissRoundsShort", { needed, rounds })] : [];
 
   return (
     <SettingGroup id="stage-swiss" title={tRoot("editor.swiss")} description={t("swissHelp")}>

@@ -51,7 +51,6 @@ function item(id: number, overrides: Partial<StageItem> = {}): StageItem {
     name: `Group ${id}`,
     type: "group",
     order: 0,
-    advance_count: null,
     inputs: [
       {
         id: 501,
@@ -74,8 +73,6 @@ function groupStage(items: StageItem[]): Stage {
     description: null,
     stage_type: "round_robin",
     max_rounds: 3,
-    advance_count: 2,
-    advance_upper_count: null,
     order: 0,
     node_id: 1,
     status: "live",

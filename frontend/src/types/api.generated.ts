@@ -19649,8 +19649,6 @@ export interface components {
         };
         /** FfaLobbyRead */
         "tournament.FfaLobbyRead": {
-            /** Advance Count */
-            advance_count: number | null;
             /** Best Of */
             best_of: number;
             /** Encounter Id */
@@ -21575,16 +21573,6 @@ export interface components {
         "tournament.StageItemInputType": TournamentStageItemInputType;
         /** StageItemRead */
         "tournament.StageItemRead": {
-            /**
-             * Advance Count
-             * @default null
-             */
-            advance_count: number | null;
-            /**
-             * Advance Upper Count
-             * @default null
-             */
-            advance_upper_count: number | null;
             /** Id */
             id: number;
             /**
@@ -21602,16 +21590,6 @@ export interface components {
         };
         /** StageItemSummaryRead */
         "tournament.StageItemSummaryRead": {
-            /**
-             * Advance Count
-             * @default null
-             */
-            advance_count: number | null;
-            /**
-             * Advance Upper Count
-             * @default null
-             */
-            advance_upper_count: number | null;
             /** Id */
             id: number;
             /** Name */
@@ -21635,16 +21613,6 @@ export interface components {
         "tournament.StagePairingMode": TournamentStagePairingMode;
         /** StageRead */
         "tournament.StageRead": {
-            /**
-             * Advance Count
-             * @default null
-             */
-            advance_count: number | null;
-            /**
-             * Advance Upper Count
-             * @default null
-             */
-            advance_upper_count: number | null;
             best_of?: components["schemas"]["tournament.StageBestOf"];
             /**
              * Challonge Id
@@ -21786,16 +21754,6 @@ export interface components {
         };
         /** StageSummaryRead */
         "tournament.StageSummaryRead": {
-            /**
-             * Advance Count
-             * @default null
-             */
-            advance_count: number | null;
-            /**
-             * Advance Upper Count
-             * @default null
-             */
-            advance_upper_count: number | null;
             best_of?: components["schemas"]["tournament.StageBestOf"];
             /**
              * Challonge Id
@@ -31650,16 +31608,6 @@ export interface components {
         };
         /** StageCreate */
         "tournament.StageCreate": {
-            /**
-             * Advance Count
-             * @default null
-             */
-            advance_count: number | null;
-            /**
-             * Advance Upper Count
-             * @default null
-             */
-            advance_upper_count: number | null;
             best_of?: components["schemas"]["tournament.StageBestOf"];
             /**
              * Challonge Id
@@ -31737,16 +31685,6 @@ export interface components {
         };
         /** StageItemCreate */
         "tournament.StageItemCreate": {
-            /**
-             * Advance Count
-             * @default null
-             */
-            advance_count: number | null;
-            /**
-             * Advance Upper Count
-             * @default null
-             */
-            advance_upper_count: number | null;
             /** Name */
             name: string;
             /**
@@ -31790,16 +31728,6 @@ export interface components {
         };
         /** StageItemUpdate */
         "tournament.StageItemUpdate": {
-            /**
-             * Advance Count
-             * @default null
-             */
-            advance_count: number | null;
-            /**
-             * Advance Upper Count
-             * @default null
-             */
-            advance_upper_count: number | null;
             /**
              * Name
              * @default null
@@ -31874,16 +31802,6 @@ export interface components {
          *     so that an explicit ``null`` is refused instead of written.
          */
         "tournament.StageUpdate": {
-            /**
-             * Advance Count
-             * @default null
-             */
-            advance_count: number | null;
-            /**
-             * Advance Upper Count
-             * @default null
-             */
-            advance_upper_count: number | null;
             best_of?: components["schemas"]["tournament.StageBestOf"];
             /**
              * De Grand Final Type

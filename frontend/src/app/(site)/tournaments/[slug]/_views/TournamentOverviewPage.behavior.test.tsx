@@ -141,8 +141,6 @@ function makeStage(overrides: Partial<StageSummary> & { id: number }): StageSumm
     description: null,
     stage_type: "double_elimination",
     max_rounds: 2,
-    advance_count: null,
-    advance_upper_count: null,
     order: 1,
     node_id: 1,
     status: "live",
@@ -979,7 +977,6 @@ describe("while it is being played", () => {
         result_status: "none",
         best_of: 3,
         scheduled_at: null,
-        advance_count: null,
         rules: { columns: [], placement_points: [], formula: null },
         // Out of order on purpose: the card ranks by `position`.
         rows: [row(2, "Gamma Lobby", 2, 2, 9), row(1, "Alpha Lobby", 1, 1, 14)]
@@ -1201,7 +1198,6 @@ describe("the reference card", () => {
           stage_type: "swiss",
           order: 0,
           max_rounds: 5,
-          advance_count: 8,
           swiss_qualify_wins: 3,
           swiss_eliminate_losses: 3
         }),
@@ -1210,7 +1206,6 @@ describe("the reference card", () => {
           name: "Playoffs",
           stage_type: "double_elimination",
           order: 1,
-          advance_count: 2
         })
       ]
     });
@@ -1222,9 +1217,6 @@ describe("the reference card", () => {
     expect(steps[0]).toContain("5 rounds");
     expect(steps[0]).toContain("Through at 3 wins");
     expect(steps[0]).toContain("Out at 3 losses");
-    expect(steps[0]).toContain("Top 8 advance");
-    // The last stage advances nobody, whatever its `advance_count` says.
-    expect(steps[1]).not.toContain("advance");
     expect(steps[1]).toContain(COPY.format.grandFinalNoReset);
   });
 

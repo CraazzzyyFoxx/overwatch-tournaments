@@ -49488,17 +49488,6 @@
     },
     "tournament.FfaLobbyRead": {
       "properties": {
-        "advance_count": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Advance Count"
-        },
         "best_of": {
           "title": "Best Of",
           "type": "integer"
@@ -49576,7 +49565,6 @@
         "result_status",
         "best_of",
         "scheduled_at",
-        "advance_count",
         "rules",
         "rows"
       ],
@@ -57880,32 +57868,6 @@
     },
     "tournament.StageCreate": {
       "properties": {
-        "advance_count": {
-          "anyOf": [
-            {
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Count"
-        },
-        "advance_upper_count": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Upper Count"
-        },
         "best_of": {
           "$ref": "#/components/schemas/tournament.StageBestOf"
         },
@@ -58088,32 +58050,6 @@
     },
     "tournament.StageItemCreate": {
       "properties": {
-        "advance_count": {
-          "anyOf": [
-            {
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Count"
-        },
-        "advance_upper_count": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Upper Count"
-        },
         "name": {
           "title": "Name",
           "type": "string"
@@ -58279,30 +58215,6 @@
     },
     "tournament.StageItemRead": {
       "properties": {
-        "advance_count": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Count"
-        },
-        "advance_upper_count": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Upper Count"
-        },
         "id": {
           "title": "Id",
           "type": "integer"
@@ -58343,30 +58255,6 @@
     },
     "tournament.StageItemSummaryRead": {
       "properties": {
-        "advance_count": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Count"
-        },
-        "advance_upper_count": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Upper Count"
-        },
         "id": {
           "title": "Id",
           "type": "integer"
@@ -58409,32 +58297,6 @@
     },
     "tournament.StageItemUpdate": {
       "properties": {
-        "advance_count": {
-          "anyOf": [
-            {
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Count"
-        },
-        "advance_upper_count": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Upper Count"
-        },
         "name": {
           "anyOf": [
             {
@@ -58491,30 +58353,6 @@
     },
     "tournament.StageRead": {
       "properties": {
-        "advance_count": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Count"
-        },
-        "advance_upper_count": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Upper Count"
-        },
         "best_of": {
           "$ref": "#/components/schemas/tournament.StageBestOf"
         },
@@ -58950,30 +58788,6 @@
     },
     "tournament.StageSummaryRead": {
       "properties": {
-        "advance_count": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Count"
-        },
-        "advance_upper_count": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Upper Count"
-        },
         "best_of": {
           "$ref": "#/components/schemas/tournament.StageBestOf"
         },
@@ -59208,32 +59022,6 @@
     "tournament.StageUpdate": {
       "description": "A partial edit: only the fields sent change (the service reads\n``exclude_unset``). ``scoring`` and ``best_of`` are each replaced as a\nwhole. The non-nullable regulation fields carry a default only\nso that an explicit ``null`` is refused instead of written.",
       "properties": {
-        "advance_count": {
-          "anyOf": [
-            {
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Count"
-        },
-        "advance_upper_count": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Advance Upper Count"
-        },
         "best_of": {
           "$ref": "#/components/schemas/tournament.StageBestOf"
         },

@@ -12,8 +12,6 @@ function stage(overrides: Partial<Stage> = {}): Stage {
     description: null,
     stage_type: "individual_swiss",
     max_rounds: 5,
-    advance_count: null,
-    advance_upper_count: null,
     pairing_mode: "score",
     playoff_team_count: 4,
     order: 1,

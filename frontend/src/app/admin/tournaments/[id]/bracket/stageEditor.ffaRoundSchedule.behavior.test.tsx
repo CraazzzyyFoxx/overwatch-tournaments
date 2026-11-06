@@ -114,8 +114,6 @@ function ffaStage(): Stage {
     description: null,
     stage_type: "ffa_league",
     max_rounds: 1,
-    advance_count: 2,
-    advance_upper_count: null,
     order: 0,
     node_id: 1,
     status: "live",
@@ -157,7 +155,6 @@ function lobby(encounterId: number, stageItemId: number, scheduledAt: string | n
     result_status: "none",
     best_of: 3,
     scheduled_at: scheduledAt,
-    advance_count: 2,
     rules: {
       columns: [{ key: "score", label: "Score", public: true, better: "higher" }],
       placement_points: [10, 6, 3],

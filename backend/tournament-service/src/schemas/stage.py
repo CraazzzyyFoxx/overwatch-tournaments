@@ -243,8 +243,6 @@ class StageItemRead(BaseRead):
     name: str
     type: enums.StageItemType
     order: int
-    advance_count: int | None = None
-    advance_upper_count: int | None = None
     inputs: list[StageItemInputRead] = []
 
 
@@ -253,8 +251,6 @@ class StageItemSummaryRead(BaseRead):
     name: str
     type: enums.StageItemType
     order: int
-    advance_count: int | None = None
-    advance_upper_count: int | None = None
 
 
 class StageSummaryRead(BaseRead, _StageRegulationRead):
@@ -263,8 +259,6 @@ class StageSummaryRead(BaseRead, _StageRegulationRead):
     description: str | None
     stage_type: enums.StageType
     max_rounds: int = 5
-    advance_count: int | None = None
-    advance_upper_count: int | None = None
     order: int
     node_id: int | None = None  #: ``None`` only on a scrim room's stage (no flow node)
     status: enums.FlowNodeStatus | None = None
@@ -280,8 +274,6 @@ class StageRead(BaseRead, _StageRegulationRead):
     description: str | None
     stage_type: enums.StageType
     max_rounds: int = 5
-    advance_count: int | None = None
-    advance_upper_count: int | None = None
     order: int
     node_id: int | None = None
     status: enums.FlowNodeStatus | None = None

@@ -87,8 +87,6 @@ function stage(id: number, name: string, order: number, stageType: StageType): S
     description: null,
     stage_type: stageType,
     max_rounds: 5,
-    advance_count: null,
-    advance_upper_count: null,
     order,
     node_id: 1,
     status: "completed",
@@ -529,7 +527,6 @@ describe("FFA lobbies", () => {
     result_status: "none" as const,
     best_of: 2,
     scheduled_at: null,
-    advance_count: null,
     rules: { columns: [], placement_points: [], formula: "place_pts", requires_placement: true },
     rows
   });

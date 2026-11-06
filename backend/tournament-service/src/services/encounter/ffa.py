@@ -545,25 +545,6 @@ class FfaEncounterService:
                 )
             ).all()
         }
-        advance = {
-            row.id: row.advance_count
-            for row in (
-                await session.execute(
-                    sa.select(models.StageItem.id, models.StageItem.advance_count).where(
-                        models.StageItem.id.in_(item_ids)
-                    )
-                )
-            ).all()
-        }
-        stage_ids = {row.stage_id for row in positions.values() if row.stage_id is not None}
-        stage_advance = {
-            row.id: row.advance_count
-            for row in (
-                await session.execute(
-                    sa.select(models.Stage.id, models.Stage.advance_count).where(models.Stage.id.in_(stage_ids))
-                )
-            ).all()
-        }
 
         out = []
         for lobby in lobbies:
@@ -576,8 +557,6 @@ class FfaEncounterService:
                     lines,
                     teams,
                     ranked,
-                    advance,
-                    stage_advance,
                     positions.get(lobby.id),
                     rules,
                 )
@@ -592,8 +571,6 @@ class FfaEncounterService:
         lines: dict[int, dict[int, GameLine]],
         teams: dict[int, sa.Row],
         ranked: dict[tuple[int, int], sa.Row],
-        advance: dict[int, int | None],
-        stage_advance: dict[int, int | None],
         position_row: BracketEncounter | None,
         rules: ScoringRules,
     ) -> FfaLobbyRead:
@@ -617,7 +594,6 @@ class FfaEncounterService:
         )
         stage_item_id = position_row.stage_item_id if position_row is not None else None
         stage_id = position_row.stage_id if position_row is not None else None
-        item_advance = advance.get(stage_item_id) if stage_item_id is not None else None
         rows = []
         for seat in seats:
             total = totals[seat.id]
@@ -654,7 +630,6 @@ class FfaEncounterService:
             result_status=lobby.result_status,
             best_of=lobby.best_of,
             scheduled_at=lobby.scheduled_at,
-            advance_count=item_advance if item_advance is not None else stage_advance.get(stage_id),
             rules=FfaRulesRead(
                 columns=[
                     FfaColumnRead(key=column.key, label=column.label, public=column.public, better=column.better)

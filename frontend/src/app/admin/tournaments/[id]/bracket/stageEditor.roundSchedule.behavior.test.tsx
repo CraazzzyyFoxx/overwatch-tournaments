@@ -114,8 +114,6 @@ function playoffStage(): Stage {
     description: null,
     stage_type: "double_elimination",
     max_rounds: 4,
-    advance_count: null,
-    advance_upper_count: null,
     order: 0,
     node_id: 1,
     status: "live",

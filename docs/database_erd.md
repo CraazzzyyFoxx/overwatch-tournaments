@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`flowP6_01_deferrable_fks`** (180 revisions in `backend/migrations/versions/`).
+Alembic head: **`flowP4_02_drop_advance`** (181 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1317,8 +1317,6 @@ erDiagram
         varchar description "nullable"
         stagetype stage_type
         int max_rounds
-        int advance_count "nullable"
-        int advance_upper_count "nullable"
         int order
         boolean is_published
         varchar ranking_preset "nullable"
@@ -1349,8 +1347,6 @@ erDiagram
         varchar name
         stageitemtype type
         int order
-        int advance_count "nullable"
-        int advance_upper_count "nullable"
     }
     TOURNAMENT_STAGE_ITEM_INPUT {
         bigint id PK

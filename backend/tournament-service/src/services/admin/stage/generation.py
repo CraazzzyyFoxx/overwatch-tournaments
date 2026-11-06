@@ -477,7 +477,7 @@ class StageGenerationMixin(StageServiceBase):
         regenerate.
 
         A bracket stage with no seeds is the one exception. Rather than refuse, it
-        is built from the preceding group stage's ``advance_count`` × groups (see
+        is built from the row counts of its flow input (see
         ``_bracket_seed_counts``) with every slot left TBD, so the playoff can be
         laid out, scheduled and configured while the groups are still running;
         ``_fill_bracket_seeds`` writes the teams into it once they resolve.

@@ -174,14 +174,13 @@ export function StageEditor({
     () =>
       projectStage({
         stage,
-        stages,
         stageType: form.stageType,
         maxRounds: normalizeMaxRounds(form.maxRounds, stage.max_rounds ?? 5),
         bestOf: form.bestOf,
         plannedRounds,
         formatRound
       }),
-    [stage, stages, form.stageType, form.maxRounds, form.bestOf, plannedRounds, formatRound]
+    [stage, form.stageType, form.maxRounds, form.bestOf, plannedRounds, formatRound]
   );
 
   const mergeCandidates = isMergeableGroupStage(stage)
@@ -447,13 +446,7 @@ export function StageEditor({
             {/* Right under the fields that shape it: format and grand final. */}
             <BracketPreview projection={projection} stage={stage} teams={teams} className="px-1 py-2" />
 
-            <SeedingSection
-              stage={stage}
-              stages={stages}
-              form={form}
-              onChange={patchForm}
-              onChanged={onChanged}
-            />
+            <SeedingSection form={form} onChange={patchForm} />
 
             {isFfaForm ? (
               <FfaScoringSection form={form} onChange={patchForm} saveError={saveError} />

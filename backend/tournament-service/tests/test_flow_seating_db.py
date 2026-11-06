@@ -5,8 +5,9 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from shared.core import enums
-from shared.models.tournament.stage import StageItem
+from shared.models.tournament.stage import Stage, StageItem
 from shared.models.tournament.standings import Standing
+from src import schemas
 from src.services.admin.stage import stage_service
 from src.services.flow.engine import flow_engine
 from tests._flow_playoff import GroupsToPlayoffCase
@@ -111,3 +112,8 @@ class FlowSeatingDbTests(GroupsToPlayoffCase):
 
         self.assertEqual(400, refused.status_code)
         self.assertIn("stage_has_no_items", str(refused.detail))
+
+    def test_stage_has_no_advance_columns(self) -> None:
+        columns = {c.name for c in Stage.__table__.columns} | {c.name for c in StageItem.__table__.columns}
+        self.assertFalse({"advance_count", "advance_upper_count"} & columns)
+        self.assertNotIn("advance_count", schemas.StageRead.model_fields)

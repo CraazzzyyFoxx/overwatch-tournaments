@@ -465,7 +465,7 @@ for (const [groupCount, wiring] of [
       adminApi,
       tournament.id,
       teams.map((t) => t.id),
-      { stageType: "round_robin", groups: groupCount, bestOf: 1, extra: explicit ? {} : { advance_count: 2 } }
+      { stageType: "round_robin", groups: groupCount, bestOf: 1 }
     );
     await startStage(adminApi, created);
     const playoff = await adminApi.post<Stage>(
@@ -635,7 +635,6 @@ test("ffa: two lobbies scored by a placement table; ties go to game wins, the he
       groups: 2,
       bestOf: 2,
       extra: {
-        advance_count: 2,
         scoring: { preset: "points", columns: [{ key: "kills", label: "Kills" }], placement_points: placementPoints, formula: "place_pts" },
       },
     }

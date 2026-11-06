@@ -335,7 +335,7 @@ export async function seedGroupsToPlayoffs(api: Api) {
     api,
     tournament.id,
     teams.map((t) => t.id),
-    { stageType: "round_robin", groups: 2, bestOf: 1, extra: { advance_count: 2 } }
+    { stageType: "round_robin", groups: 2, bestOf: 1 }
   );
   await setPoints(api, created.id, 3, 1, 0);
   await startStage(api, created);

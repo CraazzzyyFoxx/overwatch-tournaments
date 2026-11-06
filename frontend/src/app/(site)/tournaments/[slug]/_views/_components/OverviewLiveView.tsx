@@ -48,8 +48,7 @@ import { AboutTournamentCard, CardColumns, OverviewSection, SectionLink } from "
 import { BansCard, TeamSeriesRow, useHeroCatalog } from "./OverviewInsightCards";
 
 /**
- * The group tables side by side: place, the last three results, map difference and points. The places that go
- * through are teal down to the cut line, so the race for the last spot reads at a glance.
+ * The group tables side by side: place, the last three results, map difference and points.
  */
 function GroupTablesCard({
   stage,
@@ -63,7 +62,6 @@ function GroupTablesCard({
   const groups = [...byGroup.values()];
   // One decimal everywhere as soon as any row carries a half point: "4" beside "3.5" has no shared decimal to scan.
   const fraction = rows.some((row) => !Number.isInteger(row.points));
-  const advance = rows[0]?.advance ?? null;
   const head = "h-auto px-0 py-2 font-medium";
   const cell = "px-0 py-2";
 
@@ -79,7 +77,6 @@ function GroupTablesCard({
       <div className={cn("grid gap-x-8 gap-y-6", groups.length > 1 && "sm:grid-cols-2")}>
         {groups.map((group) => {
           const name = group[0]?.groupName ?? null;
-          const cut = group[0]?.advance ?? null;
           return (
             <Table className="caption-top table-fixed text-sm" key={group[0]?.groupKey}>
               <caption
@@ -113,27 +110,10 @@ function GroupTablesCard({
               </TableHeader>
               <TableBody>
                 {group.map((row) => {
-                  const through = cut !== null && row.position <= cut;
                   const teamName = row.team?.name ?? tRoot("common.tbd");
                   return (
-                    <TableRow
-                      key={row.teamId}
-                      className={cn(
-                        cut !== null &&
-                          row.position === cut &&
-                          cut < group.length &&
-                          "border-b-[color:var(--aqt-teal)]"
-                      )}
-                    >
-                      <TableCell
-                        className={cn(
-                          cell,
-                          "aqt-tnum",
-                          through
-                            ? "font-semibold text-[color:var(--aqt-teal)]"
-                            : "text-[color:var(--aqt-fg-dim)]"
-                        )}
-                      >
+                    <TableRow key={row.teamId}>
+                      <TableCell className={cn(cell, "aqt-tnum text-[color:var(--aqt-fg-dim)]")}>
                         {row.position}
                       </TableCell>
                       <TableCell className={cn(cell, "pr-3")}>
@@ -180,12 +160,6 @@ function GroupTablesCard({
           );
         })}
       </div>
-      {advance ? (
-        <p className="mt-4 flex items-center gap-2 text-label text-[color:var(--aqt-fg-dim)]">
-          <span aria-hidden className="h-0.5 w-4 rounded-full bg-[color:var(--aqt-teal)]" />
-          {t("overview.groups.advance", { count: advance })}
-        </p>
-      ) : null}
     </OverviewSection>
   );
 }
@@ -245,7 +219,7 @@ export function OverviewLiveView({
   const groupRows = useMemo(
     () =>
       stage !== null && GROUP_TYPES[stage.stage_type] === true
-        ? buildGroupRows(stage, stageStandings, stageEncounters)
+        ? buildGroupRows(stageStandings, stageEncounters)
         : [],
     [stage, stageStandings, stageEncounters]
   );

@@ -34,8 +34,6 @@ def _stage(stage_id: int, challonge_group_id: int | None) -> models.Stage:
         description=None,
         stage_type=enums.StageType.ROUND_ROBIN,
         max_rounds=1,
-        advance_count=None,
-        advance_upper_count=None,
         order=stage_id,
         is_published=False,
         challonge_group_id=challonge_group_id,

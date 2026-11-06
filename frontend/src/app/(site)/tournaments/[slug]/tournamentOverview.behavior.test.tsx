@@ -233,8 +233,6 @@ describe("TournamentLayout streaming overview", () => {
       description: null,
       stage_type,
       max_rounds: 2,
-      advance_count: null,
-      advance_upper_count: null,
       order,
       node_id: 1,
       status: "live",

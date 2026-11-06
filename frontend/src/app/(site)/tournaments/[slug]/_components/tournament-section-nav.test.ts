@@ -24,8 +24,6 @@ function stage(overrides: Partial<StageSummary> = {}): StageSummary {
     description: null,
     stage_type: "single_elimination",
     max_rounds: 3,
-    advance_count: null,
-    advance_upper_count: null,
     order: 1,
     node_id: 1,
     status: "live",

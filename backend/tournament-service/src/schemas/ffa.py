@@ -112,7 +112,5 @@ class FfaLobbyRead(BaseModel):
     result_status: enums.EncounterResultStatus
     best_of: int
     scheduled_at: datetime | None
-    #: Item override, else the stage's number; ``None`` draws no cut line.
-    advance_count: int | None
     rules: FfaRulesRead
     rows: list[FfaLobbyRowRead]

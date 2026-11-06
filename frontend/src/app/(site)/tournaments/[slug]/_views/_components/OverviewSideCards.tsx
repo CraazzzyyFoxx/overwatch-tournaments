@@ -69,8 +69,6 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
         return t("tournamentDetail.overview.format.qualify", { count: fact.count });
       case "eliminate":
         return t("tournamentDetail.overview.format.eliminate", { count: fact.count });
-      case "advance":
-        return t("tournamentDetail.overview.format.advance", { count: fact.count });
       case "grandFinal":
         return t(
           fact.reset
@@ -118,7 +116,7 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
                     const showType =
                       typeLabel !== null &&
                       typeLabel.trim().toLowerCase() !== stage.name.trim().toLowerCase();
-                    const facts = stageFacts(stage, !isLast);
+                    const facts = stageFacts(stage);
                     return (
                       <div key={stage.id} className="min-w-0">
                         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-ui font-semibold text-[color:var(--aqt-fg)]">

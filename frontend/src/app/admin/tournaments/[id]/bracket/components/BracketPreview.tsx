@@ -59,7 +59,6 @@ export function BracketPreview({
   const sourceNote = {
     seeded: t("sourceSeeded"),
     slots: t("sourceSlots"),
-    projected: t("sourceProjected"),
     unknown: t("sourceUnknown")
   }[bracketTeams.source];
 
@@ -203,24 +202,6 @@ export function BracketPreview({
       {projection.isBracket ? (
         <p className="mt-3 text-sm text-foreground">
           <span className="text-muted-foreground">{t("teamsSource", { count: bracketTeams.count, source: sourceNote })}</span>
-        </p>
-      ) : null}
-
-      {projection.isBracket && projection.seeds.lower > 0 ? (
-        <p className="mt-1 text-xs text-muted-foreground">
-          {t("upstream", { upper: projection.seeds.upper, lower: projection.seeds.lower })}
-        </p>
-      ) : null}
-
-      {projection.isGroups ? (
-        <p className="mt-3 text-sm text-foreground">
-          {projection.advancingTotal > 0
-            ? t("advance", {
-                count: projection.itemCount,
-                counts: [...new Set(projection.advanceCounts)].join(" / "),
-                total: projection.advancingTotal
-              })
-            : t("autoAdvance", { count: projection.itemCount })}
         </p>
       ) : null}
 

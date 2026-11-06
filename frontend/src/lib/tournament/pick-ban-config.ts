@@ -738,7 +738,6 @@ export function resolveSeriesLength(
   if (round != null) {
     const projected = projectStage({
       stage,
-      stages,
       stageType: stage.stage_type,
       maxRounds: stage.max_rounds,
       bestOf: stage.best_of,

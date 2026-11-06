@@ -394,8 +394,6 @@ export interface StageCreateInput extends Partial<StageRegulation> {
   description?: string | null;
   stage_type: StageType;
   max_rounds?: number;
-  advance_count?: number | null;
-  advance_upper_count?: number | null;
   /** `individual_swiss` only. */
   pairing_mode?: StagePairingMode | null;
   playoff_team_count?: number | null;
@@ -407,8 +405,6 @@ export interface StageUpdateInput extends Partial<StageRegulation> {
   description?: string | null;
   stage_type?: StageType;
   max_rounds?: number;
-  advance_count?: number | null;
-  advance_upper_count?: number | null;
   /** `individual_swiss` only. */
   pairing_mode?: StagePairingMode | null;
   playoff_team_count?: number | null;
@@ -419,8 +415,6 @@ export interface StageItemCreateInput {
   name: string;
   type: StageItemType;
   order?: number;
-  advance_count?: number | null;
-  advance_upper_count?: number | null;
 }
 
 export interface StageItemInputCreateInput {

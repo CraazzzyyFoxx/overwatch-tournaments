@@ -67,14 +67,6 @@ export interface StageItem {
   name: string;
   type: StageItemType;
   order: number;
-  /** Per-group override of `Stage.advance_count`; `null` inherits the stage. */
-  advance_count: number | null;
-  /**
-   * How many of this group's advancing teams start in the upper bracket;
-   * `null` inherits the stage. `0` is meaningful: the whole group starts in
-   * the lower bracket.
-   */
-  advance_upper_count: number | null;
   inputs: StageItemInput[];
 }
 
@@ -164,12 +156,6 @@ export interface StageSummary extends StageRegulation {
   description: string | null;
   stage_type: StageType;
   max_rounds: number;
-  advance_count: number | null;
-  /**
-   * How many of each group's advancing teams start in the upper bracket;
-   * `null` sends all of them up. The rest are seeded into `bracket_lower`.
-   */
-  advance_upper_count: number | null;
   order: number;
   /** The stage's flow node: `POST /admin/flow-nodes/{node_id}/transition` moves it. */
   node_id: number;

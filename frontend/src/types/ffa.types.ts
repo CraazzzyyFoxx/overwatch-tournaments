@@ -87,8 +87,6 @@ export interface FfaLobby {
   result_status: EncounterResultStatus;
   best_of: number;
   scheduled_at: string | null;
-  /** Item override, else the stage's number; `null` draws no cut line. */
-  advance_count: number | null;
   rules: FfaRules;
   rows: FfaLobbyRow[];
 }

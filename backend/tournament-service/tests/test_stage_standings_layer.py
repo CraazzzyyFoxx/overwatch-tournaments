@@ -720,7 +720,7 @@ class PlayoffWiringTests(StageLayerCase):
             groups = await stage_service.create_stage(
                 s,
                 self.tournament_id,
-                schemas.StageCreate(name="Groups", stage_type=enums.StageType.ROUND_ROBIN, order=0, advance_count=2),
+                schemas.StageCreate(name="Groups", stage_type=enums.StageType.ROUND_ROBIN, order=0),
             )
             playoff = await stage_service.create_stage(
                 s,

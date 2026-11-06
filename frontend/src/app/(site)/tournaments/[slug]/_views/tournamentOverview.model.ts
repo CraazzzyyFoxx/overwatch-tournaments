@@ -72,16 +72,14 @@ export type StageFact =
   | { kind: "finalBestOf"; n: number }
   | { kind: "qualify"; count: number }
   | { kind: "eliminate"; count: number }
-  | { kind: "advance"; count: number }
   | { kind: "grandFinal"; reset: boolean };
 
 /**
  * What a reader needs to follow a stage, read off its regulation: how long it
  * runs, how long a series is, how a team gets through. Only what applies — an
- * FFA lobby plays no series, and the last wave advances nobody, whatever its
- * `advance_count` says.
+ * FFA lobby plays no series.
  */
-export function stageFacts(stage: StageSummary, hasNextWave: boolean): StageFact[] {
+export function stageFacts(stage: StageSummary): StageFact[] {
   const facts: StageFact[] = [];
   const isFfa = stage.stage_type === "ffa_league";
   if ((stage.stage_type === "swiss" || isFfa) && stage.max_rounds > 0) {
@@ -101,9 +99,6 @@ export function stageFacts(stage: StageSummary, hasNextWave: boolean): StageFact
     if (stage.swiss_eliminate_losses != null) {
       facts.push({ kind: "eliminate", count: stage.swiss_eliminate_losses });
     }
-  }
-  if (hasNextWave && stage.advance_count != null && stage.advance_count > 0) {
-    facts.push({ kind: "advance", count: stage.advance_count });
   }
   if (stage.stage_type === "double_elimination") {
     facts.push({ kind: "grandFinal", reset: stage.de_grand_final_type === "with_reset" });
@@ -245,8 +240,6 @@ export interface GroupRow {
   team: Team | null;
   groupKey: string;
   groupName: string | null;
-  /** How many of this group go through: the group's own count, else the stage's. */
-  advance: number | null;
   position: number;
   points: number;
   /** Maps won minus maps lost over the finished series. */
@@ -260,7 +253,6 @@ export interface GroupRow {
  * the map difference come from the stage's finished series.
  */
 export function buildGroupRows(
-  stage: Pick<StageSummary, "advance_count">,
   stageStandings: readonly Standings[],
   stageEncounters: readonly Encounter[]
 ): GroupRow[] {
@@ -291,7 +283,6 @@ export function buildGroupRows(
         team: row.team,
         groupKey: group.key,
         groupName: group.name,
-        advance: row.stage_item?.advance_count ?? stage.advance_count,
         position: row.position,
         points: row.points,
         mapDiff: own?.mapDiff ?? 0,

@@ -114,8 +114,6 @@ function group(size: number): StageItem {
     name: "Group A",
     type: "group",
     order: 0,
-    advance_count: null,
-    advance_upper_count: null,
     inputs: Array.from({ length: size }, (_, index) => ({
       id: 500 + index,
       stage_item_id: 100,
@@ -135,8 +133,6 @@ function swissStage(overrides: Partial<Stage> = {}): Stage {
     description: null,
     stage_type: "swiss",
     max_rounds: 5,
-    advance_count: 8,
-    advance_upper_count: null,
     order: 0,
     node_id: 1,
     status: "live",
@@ -292,11 +288,10 @@ describe("Stage editor Swiss thresholds", () => {
     });
   });
 
-  it("warns when the rounds cannot reach every verdict or the cut is not half the group", async () => {
+  it("warns when the rounds cannot reach every verdict", async () => {
     await mount(
       swissStage({
         max_rounds: 3,
-        advance_count: 2,
         swiss_qualify_wins: null,
         swiss_eliminate_losses: null,
         items: [group(8)]
@@ -307,9 +302,8 @@ describe("Stage editor Swiss thresholds", () => {
     await click(labelled("Auto-qualify after N wins"));
     await click(labelled("Auto-eliminate after N losses"));
 
-    // 3 wins / 3 losses take up to 5 rounds; equal thresholds advance 4 of 8.
+    // 3 wins / 3 losses take up to 5 rounds.
     expect(container.textContent).toContain("the stage's round cap (3) is below the 5 rounds");
-    expect(container.textContent).toContain("but Group A advances 2 of 8");
 
     await save();
     expect(payload()).toMatchObject({ swiss_qualify_wins: 3, swiss_eliminate_losses: 3 });

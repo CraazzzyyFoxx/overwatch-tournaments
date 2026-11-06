@@ -121,8 +121,6 @@ function roundRobinStage(): Stage {
     description: null,
     stage_type: "round_robin",
     max_rounds: 5,
-    advance_count: 2,
-    advance_upper_count: null,
     order: 0,
     node_id: 1,
     status: "live",

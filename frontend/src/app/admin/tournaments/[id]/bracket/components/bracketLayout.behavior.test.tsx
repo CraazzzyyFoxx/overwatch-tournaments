@@ -63,8 +63,6 @@ function stage(): Stage {
     description: null,
     stage_type: "single_elimination",
     max_rounds: 2,
-    advance_count: null,
-    advance_upper_count: null,
     order: 1,
     node_id: 1,
     status: "draft",

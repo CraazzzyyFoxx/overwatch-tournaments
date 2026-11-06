@@ -55,8 +55,6 @@ function stage(isPublished: boolean): Stage {
     description: null,
     stage_type: "single_elimination",
     max_rounds: null,
-    advance_count: null,
-    advance_upper_count: null,
     order: 1,
     node_id: 1,
     status: "draft",

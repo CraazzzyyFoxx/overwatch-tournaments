@@ -1,13 +1,12 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronUp, Info, Lock, Trophy } from "lucide-react";
+import { Info, Lock, Trophy } from "lucide-react";
 
 import { Encounter } from "@/types/encounter.types";
-import { Stage, StageItem, Standings } from "@/types/tournament.types";
+import { Stage, Standings } from "@/types/tournament.types";
 import { cn } from "@/lib/utils";
 import { sortStandingsMatches } from "@/lib/tournament/match-order";
 import { groupDisplayName } from "@/lib/tournament/group";
-import { straddlingTieGroups } from "@/lib/tournament/tie-clusters";
 import { useTranslations } from "next-intl";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import {
@@ -26,8 +25,6 @@ interface StandingTableProps {
   standings: Standings[];
   is_groups: boolean;
   stages?: Stage[];
-  // Groups: tint the top-N rows and draw a dashed "top N advance" cut-line.
-  advanceCount?: number;
   // Playoff/overall: mark rank 1 as the crowned winner.
   crownTop?: boolean;
 }
@@ -44,50 +41,19 @@ export function getStandingsStagesQueryOptions(
   };
 }
 
-/**
- * Where the advancing block splits into Upper and Lower bracket, or `null` when
- * it does not split at all.
- *
- * Mirrors the backend's per-group rule (`group_advance_counts`,
- * `domain/stage/seeds.py`): places `1…advance_upper_count` are seeded into the
- * upper bracket and the rest straight into the lower one, so a tie ACROSS this
- * line decides who starts a bracket down — every bit as load-bearing as the
- * advance line itself, and invisible until now.
- *
- * The group's own number wins over the stage's; `null` on both means every
- * advancing team starts upper, and there is no line to draw. Which playoff
- * consumes the seeds no longer matters: the split is configured here.
- */
-export function upperBracketCut(
-  groupStage: Stage | null | undefined,
-  item: StageItem | null,
-  advanceCount: number | null
-): number | null {
-  if (!groupStage || advanceCount == null) return null;
-  const upper = item?.advance_upper_count ?? groupStage.advance_upper_count;
-  return upper != null && upper > 0 && upper < advanceCount ? upper : null;
-}
-
 type ResultKind = "w" | "l" | "t";
 
 /** A tie is a draw square (`ResTag` "d") that keeps its own letter. */
 const RES_TAG_KIND: Record<ResultKind, ResTagKind> = { w: "w", l: "l", t: "d" };
 
-/** The row's place against the lines: the crowned winner, a tie a line cuts, the advancing block. */
-type Zone = "crown" | "tie" | "advance";
+/** The row's place in the table: the crowned winner, or a qualifier of the overall ranking. */
+type Zone = "crown" | "advance";
 
 export const ROW_TINT: Record<Zone, string> = {
   crown:
     "bg-[color:color-mix(in_srgb,var(--aqt-medal-gold)_6%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--aqt-medal-gold)_10%,transparent)]",
-  tie: "bg-[color:color-mix(in_srgb,var(--aqt-amber)_8%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--aqt-amber)_13%,transparent)]",
   advance:
     "bg-[color:color-mix(in_srgb,var(--aqt-teal)_5%,transparent)] hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_9%,transparent)]"
-};
-
-const RANK_TONE: Record<Zone, string> = {
-  crown: "text-[color:var(--aqt-medal-gold)]",
-  tie: "text-[color:var(--aqt-amber)]",
-  advance: "text-[color:var(--aqt-teal)]"
 };
 
 export const CELL = "px-2.5 py-2.75";
@@ -202,7 +168,6 @@ const StandingsTable = ({
   standings,
   is_groups,
   stages: providedStages,
-  advanceCount = 2,
   crownTop = false
 }: StandingTableProps) => {
   const t = useTranslations();
@@ -212,49 +177,14 @@ const StandingsTable = ({
   const stages = providedStages ?? stagesQuery.data ?? [];
 
   const stage = standings[0]?.stage;
-  const stageCount = stage?.advance_count ?? null;
-
-  // A group may override the stage's number for itself. This table renders one
-  // group at a time, so the rendered group's override — when it has one — is
-  // the cut-line; everything else keeps the stage-wide resolution above. The
-  // standing carries its own group, so the line is right before the separate
-  // stages query lands.
-  const renderedItemId = standings[0]?.stage_item_id ?? null;
-  const renderedItem =
-    standings[0]?.stage_item ??
-    (renderedItemId == null
-      ? null
-      : (stages.flatMap((s) => s.items ?? []).find((item) => item.id === renderedItemId) ?? null));
-  const itemAdvanceCount = renderedItem?.advance_count ?? null;
-
-  const resolvedAdvanceCount = itemAdvanceCount ?? stageCount ?? advanceCount;
-
   const sortedStandings = [...standings].sort((a, b) => {
     const left = is_groups ? a.position : a.overall_position;
     const right = is_groups ? b.position : b.overall_position;
     return left - right;
   });
 
-  const showCut = is_groups && sortedStandings.length > resolvedAdvanceCount;
-
-  // The second boundary inside the advancing block: Upper vs Lower bracket.
-  const upperCut = is_groups
-    ? upperBracketCut(standings[0]?.stage ?? null, renderedItem, resolvedAdvanceCount)
-    : null;
-  const showUpperCut = upperCut != null && sortedStandings.length > upperCut;
-
-  // Which clusters are cut by which line. A cluster split by BOTH reports the
-  // advance line: being out beats starting a bracket down.
-  const tiedAtCut = showCut
-    ? straddlingTieGroups(sortedStandings, resolvedAdvanceCount)
-    : new Set<number>();
-  const tiedAtUpperCut =
-    showUpperCut && upperCut != null
-      ? straddlingTieGroups(sortedStandings, upperCut)
-      : new Set<number>();
   const tieClusterTitle = t("standings.tieCluster");
   const pinnedTitle = t("standings.pinnedPlace");
-  const columnCount = is_groups ? 9 : 6;
 
   // "Ranked by …" legend — resolve metric ids through i18n, falling back to the
   // shared English labels when a key is missing.
@@ -329,9 +259,6 @@ const StandingsTable = ({
                 <TableHead scope="col" className={cn(HEAD, "text-center")} style={{ width: 110 }}>
                   {t("standings.colForm")}
                 </TableHead>
-                <TableHead scope="col" className={cn(HEAD, "text-center")} style={{ width: 80 }}>
-                  <span className="sr-only">{t("common.status")}</span>
-                </TableHead>
               </TableRow>
             ) : (
               <TableRow>
@@ -357,7 +284,7 @@ const StandingsTable = ({
             )}
           </TableHeader>
           <TableBody>
-            {sortedStandings.map((standing, index) => {
+            {sortedStandings.map((standing) => {
               const position = is_groups ? standing.position : standing.overall_position;
               const tieHead = is_groups ? standing.tie_group : null;
               const history = sortStandingsMatches(standing.matches_history ?? []);
@@ -365,41 +292,14 @@ const StandingsTable = ({
               const maps = computeMaps(standing.team_id, history);
               const total = maps.won + maps.lost;
               const wPct = total > 0 ? (maps.won / total) * 100 : 0;
-              const advancing = is_groups && position <= resolvedAdvanceCount;
               const crowned = !is_groups && crownTop && position === 1;
-              // A tie the line cuts through is the row's real status: whether it
-              // advances (or starts a bracket down) is not settled by results.
-              const tieVerdict =
-                tieHead == null
-                  ? null
-                  : tiedAtCut.has(tieHead)
-                    ? ("advance" as const)
-                    : tiedAtUpperCut.has(tieHead)
-                      ? ("upper" as const)
-                      : null;
-              const tieVerdictTitle =
-                tieVerdict === "advance"
-                  ? t("standings.tieDecidesAdvance")
-                  : tieVerdict === "upper"
-                    ? t("standings.tieDecidesUpper")
-                    : undefined;
-              // The row is amber even while it is provisionally advancing,
-              // because that is exactly what is unsettled.
-              const zone: Zone | null = crowned
-                ? "crown"
-                : tieVerdict
-                  ? "tie"
-                  : advancing
-                    ? "advance"
-                    : null;
+              const zone: Zone | null = crowned ? "crown" : null;
 
               return (
                 <React.Fragment
                   key={`${standing.stage_item_id ?? standing.stage_id ?? "s"}-${standing.team_id}`}
                 >
                   <TableRow
-                    data-advance={advancing || undefined}
-                    data-tie={tieVerdict ?? undefined}
                     className={zone ? ROW_TINT[zone] : undefined}
                   >
                     <TableCell className={cn(CELL, "whitespace-nowrap")}>
@@ -421,8 +321,8 @@ const StandingsTable = ({
                           "inline-block min-w-6 font-display text-title leading-none font-extrabold tabular-nums",
                           standing.swiss_status === "eliminated"
                             ? "text-[color:var(--aqt-fg-dim)]"
-                            : zone
-                              ? RANK_TONE[zone]
+                            : crowned
+                              ? "text-[color:var(--aqt-medal-gold)]"
                               : "text-[color:var(--aqt-fg-faint)]"
                         )}
                         title={tieHead != null ? tieClusterTitle : undefined}
@@ -501,25 +401,6 @@ const StandingsTable = ({
                         <TableCell className={cn(CELL, "text-center")}>
                           <FormChips results={results} />
                         </TableCell>
-                        <TableCell className={cn(CELL, "text-center")}>
-                          {/* The tie IS the status: the line cuts through this
-                              cluster, so "advancing" would be a promise the
-                              results have not made. */}
-                          {tieVerdict ? (
-                            <Badge data-status voice="label" tone="warning" title={tieVerdictTitle}>
-                              {t("standings.tieStatus")}
-                            </Badge>
-                          ) : advancing ? (
-                            <Badge data-status voice="label" tone="accent">
-                              <ChevronUp aria-hidden className="size-3" />
-                              {t("standings.advancing")}
-                            </Badge>
-                          ) : (
-                            <Badge data-status voice="label" tone="neutral">
-                              {t("standings.eliminated")}
-                            </Badge>
-                          )}
-                        </TableCell>
                       </>
                     ) : (
                       <>
@@ -550,28 +431,6 @@ const StandingsTable = ({
                       </>
                     )}
                   </TableRow>
-
-                  {showUpperCut && index === upperCut - 1 && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={columnCount}
-                        className={cn(CELL, CUT_LINE)}
-                        data-cut="upper"
-                        data-label={t("standings.upperBracketCut", { count: upperCut })}
-                      />
-                    </TableRow>
-                  )}
-
-                  {showCut && index === resolvedAdvanceCount - 1 && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={columnCount}
-                        className={cn(CELL, CUT_LINE)}
-                        data-cut="advance"
-                        data-label={t("common.topAdvance", { count: resolvedAdvanceCount })}
-                      />
-                    </TableRow>
-                  )}
                 </React.Fragment>
               );
             })}

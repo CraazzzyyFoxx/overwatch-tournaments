@@ -104,14 +104,6 @@ class Stage(db.TimeStampIntegerMixin):
     description: Mapped[str | None] = mapped_column(String(), nullable=True)
     stage_type: Mapped[enums.StageType] = mapped_column(STAGE_TYPE_ENUM)
     max_rounds: Mapped[int] = mapped_column(Integer(), default=5, server_default="5")
-    # How many teams advance from each group of this (group) stage to the next
-    # stage. NULL = not configured → the frontend derives it from bracket wiring
-    # or falls back to a default. Mirrors the wire-from-groups ``top`` parameter.
-    advance_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    # Group stages only: how many of each group's ``advance_count`` start in the
-    # Upper bracket of the double elimination they feed; the rest start in its
-    # Lower bracket. NULL = all of them start Upper. A group's own value overrides it.
-    advance_upper_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     order: Mapped[int] = mapped_column(Integer(), default=0)
     # Set when the stage's node goes ``ready → live`` and cleared on ``ready → draft``. A bracket
     # ``admin/stage/generation.py::generate_encounters`` built as a preview stays unusable for captains (they cannot
@@ -266,13 +258,6 @@ class StageItem(db.TimeStampIntegerMixin):
     name: Mapped[str] = mapped_column(String())
     type: Mapped[enums.StageItemType] = mapped_column(STAGE_ITEM_TYPE_ENUM)
     order: Mapped[int] = mapped_column(Integer(), default=0)
-    # Per-group override of ``Stage.advance_count``: how many teams advance from
-    # THIS group. NULL = inherit the stage's number, which is what every group
-    # did before the column existed. Set it when groups are uneven and a flat
-    # "top N from each" is the wrong bar.
-    advance_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    # Per-group override of ``Stage.advance_upper_count``; NULL = inherit.
-    advance_upper_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
     stage: Mapped[Stage] = relationship(back_populates="items")
     inputs: Mapped[list[StageItemInput]] = relationship(
