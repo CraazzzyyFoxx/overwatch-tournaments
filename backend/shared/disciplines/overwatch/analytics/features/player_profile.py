@@ -55,6 +55,8 @@ async def load_player_signal_profile(
             models.AnalyticsAlgorithm.name == PERFORMANCE_MODEL.algorithm_name,
             *workspace_filter(workspace_id),
         )
+        # A stable row order: without it the planner's join order (and so the profile's row order) follows the indexes.
+        .order_by(models.AnalyticsPerformance.player_id)
     )
     base_df = pd.DataFrame((await session.execute(base_query)).mappings().all())
     if base_df.empty:
