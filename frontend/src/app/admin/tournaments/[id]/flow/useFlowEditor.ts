@@ -6,6 +6,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { useUnsavedGuard } from "@/components/kit/useUnsavedGuard";
 import { useFlowErrorNotifier } from "@/hooks/useFlowErrorNotifier";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { arrangeIfOverlapping } from "@/lib/flow/autoLayout";
 import { portsFromRead } from "@/lib/flow/flowCanvas";
 import {
   draftFromRead,
@@ -36,7 +37,9 @@ export function useFlowEditor(tournamentId: number) {
   const [prevRead, setPrevRead] = useState(read);
   if (read && read !== prevRead) {
     setPrevRead(read);
-    setDraft(refreshDraft(draft, read));
+    const next = refreshDraft(draft, read);
+    // A clean read with overlapping cards (migrated tournaments) opens already arranged, as an unsaved change.
+    setDraft(isDirty(next) ? next : arrangeIfOverlapping(next));
   }
 
   const changes = useMemo(() => (draft ? toChanges(draft) : null), [draft]);

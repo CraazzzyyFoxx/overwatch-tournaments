@@ -204,3 +204,52 @@ class ApplyChangesTests(FlowCase):
                 FlowChanges(nodes=[FlowNodeUpsert(id=reg, kind="registration", name="R", config={"check_in": True})])
             ),
         )
+
+    async def _draft_node_with_session(self, session_status: str, *, config: dict) -> int:
+        node = await self.node("formation", config=config)
+        async with self.Session() as s:
+            s.add(
+                models.DraftSession(
+                    tournament_id=self.tournament_id,
+                    formation_node_id=node,
+                    workspace_id=self.workspace_id,
+                    discipline="overwatch",
+                    status=session_status,
+                )
+            )
+            await s.commit()
+        return node
+
+    @staticmethod
+    def _formation(node: int, config: dict) -> FlowChanges:
+        return FlowChanges(nodes=[FlowNodeUpsert(id=node, kind="formation", name="F", config=config)])
+
+    async def test_the_draft_mode_and_format_are_locked_by_an_active_draft_session(self) -> None:
+        custom = {"format": "custom", "round_rules": ["reverse"], "avg_tie_seed_reverse": True}
+        node = await self._draft_node_with_session("setup", config={"mode": "draft"})
+        for config in ({"mode": "balancer"}, {"mode": "draft", "draft_format": custom}):
+            self.assertEqual((409, "draft_session_active"), await self._refusal(self._formation(node, config)))
+
+    async def test_resending_the_same_draft_format_is_not_a_change(self) -> None:
+        stored = {
+            "mode": "draft",
+            "draft_format": {"format": "linear", "round_rules": [], "avg_tie_seed_reverse": False},
+        }
+        node = await self._draft_node_with_session("setup", config=stored)
+        # Normalization makes ``{"format": "linear"}`` equal to the stored rule; only the name changes.
+        read = await self._apply(self._formation(node, {"mode": "draft", "draft_format": {"format": "linear"}}))
+        self.assertEqual("F", next(n for n in read.nodes if n.id == node).name)
+
+    async def test_the_draft_format_is_editable_once_the_session_is_finished(self) -> None:
+        node = await self._draft_node_with_session("completed", config={"mode": "draft"})
+        read = await self._apply(self._formation(node, {"mode": "draft", "draft_format": {"format": "linear"}}))
+        self.assertEqual(
+            {"format": "linear", "round_rules": [], "avg_tie_seed_reverse": False},
+            next(n for n in read.nodes if n.id == node).config["draft_format"],
+        )
+
+    async def test_an_active_draft_of_another_node_does_not_lock_this_one(self) -> None:
+        await self._draft_node_with_session("setup", config={"mode": "draft"})
+        other = await self.node("formation", config={"mode": "draft"})
+        read = await self._apply(self._formation(other, {"mode": "manual"}))
+        self.assertEqual("manual", next(n for n in read.nodes if n.id == other).config["mode"])

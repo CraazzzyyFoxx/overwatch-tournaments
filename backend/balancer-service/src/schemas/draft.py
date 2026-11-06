@@ -87,7 +87,7 @@ class DraftSessionCreateRequest(BaseModel):
     """Everything about a new draft EXCEPT its size and its format.
 
     ``rounds`` is derived from the tournament's roster shape server-side and the
-    format is a tournament rule (``Tournament.draft_format_json``), so the admin
+    format is a rule of the draft formation node (``config["draft_format"]``), so the admin
     form has nothing to submit and nothing to keep in sync for either.
     """
 

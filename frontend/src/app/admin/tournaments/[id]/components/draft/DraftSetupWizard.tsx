@@ -13,6 +13,7 @@ import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { notify } from "@/lib/notify";
 import type { RosterShape } from "@/lib/roster/shape";
 import { roleOf, toRoleRef } from "@/lib/roster/role-ref";
+import { nodeDraftFormat } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import draftService from "@/services/draft.service";
 import type {
@@ -208,15 +209,12 @@ export function DraftSetupWizard({
     () => derivePoolReadiness(candidates, teamCount, shape),
     [candidates, teamCount, shape]
   );
-  // The session's snapshot once it exists; before that the tournament's rule —
+  // The session's snapshot once it exists; before that the formation node's rule —
   // the one the server will copy into the session it creates.
+  const nodeFormat = nodeDraftFormat(tournament?.flow_nodes?.find((node) => node.id === formationNodeId));
   const draftFormat = useMemo(
-    () =>
-      resolveDraftFormat(
-        session ? formatFromSession(session) : (tournament?.draft_format_json ?? null),
-        shape.draft_rounds
-      ),
-    [session, tournament?.draft_format_json, shape.draft_rounds]
+    () => resolveDraftFormat(session ? formatFromSession(session) : nodeFormat, shape.draft_rounds),
+    [session, nodeFormat, shape.draft_rounds]
   );
   const ranks = useMemo(
     () =>
@@ -507,6 +505,7 @@ export function DraftSetupWizard({
               ontology={ontology}
               format={draftFormat}
               tournamentId={tournamentId}
+              formationNodeId={formationNodeId}
               locked={!!session}
             />
           )}

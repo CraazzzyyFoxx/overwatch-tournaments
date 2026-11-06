@@ -11,8 +11,8 @@ export type DraftStatus = "setup" | "ready" | "live" | "paused" | "completed" | 
 export type DraftFormat = "snake" | "linear" | "custom";
 
 /**
- * The tournament's draft format rule (`Tournament.draft_format_json`); `null` on
- * the tournament = snake. Normalized server-side: only `custom` keeps rules.
+ * A draft formation node's draft format rule (`config.draft_format`); `null`
+ * on the node = snake. Normalized server-side: only `custom` keeps rules.
  */
 export interface DraftFormatSettings {
   format: DraftFormat;

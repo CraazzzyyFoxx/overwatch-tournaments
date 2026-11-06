@@ -41,12 +41,10 @@ def _tournament() -> models.Tournament:
         discord_dms_enabled=True,
         logs_official=False,
         pov_stream_delay_s=0,
-        team_formation="balancer",
         division_grid_version_id=5,
         # Serialized as plain columns: an unset attribute on a detached
         # instance would trigger a refresh instead of reading NULL.
         discipline="overwatch",
-        draft_format_json=None,
         rules=None,
         cover_image_url=None,
         logo_url=None,

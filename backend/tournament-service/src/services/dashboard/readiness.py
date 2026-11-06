@@ -36,6 +36,7 @@ from src.schemas import TournamentReadiness
 __all__ = (
     "ReadinessService",
     "build_readiness",
+    "formation_modes",
     "has_enabled_achievement_rules",
     "latest_evaluation_run_status",
     "readiness",
@@ -70,6 +71,18 @@ def standings_recalc_pending(tournament_id: sa.SQLColumnExpression[int] | int) -
     state = models.TournamentRecalculationState
     return sa.exists().where(
         state.tournament_id == tournament_id, state.requested_generation > state.completed_generation
+    )
+
+
+def formation_modes(tournament_id: sa.SQLColumnExpression[int] | int) -> sa.Label[Any]:
+    """The distinct ``mode`` of the tournament's formation nodes (``NULL`` without one): the flow decides which
+    formation checks apply, so this is unmasked like the tournament's name."""
+    node = models.FlowNode
+    return (
+        sa.select(sa.func.array_agg(sa.distinct(node.config["mode"].astext)))
+        .where(node.tournament_id == tournament_id, node.kind == enums.FlowNodeKind.FORMATION)
+        .scalar_subquery()
+        .label("formation_modes")
     )
 
 
@@ -197,7 +210,7 @@ def build_readiness(
     fields.update(
         tournament_id=tournament.id,
         status=tournament.status.value,
-        team_formation=tournament.team_formation,
+        formation_modes=sorted(mode for mode in values.get("formation_modes") or [] if mode),
     )
 
     if can_tournament_read:
@@ -276,7 +289,7 @@ class ReadinessService:
                 .scalar_subquery()
             )
 
-        columns: list[Any] = []
+        columns: list[Any] = [formation_modes(tournament_id)]
         if can_tournament_read:
             # A lobby never produces a match log: only duels count toward log coverage.
             duel = encounter.slot_count == 2
@@ -309,7 +322,7 @@ class ReadinessService:
                 latest_evaluation_run_status(tournament.id).label("run_status"),
             ]
 
-        values = (await session.execute(sa.select(*columns))).one()._mapping if columns else {}
+        values = (await session.execute(sa.select(*columns))).one()._mapping
         return build_readiness(
             tournament,
             values,

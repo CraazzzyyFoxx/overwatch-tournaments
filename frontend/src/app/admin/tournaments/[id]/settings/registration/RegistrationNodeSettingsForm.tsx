@@ -7,6 +7,7 @@ import { SaveBar } from "@/components/kit/SaveBar";
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { NumberInput } from "@/components/ui/number-input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { isSignUpOpen } from "@/lib/tournament/flow-nodes";
 import type { TournamentFlowNode } from "@/types/flow.types";
@@ -68,6 +69,24 @@ export function RegistrationNodeSettingsForm({
               disabled={disabled}
               onCheckedChange={(next) => patch({ allow_late_registration: next })}
             />
+          </SettingRow>
+        </SettingGroup>
+
+        <SettingGroup id="intake" title={t("intake.title")}>
+          <SettingRow htmlFor={`${ids}-intake`} label={t("intake.label")} hint={t("intake.hint")}>
+            <Select
+              value={form.intake}
+              disabled={disabled}
+              onValueChange={(next) => patch({ intake: next as "solo" | "team" })}
+            >
+              <SelectTrigger id={`${ids}-intake`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="solo">{t("intake.solo")}</SelectItem>
+                <SelectItem value="team">{t("intake.team")}</SelectItem>
+              </SelectContent>
+            </Select>
           </SettingRow>
         </SettingGroup>
 

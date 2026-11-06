@@ -33,7 +33,7 @@ let currentSearch = "";
 let currentPath = "/admin/tournaments/80/registration/entries";
 let rerender: (() => void) | null = null;
 let canTeamRead = true;
-let teamFormation = "balancer";
+let intake: "solo" | "team" = "solo";
 
 // Every URL write re-renders from the new `useSearchParams` in the app — the
 // router's `replace` and, through Next's History patch, the inspector's native
@@ -89,9 +89,8 @@ vi.mock("@/services/admin.service", () => ({
       id: 80,
       workspace_id: 1,
       name: "Anak Cup",
-      team_formation: teamFormation,
       flow_nodes: [
-        { id: 7, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null }
+        { id: 7, kind: "registration", name: "Registration", status: "open", config: { intake }, schedule: [], stage_id: null }
       ]
     }))
   }
@@ -285,7 +284,7 @@ function findCommandItem(label: string) {
 
 beforeEach(() => {
   canTeamRead = true;
-  teamFormation = "balancer";
+  intake = "solo";
   rerender = null;
   replace.mockClear();
   listRegistrations.mockReset().mockResolvedValue(POOL);
@@ -328,7 +327,7 @@ describe("Registration entries", () => {
   });
 
   it("offers the teams section only when captains form the teams", async () => {
-    teamFormation = "registration";
+    intake = "team";
 
     const scope = await mount();
     const links = [
@@ -351,7 +350,7 @@ describe("Registration entries", () => {
 
   it("hides the section body without team.read", async () => {
     canTeamRead = false;
-    teamFormation = "registration";
+    intake = "team";
 
     const scope = await mount("", false);
 

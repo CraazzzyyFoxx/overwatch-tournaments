@@ -196,13 +196,13 @@ Team size **2–12**. A one-slot roster is forbidden (nothing to draft or balanc
 
 Resolve: tournament override → workspace default → built-in 5v5. The client receives the already-resolved shape; it does not recompute `team_size` / `draft_rounds` except as a preview of an unconfirmed editor total.
 
-Locks: cannot change the workspace default while an inheriting tournament uses it and a draft/formation is in flight. Cannot change `team_formation` or shape while a draft session is active.
+Locks: cannot change the workspace default while an inheriting tournament uses it and a draft/formation is in flight. Cannot change the shape while a draft session is active. A draft formation node's `mode` and `draft_format` are locked by an unfinished draft session of that node (409 `draft_session_active` from `apply_changes`).
 
 ---
 
 ## 6. Team formation
 
-`tournament.team_formation` is a string, default `"balancer"`. Known values: **`balancer`**, **`draft`**. Captain-registered teams are a separate export path into `tournament.team`.
+How teams form is the flow's: a formation node's `config.mode` is `balancer | draft | registered | manual`, a registration node's `config.intake` is `solo | team`. A draft node's format rule lives in `config.draft_format`. The tournament row carries neither (`flowP7_01_drop_team_formation`). Captain-registered teams are a separate export path into `tournament.team`.
 
 ### Balancer
 
@@ -224,7 +224,7 @@ Captains: top N by `(-max_rating, uuid)`.
 
 Session: `setup → ready → live ⇄ paused → completed | cancelled`.
 
-A session is created, seeded and started only for a `team_formation="draft"` tournament (409 `tournament_not_draft_formation`; a superuser's start does not bypass it). Its settings (pick time, overtime, autopick strategy, override flag) change only in `setup | ready`; once the draft starts a patch is 409 `draft_settings_locked`.
+A session is created, seeded and started only for a formation node whose `config.mode` is `draft` (409 `tournament_not_draft_formation`; a superuser's start does not bypass it). Its format comes from the node's `config.draft_format` at creation. Its settings (pick time, overtime, autopick strategy, override flag) change only in `setup | ready`; once the draft starts a patch is 409 `draft_settings_locked`.
 
 Formats: `snake | linear | custom`. Custom round rules: linear / reverse / weakest / strongest / `team_avg_asc` / `team_avg_desc`. Captain order: manual / weakest / strongest / random (Mulberry32, seed in settings).
 

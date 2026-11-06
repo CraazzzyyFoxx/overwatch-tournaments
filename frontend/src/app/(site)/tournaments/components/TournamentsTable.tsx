@@ -6,7 +6,8 @@ import { useFormatter } from "@/lib/datetime/client";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { LayoutGrid } from "lucide-react";
 
-import type { TeamFormation, Tournament } from "@/types/tournament.types";
+import type { Tournament } from "@/types/tournament.types";
+import { primaryFormationMode } from "@/lib/tournament/flow-nodes";
 import { formatDateRange } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
 import { stageProgress } from "@/lib/tournament/stage-progress";
@@ -37,6 +38,7 @@ const TournamentRow = ({
   const format = useFormatter();
   const { variant } = getTournamentStatusMeta(displayStatus(tournament));
   const stage = stageProgress(tournament, displayStatus(tournament), t);
+  const formation = primaryFormationMode(tournament);
   const players = tournament.participants_count ?? 0;
 
   return (
@@ -75,10 +77,10 @@ const TournamentRow = ({
                 <GameLabel code={tournament.discipline} games={games} />
               </>
             ) : null}
-            {tournament.team_formation && (
+            {formation && (
               <>
                 <span className={SEP}>·</span>
-                {t(`common.${tournament.team_formation as TeamFormation}`)}
+                {t(`common.formationMode.${formation}`)}
               </>
             )}
           </span>

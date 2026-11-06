@@ -3,7 +3,6 @@ import { Encounter } from "@/types/encounter.types";
 import { DivisionGridVersion } from "@/types/workspace.types";
 import type { RosterShape } from "@/lib/roster/shape";
 import type { TournamentLink } from "@/types/stream.types";
-import type { DraftFormatSettings } from "@/types/draft.types";
 import type { RoleRef } from "@/lib/roster/role-ref";
 import type { PersonDisplay } from "@/types/user.types";
 import type { Schema } from "@/types/api";
@@ -183,13 +182,6 @@ export interface Stage extends StageSummary {
 
 // ─── Tournament ─────────────────────────────────────────────────────────────
 
-/**
- * How a tournament forms its teams; each value has a `common.*` label.
- * `solo` is nominal: players register one by one for an FFA tournament and no
- * team is formed, so it has no flow of its own.
- */
-export type TeamFormation = "balancer" | "draft" | "registration" | "solo";
-
 export interface Tournament {
   id: number;
   created_at: Date;
@@ -213,8 +205,6 @@ export interface Tournament {
   challonge_slug: string | null;
   is_finished: boolean;
   is_hidden: boolean;
-  /** Free string on the backend; the known values are `TeamFormation`. */
-  team_formation: string;
   status: TournamentStatus;
   auto_transitions_enabled: boolean;
   /**
@@ -247,8 +237,6 @@ export interface Tournament {
   discipline: string;
   /** Game identity provider resolved by the tournament's discipline. */
   identity_provider: string;
-  /** Draft format rule the wizard seeds every session with; `null` = snake. */
-  draft_format_json: DraftFormatSettings | null;
   /** Resolved shape. `null` when the read did not opt into the entity. */
   roster_shape: RosterShape | null;
   /**

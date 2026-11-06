@@ -2,7 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import type { TournamentFlowNode } from "@/types/flow.types";
 
-import { currentRegistrationNode, isCheckInOpen, isSignUpLate, isSignUpOpen } from "./flow-nodes";
+import {
+  currentRegistrationNode,
+  formationModes,
+  hasTeamIntake,
+  isCheckInOpen,
+  isSignUpLate,
+  isSignUpOpen,
+  nodeDraftFormat,
+  primaryFormationMode,
+  registrationIntake
+} from "./flow-nodes";
 
 function node(id: number, status: string, kind = "registration"): TournamentFlowNode {
   return { id, kind, name: `Node ${id}`, status, config: {}, schedule: [], stage_id: null } as TournamentFlowNode;
@@ -34,6 +44,47 @@ describe("currentRegistrationNode", () => {
     expect(idOf([node(3, "draft")])).toBeNull();
     expect(idOf([node(9, "forming", "formation")])).toBeNull();
     expect(currentRegistrationNode(undefined)).toBeNull();
+  });
+});
+
+const withConfig = (n: TournamentFlowNode, config: Record<string, unknown>) => ({ ...n, config }) as TournamentFlowNode;
+
+describe("formation modes and intake", () => {
+  const graph = {
+    flow_nodes: [
+      withConfig(node(1, "open"), { intake: "team" }),
+      withConfig(node(7, "draft", "formation"), { mode: "draft" }),
+      withConfig(node(5, "draft", "formation"), { mode: "balancer" })
+    ]
+  };
+
+  it("lists every formation mode and names the first by graph order as primary", () => {
+    expect([...formationModes(graph)].sort()).toEqual(["balancer", "draft"]);
+    expect(primaryFormationMode(graph)).toBe("balancer");
+  });
+
+  it("has no mode without a formation node or without the flow_nodes entity", () => {
+    expect(formationModes({ flow_nodes: [node(1, "open")] }).size).toBe(0);
+    expect(primaryFormationMode({})).toBeNull();
+    expect(primaryFormationMode(undefined)).toBeNull();
+  });
+
+  it("reads the intake of the current registration node, solo by default", () => {
+    expect(registrationIntake(graph)).toBe("team");
+    expect(registrationIntake({ flow_nodes: [node(1, "open")] })).toBe("solo");
+    expect(registrationIntake({ flow_nodes: [] })).toBe("solo");
+    expect(registrationIntake(graph, withConfig(node(2, "open"), { intake: "solo" }))).toBe("solo");
+  });
+
+  it("offers team screens when any registration node takes teams", () => {
+    expect(hasTeamIntake(graph)).toBe(true);
+    expect(hasTeamIntake({ flow_nodes: [withConfig(node(1, "draft"), { intake: "solo" })] })).toBe(false);
+  });
+
+  it("reads a draft node's draft format, null when it has none", () => {
+    expect(nodeDraftFormat(withConfig(node(1, "draft", "formation"), { mode: "draft" }))).toBeNull();
+    const format = { format: "linear", round_rules: [], avg_tie_seed_reverse: false };
+    expect(nodeDraftFormat(withConfig(node(1, "draft", "formation"), { mode: "draft", draft_format: format }))).toEqual(format);
   });
 });
 

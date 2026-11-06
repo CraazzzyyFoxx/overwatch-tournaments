@@ -105,7 +105,6 @@ function makeTournament(status: TournamentStatus): Tournament {
     challonge_slug: null,
     is_finished: false,
     is_hidden: false,
-    team_formation: "balancer",
     status,
     auto_transitions_enabled: true,
     stages: [],

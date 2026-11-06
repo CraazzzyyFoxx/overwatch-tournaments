@@ -28,16 +28,14 @@ import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-
  * a PATCH sends).
  */
 const SETTINGS_SECTION_FIELDS = {
-  // How teams form and which grid seeds them are read on every screen that
-  // describes the tournament, so they sit with its name rather than with the
-  // results flags.
-  general: ["name", "slug", "description", "team_formation", "division_grid_version_id"],
+  // The grid that seeds the tournament is read on every screen that describes it, so it sits with its name
+  // rather than with the results flags.
+  general: ["name", "slug", "description", "division_grid_version_id"],
   // One field, and deliberately alone: the published document is the section.
   // Saving the results flags must not rewrite it in the audit trail, nor the reverse.
   rules: ["rules"],
   scoring: ["is_finished", "logs_official"],
   schedule: ["start_date", "end_date", "auto_transitions_enabled"],
-  draft: ["draft_format_json"],
   challonge: ["challonge_slug"],
   // Sits beside the stream links: the delay the rules require of a POV stream.
   links: ["pov_stream_delay_s"],

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { usePermissions } from "@/hooks/usePermissions";
+import { formationModes } from "@/lib/tournament/flow-nodes";
 import type { Tournament } from "@/types/tournament.types";
 
 import type { TabAccess } from "./tab-guards";
@@ -60,6 +61,6 @@ export function useTabAccess(tournament: Tournament | undefined): TabAccess {
     canTeamCreate: canAccessPermission("team.create", workspaceId),
     canReadTournamentLink: canAccessPermission("tournament_link.read", workspaceId),
     canDeleteTournament: canAccessPermission("tournament.delete", workspaceId),
-    teamFormation: tournament?.team_formation === "draft" ? "draft" : "balancer"
+    hasDraftFormation: formationModes(tournament).has("draft")
   };
 }

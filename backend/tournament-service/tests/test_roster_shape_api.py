@@ -39,11 +39,7 @@ _WORKSPACE_ID = 4
 DEFAULT_ROSTER_SHAPE = RosterShape(entries=(("tank", 1), ("damage", 2), ("support", 2)))
 
 
-def _tournament(
-    *,
-    tournament_id: int = 1,
-    draft_format_json: dict | None = None,
-) -> models.Tournament:
+def _tournament(*, tournament_id: int = 1) -> models.Tournament:
     tournament = models.Tournament(
         id=tournament_id,
         created_at=datetime.now(UTC),
@@ -62,10 +58,8 @@ def _tournament(
         discord_dms_enabled=True,
         logs_official=False,
         pov_stream_delay_s=0,
-        team_formation="balancer",
         division_grid_version_id=5,
         discipline="overwatch",
-        draft_format_json=draft_format_json,
         # Plain columns the serializer reads: unset on a detached instance means
         # a refresh attempt, not NULL.
         cover_image_url=None,

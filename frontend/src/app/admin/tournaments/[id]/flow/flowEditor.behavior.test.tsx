@@ -162,4 +162,22 @@ describe("Flow tab", () => {
     await act(async () => canvas.onNodesChange([{ type: "remove", id: "new-1" }]));
     expect(button("Save flow")).toBeUndefined();
   });
+
+  it("Arrange moves the nodes into columns as an unsaved change that Save sends", async () => {
+    await mount();
+    expect(button("Save flow")).toBeUndefined();
+    await act(async () => button("Arrange").click());
+    expect(button("Save flow")).toBeDefined();
+    await act(async () => button("Save flow").click());
+    const [, changes] = applyChanges.mock.calls.at(-1) as unknown as [number, { nodes: { id: number; position_x: number }[] }];
+    expect(changes.nodes).toEqual([expect.objectContaining({ id: 2, position_x: 336, position_y: 0 })]);
+  });
+
+  it("opens a flow with overlapping nodes already arranged, leaving the saved layout to Save", async () => {
+    const read = starterRead();
+    read.nodes[1].position_x = 100;
+    adminRead = { ...adminRead, ...read };
+    await mount();
+    expect(button("Save flow")).toBeDefined();
+  });
 });

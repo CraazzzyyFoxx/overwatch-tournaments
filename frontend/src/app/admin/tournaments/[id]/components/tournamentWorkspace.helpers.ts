@@ -1,7 +1,6 @@
 import type { Tournament, TournamentDisplayStatus } from "@/types/tournament.types";
 import type { Tone } from "@/components/ui/tone";
 import type { TournamentUpdateInput } from "@/types/admin.types";
-import type { DraftFormatSettings } from "@/types/draft.types";
 import { normalizeChallongeSlug } from "@/lib/tournament/challonge";
 
 export type TournamentFormState = {
@@ -23,9 +22,6 @@ export type TournamentFormState = {
   /** Seconds, 0..900. */
   pov_stream_delay_s: number;
   division_grid_version_id: number | null;
-  team_formation: string;
-  /** Draft format rule; `null` = snake. The server normalizes the shape. */
-  draft_format_json: DraftFormatSettings | null;
 };
 
 /**
@@ -68,21 +64,18 @@ export function getTournamentForm(tournament: Tournament): TournamentFormState {
     discord_dms_enabled: tournament.discord_dms_enabled ?? true,
     logs_official: tournament.logs_official ?? false,
     pov_stream_delay_s: tournament.pov_stream_delay_s ?? 0,
-    division_grid_version_id: tournament.division_grid_version_id ?? null,
-    team_formation: tournament.team_formation ?? "balancer",
-    draft_format_json: tournament.draft_format_json ?? null
+    division_grid_version_id: tournament.division_grid_version_id ?? null
   };
 }
 
 // Every field `TournamentUpdateInput` can carry, keyed the same as
 // `TournamentFormState`. Kept in one place so the diff below and
 // `getTournamentForm` above cannot drift out of sync field-by-field.
-type TournamentUpdateValues = Required<Omit<TournamentUpdateInput, "description" | "rules" | "challonge_slug" | "division_grid_version_id" | "draft_format_json">> & {
+type TournamentUpdateValues = Required<Omit<TournamentUpdateInput, "description" | "rules" | "challonge_slug" | "division_grid_version_id">> & {
   description: string | null;
   rules: string | null;
   challonge_slug: string | null;
   division_grid_version_id: number | null;
-  draft_format_json: DraftFormatSettings | null;
 };
 
 function normalizeTournamentFormValues(form: TournamentFormState): TournamentUpdateValues {
@@ -105,9 +98,7 @@ function normalizeTournamentFormValues(form: TournamentFormState): TournamentUpd
     discord_dms_enabled: form.discord_dms_enabled,
     logs_official: form.logs_official,
     pov_stream_delay_s: form.pov_stream_delay_s,
-    division_grid_version_id: form.division_grid_version_id,
-    team_formation: form.team_formation,
-    draft_format_json: form.draft_format_json
+    division_grid_version_id: form.division_grid_version_id
   };
 }
 

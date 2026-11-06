@@ -99,8 +99,7 @@ beforeEach(() => {
   pathname = "/admin/tournaments/14/settings/rules";
   getTournament.mockReset().mockResolvedValue({
     id: 14,
-    workspace_id: 3,
-    team_formation: "balancer"
+    workspace_id: 3
   });
 });
 
@@ -119,8 +118,6 @@ describe("Settings rail", () => {
       "tournament.delete",
       "team.create"
     ];
-    // Only a drafted tournament has a draft format to set.
-    getTournament.mockResolvedValue({ id: 14, workspace_id: 3, team_formation: "draft" });
     await render();
 
     expect(railLabels()).toEqual(SETTINGS_SECTIONS.map((key) => SETTINGS_SECTION_LABELS[key]));

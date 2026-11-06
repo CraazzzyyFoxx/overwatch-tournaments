@@ -1,14 +1,13 @@
 """The Pydantic edge of the draft format: one field type, one projection.
 
-The format is a rule of the tournament, not a per-draft choice: ``Tournament.
-draft_format_json`` stores it and ``rpc.balancer.draft.session_create`` copies it
-onto the session it creates. Both sides live in different services, so the
-normalize-or-reject step and the tournament -> session projection live here once,
-beside ``roster_slots.py``, instead of being mirrored per service.
+The format is a rule of the draft formation node, not a per-draft choice: ``FlowNode.config["draft_format"]``
+stores it and ``rpc.balancer.draft.session_create`` copies it onto the session it creates. Both sides live in
+different services, so the normalize-or-reject step and the node -> session projection live here once, beside
+``roster_slots.py``, instead of being mirrored per service.
 
 The bound field stores the **normalized** payload, never the raw input:
 ``round_rules`` and ``avg_tie_seed_reverse`` are meaningless outside ``custom``,
-so a snake tournament can never carry rules that would silently apply if the
+so a snake node can never carry rules that would silently apply if the
 format were switched back.
 """
 
@@ -24,12 +23,12 @@ __all__ = (
     "DraftFormatField",
     "DraftFormatSettings",
     "normalize_draft_format",
-    "session_format_from_tournament",
+    "session_format",
 )
 
 
 class DraftFormatSettings(BaseModel):
-    """The tournament's draft format. ``NULL`` on the column means these defaults."""
+    """The draft format of a formation node. ``None`` in its config means these defaults."""
 
     format: DraftFormat = DraftFormat.SNAKE
     round_rules: list[DraftRoundRule] = []
@@ -54,8 +53,8 @@ def normalize_draft_format(value: Any) -> Any:
 DraftFormatField = Annotated[dict[str, Any] | None, BeforeValidator(normalize_draft_format)]
 
 
-def session_format_from_tournament(raw: dict[str, Any] | None, rounds: int) -> tuple[DraftFormat, dict[str, Any]]:
-    """Project the stored format onto a new session: ``(format, settings_json keys)``.
+def session_format(raw: dict[str, Any] | None, rounds: int) -> tuple[DraftFormat, dict[str, Any]]:
+    """Project a node's stored format onto a new session: ``(format, settings_json keys)``.
 
     The roster shape may have changed since the format was saved, so the rules are
     padded with ``linear`` or truncated to the session's actual round count.

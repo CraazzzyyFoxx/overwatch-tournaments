@@ -74,7 +74,6 @@ class DashboardTournamentCard(BaseModel):
     # Organizer branding (public URLs), unmasked like the name; None when not uploaded
     logo_url: str | None
     cover_image_url: str | None
-    team_formation: str
     start_date: datetime | None
     end_date: datetime | None
     # wrap_up only: COALESCE(end_date, latest encounter confirmed_at)

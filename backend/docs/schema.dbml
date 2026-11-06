@@ -1807,8 +1807,8 @@ Table division_grid_tier {
   native_rank_max bigint
   canonical_number bigint
   indexes {
-    (version_id, slug) [unique]
     (version_id, sort_order) [unique]
+    (version_id, slug) [unique]
     (version_id) [name: "ix_division_grid_tier_version_id"]
   }
 }
@@ -1972,8 +1972,8 @@ Table workspace_member {
   removed_at timestamptz
   observed_only boolean [not null, default: false]
   indexes {
-    (id, workspace_id) [unique, name: "uq_workspace_member_id_workspace"]
     (workspace_id, player_id) [unique, name: "uq_workspace_member_workspace_player"]
+    (id, workspace_id) [unique, name: "uq_workspace_member_id_workspace"]
     (player_id) [name: "ix_workspace_member_player_id"]
     (workspace_id) [name: "ix_workspace_member_workspace_id"]
   }
@@ -2232,8 +2232,8 @@ Table registration.google_sheet_binding {
   row_hash VARCHAR(128)
   last_seen_at timestamptz
   indexes {
-    (registration_id) [unique, name: "uq_registration_google_sheet_binding_registration"]
     (feed_id, source_record_key) [unique, name: "uq_registration_google_sheet_binding_key"]
+    (registration_id) [unique, name: "uq_registration_google_sheet_binding_registration"]
     (feed_id) [name: "ix_registration_google_sheet_binding_feed_id"]
   }
 }
@@ -2361,8 +2361,8 @@ Table registration.role_entity {
   entity_kind VARCHAR(16) [not null, default: `character`]
   priority int [not null]
   indexes {
-    (role_id, priority) [unique, name: "uq_reg_role_entity_role_priority"]
     (role_id, entity_id) [unique, name: "uq_reg_role_entity_role_entity"]
+    (role_id, priority) [unique, name: "uq_reg_role_entity_role_priority"]
     (role_id) [name: "ix_registration_role_entity_role_id"]
   }
 }
@@ -2641,8 +2641,8 @@ Table stats.match {
   mode_entity_id bigint
   mode_kind VARCHAR(16) [not null, default: `mode`]
   indexes {
-    (id, encounter_id) [unique, name: "uq_stats_match_owner"]
     (encounter_game_id) [unique, name: "uq_stats_match_game"]
+    (id, encounter_id) [unique, name: "uq_stats_match_owner"]
     (encounter_id) [name: "ix_stats_match_encounter"]
     (ingest_job_id) [name: "ix_stats_match_ingest_job"]
     (workspace_id) [name: "ix_stats_match_workspace"]
@@ -2999,8 +2999,8 @@ Table tournament.encounter_link {
   target_encounter_id bigint [not null]
   target_slot int [not null]
   indexes {
-    (target_encounter_id, target_slot) [unique, name: "uq_link_target_slot"]
     (source_encounter_id, source_position) [unique, name: "uq_link_source_position"]
+    (target_encounter_id, target_slot) [unique, name: "uq_link_target_slot"]
   }
 }
 
@@ -3270,8 +3270,8 @@ Table tournament.scrim_room {
   created_by_auth_user_id bigint [not null]
   closed_at timestamptz
   indexes {
-    (encounter_id) [unique, name: "uq_scrim_room_encounter"]
     (token) [unique, name: "uq_scrim_room_token"]
+    (encounter_id) [unique, name: "uq_scrim_room_encounter"]
     (created_by_auth_user_id) [name: "ix_scrim_room_open_by_creator"]
     (created_by_auth_user_id) [name: "ix_tournament_scrim_room_created_by_auth_user_id"]
     (stage_id) [name: "ix_tournament_scrim_room_stage_id"]
@@ -3352,6 +3352,7 @@ Table tournament.stage_item_input {
   input_type stageiteminputtype [not null]
   team_id bigint
   source_result_id bigint
+  seat_source VARCHAR(8) [not null, default: `flow`]
   indexes {
     (stage_item_id, slot) [unique, name: "uq_stage_item_input_item_slot"]
     (source_result_id) [name: "ix_tournament_stage_item_input_source_result_id"]
@@ -3470,7 +3471,6 @@ Table tournament.tournament {
   rules text
   is_finished boolean [not null, default: false]
   is_hidden boolean [not null, default: false]
-  team_formation VARCHAR [not null, default: `balancer`]
   status tournamentstatus [not null]
   start_date timestamptz
   end_date timestamptz
@@ -3480,7 +3480,6 @@ Table tournament.tournament {
   logs_official boolean [not null, default: false]
   pov_stream_delay_s int [not null, default: 0]
   division_grid_version_id bigint
-  draft_format_json jsonb
   cover_image_url VARCHAR
   logo_url VARCHAR
   indexes {

@@ -1669,7 +1669,7 @@ export interface paths {
         put?: never;
         /**
          * Create draft session
-         * @description Permission: workspace `team.create`. Creates a new draft session for a tournament and publishes a session-updated realtime event. The draft format (and, for `custom`, its round rules) comes from the tournament's `draft_format_json`, not from the request.
+         * @description Permission: workspace `team.create`. Creates a new draft session for a tournament and publishes a session-updated realtime event. The draft format (and, for `custom`, its round rules) comes from the formation node's `draft_format` config, not from the request.
          *
          *     RPC subject: `rpc.balancer.draft.session_create`
          */
@@ -15166,7 +15166,7 @@ export interface components {
          * @description Everything about a new draft EXCEPT its size and its format.
          *
          *     ``rounds`` is derived from the tournament's roster shape server-side and the
-         *     format is a tournament rule (``Tournament.draft_format_json``), so the admin
+         *     format is a rule of the draft formation node (``config["draft_format"]``), so the admin
          *     form has nothing to submit and nothing to keep in sync for either.
          */
         "balancer.DraftSessionCreateRequest": {
@@ -22233,13 +22233,6 @@ export interface components {
             /** Division Grid Version Id */
             division_grid_version_id: number | null;
             /**
-             * Draft Format Json
-             * @default null
-             */
-            draft_format_json: {
-                [key: string]: unknown;
-            } | null;
-            /**
              * End Date
              * Format: date-time
              */
@@ -22322,11 +22315,6 @@ export interface components {
              */
             start_date: string;
             status: components["schemas"]["tournament.TournamentStatus"];
-            /**
-             * Team Formation
-             * @default balancer
-             */
-            team_formation: string;
             /**
              * Teams Count
              * @default null
@@ -28894,8 +28882,6 @@ export interface components {
             start_date: string | null;
             /** Status */
             status: string;
-            /** Team Formation */
-            team_formation: string;
             wrap_up: components["schemas"]["tournament.DashboardWrapUp"] | null;
         };
         /** DashboardTrendPoint */
@@ -30220,6 +30206,13 @@ export interface components {
         };
         /** FormationNodeConfig */
         "tournament.FormationNodeConfig": {
+            /**
+             * Draft Format
+             * @default null
+             */
+            draft_format: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Mode
              * @enum {string}
@@ -32356,13 +32349,6 @@ export interface components {
              */
             division_grid_version_id: number | null;
             /**
-             * Draft Format Json
-             * @default null
-             */
-            draft_format_json: {
-                [key: string]: unknown;
-            } | null;
-            /**
              * End Date
              * Format: date
              */
@@ -32389,11 +32375,6 @@ export interface components {
              * Format: date
              */
             start_date: string;
-            /**
-             * Team Formation
-             * @default balancer
-             */
-            team_formation: string;
             /** Workspace Id */
             workspace_id: number;
         };
@@ -32480,6 +32461,8 @@ export interface components {
             duel_encounters_total: number | null;
             /** Duel Encounters With Logs */
             duel_encounters_with_logs: number | null;
+            /** Formation Modes */
+            formation_modes: string[];
             /** Grid Selected */
             grid_selected: boolean | null;
             /** Logs Used */
@@ -32514,8 +32497,6 @@ export interface components {
             standings_recalc_pending: boolean | null;
             /** Status */
             status: string;
-            /** Team Formation */
-            team_formation: string;
             /** Tournament Id */
             tournament_id: number;
         };
@@ -32551,13 +32532,6 @@ export interface components {
              * @default null
              */
             division_grid_version_id: number | null;
-            /**
-             * Draft Format Json
-             * @default null
-             */
-            draft_format_json: {
-                [key: string]: unknown;
-            } | null;
             /**
              * End Date
              * @default null
@@ -32603,11 +32577,6 @@ export interface components {
              * @default null
              */
             start_date: string | null;
-            /**
-             * Team Formation
-             * @default null
-             */
-            team_formation: string | null;
         };
         /** VoiceChannelStatus */
         "tournament.VoiceChannelStatus": {

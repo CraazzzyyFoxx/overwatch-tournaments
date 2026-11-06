@@ -149,7 +149,6 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
                 name=f"T {self._suffix}",
                 slug=f"t-{self._suffix}",
                 status=DraftStatus.SETUP.value,
-                team_formation="draft",
             )
             # Tournament.status is TournamentStatus; "live" is a plain, non-finished value.
             tourn.status = "live"

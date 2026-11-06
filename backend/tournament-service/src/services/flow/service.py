@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from itertools import count
+from typing import Any
 
 import sqlalchemy as sa
 from pydantic import ValidationError
@@ -20,10 +21,12 @@ from shared.domain.flow.ports import PORT_CATALOGUE, PortSpec
 from shared.domain.flow.validate import FlowEdgeSpec, FlowIssue, FlowNodeSpec, resolve_ports, validate_flow
 from shared.models.tournament.flow import FlowEdge, FlowNode, FlowNodeResult
 from shared.models.tournament.stage import Stage
+from shared.schemas.draft_format import normalize_draft_format
 from shared.services.flow_queries import downstream_lifecycle_started
 from shared.services.realtime import Resource
 from src.schemas import flow as flow_schemas
 from src.services.admin.stage import stage_service
+from src.services.draft_guards import has_unfinished_draft_on_node
 from src.services.flow.engine import flow_engine
 from src.services.flow.lifecycle import flow_node_service
 from src.services.tournament.events import publish_tournament_invalidation
@@ -93,6 +96,21 @@ def _incoming(edges: Iterable[FlowEdgeSpec]) -> dict[int, set[tuple[int, str, st
     for e in edges:
         wires[e.target_node_id].add((e.source_node_id, e.source_port, e.target_port))
     return wires
+
+
+DRAFT_SESSION_ACTIVE = "draft_session_active"
+
+
+def _draft_rule(config: Mapping[str, Any]) -> tuple[Any, Any]:
+    """What a draft session snapshots from its formation node: the mode and the normalized format rule."""
+    return config.get("mode"), normalize_draft_format(config.get("draft_format"))
+
+
+def _stored_config(kind: FlowNodeKind, config: Mapping[str, Any]) -> dict[str, Any]:
+    """A draft format is stored normalized, as the tournament column did: no round rules a non-custom format ignores."""
+    if kind == FlowNodeKind.FORMATION and config.get("draft_format") is not None:
+        return {**config, "draft_format": normalize_draft_format(config["draft_format"])}
+    return dict(config)
 
 
 class FlowService:
@@ -264,6 +282,20 @@ class FlowService:
                     "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']} ({e['type']})" for e in exc.errors()),
                     node_id,
                 )
+            else:
+                # The session snapshots the format at create time: an edit mid-draft would promise a change the
+                # running board never honours. Both sides are normalized, so a resend of the same rule is no change.
+                if (
+                    u.id is not None
+                    and u.kind == FlowNodeKind.FORMATION == stored[u.id].kind
+                    and _draft_rule(u.config) != _draft_rule(stored[u.id].config)
+                    and await has_unfinished_draft_on_node(session, u.id)
+                ):
+                    error(
+                        DRAFT_SESSION_ACTIVE,
+                        "The draft mode or format cannot change while a draft session is active",
+                        node_id,
+                    )
             upserted.add(node_id)
             nodes[node_id] = spec
 
@@ -322,7 +354,7 @@ class FlowService:
         await flow_node_service.lock_tournament(session, tournament_id)
         plan = await self.plan_changes(session, tournament_id, changes)
         if errors := [i for i in plan.issues if i.severity == "error"]:
-            conflict = {i.code for i in errors} <= {"node_frozen", "node_has_dependents"}
+            conflict = {i.code for i in errors} <= {"node_frozen", "node_has_dependents", DRAFT_SESSION_ACTIVE}
             raise ApiHTTPException(
                 status_code=409 if conflict else 422,
                 detail=[
@@ -345,7 +377,7 @@ class FlowService:
             fields = {
                 "kind": u.kind.value,
                 "name": u.name,
-                "config": u.config,
+                "config": _stored_config(u.kind, u.config),
                 # A kind change (allowed only on an unfrozen node) starts the node over in the new kind's lifecycle.
                 "status": (FlowNodeStatus.DRAFT if u.kind in LIFECYCLE_KINDS else FlowNodeStatus.PENDING).value,
             }

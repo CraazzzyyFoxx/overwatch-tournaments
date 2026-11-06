@@ -108,7 +108,7 @@ Slot codes are `tank`, `damage`, `support`, `flex`. The built-in shape is `{"tan
 - Team size runs from 1 to 12 slots. A one-slot roster is allowed.
 - `draft_rounds` is `team_size - 1`: the captain already fills one slot. For a one-slot roster that is zero, and a live draft simply cannot be created for such a tournament.
 - Resolution: tournament override → workspace default → built-in 5v5. The client receives the already-resolved shape and does not recompute it, except as a preview of an unconfirmed editor total.
-- Locks: the workspace default cannot change while an inheriting tournament has a draft or formation in flight, and neither `team_formation` nor the roster shape can change while a draft session is active.
+- Locks: the workspace default cannot change while an inheriting tournament has a draft or formation in flight, and neither a draft node's `draft_format` nor the roster shape can change while a draft session is active.
 
 `flex` is a slot, never a rated role: it carries no rank and no role is recorded into it. When every slot in the shape is `flex`, role counters, role filters and role validation are switched off entirely.
 

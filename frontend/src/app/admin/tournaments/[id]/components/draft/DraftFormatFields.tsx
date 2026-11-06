@@ -29,9 +29,9 @@ interface DraftFormatFieldsProps {
 const FORMATS: DraftFormat[] = ["snake", "linear", "custom"];
 
 /**
- * The tournament's draft format rule: snake, linear, or a rule per round. It
- * lives in the tournament settings, not the wizard — every draft of the
- * tournament is seeded with it server-side.
+ * A draft formation node's draft format rule: snake, linear, or a rule per round. It
+ * lives in the node's config (Flow tab), not the wizard — every draft of the
+ * node is seeded with it server-side.
  */
 export function DraftFormatFields({
   value,

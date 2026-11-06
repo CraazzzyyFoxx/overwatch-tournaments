@@ -40,6 +40,7 @@ import { findRole, roleColor, rolePresentation, showsRoles, type RoleOntology } 
 import { hasPlayStarted } from "@/lib/tournament/stages";
 import { answerFlag, answerList, answerText } from "@/lib/forms/answers";
 import { IDENTITY_PROVIDERS, identityKey, identityProvider } from "@/lib/forms/builtin-keys";
+import { nodesOfKind, registrationIntake } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import registrationTeamService from "@/services/registration-team.service";
 import registrationService from "@/services/registration.service";
@@ -506,7 +507,14 @@ function MyRegistrationCard({
     ...requirementSteps,
     {
       key: "balancing",
-      label: t(tournament.team_formation === "registration" ? "registrationTeams.myCard.playerEligibility" : "registration.myCard.steps.balancing"),
+      label: t(
+        registrationIntake(
+          tournament,
+          nodesOfKind(tournament, "registration").find((node) => node.id === registration.registration_node_id)
+        ) === "team"
+          ? "registrationTeams.myCard.playerEligibility"
+          : "registration.myCard.steps.balancing"
+      ),
       tone: balancerReady
         ? "done"
         : isTerminal

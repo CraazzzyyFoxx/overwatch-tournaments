@@ -72,7 +72,6 @@ async def _seed(session: Any) -> SimpleNamespace:
         name=f"Flex roster {suffix}",
         slug=f"flexros-{suffix}",
         status=enums.TournamentStatus.LIVE,
-        team_formation="registration",
     )
     session.add(tournament)
     await session.flush()

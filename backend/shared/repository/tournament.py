@@ -148,12 +148,6 @@ class TournamentRepository(BaseRepository[models.Tournament]):
             )
         ).one_or_none()
 
-    async def get_draft_format_json(self, session: AsyncSession, tournament_id: int) -> dict | None:
-        """The stored draft format rule; ``None`` when the tournament never set one (snake)."""
-        return await session.scalar(
-            sa.select(models.Tournament.draft_format_json).where(models.Tournament.id == tournament_id)
-        )
-
     async def get_for_registration(self, session: AsyncSession, registration_id: int) -> models.Tournament | None:
         """The tournament a balancer registration belongs to."""
         return await session.scalar(

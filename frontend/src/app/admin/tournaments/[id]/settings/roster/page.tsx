@@ -11,6 +11,7 @@ import { teamFormatPayload, teamFormatErrors, teamFormatsEqual, type TeamFormatW
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useScopedSettingsForm } from "@/components/kit/useScopedSettingsForm";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { hasTeamIntake } from "@/lib/tournament/flow-nodes";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import adminService from "@/services/admin.service";
 import { NumberInput } from "@/components/ui/number-input";
@@ -35,7 +36,7 @@ export default function RosterSettingsPage() {
             disabled={!canUpdateTournament}
           />
         );
-        return tournament.team_formation === "registration" ? (
+        return hasTeamIntake(tournament) ? (
           <RegistrationNodeScope tournament={tournament} fallback={form(null)}>
             {form}
           </RegistrationNodeScope>

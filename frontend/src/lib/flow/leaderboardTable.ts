@@ -130,8 +130,17 @@ const SCORES = {
   formula: "formula"
 } as const;
 
+export interface AggregateWords {
+  mode: { key: "sumAll" | "sumLastN" | "sumBestN" | "average"; n: number | null };
+  score: {
+    key: "stagePoints" | "placementTable" | "formula";
+    table: [string, number][];
+    formula: string | null;
+  };
+}
+
 /** The aggregate config as the keys of its three sentences (mode, score; the tiebreak sentence is fixed). */
-export function describeAggregate(config: Record<string, unknown>) {
+export function describeAggregate(config: Record<string, unknown>): AggregateWords {
   const mode = MODES[config.mode as keyof typeof MODES] ?? "sumAll";
   const score = (config.score ?? {}) as {
     preset?: string;
@@ -156,4 +165,36 @@ export function describeAggregate(config: Record<string, unknown>) {
       formula: key === "formula" ? (score.formula ?? null) : null
     }
   };
+}
+
+/** The variables an aggregate formula may read (`AGGREGATE_VARIABLES` on the backend). */
+export const FORMULA_VARIABLES = [
+  "place",
+  "participants",
+  "points",
+  "wins",
+  "draws",
+  "losses",
+  "map_diff",
+  "buchholz",
+  "ffa_score"
+] as const;
+export type FormulaVariable = (typeof FORMULA_VARIABLES)[number];
+
+const isFormulaVariable = (name: string): name is FormulaVariable =>
+  (FORMULA_VARIABLES as readonly string[]).includes(name);
+
+/**
+ * A formula as a reader says it: known variables take their `label`, `*` reads `×`, `+` and `/` get a space either side.
+ * Anything else (numbers, `-`, parentheses, function names) stays as written.
+ */
+export function formulaInWords(
+  formula: string,
+  label: (variable: FormulaVariable) => string
+): string {
+  return formula
+    .replace(/\b[A-Za-z_]\w*\b/g, (name) => (isFormulaVariable(name) ? label(name) : name))
+    .replace(/\s*\*\s*/g, " × ")
+    .replace(/\s*([+/])\s*/g, " $1 ")
+    .trim();
 }

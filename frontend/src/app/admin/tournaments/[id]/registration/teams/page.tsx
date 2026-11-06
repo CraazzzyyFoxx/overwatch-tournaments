@@ -16,7 +16,7 @@ import { tabError, tabFallback, useHubTournamentQuery } from "../../hubQueries";
  * The teams captains registered, organizer side.
  *
  * Its own section rather than a switcher inside `entries`: the layout only
- * offers it when `team_formation` is `registration`, which is also the only
+ * offers it when a registration node takes team entries (`intake: "team"`), which is also the only
  * case where the read returns anything.
  *
  * The export writes into one registered-mode formation node (`?node=`), and the teams listed are those of the

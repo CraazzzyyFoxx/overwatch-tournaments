@@ -62,7 +62,9 @@ export function NodeInspector({ tournamentId, tournament, read, node, dirty, rea
     const mode = String(node.config.mode ?? "manual");
     body = (
       <>
-        {node.kind === "formation" ? <FormationMode node={node} readOnly={readOnly} onChange={onChange} /> : null}
+        {node.kind === "formation" ? (
+          <FormationMode tournament={tournament} node={node} readOnly={readOnly} onChange={onChange} />
+        ) : null}
         {dirty ? (
           <p className="text-caption text-muted-foreground">{t("saveOrDiscard")}</p>
         ) : node.kind === "registration" ? (

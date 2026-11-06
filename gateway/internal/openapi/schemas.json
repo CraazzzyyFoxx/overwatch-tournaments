@@ -2959,7 +2959,7 @@
       "summary": "Get draft session board"
     },
     "rpc.balancer.draft.session_create": {
-      "description": "Permission: workspace `team.create`. Creates a new draft session for a tournament and publishes a session-updated realtime event. The draft format (and, for `custom`, its round rules) comes from the tournament's `draft_format_json`, not from the request.",
+      "description": "Permission: workspace `team.create`. Creates a new draft session for a tournament and publishes a session-updated realtime event. The draft format (and, for `custom`, its round rules) comes from the formation node's `draft_format` config, not from the request.",
       "request": {
         "array": false,
         "ref": "balancer.DraftSessionCreateRequest"
@@ -23742,7 +23742,7 @@
       "type": "object"
     },
     "balancer.DraftSessionCreateRequest": {
-      "description": "Everything about a new draft EXCEPT its size and its format.\n\n``rounds`` is derived from the tournament's roster shape server-side and the\nformat is a tournament rule (``Tournament.draft_format_json``), so the admin\nform has nothing to submit and nothing to keep in sync for either.",
+      "description": "Everything about a new draft EXCEPT its size and its format.\n\n``rounds`` is derived from the tournament's roster shape server-side and the\nformat is a rule of the draft formation node (``config[\"draft_format\"]``), so the admin\nform has nothing to submit and nothing to keep in sync for either.",
       "properties": {
         "allow_admin_override": {
           "default": true,
@@ -45148,10 +45148,6 @@
           "title": "Status",
           "type": "string"
         },
-        "team_formation": {
-          "title": "Team Formation",
-          "type": "string"
-        },
         "wrap_up": {
           "anyOf": [
             {
@@ -45172,7 +45168,6 @@
         "is_hidden",
         "logo_url",
         "cover_image_url",
-        "team_formation",
         "start_date",
         "end_date",
         "finished_at",
@@ -51020,6 +51015,19 @@
     "tournament.FormationNodeConfig": {
       "additionalProperties": false,
       "properties": {
+        "draft_format": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Draft Format"
+        },
         "mode": {
           "enum": [
             "balancer",
@@ -61073,19 +61081,6 @@
           "default": null,
           "title": "Division Grid Version Id"
         },
-        "draft_format_json": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Draft Format Json"
-        },
         "end_date": {
           "format": "date",
           "title": "End Date",
@@ -61120,11 +61115,6 @@
         "start_date": {
           "format": "date",
           "title": "Start Date",
-          "type": "string"
-        },
-        "team_formation": {
-          "default": "balancer",
-          "title": "Team Formation",
           "type": "string"
         },
         "workspace_id": {
@@ -61683,19 +61673,6 @@
           ],
           "title": "Division Grid Version Id"
         },
-        "draft_format_json": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Draft Format Json"
-        },
         "end_date": {
           "format": "date-time",
           "title": "End Date",
@@ -61852,11 +61829,6 @@
         "status": {
           "$ref": "#/components/schemas/tournament.TournamentStatus"
         },
-        "team_formation": {
-          "default": "balancer",
-          "title": "Team Formation",
-          "type": "string"
-        },
         "teams_count": {
           "anyOf": [
             {
@@ -61973,6 +61945,13 @@
             }
           ],
           "title": "Duel Encounters With Logs"
+        },
+        "formation_modes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Formation Modes",
+          "type": "array"
         },
         "grid_selected": {
           "anyOf": [
@@ -62154,10 +62133,6 @@
           "title": "Status",
           "type": "string"
         },
-        "team_formation": {
-          "title": "Team Formation",
-          "type": "string"
-        },
         "tournament_id": {
           "title": "Tournament Id",
           "type": "integer"
@@ -62166,7 +62141,7 @@
       "required": [
         "tournament_id",
         "status",
-        "team_formation",
+        "formation_modes",
         "schedule_configured",
         "grid_selected",
         "stages_total",
@@ -62318,19 +62293,6 @@
           "default": null,
           "title": "Division Grid Version Id"
         },
-        "draft_format_json": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Draft Format Json"
-        },
         "end_date": {
           "anyOf": [
             {
@@ -62443,18 +62405,6 @@
           ],
           "default": null,
           "title": "Start Date"
-        },
-        "team_formation": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Team Formation"
         }
       },
       "title": "TournamentUpdate",

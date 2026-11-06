@@ -129,7 +129,7 @@ const OW5V5_SHAPE: RosterShape = {
 /** Spelled out rather than cast: `tsconfig.json` excludes test files, so a
  *  fixture that lies about its shape type-checks green. */
 function makeTournament(
-  teamFormation: string,
+  formationMode: "balancer" | "draft" | "registered",
   status: TournamentStatus,
   rosterShape: RosterShape | null
 ): Tournament {
@@ -146,11 +146,20 @@ function makeTournament(
     challonge_slug: null,
     is_finished: false,
     is_hidden: false,
-    team_formation: teamFormation,
     status,
     auto_transitions_enabled: true,
+    // The formation mode decides the pool view; a `registered` one is fed by a team intake.
     flow_nodes: [
-      { id: 21, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null }
+      {
+        id: 21,
+        kind: "registration",
+        name: "Registration",
+        status: "open",
+        config: { intake: formationMode === "registered" ? "team" : "solo" },
+        schedule: [],
+        stage_id: null
+      },
+      { id: 22, kind: "formation", name: "Teams", status: "draft", config: { mode: formationMode }, schedule: [], stage_id: null }
     ],
     stages: [],
     participants_count: 4,
@@ -166,7 +175,12 @@ function makeTournament(
 
 /** The subscription rule is the registration node's setting, not the form's. */
 function requiringSubscription(base: Tournament): Tournament {
-  return { ...base, flow_nodes: base.flow_nodes.map((node) => ({ ...node, config: { require_subscription: true } })) };
+  return {
+    ...base,
+    flow_nodes: base.flow_nodes.map((node) =>
+      node.kind === "registration" ? { ...node, config: { ...node.config, require_subscription: true } } : node
+    )
+  };
 }
 
 function role(
@@ -432,7 +446,7 @@ describe("participants pool", () => {
   });
 
   it("gives team registration the table and no view switch", async () => {
-    tournament = makeTournament("registration", "live", null);
+    tournament = makeTournament("registered", "live", null);
     await mount();
 
     expect(container.querySelector('[role="radiogroup"]')).toBeNull();
@@ -459,7 +473,7 @@ describe("participants pool", () => {
   });
 
   it("keeps organizer-only columns out of the config without the grant", async () => {
-    tournament = requiringSubscription(makeTournament("registration", "live", null));
+    tournament = requiringSubscription(makeTournament("registered", "live", null));
     await mount();
 
     const columns = (
@@ -478,7 +492,7 @@ describe("participants pool", () => {
 
   it("restores organizer-only columns for a reader who may see them", async () => {
     canReadOrganizerColumns = true;
-    tournament = requiringSubscription(makeTournament("registration", "live", null));
+    tournament = requiringSubscription(makeTournament("registered", "live", null));
     await mount();
 
     const columns = (

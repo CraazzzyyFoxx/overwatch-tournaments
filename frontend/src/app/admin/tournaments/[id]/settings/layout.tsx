@@ -27,7 +27,6 @@ const CONTINUED_SECTIONS: Partial<Record<SettingsSection, ComponentType>> = {
   scoring: dynamic(() => import("./scoring/page")),
   schedule: dynamic(() => import("./schedule/page")),
   roster: dynamic(() => import("./roster/page")),
-  draft: dynamic(() => import("./draft/page")),
   registration: dynamic(() => import("./registration/page")),
   admission: dynamic(() => import("./admission/page")),
   challonge: dynamic(() => import("./challonge/page")),

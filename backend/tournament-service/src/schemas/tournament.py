@@ -57,7 +57,6 @@ class TournamentRead(BaseRead):
     # gradient fallback.
     cover_image_url: str | None = None
     logo_url: str | None = None
-    team_formation: str = "balancer"
     status: enums.TournamentStatus
     start_date: datetime
     end_date: datetime
@@ -74,9 +73,6 @@ class TournamentRead(BaseRead):
     teams_count: int | None = None
     division_grid_version_id: int | None
     division_grid_version: DivisionGridVersionRead | None = None
-    # The tournament's draft format rule; None = the snake default. Always
-    # exposed: it costs no query.
-    draft_format_json: dict[str, typing.Any] | None = None
     # Opt-in entities: TournamentRead is nested in six other schemas that
     # are built from ORM rows without a session, so neither of these can be
     # required -- filling them unconditionally would cost a query per nested row.

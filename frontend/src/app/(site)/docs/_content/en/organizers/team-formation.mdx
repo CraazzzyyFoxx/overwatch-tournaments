@@ -2,15 +2,16 @@ There are three ways to build the teams of a tournament: the balancer, a live dr
 
 ## Choosing the method
 
-The method lives in the tournament settings: **Admin → Tournaments → Settings → General**, field **Team formation**.
+The method is a property of a **Formation** box in the tournament's flow, not of the tournament as a whole: **Admin → Tournaments → Flow**, select the box, field **Team formation**. A tournament can have several formation boxes, each with its own method. Whether entries are players one by one or whole teams is set on the **Registration** box, in **Who registers**.
 
 | Value | What it means |
 | --- | --- |
-| **Auto-balance (Balancer)** | You collect a pool of admitted players and the balancer splits it into even teams. |
-| **Captain draft** | Captains pick players live in a draft room. |
-| **Team registration** | Captains build their own rosters at registration and you review them. |
+| **Balancer** | You collect a pool of admitted players and the balancer splits it into even teams. |
+| **Draft** | Captains pick players live in a draft room. |
+| **Registered teams** | Captains build their own rosters at registration and you review them. |
+| **Manual** | You put the rosters together yourself in **Teams → Roster**. |
 
-The choice changes the tournament screens: the **Teams → Draft** tab and the draft phase in the schedule exist only for a captain draft, and the **Bench** group with its **Substitutes per team** field in **Settings → Roster shape** only for captain-built teams. Draft setup is covered in [Captain draft](/docs/organizers/draft); what a player sees is in [Draft](/docs/players/draft) and [Captain teams](/docs/players/captain-teams).
+The choice changes the tournament screens: the **Teams → Draft** tab and the draft phase in the schedule exist only when a formation box is in **Draft** mode, and the **Bench** group with its **Substitutes per team** field in **Settings → Roster shape** only when a registration box takes teams. Draft setup is covered in [Captain draft](/docs/organizers/draft); what a player sees is in [Draft](/docs/players/draft) and [Captain teams](/docs/players/captain-teams).
 
 ## Roster shape
 
@@ -26,7 +27,7 @@ A team can have between 1 and 12 slots. A flex slot is not tied to a role: any p
 A draft needs at least two slots: the captain already occupies one seat, so a draft has one round fewer than the roster size.
 
 <Callout>
-Once a draft session exists for the tournament, the roster shape is locked and the editor says so: **A draft session has already been created, so the roster shape is locked. Complete or cancel it to change the shape.** The same rule applies to changing the team formation method.
+Once a draft session exists for the tournament, the roster shape is locked and the editor says so: **A draft session has already been created, so the roster shape is locked. Complete or cancel it to change the shape.** The same rule applies to the draft format.
 </Callout>
 
 ## Running the balancer

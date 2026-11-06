@@ -272,7 +272,6 @@ export interface StreamPollTick {
 
 // ─── Tournament ──────────────────────────────────────────────────────────────
 
-import type { DraftFormatSettings } from "@/types/draft.types";
 import type {
   StageItemType,
   StageRegulation,
@@ -299,7 +298,6 @@ export interface TournamentCreateInput {
   slug?: string;
   /** "Create tournament" creates it Unpublished; it is published from the hub. */
   is_hidden?: boolean;
-  team_formation?: string;
   start_date: string;
   end_date: string;
   auto_transitions_enabled?: boolean;
@@ -316,7 +314,6 @@ export interface TournamentUpdateInput {
   slug?: string | null;
   is_finished?: boolean;
   is_hidden?: boolean;
-  team_formation?: string;
   start_date?: string;
   end_date?: string;
   auto_transitions_enabled?: boolean;
@@ -325,8 +322,6 @@ export interface TournamentUpdateInput {
   logs_official?: boolean;
   pov_stream_delay_s?: number;
   division_grid_version_id?: number | null;
-  /** Draft format rule; `null` clears it back to snake. */
-  draft_format_json?: DraftFormatSettings | null;
 }
 
 interface TournamentPreviewAccessUser {
@@ -355,7 +350,8 @@ export interface TournamentPreviewAccessEntry {
 export interface TournamentReadiness {
   tournament_id: number;
   status: TournamentStatus;
-  team_formation: string;
+  /** Distinct modes of the tournament's formation nodes (`balancer` | `draft` | `registered` | `manual`), sorted. */
+  formation_modes: string[];
   // visible with tournament.read:
   schedule_configured: boolean | null;
   grid_selected: boolean | null;

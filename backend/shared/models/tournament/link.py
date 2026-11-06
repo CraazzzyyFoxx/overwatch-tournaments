@@ -33,8 +33,7 @@ class TournamentLink(db.TimeStampIntegerMixin):
         ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True, nullable=False
     )
     # One of ``TOURNAMENT_LINK_KINDS``, stored as text (not a PG enum) to stay
-    # flexible: adding a kind must not require a migration. Same choice as
-    # ``Tournament.team_formation``.
+    # flexible: adding a kind must not require a migration.
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     #: Human-facing caption. NULL means "render the kind's default label".
     label: Mapped[str | None] = mapped_column(String(128), nullable=True)

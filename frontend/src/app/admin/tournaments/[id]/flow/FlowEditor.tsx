@@ -10,8 +10,10 @@ import { FLOW_NODE_PARAM } from "@/hooks/useFlowNodeParam";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { toCanvas } from "@/lib/flow/flowCanvas";
+import { arrangeDraft } from "@/lib/flow/autoLayout";
 import { addNode, assignStageOrders, connect, deletedLifecycleNodes, removeEdge, removeNode, updateNode, canDelete } from "@/lib/flow/flowDraft";
-import { applyPreset, hasOnlyStarterNodes, type PresetLabels } from "@/lib/flow/presets";
+import { applyPreset, hasOnlyStarterNodes } from "@/lib/flow/presets";
+import { usePresetLabels } from "@/lib/flow/usePresetLabels";
 import type { FlowNodeKind, FlowStageCreate } from "@/types/flow.types";
 
 import { tabError, tabFallback, useHubTournamentQuery } from "../hubQueries";
@@ -28,7 +30,7 @@ const CLICK_OFFSET = 176 + 40;
 export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>) {
   const t = useTranslations("adminTournament.flow");
   const tKind = useTranslations("common.flow.kind");
-  const tNames = useTranslations("adminTournament.flow.presets.names");
+  const labels = usePresetLabels();
   const { canAccessPermission } = usePermissions();
   const { searchParams, setParams } = useQueryParams({ shallow: true, resetOnChange: [] });
   const [presetsOpen, setPresetsOpen] = useState(false);
@@ -78,26 +80,17 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
       );
     });
 
-  const labels: PresetLabels = {
-    playoff: tNames("playoff"),
-    groups: tNames("groups"),
-    topPerGroup: (n) => tNames("topPerGroup", { n }),
-    top: (n) => tNames("top", { n }),
-    playoffTeams: tNames("playoffTeams"),
-    swiss: tNames("swiss"),
-    qualifiers: tNames("qualifiers"),
-    day: (i) => tNames("day", { i }),
-    dayTeams: (i) => tNames("dayTeams", { i }),
-    season: tNames("season"),
-    seasonTable: tNames("seasonTable")
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         {canUpdate && hasOnlyStarterNodes(read) && !dirty ? (
           <Button type="button" variant="outline" onClick={() => setPresetsOpen(true)}>
             {t("toolbar.presets")}
+          </Button>
+        ) : null}
+        {canUpdate ? (
+          <Button type="button" variant="outline" disabled={editor.saving} onClick={() => apply(arrangeDraft)}>
+            {t("toolbar.arrange")}
           </Button>
         ) : null}
         {canUpdate && dirty ? (

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { PageStateCard } from "@/components/ui/page-state-card";
+import { registrationIntake } from "@/lib/tournament/flow-nodes";
 import { tabFallback } from "../../hubQueries";
 import { SettingsSectionPage } from "../SettingsSection";
 import { RegistrationNodeScope } from "../RegistrationNodeScope";
@@ -41,7 +42,7 @@ export default function AdmissionSettingsPage() {
             <AdmissionForm
               tournamentId={tournamentId}
               node={node}
-              teamRegistration={tournament.team_formation === "registration"}
+              teamRegistration={registrationIntake(tournament, node) === "team"}
               disabled={!canTeamCreate}
               nodeDisabled={!canUpdateTournament}
             />

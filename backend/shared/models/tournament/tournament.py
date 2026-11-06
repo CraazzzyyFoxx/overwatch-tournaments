@@ -2,7 +2,6 @@ import typing
 from datetime import datetime
 
 from sqlalchemy import Boolean, CheckConstraint, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
@@ -72,11 +71,6 @@ class Tournament(db.TimeStampIntegerMixin):
     is_hidden: Mapped[bool] = mapped_column(
         Boolean(), default=False, server_default="false", nullable=False, index=True
     )
-    # How teams are formed for this tournament: "balancer" (auto-balance),
-    # "draft" (live draft), "registration" (teams register as a unit) or "solo"
-    # (nominal: players register one by one for FFA, no team is formed).
-    # Stored as text (not a PG enum) to stay flexible.
-    team_formation: Mapped[str] = mapped_column(String(), default="balancer", server_default="balancer", nullable=False)
     # No ``server_default``: the only writer is SQLAlchemy, which always sends
     # this column, and a DB-side default could only ever answer a raw INSERT
     # that has no business existing — with a status claiming registration is
@@ -116,11 +110,6 @@ class Tournament(db.TimeStampIntegerMixin):
         nullable=True,
         index=True,
     )
-    # The tournament's draft format: ``{"format": ..., "round_rules": [...],
-    # "avg_tie_seed_reverse": bool}`` (see ``shared.schemas.draft_format``). NULL
-    # means the snake default; ``session_create`` copies the resolved value onto
-    # each new draft session, which keeps its own snapshot from then on.
-    draft_format_json: Mapped[dict[str, typing.Any] | None] = mapped_column(JSONB, nullable=True)
     # Organizer-uploaded branding (S3 public URLs, keys under
     # ``avatars/tournaments/{id}/{cover,logo}/`` -- see
     # ``shared.clients.s3.avatar_prefix``). Nullable with no default: a

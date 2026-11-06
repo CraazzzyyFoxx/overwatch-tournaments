@@ -143,7 +143,6 @@ class CreateTournamentFlowTests(FlowCase):
                     discipline="lol",
                     division_grid_version_id=grid_version_id,
                     name=f"{self.tag}-new",
-                    team_formation="draft",
                     start_date=date(2026, 11, 5),
                     end_date=date(2026, 11, 6),
                 ),
@@ -159,7 +158,8 @@ class CreateTournamentFlowTests(FlowCase):
                 sa.select(sa.func.count(models.FlowEdge.id)).where(models.FlowEdge.tournament_id == created.id)
             )
         self.assertEqual([("registration", "draft"), ("formation", "draft")], [(k, st) for k, st, _ in nodes])
-        self.assertEqual("draft", nodes[1].config["mode"])
+        self.assertEqual({"check_in": False, "intake": "solo"}, nodes[0].config)
+        self.assertEqual({"mode": "balancer"}, nodes[1].config)
         self.assertEqual(1, edges)
 
 

@@ -22,6 +22,7 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import { isRoleSlot, slotCodesOf, type RosterShape } from "@/lib/roster/shape";
+import { FLOW_NODE_PARAM } from "@/hooks/useFlowNodeParam";
 import type { DraftAutopickStrategy, DraftFormatSettings } from "@/types/draft.types";
 
 import type { DraftRoundRule } from "./setup-model";
@@ -34,9 +35,11 @@ interface DraftConfigStepProps {
   rosterShape: RosterShape;
   /** The owner game's role dictionary: the names and glyphs of the shape's slots. */
   ontology: RoleOntology | null;
-  /** The tournament's format rule, resolved to the round count; read-only here. */
+  /** The formation node's format rule, resolved to the round count; read-only here. */
   format: DraftFormatSettings;
   tournamentId: number;
+  /** The draft formation node whose `config.draft_format` is the rule. */
+  formationNodeId: number;
   locked?: boolean;
 }
 
@@ -50,6 +53,7 @@ export function DraftConfigStep({
   ontology,
   format,
   tournamentId,
+  formationNodeId,
   locked = false
 }: Readonly<DraftConfigStepProps>) {
   const t = useTranslations("draftAdmin");
@@ -121,10 +125,10 @@ export function DraftConfigStep({
             </p>
           )}
           <Link
-            href={`/admin/tournaments/${tournamentId}/settings/draft`}
+            href={`/admin/tournaments/${tournamentId}/flow?${FLOW_NODE_PARAM}=${formationNodeId}`}
             className="inline-flex items-center text-xs font-medium text-primary hover:underline"
           >
-            {t("changeFormatInSettings")}
+            {t("changeFormatInFlow")}
             <ArrowUpRight className="ml-1 h-3.5 w-3.5" aria-hidden />
           </Link>
         </div>

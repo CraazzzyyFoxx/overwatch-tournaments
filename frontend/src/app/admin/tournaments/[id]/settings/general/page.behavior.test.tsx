@@ -90,7 +90,6 @@ const TOURNAMENT: Tournament = {
   challonge_slug: "owt-64",
   is_finished: false,
   is_hidden: false,
-  team_formation: "balancer",
   status: "live",
   auto_transitions_enabled: true,
   stages: [],

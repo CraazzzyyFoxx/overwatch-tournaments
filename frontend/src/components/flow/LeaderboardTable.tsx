@@ -10,7 +10,11 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
-import { describeAggregate, type LeaderboardTableModel } from "@/lib/flow/leaderboardTable";
+import {
+  describeAggregate,
+  formulaInWords,
+  type LeaderboardTableModel
+} from "@/lib/flow/leaderboardTable";
 import { cn } from "@/lib/utils";
 
 /** The leaderboard as a table: place, name, one column per aggregate input (counted cells highlighted), total. */
@@ -31,7 +35,9 @@ export function LeaderboardTable({
           <p>
             {t(`tournamentDetail.table.formula.score.${words.score.key}`, {
               table: words.score.table.map(([place, points]) => `#${place} — ${points}`).join(", "),
-              formula: words.score.formula ?? ""
+              formula: formulaInWords(words.score.formula ?? "", (variable) =>
+                t(`tournamentDetail.table.formula.variables.${variable}`)
+              )
             })}
           </p>
           <p>{t("tournamentDetail.table.formula.ties")}</p>

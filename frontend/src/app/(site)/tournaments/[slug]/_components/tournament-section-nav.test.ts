@@ -102,7 +102,6 @@ describe("buildTournamentSectionNav", () => {
   it("orders the rail by phase: participants second before play, last after", () => {
     expect(model("registration").map((item) => item.id)).toEqual([
       "overview",
-      "format",
       "participants",
       "maps",
       "teams",
@@ -117,7 +116,6 @@ describe("buildTournamentSectionNav", () => {
       "matches",
       "maps",
       "stats",
-      "format",
       "participants"
     ]);
   });
@@ -136,7 +134,6 @@ describe("buildTournamentSectionNav", () => {
       "matches",
       "maps",
       "stats",
-      "format",
       "participants"
     ]);
     expect(
@@ -231,7 +228,6 @@ describe("buildTournamentSectionNav", () => {
       ["matches", "common.matches"],
       ["maps", "common.maps"],
       ["stats", "common.stats"],
-      ["format", "common.format"],
       ["participants", "common.participants"]
     ]);
     // Schedule, Heroes and Standings folded into Overview / Stats / Bracket;
@@ -329,21 +325,6 @@ describe("buildTournamentSectionNav", () => {
 
     expect(ids({ status: "live" })).not.toContain("table");
     expect(ids({ status: "live", hasLeaderboard: true }).slice(0, 3)).toEqual(["overview", "rules", "table"]);
-  });
-
-  it("always lists Format: after Rules before play, before Stream during play", () => {
-    const ids = (input: { status: TournamentDisplayStatus; hasStreams?: boolean }) =>
-      buildTournamentSectionNav({
-        tournamentId,
-        stages: [stage({ status: PRE_PLAY.includes(input.status) ? "draft" : "live" })],
-        hasRules: true,
-        pathname: `/tournaments/${tournamentId}`,
-        ...input
-      }).map((item) => item.id);
-
-    expect(ids({ status: "announcement" }).slice(0, 3)).toEqual(["overview", "rules", "format"]);
-    const live = ids({ status: "live", hasStreams: true });
-    expect(live.indexOf("format")).toBe(live.indexOf("stream") - 1);
   });
 
   it("keeps Rules directly under Overview in both phase orders", () => {

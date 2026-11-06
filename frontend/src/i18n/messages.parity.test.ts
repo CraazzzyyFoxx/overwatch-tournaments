@@ -23,19 +23,17 @@ describe("message dictionaries", () => {
 /**
  * Keys looked up by INTERPOLATION rather than as literals, which the parity check
  * above cannot see: both dictionaries can agree perfectly and still be missing
- * one. The overview's Format card renders team formation as
- * `t(`common.${tournament.team_formation}`)`, and adding the `registration` mode
- * shipped a badge reading the raw path `common.registration` because no key
- * existed and the TS cast claimed the value could not occur.
+ * one. Cards render a tournament's primary formation mode as
+ * `t(`common.formationMode.${mode}`)`, and a mode with no key would ship a badge
+ * reading the raw path because the TS cast claims the value cannot occur.
  */
 describe("interpolated message keys", () => {
-  it("every team_formation value has a common.* label in both locales", () => {
-    // The full set the backend column can hold; `Tournament.team_formation` is a
-    // free string, so this list is the contract.
-    const formations = ["balancer", "draft", "registration", "solo"];
+  it("every formation node mode has a common.formationMode label in both locales", () => {
+    // `FormationNodeConfig.mode` (backend flow config) is the contract.
+    const modes = ["balancer", "draft", "registered", "manual"];
     for (const dict of [en, ru]) {
-      const common: Record<string, unknown> = dict.common;
-      expect(formations.filter((value) => !(value in common))).toEqual([]);
+      const labels: Record<string, unknown> = dict.common.formationMode;
+      expect(modes.filter((value) => !(value in labels))).toEqual([]);
     }
   });
 

@@ -33,7 +33,6 @@ function tournament(id: number, name: string, discipline: string): Tournament {
     status: "completed",
     start_date: "2026-01-01",
     end_date: "2026-01-02",
-    team_formation: null,
     stages: []
   } as unknown as Tournament;
 }

@@ -1,5 +1,36 @@
+import type { DraftFormatSettings } from "@/types/draft.types";
 import type { Tournament } from "@/types/tournament.types";
 import type { TournamentFlowNode } from "@/types/flow.types";
+
+export type FormationMode = "balancer" | "draft" | "registered" | "manual";
+
+/** The draft rule a formation node drafts with (`config.draft_format`, only read in `draft` mode); `null` = the snake default. */
+export function nodeDraftFormat(node: Pick<TournamentFlowNode, "config"> | null | undefined): DraftFormatSettings | null {
+  return (node?.config.draft_format as DraftFormatSettings | null | undefined) ?? null;
+}
+
+/** The modes of the tournament's formation nodes. Empty when the read did not ask for `flow_nodes`, or the graph has no formation. */
+export function formationModes(tournament: Pick<Tournament, "flow_nodes"> | null | undefined): Set<FormationMode> {
+  return new Set(nodesOfKind(tournament, "formation").map((node) => node.config.mode as FormationMode));
+}
+
+/** Some registration node takes whole teams: registered teams exist and the organizer screens for them are offered. */
+export function hasTeamIntake(tournament: Pick<Tournament, "flow_nodes"> | null | undefined): boolean {
+  return nodesOfKind(tournament, "registration").some((node) => registrationIntake(tournament, node) === "team");
+}
+
+/** The mode of the first formation by graph order (node id), or null when there is none: what a card or a chip says the tournament is. */
+export function primaryFormationMode(tournament: Pick<Tournament, "flow_nodes"> | null | undefined): FormationMode | null {
+  return (nodesOfKind(tournament, "formation")[0]?.config.mode as FormationMode | undefined) ?? null;
+}
+
+/** `team` when the registration node (default: the current one) takes whole teams, else `solo`. */
+export function registrationIntake(
+  tournament: Pick<Tournament, "flow_nodes"> | null | undefined,
+  node: Pick<TournamentFlowNode, "config"> | null = currentRegistrationNode(tournament)
+): "solo" | "team" {
+  return registrationNodeConfig(node).intake;
+}
 
 /** The tournament's nodes of one lifecycle kind, in id order; empty when the read did not ask for `flow_nodes`. */
 export function nodesOfKind(

@@ -185,8 +185,8 @@ const REGISTRATION_SCHEDULE = [
 ] as FlowNode["schedule"];
 
 /** Registration over its window with check-in planned, and a stage that starts when play does. */
-function registrationNode(status: string): FlowNode {
-  return { id: 4, kind: "registration", name: "Registration", status, config: {}, schedule: REGISTRATION_SCHEDULE, stage_id: null } as FlowNode;
+function registrationNode(status: string, config: Record<string, unknown> = {}): FlowNode {
+  return { id: 4, kind: "registration", name: "Registration", status, config, schedule: REGISTRATION_SCHEDULE, stage_id: null } as FlowNode;
 }
 const STAGE_NODE = {
   id: 11,
@@ -197,8 +197,8 @@ const STAGE_NODE = {
   schedule: [{ phase: "start", starts_at: new Date("2024-08-12T10:00:00Z").toISOString(), ends_at: null }],
   stage_id: 7
 } as FlowNode;
-const formationNode = (status: string): FlowNode =>
-  ({ id: 9, kind: "formation", name: "Teams", status, config: { mode: "draft" }, schedule: [], stage_id: null }) as FlowNode;
+const formationNode = (status: string, mode = "draft"): FlowNode =>
+  ({ id: 9, kind: "formation", name: "Teams", status, config: { mode }, schedule: [], stage_id: null }) as FlowNode;
 
 /** Before play: the tournament is `live` because a registration node is, no stage has started, teams not forming. */
 const SIGN_UP: Partial<Tournament> = {
@@ -221,7 +221,6 @@ function makeTournament(status: TournamentStatus, overrides: Partial<Tournament>
     challonge_slug: null,
     is_finished: false,
     is_hidden: false,
-    team_formation: "draft",
     flow_nodes: [registrationNode("open"), formationNode("forming"), STAGE_NODE],
     status,
     auto_transitions_enabled: true,
@@ -747,7 +746,10 @@ describe("before the tournament starts", () => {
   });
 
   it("counts a team-registration field in teams, with no role shape to fill", async () => {
-    tournament = makeTournament("live", { ...SIGN_UP, team_formation: "registration" });
+    tournament = makeTournament("live", {
+      ...SIGN_UP,
+      flow_nodes: [registrationNode("open", { intake: "team" }), formationNode("draft", "registered"), { ...STAGE_NODE, status: "draft" }]
+    });
     const team = (id: number) =>
       ({
         id,
