@@ -40410,6 +40410,13 @@
           "title": "Nodes",
           "type": "array"
         },
+        "participants": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowParticipantRead"
+          },
+          "title": "Participants",
+          "type": "array"
+        },
         "results": {
           "items": {
             "$ref": "#/components/schemas/tournament.FlowNodeResultRead"
@@ -49717,6 +49724,18 @@
             }
           ],
           "default": null,
+          "title": "Regex"
+        }
+      },
+      "title": "FieldValidation",
+      "type": "object"
+    },
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
           "title": "Error Message"
         },
         "regex": {
@@ -49837,18 +49856,6 @@
       "title": "FilterNodeConfig",
       "type": "object"
     },
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Regex"
-        }
-      },
-      "title": "FieldValidation",
-      "type": "object"
-    },
     "tournament.FirstBanRotation": {
       "enum": [
         "fixed",
@@ -49877,6 +49884,18 @@
           "type": "array"
         },
         "delete_node_ids": {
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowNodeUpsert"
+          },
+          "title": "Nodes",
+          "type": "array"
+        }
+      },
+      "title": "FlowChanges",
+      "type": "object"
+    },
           "items": {
             "type": "integer"
           },
@@ -49918,18 +49937,6 @@
         }
       },
       "title": "FlowConfigDefaults",
-      "type": "object"
-    },
-        },
-        "nodes": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.FlowNodeUpsert"
-          },
-          "title": "Nodes",
-          "type": "array"
-        }
-      },
-      "title": "FlowChanges",
       "type": "object"
     },
     "tournament.FlowEdgeRead": {
@@ -50469,6 +50476,43 @@
             {
               "type": "null"
             }
+    "tournament.FlowParticipantRead": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Id"
+        },
+        "workspace_member_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Member Id"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "FlowParticipantRead",
+      "type": "object"
+    },
           ],
           "default": null,
           "title": "Stage Id"
@@ -50530,6 +50574,18 @@
           "type": "string"
         },
         "repeated": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "multi",
+        "repeated",
+        "unit_rule"
+      ],
+      "title": "FlowPortSpecRead",
+      "type": "object"
+    },
           "title": "Repeated",
           "type": "boolean"
         },
@@ -50563,22 +50619,17 @@
       "title": "FlowPreviewPortsRead",
       "type": "object"
     },
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "multi",
-        "repeated",
-        "unit_rule"
-      ],
-      "title": "FlowPortSpecRead",
-      "type": "object"
-    },
     "tournament.FlowRead": {
       "properties": {
         "edges": {
           "items": {
+        "participants": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowParticipantRead"
+          },
+          "title": "Participants",
+          "type": "array"
+        },
             "$ref": "#/components/schemas/tournament.FlowEdgeRead"
           },
           "title": "Edges",
@@ -50599,6 +50650,18 @@
           "type": "array"
         }
       },
+      ],
+      "title": "FlowResultState",
+      "type": "string"
+    },
+    "tournament.FlowUnit": {
+      "enum": [
+        "players",
+        "teams"
+      ],
+      "title": "FlowUnit",
+      "type": "string"
+    },
       "required": [
         "nodes",
         "edges",
@@ -50651,18 +50714,6 @@
       ],
       "title": "FlowValidationRead",
       "type": "object"
-    },
-      ],
-      "title": "FlowResultState",
-      "type": "string"
-    },
-    "tournament.FlowUnit": {
-      "enum": [
-        "players",
-        "teams"
-      ],
-      "title": "FlowUnit",
-      "type": "string"
     },
     "tournament.FormField": {
       "properties": {
@@ -51020,6 +51071,18 @@
           ],
           "default": null,
           "title": "Recommended Max"
+          "title": "Recommended Min"
+        },
+        "role": {
+          "$ref": "#/components/schemas/tournament.RoleRef"
+        }
+      },
+      "required": [
+        "role"
+      ],
+      "title": "FormatRuleWire",
+      "type": "object"
+    },
         },
         "recommended_min": {
           "anyOf": [
@@ -51050,18 +51113,6 @@
         "mode"
       ],
       "title": "FormationNodeConfig",
-      "type": "object"
-    },
-          "title": "Recommended Min"
-        },
-        "role": {
-          "$ref": "#/components/schemas/tournament.RoleRef"
-        }
-      },
-      "required": [
-        "role"
-      ],
-      "title": "FormatRuleWire",
       "type": "object"
     },
     "tournament.GameClaimIn": {
@@ -51324,6 +51375,18 @@
         },
         "actor_user_id": {
           "anyOf": [
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "actor_user_id",
+        "actor_name",
+        "created_at"
+      ],
+      "title": "LastResolutionRead",
+      "type": "object"
+    },
             {
               "type": "integer"
             },
@@ -51370,18 +51433,6 @@
         "position"
       ],
       "title": "LeaderboardPin",
-      "type": "object"
-    },
-          "type": "string"
-        }
-      },
-      "required": [
-        "action",
-        "actor_user_id",
-        "actor_name",
-        "created_at"
-      ],
-      "title": "LastResolutionRead",
       "type": "object"
     },
     "tournament.LogRecordRef": {
@@ -55259,6 +55310,18 @@
             },
             {
               "type": "null"
+          },
+          "title": "Roles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "registration_id",
+        "display"
+      ],
+      "title": "RegistrationFreeAgentRead",
+      "type": "object"
+    },
             }
           ],
           "default": null,
@@ -55382,18 +55445,6 @@
         }
       },
       "title": "RegistrationNodeConfig",
-      "type": "object"
-    },
-          },
-          "title": "Roles",
-          "type": "array"
-        }
-      },
-      "required": [
-        "registration_id",
-        "display"
-      ],
-      "title": "RegistrationFreeAgentRead",
       "type": "object"
     },
     "tournament.RegistrationRead": {
@@ -57692,6 +57743,18 @@
         },
         "user_id": {
           "title": "User Id",
+      ],
+      "title": "SocialAccountRead",
+      "type": "object"
+    },
+    "tournament.SortOrder": {
+      "enum": [
+        "asc",
+        "desc"
+      ],
+      "title": "SortOrder",
+      "type": "string"
+    },
           "type": "integer"
         },
         "username": {
@@ -57754,18 +57817,6 @@
       ],
       "title": "SplitNodeConfig",
       "type": "object"
-    },
-      ],
-      "title": "SocialAccountRead",
-      "type": "object"
-    },
-    "tournament.SortOrder": {
-      "enum": [
-        "asc",
-        "desc"
-      ],
-      "title": "SortOrder",
-      "type": "string"
     },
     "tournament.StageBestOf": {
       "additionalProperties": false,

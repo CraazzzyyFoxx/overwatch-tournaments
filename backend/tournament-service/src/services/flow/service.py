@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
 from itertools import count
 
@@ -85,12 +85,15 @@ class FlowService:
         node_rows = await session.scalars(
             sa.select(FlowNode).where(FlowNode.tournament_id == tournament_id).order_by(FlowNode.id)
         )
-        results = await session.scalars(
-            sa.select(FlowNodeResult)
-            .join(FlowNode, FlowNode.id == FlowNodeResult.node_id)
-            .where(FlowNode.tournament_id == tournament_id)
-            .order_by(FlowNodeResult.node_id, FlowNodeResult.port, FlowNodeResult.rank)
-        )
+        results = [
+            flow_schemas.FlowNodeResultRead.model_validate(r, from_attributes=True)
+            for r in await session.scalars(
+                sa.select(FlowNodeResult)
+                .join(FlowNode, FlowNode.id == FlowNodeResult.node_id)
+                .where(FlowNode.tournament_id == tournament_id)
+                .order_by(FlowNodeResult.node_id, FlowNodeResult.port, FlowNodeResult.rank)
+            )
+        ]
         read = flow_schemas.FlowRead(
             nodes=[
                 flow_schemas.FlowNodeRead(
@@ -100,9 +103,39 @@ class FlowService:
                 for n in node_rows
             ],
             edges=[flow_schemas.FlowEdgeRead(**asdict(e)) for e in edges],
-            results=[flow_schemas.FlowNodeResultRead.model_validate(r, from_attributes=True) for r in results],
+            results=results,
+            participants=await self._participants(session, results),
         )
         return read, nodes, edges
+
+    async def _participants(
+        self, session: AsyncSession, results: Sequence[flow_schemas.FlowNodeResultRead]
+    ) -> list[flow_schemas.FlowParticipantRead]:
+        """Display names of the members and teams the results mention; nothing is read for absent ids."""
+        member_ids = {r.workspace_member_id for r in results} - {None}
+        team_ids = {r.team_id for r in results} - {None}
+        members = (
+            await session.execute(
+                sa.select(
+                    models.WorkspaceMember.id, sa.func.coalesce(models.WorkspaceMember.display_name, models.User.name)
+                )
+                .join(models.User, models.User.id == models.WorkspaceMember.player_id)
+                .where(models.WorkspaceMember.id.in_(member_ids))
+                .order_by(models.WorkspaceMember.id)
+            )
+            if member_ids
+            else ()
+        )
+        teams = (
+            await session.execute(
+                sa.select(models.Team.id, models.Team.name).where(models.Team.id.in_(team_ids)).order_by(models.Team.id)
+            )
+            if team_ids
+            else ()
+        )
+        return [flow_schemas.FlowParticipantRead(workspace_member_id=i, name=n) for i, n in members] + [
+            flow_schemas.FlowParticipantRead(team_id=i, name=n) for i, n in teams
+        ]
 
     async def get_read(self, session: AsyncSession, tournament_id: int) -> flow_schemas.FlowRead:
         return (await self._load(session, tournament_id))[0]

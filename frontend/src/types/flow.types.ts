@@ -19,6 +19,9 @@ export type FlowPortRead = Schema<"tournament.FlowPortRead">;
 export type FlowEdgeRead = Schema<"tournament.FlowEdgeRead">;
 export type FlowNodeResultRead = Schema<"tournament.FlowNodeResultRead">;
 
+/** The display name of a member or team a result row refers to (`FlowRead.participants`). */
+export type FlowParticipantRead = Schema<"tournament.FlowParticipantRead">;
+
 /** The config each node kind starts with. */
 export type FlowConfigDefaults = Schema<"tournament.FlowConfigDefaults">;
 

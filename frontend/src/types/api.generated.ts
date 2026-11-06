@@ -19814,6 +19814,21 @@ export interface components {
         /**
          * FlowNodeStatus
          * @enum {string}
+        /** FlowParticipantRead */
+        "tournament.FlowParticipantRead": {
+            /** Name */
+            name: string;
+            /**
+             * Team Id
+             * @default null
+             */
+            team_id: number | null;
+            /**
+             * Workspace Member Id
+             * @default null
+             */
+            workspace_member_id: number | null;
+        };
          */
         "tournament.FlowNodeStatus": TournamentFlowNodeStatus;
         /** FlowPortRead */
@@ -19833,6 +19848,8 @@ export interface components {
         "tournament.FlowRead": {
             /** Edges */
             edges: components["schemas"]["tournament.FlowEdgeRead"][];
+            /** Participants */
+            participants?: components["schemas"]["tournament.FlowParticipantRead"][];
             /** Nodes */
             nodes: components["schemas"]["tournament.FlowNodeRead"][];
             /** Results */
@@ -27158,6 +27175,8 @@ export interface components {
             tournaments_active: number;
             /**
              * Tournaments Updated
+            /** Participants */
+            participants?: components["schemas"]["tournament.FlowParticipantRead"][];
              * @default 0
              */
             tournaments_updated: number;
@@ -27307,6 +27326,48 @@ export interface components {
             updated_at: string | null;
             /** Workspace Id */
             workspace_id: number;
+            played_at: string | null;
+            /** Raw Available */
+            raw_available: boolean;
+            raw_status: components["schemas"]["tournament.RawSourceStatus"] | null;
+            /** Tournament Id */
+            tournament_id: number;
+            /** Tournament Name */
+            tournament_name: string;
+            /** Updated At */
+            updated_at: string | null;
+            /** Workspace Id */
+            workspace_id: number;
+        };
+        /**
+         * AdminReadinessSet
+         * @description Body for the admin readiness override: force one participation's captain
+         *     readiness on or off.
+         *
+         *     ``ready: false`` is only meaningful before a session exists -- readiness
+         *     gates session CREATION and nothing else -- so the service 409s once one
+         *     does (reset the session instead).
+         */
+        "tournament.AdminReadinessSet": {
+            /** Encounter Team Id */
+            encounter_team_id: number;
+            /** Ready */
+            ready: boolean;
+        };
+        /**
+         * AdminTechnicalLossInput
+         * @description Body for the technical-loss route: which PARTICIPATION forfeits,
+         *     optionally the exact scores to record it as (omitted = the default forfeit
+         *     score), and the reason -- a walkover is never anonymous.
+         */
+        "tournament.AdminTechnicalLossInput": {
+            /** Loser Team Id */
+            loser_team_id: number;
+            /** Reason */
+            reason: string;
+            /** Results */
+            results?: components["schemas"]["tournament.AdminForfeitResult"][];
+        };
         };
         /**
          * AdminMatchRow
@@ -27391,48 +27452,6 @@ export interface components {
             table: {
                 [key: string]: number;
             };
-        };
-            played_at: string | null;
-            /** Raw Available */
-            raw_available: boolean;
-            raw_status: components["schemas"]["tournament.RawSourceStatus"] | null;
-            /** Tournament Id */
-            tournament_id: number;
-            /** Tournament Name */
-            tournament_name: string;
-            /** Updated At */
-            updated_at: string | null;
-            /** Workspace Id */
-            workspace_id: number;
-        };
-        /**
-         * AdminReadinessSet
-         * @description Body for the admin readiness override: force one participation's captain
-         *     readiness on or off.
-         *
-         *     ``ready: false`` is only meaningful before a session exists -- readiness
-         *     gates session CREATION and nothing else -- so the service 409s once one
-         *     does (reset the session instead).
-         */
-        "tournament.AdminReadinessSet": {
-            /** Encounter Team Id */
-            encounter_team_id: number;
-            /** Ready */
-            ready: boolean;
-        };
-        /**
-         * AdminTechnicalLossInput
-         * @description Body for the technical-loss route: which PARTICIPATION forfeits,
-         *     optionally the exact scores to record it as (omitted = the default forfeit
-         *     score), and the reason -- a walkover is never anonymous.
-         */
-        "tournament.AdminTechnicalLossInput": {
-            /** Loser Team Id */
-            loser_team_id: number;
-            /** Reason */
-            reason: string;
-            /** Results */
-            results?: components["schemas"]["tournament.AdminForfeitResult"][];
         };
         /** BalancerGoogleSheetFeedRead */
         "tournament.BalancerGoogleSheetFeedRead": {
@@ -29792,6 +29811,48 @@ export interface components {
              * Ended At
              * @default null
              */
+        /** FfaGameResultLineInput */
+        "tournament.FfaGameResultLineInput": {
+            /**
+             * Placement
+             * @default null
+             */
+            placement: number | null;
+            /** Stats */
+            stats: {
+                [key: string]: number;
+            };
+            /** Team Id */
+            team_id: number;
+        };
+        /** FfaGameResultsInput */
+        "tournament.FfaGameResultsInput": {
+            /**
+             * Reason
+             * @default null
+             */
+            reason: string | null;
+            /** Results */
+            results: components["schemas"]["tournament.FfaGameResultLineInput"][];
+        };
+        /** FfaGamesCountInput */
+        "tournament.FfaGamesCountInput": {
+            /** Games */
+            games: number;
+        };
+        /** FieldValidation */
+        "tournament.FieldValidation": {
+            /**
+             * Error Message
+             * @default null
+             */
+            error_message: string | null;
+            /**
+             * Regex
+             * @default null
+             */
+            regex: string | null;
+        };
             ended_at: string | null;
             /**
              * Name
@@ -29886,17 +29947,17 @@ export interface components {
              */
             upper: number | null;
         };
-        /** FfaGameResultLineInput */
-        "tournament.FfaGameResultLineInput": {
-            /**
-             * Placement
-             * @default null
-             */
-            placement: number | null;
-            /** Stats */
-            stats: {
-                [key: string]: number;
-            };
+        /** FlowChanges */
+        "tournament.FlowChanges": {
+            /** Delete Edge Ids */
+            delete_edge_ids?: number[];
+            /** Delete Node Ids */
+            delete_node_ids?: number[];
+            /** Edges */
+            edges?: components["schemas"]["tournament.FlowEdgeUpsert"][];
+            /** Nodes */
+            nodes?: components["schemas"]["tournament.FlowNodeUpsert"][];
+        };
         /**
          * FlowConfigDefaults
          * @description The config a freshly dropped node of each kind starts with; typed so OpenAPI carries every config class.
@@ -29910,48 +29971,6 @@ export interface components {
             registration?: components["schemas"]["tournament.RegistrationNodeConfig"];
             split?: components["schemas"]["tournament.SplitNodeConfig"];
             stage?: components["schemas"]["tournament.StageNodeConfig"];
-        };
-            /** Team Id */
-            team_id: number;
-        };
-        /** FfaGameResultsInput */
-        "tournament.FfaGameResultsInput": {
-            /**
-             * Reason
-             * @default null
-             */
-            reason: string | null;
-            /** Results */
-            results: components["schemas"]["tournament.FfaGameResultLineInput"][];
-        };
-        /** FfaGamesCountInput */
-        "tournament.FfaGamesCountInput": {
-            /** Games */
-            games: number;
-        };
-        /** FieldValidation */
-        "tournament.FieldValidation": {
-            /**
-             * Error Message
-             * @default null
-             */
-            error_message: string | null;
-            /**
-             * Regex
-             * @default null
-             */
-            regex: string | null;
-        };
-        /** FlowChanges */
-        "tournament.FlowChanges": {
-            /** Delete Edge Ids */
-            delete_edge_ids?: number[];
-            /** Delete Node Ids */
-            delete_node_ids?: number[];
-            /** Edges */
-            edges?: components["schemas"]["tournament.FlowEdgeUpsert"][];
-            /** Nodes */
-            nodes?: components["schemas"]["tournament.FlowNodeUpsert"][];
         };
         /**
          * FlowEdgeUpsert
@@ -31228,6 +31247,48 @@ export interface components {
              */
             stale_registrations: number | null;
             /** Subrole Catalog */
+         * RegistrationFormTemplateSave
+         * @description The name to file the tournament's current questions under.
+         */
+        "tournament.RegistrationFormTemplateSave": {
+            /** Name */
+            name: string;
+        };
+        /** RegistrationFormTemplateUpsert */
+        "tournament.RegistrationFormTemplateUpsert": {
+            /**
+             * Discipline
+             * @default null
+             */
+            discipline: string | null;
+            form_schema: components["schemas"]["tournament.FormSchema-Input"];
+            /** Name */
+            name: string;
+        };
+        /** RegistrationFormUpsert */
+        "tournament.RegistrationFormUpsert": {
+            form_schema: components["schemas"]["tournament.FormSchema-Input"];
+            /**
+             * Hide Registrations
+             * @default false
+             */
+            hide_registrations: boolean;
+            /**
+             * Open Profile Scope
+             * @default main
+             */
+            open_profile_scope: string;
+            /**
+             * Require Open Profile
+             * @default false
+             */
+            require_open_profile: boolean;
+            /**
+             * Show Ranks
+             * @default false
+             */
+            show_ranks: boolean;
+        };
             subrole_catalog?: {
                 [key: string]: components["schemas"]["tournament.SubroleOption"][];
             };
@@ -31341,48 +31402,6 @@ export interface components {
              * @default false
              */
             team_unique_identity: boolean;
-        };
-         * RegistrationFormTemplateSave
-         * @description The name to file the tournament's current questions under.
-         */
-        "tournament.RegistrationFormTemplateSave": {
-            /** Name */
-            name: string;
-        };
-        /** RegistrationFormTemplateUpsert */
-        "tournament.RegistrationFormTemplateUpsert": {
-            /**
-             * Discipline
-             * @default null
-             */
-            discipline: string | null;
-            form_schema: components["schemas"]["tournament.FormSchema-Input"];
-            /** Name */
-            name: string;
-        };
-        /** RegistrationFormUpsert */
-        "tournament.RegistrationFormUpsert": {
-            form_schema: components["schemas"]["tournament.FormSchema-Input"];
-            /**
-             * Hide Registrations
-             * @default false
-             */
-            hide_registrations: boolean;
-            /**
-             * Open Profile Scope
-             * @default main
-             */
-            open_profile_scope: string;
-            /**
-             * Require Open Profile
-             * @default false
-             */
-            require_open_profile: boolean;
-            /**
-             * Show Ranks
-             * @default false
-             */
-            show_ranks: boolean;
         };
         /** RegistrationTeamAdmissionRequest */
         "tournament.RegistrationTeamAdmissionRequest": {
@@ -64539,7 +64558,6 @@ export interface operations {
             path: {
                 tournament_id: string;
             };
-            cookie?: never;
         };
         requestBody?: never;
         responses: {
@@ -64623,24 +64641,7 @@ export interface operations {
             content: {
                 "application/json": components["schemas"]["tournament.FlowChanges"];
             };
-        };
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-    post__api_v1_admin_tournaments__tournament_id__flow_validate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                tournament_id: string;
-            };
             cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["tournament.FlowChanges"];
-            };
         };
         responses: {
             /** @description Success */
@@ -64649,7 +64650,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["tournament.FlowValidationRead"];
+                    "application/json": components["schemas"]["tournament.AdminFlowRead"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
@@ -64710,10 +64711,28 @@ export interface operations {
             };
         };
     };
+    post__api_v1_admin_tournaments__tournament_id__flow_validate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["tournament.FlowChanges"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["tournament.AdminFlowRead"];
+                    "application/json": components["schemas"]["tournament.FlowValidationRead"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
@@ -84733,7 +84752,6 @@ export enum TournamentFormationNodeConfigMode {
     draft = "draft",
     registered = "registered",
     manual = "manual"
-}
 export enum TournamentDivisionGridPortableImportRequestMode {
     library = "library",
     sync = "sync",
@@ -84797,6 +84815,7 @@ export enum TournamentFormatDimensionWireMode {
     informational = "informational",
     preference = "preference",
     enforced = "enforced"
+}
 export enum TournamentRegistrationNodeConfigIntake {
     solo = "solo",
     team = "team"

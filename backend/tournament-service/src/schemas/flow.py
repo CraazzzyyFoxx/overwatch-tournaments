@@ -37,6 +37,7 @@ __all__ = (
     "FlowNodeScheduleSet",
     "FlowNodeTransition",
     "FlowNodeUpsert",
+    "FlowParticipantRead",
     "FlowPortRead",
     "FlowPortSpecRead",
     "FlowPreviewPortsRead",
@@ -89,10 +90,18 @@ class FlowNodeResultRead(BaseModel):
     state: FlowResultState
 
 
+class FlowParticipantRead(BaseModel):
+    workspace_member_id: int | None = None
+    team_id: int | None = None
+    name: str
+
+
 class FlowRead(BaseModel):
     nodes: list[FlowNodeRead]
     edges: list[FlowEdgeRead]
     results: list[FlowNodeResultRead]
+    #: Names of the members and teams the results mention: members first by id, then teams by id.
+    participants: list[FlowParticipantRead] = Field(default_factory=list)
 
 
 class FlowIssueRead(BaseModel):
