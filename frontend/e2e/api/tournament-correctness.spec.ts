@@ -17,13 +17,16 @@ import {
   seedOrder,
   singleElimination,
   stageStandings,
+  startPlayoff,
   win,
+  wireGroupsToPlayoff,
   type BracketModel,
   type ModelMatch,
   type Result,
   type TableStanding,
 } from "../support/correctness";
 import { expect, test } from "../support/fixtures";
+import { waitNode } from "../support/flow";
 import {
   completeStages,
   createStage,
@@ -37,7 +40,7 @@ import {
   type TournamentJob,
 } from "../support/flows";
 import { openGame, readEncounter, resultAudit, series, setPoints, sides } from "../support/results";
-import { createTournament, createWorkspace, type Tournament } from "../support/seed";
+import { createTournament, createWorkspace, transitionNode, type Tournament } from "../support/seed";
 
 /**
  * Tournament-engine correctness, end to end over the gateway: brackets laid out
@@ -369,17 +372,20 @@ async function recalculate(api: Api, tournamentId: number) {
   await waitForJob(api, await api.post<TournamentJob>(`/api/v1/admin/standings/recalculate/${tournamentId}`, undefined, 202));
 }
 
-test("groups → playoffs: top 2 cross-seed A1-B2 / B1-A2 only once the groups close; a group correction re-seeds until the playoff starts", async ({ adminApi }) => {
+test("groups → playoffs: top 2 cross-seed A1-B2 / B1-A2 only once the groups close; a group correction re-seats the ready playoff until it goes live", async ({ adminApi }) => {
   test.setTimeout(600_000);
-  const { tournament, groupStage, playoff, groupA, groupB, encounters: groupEncounters } = await seedGroupsToPlayoffs(adminApi);
+  const { tournament, groupStage, playoff, filterNodeId, groupA, groupB, encounters: groupEncounters } = await seedGroupsToPlayoffs(adminApi);
   const [a1, a2, a3, a4] = groupA;
   const [b1, b2, b3, b4] = groupB;
   const planA = ladder(groupA);
   const planB = ladder(groupB);
   for (const r of [...planA, ...planB.slice(0, 5)]) await enter(adminApi, groupEncounters, r);
 
-  // One group match still open, the playoff is not started.
+  // One group match still open: the filter is not final, so the playoff is refused its seats.
   expect(await listEncounters(adminApi, tournament.id, playoff.id), "no playoff match before the groups close").toHaveLength(0);
+  const early = await adminApi.raw("POST", `/api/v1/admin/flow-nodes/${playoff.node_id}/transition`, { body: { status: "ready" } });
+  expect(early.status(), "seating the playoff before the groups close").toBe(409);
+  expect(await early.text()).toContain("input_not_final");
 
   await enter(adminApi, groupEncounters, planB[5]);
   let rows = await stageStandings(adminApi, tournament.id, groupStage.id);
@@ -389,13 +395,15 @@ test("groups → playoffs: top 2 cross-seed A1-B2 / B1-A2 only once the groups c
   expect(groupOrder(itemB)).toEqual(groupTable(groupB, planB, POINTS, ROUND_ROBIN_ORDER).map((r) => r.team));
   expect((await adminApi.get<Stage>(`/api/v1/admin/stages/${groupStage.id}`)).status, "both groups closed").toBe("completed");
 
-  await startStage(adminApi, playoff);
+  await waitNode(adminApi, tournament.id, filterNodeId, "final");
+  await transitionNode(adminApi, playoff.node_id, "ready");
+  const playoffSeats = async () => seedOrder(await adminApi.get<Stage>(`/api/v1/admin/stages/${playoff.id}`)).sort((x, y) => x - y);
+  expect(await playoffSeats(), "the top 2 of each group are seated").toEqual([a1, a2, b1, b2].sort((x, y) => x - y));
   const firstRound = async () =>
     (await listEncounters(adminApi, tournament.id, playoff.id))
       .filter((e) => e.round === 1)
-      .map((e) => seats(e).join("-"))
+      .map((e) => pairKey(...seats(e)))
       .sort();
-  expect(await firstRound(), "cross-seeding: A1 vs B2, B1 vs A2").toEqual([`${a1}-${b2}`, `${b1}-${a2}`].sort());
 
   // A correction while the playoff is untouched: a3 really beat a2, so a3 is A2 now and takes the seat.
   const fixed = encounterOf(groupEncounters, a2, a3);
@@ -403,20 +411,22 @@ test("groups → playoffs: top 2 cross-seed A1-B2 / B1-A2 only once the groups c
   planA[3] = beat(a3, a2);
   await enter(adminApi, [await readEncounter(adminApi, fixed.id)], planA[3]);
   await expect
-    .poll(firstRound, { message: "the re-ranked A2 is re-seeded into the untouched playoff", timeout: 60_000 })
-    .toEqual([`${a1}-${b2}`, `${b1}-${a3}`].sort());
+    .poll(playoffSeats, { message: "the re-ranked A2 is re-seated into the ready playoff", timeout: 60_000 })
+    .toEqual([a1, a3, b1, b2].sort((x, y) => x - y));
+  await transitionNode(adminApi, playoff.node_id, "live");
+  expect(await firstRound(), "cross-seeding: A1 vs B2, B1 vs A3").toEqual([pairKey(a1, b2), pairKey(b1, a3)].sort());
   rows = await stageStandings(adminApi, tournament.id, groupStage.id);
   expect(groupOrder(itemA), "group A after the correction").toEqual(groupTable(groupA, planA, POINTS, ROUND_ROBIN_ORDER).map((r) => r.team));
   expect(groupOrder(itemA)).toEqual([a1, a3, a2, a4]);
 
-  // Once the playoff has a result, a group correction is refused: the seed is frozen into a running bracket.
+  // Once the playoff is live, a group correction is refused: the seed is frozen into a running bracket.
   const playoffRound1 = await listEncounters(adminApi, tournament.id, playoff.id);
   await win(adminApi, encounterOf(playoffRound1, a1, b2), a1);
   const late = await adminApi.raw("POST", `/api/v1/admin/encounters/${encounterOf(groupEncounters, a1, a4).id}/result/reopen`, {
     body: { reason: "too late" },
   });
   expect(late.status(), "a group correction after the playoff started").toBe(409);
-  expect(await late.text()).toContain("downstream stage already in progress");
+  expect(await late.text()).toContain("downstream_started");
 
   await win(adminApi, encounterOf(playoffRound1, b1, a3), b1);
   const final = await poll(
@@ -448,19 +458,18 @@ test("groups → playoffs: top 2 cross-seed A1-B2 / B1-A2 only once the groups c
   expect(await standingsSnapshot(adminApi, tournament.id), "a recalculation after finishing changes nothing").toEqual(before);
 });
 
-// "Both modes avoid same-group rematches in the first playoff round" (wire_from_groups, WireFromGroupsRequest,
-// the auto-wire comment). Three groups sending two leave two byes; the explicit wire defaults to `cross`.
-for (const [groupCount, wiring] of [
-  [3, "auto-wire"],
-  [4, "auto-wire"],
-  [2, "explicit wire, default mode"],
+// "Both modes avoid same-group rematches in the first playoff round" (`cross` and `snake` seeding of a playoff fed by
+// a `per_item_top` filter). Three groups sending two leave two byes.
+for (const [groupCount, seeding] of [
+  [3, "cross"],
+  [4, "snake"],
+  [2, "cross"],
 ] as const) {
-  test(`playoff seeding from ${groupCount} groups (${wiring}) never opens with two teams of one group; byes go to group winners`, async ({ adminApi }) => {
+  test(`playoff seeding from ${groupCount} groups (${seeding}) never opens with two teams of one group; byes go to group winners`, async ({ adminApi }) => {
     const ws = await createWorkspace(adminApi);
     const tournament = await createTournament(adminApi, ws.id);
     const teams = await seedTeams(adminApi, tournament.id, groupCount * 2, { players: false });
     await formTeams(adminApi, tournament.id);
-    const explicit = wiring !== "auto-wire";
     const created = await createStage(
       adminApi,
       tournament.id,
@@ -470,10 +479,11 @@ for (const [groupCount, wiring] of [
     await startStage(adminApi, created);
     const playoff = await adminApi.post<Stage>(
       `/api/v1/admin/stages/tournament/${tournament.id}`,
-      { name: "Playoffs", stage_type: "single_elimination", best_of: { default: 1 }, order: 1 },
+      { name: "Playoffs", stage_type: "single_elimination", best_of: { default: 1 }, order: 1, seed_ranking: seeding },
       201
     );
     await adminApi.post(`/api/v1/admin/stages/${playoff.id}/items`, { name: "Bracket", type: "single_bracket", order: 0 }, 201);
+    const filterNodeId = await wireGroupsToPlayoff(adminApi, tournament.id, created, playoff);
 
     const groupStage = await adminApi.get<Stage>(`/api/v1/admin/stages/${created.id}`);
     const groupOf = new Map(groupStage.items.flatMap((item) => item.inputs.map((input) => [input.team_id!, item.name])));
@@ -481,8 +491,7 @@ for (const [groupCount, wiring] of [
     for (const e of await listEncounters(adminApi, tournament.id, created.id)) await win(adminApi, e, seats(e)[0]!);
     const rows = await stageStandings(adminApi, tournament.id, created.id);
     const winners = new Set(rows.filter((r) => r.position === 1).map((r) => r.team_id));
-    if (explicit) await adminApi.post(`/api/v1/admin/stages/${playoff.id}/wire-from-groups`, { source_stage_id: created.id, top: 2 });
-    await startStage(adminApi, playoff);
+    await startPlayoff(adminApi, tournament.id, filterNodeId, playoff);
 
     const firstRound = (await listEncounters(adminApi, tournament.id, playoff.id)).filter((e) => e.round === 1).map((e) => seats(e) as [number, number]);
     const n = groupCount * 2;
