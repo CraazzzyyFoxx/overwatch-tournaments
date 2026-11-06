@@ -30,7 +30,8 @@ import type { PlayerRankHistoryState } from "./usePlayerEditForm";
 type HistoryPreviewCardProps = {
   entry: PlayerRankHistoryPreviewEntry;
   currentEntry: BalancerPlayerRoleEntry | undefined;
-  workspaceGrid: DivisionGrid;
+  /** The tournament's grid: the target history ranks are normalised into. */
+  grid: DivisionGrid;
   ontology: RoleOntology | null;
   getDivisionName: (divisionNumber: number | null) => string | null;
   getOriginalDivisionName: (
@@ -43,7 +44,7 @@ function HistoryPreviewCard({
   entry,
   currentEntry,
   ontology,
-  workspaceGrid,
+  grid,
   getDivisionName,
   getOriginalDivisionName
 }: Readonly<HistoryPreviewCardProps>) {
@@ -92,13 +93,13 @@ function HistoryPreviewCard({
                   division={entry.original_division_number}
                   width={16}
                   height={16}
-                  tournamentGrid={entry.tournament_grid_version ?? workspaceGrid}
+                  tournamentGrid={entry.tournament_grid_version ?? grid}
                 />
               ) : null}
               <span className="text-label font-medium">{originalDivisionName}</span>
             </div>
           ) : null}
-          {/* Normalised division (workspace target grid) — only when different */}
+          {/* Normalised division (the tournament's grid) — only when different */}
           {showNormalisedArrow && divisionName ? (
             <>
               <ArrowRight className="size-4 shrink-0 text-[color:var(--aqt-fg-dim)]" aria-hidden />
@@ -106,7 +107,7 @@ function HistoryPreviewCard({
                 {entry.division_number != null ? (
                   <DivisionIcon
                     division={entry.division_number}
-                    tournamentGrid={workspaceGrid}
+                    tournamentGrid={grid}
                     width={16}
                     height={16}
                   />
@@ -144,7 +145,7 @@ interface PlayerEditHistoryPanelProps {
   history: PlayerRankHistoryState;
   /** The roles being edited, so each preview card can say what it would change. */
   roleEntries: BalancerPlayerRoleEntry[];
-  workspaceGrid: DivisionGrid;
+  grid: DivisionGrid;
   ontology: RoleOntology | null;
   getDivisionName: (divisionNumber: number | null) => string | null;
   getOriginalDivisionName: (
@@ -159,7 +160,7 @@ export function PlayerEditHistoryPanel({
   history,
   roleEntries,
   ontology,
-  workspaceGrid,
+  grid,
   getDivisionName,
   getOriginalDivisionName
 }: Readonly<PlayerEditHistoryPanelProps>) {
@@ -221,7 +222,7 @@ export function PlayerEditHistoryPanel({
             key={`${entry.role}-${entry.tournament_id}`}
             entry={entry}
             currentEntry={roleEntries.find((roleEntry) => roleEntry.role === entry.role)}
-            workspaceGrid={workspaceGrid}
+            grid={grid}
             ontology={ontology}
             getDivisionName={getDivisionName}
             getOriginalDivisionName={getOriginalDivisionName}

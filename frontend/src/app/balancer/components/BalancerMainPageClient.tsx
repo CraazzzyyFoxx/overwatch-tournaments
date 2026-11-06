@@ -30,7 +30,7 @@ import {
   balancerRealtimeTopic,
   useBalancerRealtime
 } from "@/app/balancer/components/useBalancerRealtime";
-import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
+import { useTournamentDivisionGridVersion } from "@/hooks/useCurrentWorkspace";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
@@ -48,6 +48,7 @@ import balancerService from "@/services/balancer.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { BalancerPlayerExportFormat } from "@/types/balancer-admin.types";
 import type { BalancerConfig, BalancerConfigValue } from "@/types/balancer.types";
+import type { DivisionGrid } from "@/types/workspace.types";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -95,6 +96,9 @@ import {
   useGroupWidth,
   useIsWideBalancerLayout
 } from "./useBalancerLayout";
+
+/** Until the tournament's grid resolves: crests render their neutral missing state, never another grid's. */
+const EMPTY_GRID: DivisionGrid = { tiers: [] };
 
 // Dialogs and sheets that render nothing until opened: lazy chunks, so they
 // (and the image rasteriser behind the export dialog) are not first-load JS.
@@ -208,7 +212,13 @@ export function BalancerMainPageClient() {
     refetchOnWindowFocus: false
   });
 
-  const divisionGrid = useDivisionGrid(tournamentQuery.data?.discipline);
+  // The one grid every rank on this page resolves through — pool, editor, export and the player sheet alike.
+  const divisionGridVersion = useTournamentDivisionGridVersion(
+    tournamentQuery.data?.discipline,
+    tournamentQuery.data?.division_grid_version_id,
+    tournamentQuery.data?.division_grid_version
+  );
+  const divisionGrid: DivisionGrid = divisionGridVersion ?? EMPTY_GRID;
   // The solver config of the tournament's game: its defaults and presets carry that game's role weights.
   const configDiscipline = tournamentQuery.data?.discipline ?? null;
   const balancerConfigQuery = useQuery({
@@ -879,9 +889,8 @@ export function BalancerMainPageClient() {
           player={quickEditPlayer}
           registration={quickEditRegistration}
           discipline={tournamentQuery.data?.discipline}
-          divisionGridVersionId={tournamentQuery.data?.division_grid_version_id}
           ontology={ontology}
-          divisionGridVersion={tournamentQuery.data?.division_grid_version}
+          divisionGridVersion={divisionGridVersion}
           statusOptions={playerStatusOptions}
           open={editingPlayerId !== null}
           onOpenChange={(open) => {

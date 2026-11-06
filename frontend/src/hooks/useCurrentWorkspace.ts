@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { divisionGridQueryKeys } from "@/lib/divisions/query-keys";
 import { resolveOwnerGrid } from "@/lib/divisions/grid";
 import workspaceService from "@/services/workspace.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -39,4 +40,27 @@ export function useDivisionGrid(discipline?: string): DivisionGrid {
 export function useDivisionGridVersion(discipline?: string): DivisionGridVersion | null {
   const workspace = useWorkspaceRead(useCurrentWorkspaceId());
   return resolveOwnerGrid(workspace, discipline ?? workspace?.disciplines_enabled[0]);
+}
+
+/**
+ * The grid a tournament's ranks resolve through: its pinned version, else the workspace's effective grid for the
+ * game — the order `tournament_effective_version_id_expr` resolves on the backend. `pinnedVersionId` undefined is
+ * unresolved owner metadata, null is "no pin"; `pinnedVersion` is the embedded pin, read instead of a fetch when it
+ * matches. `null` while unresolved.
+ */
+export function useTournamentDivisionGridVersion(
+  discipline: string | undefined,
+  pinnedVersionId: number | null | undefined,
+  pinnedVersion?: DivisionGridVersion | null
+): DivisionGridVersion | null {
+  const workspaceVersion = useDivisionGridVersion(discipline);
+  const suppliedPin = pinnedVersionId != null && pinnedVersion?.id === pinnedVersionId ? pinnedVersion : null;
+  const pinnedQuery = useQuery({
+    queryKey: divisionGridQueryKeys.version(pinnedVersionId ?? null),
+    queryFn: () => workspaceService.getDivisionGridVersion(pinnedVersionId!),
+    enabled: discipline !== undefined && pinnedVersionId != null && suppliedPin === null
+  });
+  if (discipline === undefined || pinnedVersionId === undefined) return null;
+  if (pinnedVersionId === null) return workspaceVersion;
+  return suppliedPin ?? pinnedQuery.data ?? null;
 }

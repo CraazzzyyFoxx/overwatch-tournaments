@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
-import { act, type ReactNode } from "react";
+import { act, type ComponentProps, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,6 +16,7 @@ import adminService from "@/services/admin.service";
 import balancerAdminService from "@/services/balancer-admin.service";
 import userService from "@/services/user.service";
 import workspaceService from "@/services/workspace.service";
+import { useTournamentDivisionGridVersion } from "@/hooks/useCurrentWorkspace";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { DEADLOCK_METADATA, LOL_METADATA, OW_METADATA } from "@/test/discipline-metadata";
 import type {
@@ -134,13 +135,25 @@ async function render(children: ReactNode, locale: "en" | "ru" = "en") {
     await promise;
   });
 }
+/** The page's wiring: the sheet gets the grid `useTournamentDivisionGridVersion` resolves for the tournament. */
+function TournamentSheet({
+  divisionGridVersionId,
+  divisionGridVersion,
+  ...props
+}: Omit<ComponentProps<typeof PlayerEditModal>, "divisionGridVersion"> & {
+  divisionGridVersionId: number | null | undefined;
+  divisionGridVersion?: DivisionGridVersion;
+}) {
+  const resolved = useTournamentDivisionGridVersion(props.discipline, divisionGridVersionId, divisionGridVersion);
+  return <PlayerEditModal {...props} divisionGridVersion={resolved} />;
+}
 function sheet(
   discipline: string | undefined,
   divisionGridVersionId: number | null | undefined = null,
   divisionGridVersion?: DivisionGridVersion
 ) {
   return (
-    <PlayerEditModal
+    <TournamentSheet
       player={player}
       discipline={discipline}
       ontology={discipline === "lol" ? LOL_METADATA : discipline === "overwatch" ? OW_METADATA : null}
@@ -314,7 +327,7 @@ describe("owner-grid receiving controls", () => {
     });
   });
 
-  it("keeps history normalized to the workspace while editing and applying into a different pin", async () => {
+  it("normalizes history into the tournament's pin, the grid the rest of the sheet edits in", async () => {
     const pinned = version(3, "LoL Pin", [200, 900]);
     vi.spyOn(userService, "getUserByName").mockResolvedValue({ id: 42 } as User);
     vi.spyOn(balancerAdminService, "getUserBalancerRankHistory").mockResolvedValue([]);
@@ -322,27 +335,27 @@ describe("owner-grid receiving controls", () => {
       results: [
         {
           id: 10,
-          name: "Past pinned tournament",
+          name: "Past workspace tournament",
           // The wire names the tournament's workspace and game; history of any other game is never read as LoL ranks.
           workspace_id: 1,
           discipline: "lol",
           role: { dimension: "position", role: "support" },
-          division_grid_version_id: pinned.id,
+          division_grid_version_id: lol.id,
           players: [{ user_id: 42, rank: 250 }]
         } as UserTournament
       ],
-      division_grid_versions: [pinned]
+      division_grid_versions: [lol]
     } as UserTournamentList);
     vi.spyOn(workspaceService, "getDivisionGridMapping").mockResolvedValue({
       id: 9,
-      source_version_id: pinned.id,
-      target_version_id: lol.id,
-      name: "Pinned to workspace",
+      source_version_id: lol.id,
+      target_version_id: pinned.id,
+      name: "Workspace to pin",
       is_complete: true,
       rules: [
         {
-          source_tier_id: pinned.tiers[0].id!,
-          target_tier_id: lol.tiers[1].id!,
+          source_tier_id: lol.tiers[0].id!,
+          target_tier_id: pinned.tiers[1].id!,
           weight: 1,
           is_primary: true
         }
@@ -350,20 +363,18 @@ describe("owner-grid receiving controls", () => {
     });
     await render(sheet("lol", pinned.id, pinned));
     await clickButton("Load from history");
-    expect(document.body.textContent).toContain("Past pinned tournament");
-    expect(crestNames()).toContain("LoL Pin 1");
-    expect(crestNames()).toContain("LoL 2");
-    expect(crestNames()).not.toContain("LoL Pin 2");
-    expect(crestNames()).not.toContain("OW 2");
+    expect(document.body.textContent).toContain("Past workspace tournament");
+    expect(crestNames()).toContain("LoL 1");
+    expect(crestNames()).toContain("LoL Pin 2");
+    expect(crestNames()).not.toContain("LoL 2");
     await clickButton("Apply history values");
     expect(document.querySelector<HTMLInputElement>('input[inputmode="numeric"]')?.value).toBe(
-      "400"
+      "900"
     );
-    expect(crestNames()).toContain("LoL Pin 1");
     await clickButton("Save");
     expect(onSave.mock.calls[0][1].role_entries_json[0]).toMatchObject({
-      rank_value: 400,
-      division_number: 1
+      rank_value: 900,
+      division_number: 2
     });
   });
 });
@@ -469,7 +480,7 @@ describe("owner game role and rank capabilities", () => {
     discipline: "overwatch" | "lol",
     entry: Partial<BalancerPlayerRecord["role_entries_json"][number]> = {}
   ) => (
-    <PlayerEditModal
+    <TournamentSheet
       player={{ ...player, role_entries_json: [{ ...player.role_entries_json[0], ...entry }] }}
       discipline={discipline}
       ontology={discipline === "lol" ? LOL_METADATA : OW_METADATA}
@@ -527,7 +538,7 @@ describe("owner game role and rank capabilities", () => {
     expect(document.querySelector('[aria-label="Flex player"]')).not.toBeNull();
 
     await render(
-      <PlayerEditModal
+      <TournamentSheet
         player={player}
         discipline="overwatch"
         ontology={{ ...OW_METADATA, discipline: { ...OW_METADATA.discipline, flex: false } }}
@@ -543,7 +554,7 @@ describe("owner game role and rank capabilities", () => {
   it("edits a one-role game's rank alone: no role list to add to, turn off or remove from", async () => {
     // The Overwatch grid opens the sheet; the Deadlock dictionary is what the card reads its roles from.
     await render(
-      <PlayerEditModal
+      <TournamentSheet
         player={{ ...player, role_entries_json: [{ ...player.role_entries_json[0], role: "agent" }] }}
         discipline="overwatch"
         ontology={DEADLOCK_METADATA}
@@ -564,7 +575,7 @@ describe("owner game role and rank capabilities", () => {
 
   // A one-role game: the Overwatch grid opens the sheet, the Deadlock dictionary is the player's game.
   const deadlockSheet = (entries: BalancerPlayerRecord["role_entries_json"]) => (
-    <PlayerEditModal
+    <TournamentSheet
       player={{ ...player, role_entries_json: entries }}
       discipline="overwatch"
       ontology={DEADLOCK_METADATA}
