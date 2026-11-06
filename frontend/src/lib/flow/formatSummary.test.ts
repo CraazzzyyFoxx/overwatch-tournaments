@@ -51,9 +51,14 @@ describe("summarizeFormat", () => {
       )
     );
 
-    expect(summary.intro).toEqual({ intake: "solo", formation: "balancer" });
+    expect(summary.intro).toEqual({ intake: "solo" });
     expect(summary.steps).toHaveLength(1);
-    expect(summary.steps[0]).toMatchObject({ transitions: [], league: null, state: "upcoming" });
+    expect(summary.steps[0]).toMatchObject({
+      transitions: [],
+      league: null,
+      state: "upcoming",
+      teams: { mode: "balancer", renewed: null, byScore: false }
+    });
   });
 
   it("puts groups -> per-group filter -> playoff in two steps with the filter between", () => {
@@ -84,6 +89,8 @@ describe("summarizeFormat", () => {
       { kind: "perItemTop", n: 2, upper: 1, grouped: true }
     ]);
     expect(summary.steps.map((s) => s.state)).toEqual(["done", "current"]);
+    // The first step is fed by the formation; the playoff carries its teams over.
+    expect(summary.steps.map((s) => s.teams?.mode ?? null)).toEqual(["registered", null]);
   });
 
   it("does not say per group for a per-item filter on a stage with one item", () => {
@@ -112,33 +119,82 @@ describe("summarizeFormat", () => {
     ]);
   });
 
-  it("reads individual swiss -> top 20 -> draft formation -> playoff as a filter then a re-formation", () => {
+  it("puts the balancer on an individual swiss step and the draft on the playoff it feeds", () => {
+    const nodes: N[] = [
+      [1, "registration", { intake: "solo" }],
+      [3, "stage"],
+      [4, "filter", { mode: "top", n: 20 }],
+      [5, "formation", { mode: "draft" }],
+      [6, "stage"]
+    ];
+    const edges: [number, number][] = [
+      [1, 3],
+      [3, 4],
+      [4, 5],
+      [5, 6]
+    ];
+    const swiss = (pairing_mode: "score" | "balance") => [
+      { id: 30, stage_type: "individual_swiss" as const, pairing_mode }
+    ];
+
+    const balance = summarizeFormat(flow(nodes, edges), swiss("balance"));
+    const score = summarizeFormat(flow(nodes, edges), swiss("score"));
+
+    expect(balance.intro).toEqual({ intake: "solo" });
+    expect(balance.steps[0]).toMatchObject({
+      transitions: [],
+      teams: { mode: "balancer", renewed: "round", byScore: false }
+    });
+    expect(balance.steps[1]).toMatchObject({
+      transitions: [{ kind: "top", n: 20 }],
+      teams: { mode: "draft", renewed: null, byScore: false }
+    });
+    expect(score.steps[0]!.teams).toEqual({ mode: "balancer", renewed: "round", byScore: true });
+  });
+
+  it("shows no team line on a step fed by a filter alone", () => {
     const summary = summarizeFormat(
       flow(
         [
-          [1, "registration", { intake: "solo" }],
-          [2, "formation", { mode: "balancer" }],
-          [3, "stage"],
-          [4, "filter", { mode: "top", n: 20 }],
-          [5, "formation", { mode: "draft" }],
-          [6, "stage"]
+          [1, "formation", { mode: "balancer" }],
+          [2, "stage"],
+          [3, "filter", { mode: "top", n: 4 }],
+          [4, "stage"]
         ],
         [
           [1, 2],
           [2, 3],
-          [3, 4],
-          [4, 5],
-          [5, 6]
+          [3, 4]
         ]
       )
     );
 
-    // The formation before the swiss belongs to the intro line, not to a transition.
-    expect(summary.intro).toEqual({ intake: "solo", formation: "balancer" });
-    expect(summary.steps[1]!.transitions).toEqual([
-      { kind: "top", n: 20 },
-      { kind: "reform", mode: "draft" }
-    ]);
+    expect(summary.steps.map((s) => s.teams?.mode ?? null)).toEqual(["balancer", null]);
+    expect(summary.steps[1]!.transitions).toEqual([{ kind: "top", n: 4 }]);
+  });
+
+  it("puts the formation of the match days on the league step, renewed when each day has one", () => {
+    const days = [1, 2, 3];
+    const league = (perDay: boolean) =>
+      summarizeFormat(
+        flow(
+          [
+            ...days.map((d): N => [d, "stage"]),
+            ...(perDay
+              ? days.map((d): N => [d + 10, "formation", { mode: "balancer" }])
+              : ([[10, "formation", { mode: "balancer" }]] as N[])),
+            [20, "aggregate", { unit: "players", score: { preset: "formula", formula: "wins" }, mode: "sum_all" }]
+          ],
+          [
+            ...days.map((d): [number, number] => [perDay ? d + 10 : 10, d]),
+            ...days.map((d): [number, number] => [d, 20])
+          ]
+        )
+      );
+
+    expect(league(true).steps).toHaveLength(1);
+    expect(league(true).steps[0]!.teams).toEqual({ mode: "balancer", renewed: "day", byScore: false });
+    expect(league(false).steps[0]!.teams).toEqual({ mode: "balancer", renewed: null, byScore: false });
   });
 
   it("collapses an 8-day league into one step with its rule, then the stages after the leaderboard", () => {
@@ -210,7 +266,7 @@ describe("summarizeFormat", () => {
           [[1, 2]]
         )
       ).intro
-    ).toEqual({ intake: "team", formation: null });
+    ).toEqual({ intake: "team" });
   });
 });
 

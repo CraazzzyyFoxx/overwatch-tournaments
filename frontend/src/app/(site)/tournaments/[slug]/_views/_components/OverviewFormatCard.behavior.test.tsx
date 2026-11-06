@@ -57,7 +57,7 @@ let root: Root | null = null;
 const host = document.createElement("div");
 document.body.append(host);
 
-async function render() {
+async function render(shown: Tournament = tournament) {
   root = createRoot(host);
   await act(async () => {
     root!.render(
@@ -65,7 +65,7 @@ async function render() {
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       >
         <NextIntlClientProvider locale="en" messages={en}>
-          <OverviewFormatCard tournament={tournament} />
+          <OverviewFormatCard tournament={shown} />
         </NextIntlClientProvider>
       </QueryClientProvider>
     );
@@ -104,5 +104,49 @@ describe("OverviewFormatCard", () => {
     expect(steps).toHaveLength(3);
     expect(steps[1]!.getAttribute("aria-current")).toBe("step");
     expect(steps[0]!.textContent).toContain("Day 1");
+  });
+
+  it("puts each formation on the step it feeds, and the balancer on an individual swiss", async () => {
+    const node = (id: number, kind: string, config: Record<string, unknown>, stageId?: number) => ({
+      id,
+      kind,
+      name: `${kind} ${id}`,
+      status: "draft",
+      config,
+      stage_id: stageId ?? null,
+      ports: []
+    });
+    getFlow.mockResolvedValue({
+      nodes: [
+        node(1, "registration", { intake: "solo" }),
+        node(2, "stage", {}, 31),
+        node(3, "filter", { mode: "top", n: 20 }),
+        node(4, "formation", { mode: "draft" }),
+        node(5, "stage", {}, 32)
+      ],
+      edges: [
+        [1, 2],
+        [2, 3],
+        [3, 4],
+        [4, 5]
+      ].map(([source_node_id, target_node_id], id) => ({ id, source_node_id, target_node_id })),
+      results: [],
+      participants: []
+    });
+    await render({
+      ...tournament,
+      stages: [
+        { ...stage(31, "Swiss", "draft"), stage_type: "individual_swiss", pairing_mode: "score" },
+        { ...stage(32, "Playoff", "draft"), stage_type: "single_elim" }
+      ]
+    } as unknown as Tournament);
+
+    const steps = [...host.querySelectorAll("ol > li")].map((li) => li.textContent ?? "");
+    expect(steps).toHaveLength(2);
+    expect(steps[0]).toContain("Teams: balancer, re-formed every round · opponents by points");
+    expect(steps[0]).toContain("Top 20 advance");
+    expect(steps[0]).not.toContain("captain draft");
+    expect(steps[1]).toContain("Teams: captain draft");
+    expect(host.textContent).toContain("Solo sign-up");
   });
 });

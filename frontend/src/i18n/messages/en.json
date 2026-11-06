@@ -3220,13 +3220,19 @@
         "stepDone": "Done",
         "intro": {
           "solo": "Solo sign-up",
-          "team": "Team sign-up",
-          "formation": {
-            "balancer": "teams by balance",
-            "draft": "teams by captain draft",
+          "team": "Team sign-up"
+        },
+        "teams": {
+          "line": "Teams: {how}",
+          "mode": {
+            "balancer": "balancer",
+            "draft": "captain draft",
             "registered": "registered teams",
-            "manual": "teams set by the organizers"
-          }
+            "manual": "set by the organizers"
+          },
+          "round": "{mode}, re-formed every round",
+          "day": "{mode}, re-formed every day",
+          "byScore": "opponents by points"
         },
         "league": {
           "mode": {
@@ -3250,14 +3256,7 @@
           "qualified": "Qualified players advance",
           "eliminated": "Eliminated players move on",
           "manual": "The organizers pick who advances",
-          "split": "Split into {names}",
-          "reform": "Teams are re-formed: {how}",
-          "reformHow": {
-            "balancer": "balance",
-            "draft": "captain draft",
-            "registered": "registered teams",
-            "manual": "set by the organizers"
-          }
+          "split": "Split into {names}"
         },
         "types": {
           "round_robin": {

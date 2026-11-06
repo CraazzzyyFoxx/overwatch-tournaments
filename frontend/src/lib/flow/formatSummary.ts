@@ -1,19 +1,30 @@
 import { kindOf } from "@/lib/flow/kinds";
 import { describeAggregate, type AggregateWords } from "@/lib/flow/leaderboardTable";
 import type { FlowNodeRead, FlowRead } from "@/types/flow.types";
+import type { StageSummary } from "@/types/tournament.types";
 
 export type FormationMode = "balancer" | "draft" | "registered" | "manual";
 export type StepState = "done" | "current" | "upcoming";
 
-/** What a pure node or a formation between two stages says to a reader, in the words of its config. */
+/** What a pure node between two stages says to a reader, in the words of its config. */
 export type FormatTransition =
   | { kind: "top"; n: number }
   | { kind: "perItemTop"; n: number; upper: number | null; grouped: boolean }
   | { kind: "range"; from: number; to: number }
   | { kind: "swissStatus"; status: "qualified" | "eliminated" }
   | { kind: "manual" }
-  | { kind: "split"; buckets: string[] }
-  | { kind: "reform"; mode: FormationMode };
+  | { kind: "split"; buckets: string[] };
+
+/**
+ * How the teams of a step are made. `renewed` is set when they are made anew inside the step (every round of an
+ * individual swiss, every day of a league whose days each have a formation); `byScore` is an individual swiss
+ * that groups opponents by points.
+ */
+export type FormatTeams = {
+  mode: FormationMode;
+  renewed: "round" | "day" | null;
+  byScore: boolean;
+};
 
 export type FormatStageRef = { stageId: number | null; name: string };
 
@@ -24,11 +35,13 @@ export type FormatStep = {
   stages: FormatStageRef[];
   /** What happens between the previous step and this one; empty for the first. */
   transitions: FormatTransition[];
+  /** How this step's teams are made; `null` when they carry over from the stage before. */
+  teams: FormatTeams | null;
   /** Set for a league: `stages` are its match days and the rule is the aggregate that counts them. */
   league: { rule: AggregateWords } | null;
 };
 
-export type FormatIntro = { intake: "solo" | "team"; formation: FormationMode | null };
+export type FormatIntro = { intake: "solo" | "team" };
 export type FormatSummary = { intro: FormatIntro | null; steps: FormatStep[] };
 
 /** A step is done when all its stages are, current when it is the first one not done after play began. */
@@ -56,6 +69,7 @@ export function summarizeStageWaves(
         key: wave.map((s) => s.id).join("-"),
         stages: wave.map((s) => ({ stageId: s.id, name: s.name })),
         transitions: [],
+        teams: null,
         league: null
       })),
       waves.map((wave) => wave.map((s) => s.status))
@@ -65,10 +79,14 @@ export function summarizeStageWaves(
 
 /**
  * The public "how it's played" steps, read off the flow graph. A step is a stage (stages at the same depth, e.g. divisions,
- * share one); a league (an aggregate fed by two or more stages) is ONE step; the pure nodes and formations between two
- * steps become its transitions; registration and the first formation become the intro.
+ * share one); a league (an aggregate fed by two or more stages) is ONE step; the pure nodes between two steps become
+ * its transitions and the formation feeding a step says how its teams are made; registration becomes the intro.
+ * `stages` (the tournament's stage summaries) tell an individual swiss, which has no formation node, from the rest.
  */
-export function summarizeFormat(flow: FlowRead): FormatSummary {
+export function summarizeFormat(
+  flow: FlowRead,
+  stages: readonly Pick<StageSummary, "id" | "stage_type" | "pairing_mode">[] = []
+): FormatSummary {
   const nodes = new Map(flow.nodes.map((n) => [n.id, n]));
   const sources = new Map<number, number[]>();
   for (const e of flow.edges) {
@@ -128,8 +146,8 @@ export function summarizeFormat(flow: FlowRead): FormatSummary {
     return items.size;
   };
 
-  /** Nodes between the previous step and these stages, upstream first. */
-  const between = (stages: FlowNodeRead[]): FormatTransition[] => {
+  /** Non-stage nodes between the previous step and these stages, upstream first. */
+  const upstream = (targets: FlowNodeRead[]): FlowNodeRead[] => {
     const seen = new Set<number>();
     const found: FlowNodeRead[] = [];
     const visit = (id: number) => {
@@ -140,30 +158,44 @@ export function summarizeFormat(flow: FlowRead): FormatSummary {
         found.push(nodes.get(from)!);
       }
     };
-    stages.forEach((s) => visit(s.id));
-    return found.flatMap((n) => transitionOf(n, depth(n.id) > 0, itemCount(n)));
+    targets.forEach((s) => visit(s.id));
+    return found;
+  };
+
+  const teamsOf = (group: { stages: FlowNodeRead[]; league: FlowNodeRead | null }): FormatTeams | null => {
+    // An individual swiss has no formation node: the balancer deals new teams every round.
+    const swiss = group.stages
+      .map((s) => stages.find((x) => x.id === s.stage_id))
+      .find((x) => x?.stage_type === "individual_swiss");
+    if (swiss) return { mode: "balancer", renewed: "round", byScore: swiss.pairing_mode !== "balance" };
+    const formations = group.stages
+      .map((s) => upstream([s]).filter((n) => kindOf(n) === "formation"))
+      .flat()
+      .sort((a, b) => a.id - b.id);
+    if (formations.length === 0) return null;
+    const distinct = new Set(formations.map((n) => n.id));
+    return {
+      mode: formations[0]!.config.mode as FormationMode,
+      renewed: group.league && distinct.size >= 2 ? "day" : null,
+      byScore: false
+    };
   };
 
   const steps = ordered.map(([key, group], i) => ({
     key,
     stages: group.stages.map((s) => ({ stageId: s.stage_id, name: s.name })),
-    transitions: i === 0 ? [] : between(group.stages),
+    transitions: i === 0 ? [] : upstream(group.stages).flatMap((n) => transitionOf(n, itemCount(n))),
+    teams: teamsOf(group),
     league: group.league ? { rule: describeAggregate(group.league.config) } : null
   }));
 
   const registration = flow.nodes
     .filter((n) => kindOf(n) === "registration")
     .sort((a, b) => a.id - b.id)[0];
-  const formation = flow.nodes
-    .filter((n) => kindOf(n) === "formation" && depth(n.id) === 0)
-    .sort((a, b) => a.id - b.id)[0];
   const intake = registration?.config.intake === "team" ? "team" : "solo";
-  const mode = formation ? (formation.config.mode as FormationMode) : null;
 
   return {
-    intro: registration
-      ? { intake, formation: intake === "team" && mode === "registered" ? null : mode }
-      : null,
+    intro: registration ? { intake } : null,
     steps: withProgress(
       steps,
       ordered.map(([, group]) => group.stages.map((s) => s.status))
@@ -171,7 +203,7 @@ export function summarizeFormat(flow: FlowRead): FormatSummary {
   };
 }
 
-function transitionOf(node: FlowNodeRead, afterStage: boolean, items: number): FormatTransition[] {
+function transitionOf(node: FlowNodeRead, items: number): FormatTransition[] {
   const c = node.config as Record<string, unknown>;
   switch (kindOf(node)) {
     case "filter":
@@ -203,8 +235,6 @@ function transitionOf(node: FlowNodeRead, afterStage: boolean, items: number): F
       return [
         { kind: "split", buckets: ((c.buckets ?? []) as { name: string }[]).map((b) => b.name) }
       ];
-    case "formation":
-      return afterStage ? [{ kind: "reform", mode: c.mode as FormationMode }] : [];
     default:
       return [];
   }

@@ -19,6 +19,7 @@ import {
   summarizeStageWaves,
   type FormatStageRef,
   type FormatStep,
+  type FormatTeams,
   type FormatTransition
 } from "@/lib/flow/formatSummary";
 import { slotCodesOf } from "@/lib/roster/shape";
@@ -68,7 +69,7 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
   const summary = useMemo(
     () =>
       flow?.nodes.some((node) => kindOf(node) === "stage")
-        ? summarizeFormat(flow)
+        ? summarizeFormat(flow, tournament.stages)
         : summarizeStageWaves(groupTournamentStageFlow(tournament.stages)),
     [flow, tournament.stages]
   );
@@ -127,21 +128,19 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
         return t(`${key}.manual`);
       case "split":
         return t(`${key}.split`, { names: transition.buckets.join(" / ") });
-      case "reform":
-        return t(`${key}.reform`, { how: t(`${key}.reformHow.${transition.mode}`) });
     }
   };
 
-  const introText = intro
-    ? [
-        t(`tournamentDetail.overview.format.intro.${intro.intake}`),
-        intro.formation
-          ? t(`tournamentDetail.overview.format.intro.formation.${intro.formation}`)
-          : null
-      ]
-        .filter(Boolean)
-        .join(" · ")
-    : null;
+  const introText = intro ? t(`tournamentDetail.overview.format.intro.${intro.intake}`) : null;
+
+  const teamsText = (teams: FormatTeams) => {
+    const key = "tournamentDetail.overview.format.teams";
+    const mode = t(`${key}.mode.${teams.mode}`);
+    const how = teams.renewed ? t(`${key}.${teams.renewed}`, { mode }) : mode;
+    return [t(`${key}.line`, { how }), teams.byScore ? t(`${key}.byScore`) : null]
+      .filter(Boolean)
+      .join(" · ");
+  };
 
   const renderStage = (ref: FormatStageRef) => {
     const stage = tournament.stages.find((item) => item.id === ref.stageId);
@@ -216,7 +215,7 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
   };
 
   const formation = primaryFormationMode(tournament);
-  const showFormationText = !introText && formation !== null;
+  const showFormationText = formation !== null && !steps.some((step) => step.teams);
   const showTeam = showFormationText || showGlyphs;
   const loading = flowQuery.isPending;
 
@@ -273,6 +272,11 @@ export function OverviewFormatCard({ tournament }: Readonly<{ tournament: Tourna
                     </span>
                   ) : null}
                   {step.league ? renderLeague(step) : step.stages.map(renderStage)}
+                  {step.teams ? (
+                    <p className="text-caption text-[color:var(--aqt-fg-muted)]">
+                      {teamsText(step.teams)}
+                    </p>
+                  ) : null}
                   {next.length > 0 ? (
                     <p className="text-caption text-[color:var(--aqt-fg-dim)]">
                       {next.map(transitionText).join(" · ")}
