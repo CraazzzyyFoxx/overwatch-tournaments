@@ -235,8 +235,8 @@ class UserProfileQueries(DisciplineQueries):
         user_id: int,
         workspace_id: int | None = None,
     ) -> typing.Sequence[tuple[models.Team, int, int, int]]:
-        """A user's tournament history as ``(team, maps won, maps lost, average encounter
-        closeness)`` rows.
+        """A user's tournament history as ``(team, maps won, maps lost, average encounter closeness)`` rows: one per
+        tournament, the member's final team (§11.2), so a merged league is one row, not one per day team.
         """
 
         seat = Seat()
@@ -256,6 +256,7 @@ class UserProfileQueries(DisciplineQueries):
             .where(
                 models.WorkspaceMember.player_id == user_id,
                 models.Player.is_substitution.is_(False),
+                is_member_tournament_row(),
                 # Hidden tournaments never appear in a user's public
                 # tournament list. This read is cashews-cached without the viewer,
                 # so exclude unconditionally; admins/allowlisted view hidden

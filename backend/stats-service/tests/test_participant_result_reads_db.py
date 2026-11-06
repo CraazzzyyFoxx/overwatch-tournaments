@@ -10,6 +10,7 @@ import sqlalchemy as sa
 
 from shared.core import enums, pagination
 from shared.division_grid import DEFAULT_GRID
+from shared.models.encounter import Encounter
 from shared.models.tournament import Player, Standing, Tournament
 from shared.services.encounter import participants
 from shared.services.participant_result import write_participant_results
@@ -89,6 +90,31 @@ class TwoTeamMemberReadsTests(EncounterWriterCase):
     async def test_get_teams_lists_one_team_per_tournament(self) -> None:
         self.assertEqual([self.ids["team1"]], await self._teams(0))
         self.assertEqual([self.ids["team3"]], await self._teams(3))
+
+    async def test_the_tournament_history_lists_the_final_team_once(self) -> None:
+        async with self.Session() as s:  # the history reads duel seats only: one duel for each pair of teams
+            for pair in ((0, 1), (2, 3)):
+                duel = Encounter(
+                    workspace_id=self.ids["ws"],
+                    discipline="overwatch",
+                    tournament_id=self.ids["t"],
+                    scoring_rule_id=self.ids["rule"],
+                    name="duel",
+                    slot_count=2,
+                    best_of=1,
+                    status=enums.EncounterStatus.OPEN,
+                )
+                s.add(duel)
+                await s.flush()
+                for slot, team in enumerate(pair, start=1):
+                    await participants.place_team(
+                        s, duel, slot=slot, team_id=self.ids[f"team{team}"], name=f"T{team}", seed=None, members=()
+                    )
+            await s.commit()
+            queries = UserProfileQueries.of(OW)
+            for user_index, final_team in ((0, "team1"), (3, "team3")):
+                rows = await queries.get_tournaments_with_stats(s, self.users[user_index], self.ids["ws"])
+                self.assertEqual([self.ids[final_team]], [row[0].id for row in rows])
 
     async def test_placements_are_the_member_result(self) -> None:
         async with self.Session() as s:

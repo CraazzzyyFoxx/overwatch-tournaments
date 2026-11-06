@@ -1435,6 +1435,7 @@ class UserService(DisciplineQueries):
         tournaments = await self.profile.get_tournaments_with_stats(session, user.id, workspace_id=workspace_id)
         tournaments_ids = [tournament[0].tournament_id for tournament in tournaments]
         placements = await self.encounters.count_teams_by_tournament_bulk(session, tournaments_ids)
+        member_placements = await self.profile.get_placements(session, user.id, workspace_id=workspace_id)
 
         # Per-roster-player enrichment (avg MVP + signature heroes), scoped to the
         # tournaments this history covers. Gather every teammate's canonical user id
@@ -1472,7 +1473,7 @@ class UserService(DisciplineQueries):
             won: int = 0
             lost: int = 0
             draw: int = 0
-            placement = _mappers.resolve_team_placement(team)
+            placement = member_placements.get(team.tournament_id)
 
             # Each tournament's divisions live on its own effective grid (own pin,
             # else its workspace default, else the system default) — in the

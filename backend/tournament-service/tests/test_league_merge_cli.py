@@ -48,3 +48,73 @@ def test_plan_refuses_to_overwrite_an_edited_file(tmp_path) -> None:
     out.write_text("[]", encoding="utf-8")
     result = CliRunner().invoke(league_merge.cli, ["plan", "--output", str(out)])
     assert result.exit_code == 1 and "already exists" in result.output
+
+
+def test_a_failed_league_keeps_the_snapshot_and_still_queues_what_merged(tmp_path, monkeypatch) -> None:
+    from src.services.flow.league_merge import GrantSnapshot, MergeLog  # noqa: PLC0415
+
+    mapping = tmp_path / "league_merge.json"
+    aggregate = {"unit": "players", "score": {"preset": "stage_points"}, "mode": "sum_all"}
+    mapping.write_text(
+        json.dumps(
+            [
+                {
+                    "league": "Weekly",
+                    "season": n,
+                    "name": f"Weekly {n}",
+                    "target_tournament_id": n,
+                    "aggregate": aggregate,
+                    "days": [{"tournament_id": n, "day": 1}],
+                }
+                for n in (1, 2)
+            ]
+        ),
+        encoding="utf-8",
+    )
+    snapshot_file = mapping.with_suffix(".snapshot.json")
+    snapshot_file.write_text(GrantSnapshot([(9, 9, 9, None, None)], ["old-run"]).to_json(), encoding="utf-8")
+    calls: list[str] = []
+
+    class Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def commit(self):
+            calls.append("commit")
+
+    async def affected_scope(session, tournament_ids):
+        return {7}, {8}
+
+    async def snapshot_results(session, **kwargs):
+        return [(1, 8, 1, None, None)]
+
+    async def apply_mapping(maker, entries, *, dry_run, logs):
+        logs.append(MergeLog(entries[0].target_tournament_id, []))
+        raise RuntimeError("league 2 failed")
+
+    async def queue_evaluations(session, workspaces):
+        calls.append("evaluations")
+        return ["new-run"]
+
+    async def queue_analytics(session, targets):
+        calls.append(f"analytics {sorted(targets)}")
+        return {7: "job 1"}
+
+    async def bump(*generations):
+        calls.append("bump")
+
+    monkeypatch.setattr(league_merge, "_session_maker", lambda: Session)
+    for fn in (affected_scope, snapshot_results, apply_mapping, queue_evaluations, queue_analytics, bump):
+        monkeypatch.setattr(league_merge, fn.__name__, fn)
+    monkeypatch.setattr(league_merge, "configure_generations", lambda url: None)
+
+    result = CliRunner().invoke(league_merge.cli, ["apply", "--file", str(mapping)])
+
+    assert isinstance(result.exception, RuntimeError)
+    saved = GrantSnapshot.from_json(snapshot_file.read_text(encoding="utf-8"))
+    assert saved.keys == [(1, 8, 1, None, None), (9, 9, 9, None, None)]
+    assert saved.run_ids == ["old-run", "new-run"]
+    assert calls == ["evaluations", "commit", "bump", "analytics [1]", "commit"]

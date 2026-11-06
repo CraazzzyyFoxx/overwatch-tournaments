@@ -64,6 +64,25 @@ class FlowChangePlan:
     new_edge_ids: list[int]
 
 
+#: Rows that reference a flow node with ``ON DELETE RESTRICT``: a delete must name them instead of failing in the DB.
+_RESTRICT_DEPENDENTS = (
+    (models.RegistrationEntry.registration_node_id, "registration entries"),
+    (models.RegistrationGoogleSheetFeed.registration_node_id, "Google Sheet feeds"),
+    (models.RegistrationTeam.registration_node_id, "registration teams"),
+    (models.Team.formation_node_id, "teams"),
+    (models.Player.formation_node_id, "players"),
+)
+
+
+async def _restrict_dependents(session: AsyncSession, node_id: int) -> str:
+    """``"3 teams, 5 players"``: what keeps a lifecycle node from being deleted; empty when nothing does."""
+    found = []
+    for column, label in _RESTRICT_DEPENDENTS:
+        if n := await session.scalar(sa.select(sa.func.count()).select_from(column.class_).where(column == node_id)):
+            found.append(f"{n} {label}")
+    return ", ".join(found)
+
+
 def _not_found(code: str, message: str) -> ApiHTTPException:
     return ApiHTTPException(status_code=404, detail=[ApiExc(code=code, msg=message)])
 
@@ -203,6 +222,10 @@ class FlowService:
         for node_id in sorted(deleted):
             if await frozen(node_id):
                 error("node_frozen", "A started node, or one feeding a started node, cannot be deleted", node_id)
+            elif stored[node_id].kind in (FlowNodeKind.REGISTRATION, FlowNodeKind.FORMATION) and (
+                blockers := await _restrict_dependents(session, node_id)
+            ):
+                error("node_has_dependents", f"The node still owns {blockers}: remove them first", node_id)
 
         new_node_ids, ref_ids, upserted = count(-1, -1), {}, set()
         for u in changes.nodes:
@@ -299,12 +322,13 @@ class FlowService:
         await flow_node_service.lock_tournament(session, tournament_id)
         plan = await self.plan_changes(session, tournament_id, changes)
         if errors := [i for i in plan.issues if i.severity == "error"]:
-            frozen_only = {i.code for i in errors} == {"node_frozen"}
+            conflict = {i.code for i in errors} <= {"node_frozen", "node_has_dependents"}
             raise ApiHTTPException(
-                status_code=409 if frozen_only else 422,
+                status_code=409 if conflict else 422,
                 detail=[
                     ApiExc(
-                        code="node_frozen" if frozen_only else "flow_invalid", msg="; ".join(i.message for i in errors)
+                        code=errors[0].code if conflict else "flow_invalid",
+                        msg="; ".join(i.message for i in errors),
                     )
                 ],
             )
@@ -338,6 +362,8 @@ class FlowService:
                 row = node_rows[u.id]
                 if row.kind == u.kind.value:
                     del fields["status"]
+                if row.kind == FlowNodeKind.STAGE and row.stage_id is not None and row.name != u.name:
+                    await session.execute(sa.update(Stage).where(Stage.id == row.stage_id).values(name=u.name))
                 for name, value in fields.items():
                     setattr(row, name, value)
         session.add_all(created)

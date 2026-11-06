@@ -556,7 +556,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.flow_apply": {
         "summary": "Change a tournament's flow graph",
-        "description": "Permission: workspace `tournament.update`. Replaces part of the tournament's node graph in one transaction: `nodes` creates (`ref`) or updates (`id`) nodes, `edges` wires them (an endpoint is a node id or a new node's `ref`), `delete_node_ids` / `delete_edge_ids` remove. A started node, or a pure node with a started lifecycle node downstream, cannot be deleted, re-configured or re-wired (`node_frozen`, 409); a new `stage` node carries a `stage` payload and the save creates its stage, and deleting a draft stage node deletes its stage; an invalid graph answers 422 `flow_invalid`. Answers the admin flow read.",
+        "description": "Permission: workspace `tournament.update`. Replaces part of the tournament's node graph in one transaction: `nodes` creates (`ref`) or updates (`id`) nodes, `edges` wires them (an endpoint is a node id or a new node's `ref`), `delete_node_ids` / `delete_edge_ids` remove. A started node, or a pure node with a started lifecycle node downstream, cannot be deleted, re-configured or re-wired (`node_frozen`, 409); a draft registration or formation node that still owns entries, registration teams, sheet feeds, teams or players cannot be deleted (`node_has_dependents`, 409, the message names what blocks); a new `stage` node carries a `stage` payload and the save creates its stage, renaming a saved stage node renames its stage, and deleting a draft stage node deletes its stage; an invalid graph answers 422 `flow_invalid`. Answers the admin flow read.",
     },
     "rpc.tournament.flow_validate": {
         "summary": "Validate flow changes (dry run)",

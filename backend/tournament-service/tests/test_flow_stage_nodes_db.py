@@ -80,3 +80,10 @@ class StageNodeSaveTests(FlowCase):
         self.assertIn("node_frozen", await self._issue_codes(FlowChanges(delete_node_ids=[node_id])))
         async with self.Session() as s:
             self.assertIsNotNone(await s.get(Stage, stage_id))
+
+    async def test_renaming_a_saved_stage_node_renames_its_stage(self) -> None:
+        stage_id, node_id = await self.stage(name="Old")
+        await self._apply(FlowChanges(nodes=[FlowNodeUpsert(id=node_id, kind="stage", name="Playoff")]))
+        async with self.Session() as s:
+            self.assertEqual("Playoff", (await s.get(Stage, stage_id)).name)
+            self.assertEqual("Playoff", (await s.get(FlowNode, node_id)).name)

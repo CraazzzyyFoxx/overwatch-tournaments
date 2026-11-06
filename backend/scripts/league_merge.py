@@ -2,7 +2,9 @@
 
 Production runbook (run by the owner/controller from the release SHA; the merge is not an Alembic migration):
 
-1. Make the composite FKs deferrable; the deployed services keep running::
+1. Make the composite FKs deferrable. Production must already be at ``flowP4_01`` or later (the P4 release note's deploy
+   order); from an older revision this upgrade also runs the earlier flow migrations, which the running services
+   cannot tolerate. The deployed services keep running::
 
        docker compose exec tournament-service sh -c "cd /app && alembic upgrade flowP6_01_deferrable_fks"
 
@@ -11,8 +13,12 @@ Production runbook (run by the owner/controller from the release SHA; the merge 
        docker compose exec tournament-service sh -c "cd /app && python -m scripts.league_merge plan --output league_merge.json"
 
 3. Rehearse, then merge. ``apply`` writes ``league_merge.snapshot.json`` (the evaluation results of every affected
-   member) before the first league, queues one evaluation run per workspace and one analytics job, and bumps the
-   user-cache generation::
+   member; an existing file is extended, never replaced) before the first league. Whatever leagues merged, even when a
+   later one fails, it then queues one evaluation run per workspace, bumps the user-cache generation and queues one
+   analytics job (skipped while the workspace has an active job: queue a ``compute`` job from the earliest target once
+   that one finishes). Keep both files outside the container filesystem (a mounted path, or ``docker cp`` them out
+   right after ``apply``); after a failure fix the cause, drop the merged leagues from the mapping and run ``apply``
+   again::
 
        python -m scripts.league_merge apply --file league_merge.json --dry-run
        python -m scripts.league_merge apply --file league_merge.json
@@ -133,24 +139,41 @@ async def _apply(file: str, entries: Sequence[Any], *, dry_run: bool) -> None:
         workspaces, members = await affected_scope(session, target_of)
         snapshot = GrantSnapshot(await snapshot_results(session, member_ids=members, target_of=target_of))
     path = _snapshot_path(file)
+    if path.exists():  # a re-run (after a failure or a dropped session) after a merge: never lose the first one's keys
+        snapshot = snapshot.union(GrantSnapshot.from_json(path.read_text(encoding="utf-8")))
     path.write_text(snapshot.to_json(), encoding="utf-8")
     click.echo(f"snapshot of {len(snapshot.keys)} results -> {path}")
-    logs = await apply_mapping(maker, entries, dry_run=False)
-    async with maker() as session:
-        analytics = await queue_analytics(session, {e.target_tournament_id for e in entries})
-        snapshot.run_ids = await queue_evaluations(session, workspaces)
+    committed: list[Any] = []
+    try:
+        await apply_mapping(maker, entries, dry_run=False, logs=committed)
+    finally:
+        # Whatever merged stays merged: its evaluations must run and the snapshot must name them, failure or not.
+        if committed:
+            await _after_merge(path, snapshot, entries, committed, workspaces)
+
+
+async def _after_merge(
+    path: Path, snapshot: GrantSnapshot, entries: Sequence[Any], logs: Sequence[Any], workspaces: set[int]
+) -> None:
+    async with _session_maker()() as session:
+        run_ids = await queue_evaluations(session, workspaces)
         await session.commit()
+    snapshot.run_ids = [*snapshot.run_ids, *run_ids]
     path.write_text(snapshot.to_json(), encoding="utf-8")
 
     from src.core.config import settings  # noqa: PLC0415  # ty: ignore[unresolved-import]
 
     configure_generations(str(settings.redis_url))
     await bump(*COMPARE_GENERATIONS)
-    for entry, log in zip(entries, logs, strict=True):
+    for entry, log in zip(entries, logs, strict=False):
         _echo_log(entry, log)
+    click.echo(f"evaluation runs: {snapshot.run_ids}")
+    # Own transaction, after the evaluations: it can lose the race for the one running job per workspace.
+    async with _session_maker()() as session:
+        analytics = await queue_analytics(session, {e.target_tournament_id for e in entries[: len(logs)]})
+        await session.commit()
     for workspace_id, outcome in analytics.items():
         click.echo(f"analytics workspace {workspace_id}: {outcome}")
-    click.echo(f"evaluation runs: {snapshot.run_ids}")
     click.echo("run `grant` once these runs are done")
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from shared import models
 from shared.core.errors import ApiHTTPException
 from src.schemas.flow import FlowChanges, FlowEdgeUpsert, FlowNodeUpsert
 from src.services.flow.service import flow_service
@@ -104,6 +105,21 @@ class ApplyChangesTests(FlowCase):
         form = await self.node("formation", "forming", config={"mode": "draft"})
         wire = await self.edge(reg, "participants", form, "players")
         self.assertEqual((409, "node_frozen"), await self._refusal(FlowChanges(delete_edge_ids=[wire])))
+
+    async def test_deleting_a_draft_formation_that_owns_teams_is_node_has_dependents(self) -> None:
+        form = await self.node("formation", config={"mode": "manual"})
+        async with self.Session() as s:
+            team = models.Team(
+                tournament_id=self.tournament_id, name="Alpha", balancer_name="Alpha", formation_node_id=form
+            )
+            s.add(team)
+            await s.commit()
+        try:
+            self.assertEqual((409, "node_has_dependents"), await self._refusal(FlowChanges(delete_node_ids=[form])))
+        finally:  # the RESTRICT would also stop the workspace teardown
+            async with self.Session() as s:
+                await s.delete(await s.get(models.Team, team.id))
+                await s.commit()
 
     async def test_new_pure_node_is_pending_and_deleting_a_draft_node_drops_its_edges(self) -> None:
         reg = await self.node("registration")

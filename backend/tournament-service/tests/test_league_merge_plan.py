@@ -61,7 +61,7 @@ def test_plan_groups_by_workspace_game_and_prefix_and_numbers_days_by_date() -> 
     assert planned[0] == {
         "league": "Weekly",
         "season": 1,
-        "name": "Weekly",
+        "name": "Weekly · Season 1",
         "target_tournament_id": 11,
         "aggregate": None,
         "days": [{"tournament_id": 11, "day": 1, "division": None}, {"tournament_id": 12, "day": 2, "division": None}],
@@ -72,6 +72,7 @@ def test_plan_splits_a_season_on_a_gap_longer_than_the_threshold() -> None:
     planned = plan_leagues([row(1, "L | 1", 0), row(2, "L | 2", 21), row(3, "L | 3", 43)])
     assert [(p["season"], [d["tournament_id"] for d in p["days"]]) for p in planned] == [(1, [1, 2]), (2, [3])]
     assert [p["season"] for p in plan_leagues([row(1, "L | 1", 0), row(3, "L | 3", 43)], season_gap_days=50)] == [1]
+    assert [p["name"] for p in planned] == ["L · Season 1", "L · Season 2"]
 
 
 def test_tournaments_starting_together_are_divisions_of_one_day() -> None:

@@ -186,7 +186,7 @@ def plan_leagues(rows: Iterable[LeagueSourceRow], *, season_gap_days: int = 21) 
                 {
                     "league": league,
                     "season": number,
-                    "name": league,
+                    "name": f"{league} · Season {number}",
                     "target_tournament_id": days[0]["tournament_id"],
                     "aggregate": None,
                     "days": days,
@@ -217,6 +217,8 @@ def _rule(kind: Literal["move", "keep_latest", "dedupe", "drop", "leave", "speci
 #: unclassified one). Keys are ``schema.table.column``; the second item of a rule is the ``dedupe`` key.
 #: ``leave`` = cascades with the emptied day; ``special`` = collapsed by a dedicated step first, then moved.
 #: Flow nodes, edges, schedules and results move with their node; registration entries follow their node.
+#: ``achievements.rule.min_tournament_id`` carries a tournament id without an FK, so it is not listed here: ``merge_league``
+#: remaps it from the deleted days to the target.
 TOURNAMENT_FKS: dict[str, Rule] = {
     "achievements.evaluation_result.tournament_id": _rule("leave"),  # Spec issue 10: collides, re-evaluated
     "achievements.evaluation_run.tournament_id": _rule("leave"),  # audit, SET NULL on delete
@@ -302,6 +304,17 @@ def _ids(values: Sequence[int]) -> dict[str, list[int]]:
     return {"ids": list(values)}
 
 
+async def _has_league_flag(session: AsyncSession) -> bool:
+    return bool(
+        await session.scalar(
+            sa.text(
+                "SELECT 1 FROM information_schema.columns WHERE table_schema = 'tournament' "
+                "AND table_name = 'tournament' AND column_name = 'is_league'"
+            )
+        )
+    )
+
+
 async def _check_days(session: AsyncSession, entry: LeagueEntry) -> None:
     rows = (
         await session.execute(
@@ -321,6 +334,16 @@ async def _check_days(session: AsyncSession, entry: LeagueEntry) -> None:
         row = found[day.tournament_id]
         if (row.workspace_id, row.discipline) != (target.workspace_id, target.discipline):
             raise MergeError(f"tournament {row.id} is not in workspace {target.workspace_id} / {target.discipline}")
+    if await _has_league_flag(session):  # the column is gone after flowP6_02
+        regular = await session.scalars(
+            sa.text(
+                "SELECT id FROM tournament.tournament WHERE id = ANY(CAST(:ids AS bigint[])) AND NOT is_league "
+                "ORDER BY id"
+            ),
+            _ids([d.tournament_id for d in entry.days]),
+        )
+        if ids := list(regular):
+            raise MergeError(f"tournament {ids[0]} is not a league tournament")
 
 
 async def _assign_formations(session: AsyncSession, entry: LeagueEntry) -> None:
@@ -612,18 +635,22 @@ async def merge_league(session: AsyncSession, entry: LeagueEntry) -> MergeLog:
         ),
         {"name": entry.name, "target": entry.target_tournament_id, **_ids(days)},
     )
-    has_league_flag = await session.scalar(
-        sa.text(
-            "SELECT 1 FROM information_schema.columns WHERE table_schema = 'tournament' "
-            "AND table_name = 'tournament' AND column_name = 'is_league'"
-        )
-    )
+    has_league_flag = await _has_league_flag(session)
     if has_league_flag:
         # shortcut: the column exists only before flowP6_02; the production merge runs at flowP6_01
         await session.execute(
             sa.text("UPDATE tournament.tournament SET is_league = false WHERE id = :target"),
             {"target": entry.target_tournament_id},
         )
+    # No FK carries it, so the guard cannot see it; a cutoff on a deleted day would silently lift (P0 ruling).
+    remapped = await session.scalars(
+        sa.text(
+            "UPDATE achievements.rule SET min_tournament_id = :target "
+            "WHERE min_tournament_id = ANY(CAST(:ids AS bigint[])) RETURNING id"
+        ),
+        {"target": entry.target_tournament_id, **_ids(entry.others)},
+    )
+    log.moved["achievements.rule.min_tournament_id"] = len(remapped.all())
     await session.execute(
         sa.text("DELETE FROM tournament.tournament WHERE id = ANY(CAST(:ids AS bigint[]))"), _ids(entry.others)
     )
@@ -637,10 +664,18 @@ async def merge_league(session: AsyncSession, entry: LeagueEntry) -> MergeLog:
 
 
 async def apply_mapping(
-    session_maker: async_sessionmaker[AsyncSession], entries: Sequence[LeagueEntry], *, dry_run: bool
+    session_maker: async_sessionmaker[AsyncSession],
+    entries: Sequence[LeagueEntry],
+    *,
+    dry_run: bool,
+    logs: list[MergeLog] | None = None,
 ) -> list[MergeLog]:
-    """Merge each league in its own transaction (rolled back on ``dry_run``); the first failure is re-raised."""
-    logs: list[MergeLog] = []
+    """Merge each league in its own transaction (rolled back on ``dry_run``); the first failure is re-raised.
+
+    ``logs`` receives each league's log as it finishes, so a caller that sees the failure still knows which leagues
+    committed.
+    """
+    logs = [] if logs is None else logs
     for entry in entries:
         async with session_maker() as session:
             logs.append(await merge_league(session, entry))
@@ -663,6 +698,11 @@ class GrantSnapshot:
 
     def to_json(self) -> str:
         return json.dumps({"keys": self.keys, "run_ids": self.run_ids})
+
+    def union(self, other: GrantSnapshot) -> GrantSnapshot:
+        """Every key and run of both: a re-run `apply` must never lose what an earlier one recorded."""
+        keys = sorted({*self.keys, *other.keys}, key=_sort_key)
+        return GrantSnapshot(keys, [*other.run_ids, *(r for r in self.run_ids if r not in other.run_ids)])
 
     @classmethod
     def from_json(cls, text: str) -> GrantSnapshot:
@@ -800,6 +840,8 @@ async def grant_missing(session: AsyncSession, snapshot: GrantSnapshot, *, grant
 
     Idempotent: an existing grant override of the same four values is skipped. Returns grants written per rule.
     """
+    if not snapshot.run_ids:
+        raise MergeError("the snapshot has no evaluation run: `apply` queues them; grant would write every lost key")
     for run_id in snapshot.run_ids:
         status = await session.scalar(
             sa.select(EvaluationRun.status).where(EvaluationRun.id == run_id).execution_options(populate_existing=True)

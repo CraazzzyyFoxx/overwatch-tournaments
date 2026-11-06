@@ -125,10 +125,24 @@ class LeagueMergeAchievementsCase(IsolatedAsyncioTestCase):
             assert await grant_missing(s, GrantSnapshot(keys, run_ids), granted_by=self.operator) == {}
 
     async def test_grant_is_idempotent(self) -> None:
-        snapshot = GrantSnapshot([(self.rule, self.m0, self.a, None, None)], [])
         async with self.Session() as s:
+            run_ids = await queue_evaluations(s, {self.ws})
+            await s.execute(sa.update(EvaluationRun).where(EvaluationRun.id.in_(run_ids)).values(status="done"))
+            snapshot = GrantSnapshot([(self.rule, self.m0, self.a, None, None)], run_ids)
             assert await grant_missing(s, snapshot, granted_by=self.operator) == {self.rule: 1}
             assert await grant_missing(s, snapshot, granted_by=self.operator) == {}
+
+    async def test_grant_refuses_a_snapshot_without_runs(self) -> None:
+        async with self.Session() as s:
+            with self.assertRaisesRegex(MergeError, "no evaluation run"):
+                await grant_missing(s, GrantSnapshot([(self.rule, self.m0, self.a, None, None)], []), granted_by=1)
+
+    def test_a_snapshot_union_keeps_every_key_and_run(self) -> None:
+        first = GrantSnapshot([(1, 2, 3, None, None), (1, 2, 4, None, None)], ["run-a"])
+        second = GrantSnapshot([(1, 2, 4, None, None), (1, 2, 5, None, None)], ["run-b"])
+        merged = second.union(first)
+        assert merged.keys == [(1, 2, 3, None, None), (1, 2, 4, None, None), (1, 2, 5, None, None)]
+        assert merged.run_ids == ["run-a", "run-b"]
 
     async def test_grant_waits_for_every_queued_run(self) -> None:
         async with self.Session() as s:

@@ -332,81 +332,6 @@ class UserProfileFlowsTests(IsolatedAsyncioTestCase):
         self.assertEqual({"dimension": "position", "role": "support", "parent": None}, result.model_dump()["role"])
         self.assertNotIn("sub_role", result.model_dump())
 
-    async def test_get_tournaments_uses_best_positive_team_placement(self) -> None:
-        self.skipTest(
-            "Pre-existing failure (predates CI repair): patches `flows.encounter_service`, which was "
-            "removed in the user-flows refactor. Needs the test rewritten to the current flow structure."
-        )
-        session = SimpleNamespace()
-        user = SimpleNamespace(id=42)
-        player = SimpleNamespace(user_id=42, role_ref=RoleRef(dimension="player_role", role="damage"), rank=1500)
-        team = SimpleNamespace(
-            id=9,
-            name="Team Example",
-            tournament_id=3,
-            players=[player],
-            standings=[
-                SimpleNamespace(overall_position=0, win=0, lose=0, draw=0),
-                SimpleNamespace(overall_position=3, win=3, lose=1, draw=0),
-            ],
-            tournament=SimpleNamespace(
-                id=3,
-                name="Tournament Example",
-                division_grid_version=None,
-            ),
-        )
-
-        with (
-            patch.object(users, "get", AsyncMock(return_value=user)),
-            patch.object(
-                users.profile,
-                "get_tournaments_with_stats",
-                AsyncMock(return_value=[(team, 4, 2, 0.75)]),
-            ),
-            patch.object(
-                user_flows.encounter_service,
-                "get_by_user_with_teams",
-                AsyncMock(return_value=[]),
-            ),
-            patch.object(
-                user_flows.team_service,
-                "get_team_count_by_tournament_bulk",
-                AsyncMock(return_value={3: 8}),
-            ),
-            patch.object(
-                user_flows.team_flows,
-                "to_pydantic_player",
-                AsyncMock(
-                    return_value=user_flows.schemas.PlayerRead.model_construct(
-                        id=91,
-                        name="Player Example",
-                        rank=1500,
-                        division=9,
-                        role=RoleRef(dimension="player_role", role="damage"),
-                        tournament_id=3,
-                        user_id=42,
-                        team_id=9,
-                        is_newcomer=False,
-                        is_newcomer_role=False,
-                        is_substitution=False,
-                        related_player_id=None,
-                        tournament=None,
-                        team=None,
-                        user=None,
-                    )
-                ),
-            ),
-        ):
-            tournaments = await users.get_tournaments(
-                session,
-                42,
-                workspace_id=5,
-                grid=division_grid.DEFAULT_GRID,
-            )
-
-        self.assertEqual(1, len(tournaments.results))
-        self.assertEqual(3, tournaments.results[0].placement)
-
     async def test_get_tournaments_never_calls_encounter_matches_repository(self) -> None:
         """`get_tournaments` (the list endpoint) ships no encounters — that data
         comes from the lazy `get_tournament_encounters` endpoint. Regression guard against
@@ -453,6 +378,7 @@ class UserProfileFlowsTests(IsolatedAsyncioTestCase):
                 AsyncMock(return_value=[(team, 4, 2, 0.75)]),
             ),
             patch.object(users.encounters, "count_teams_by_tournament_bulk", AsyncMock(return_value={3: 8})),
+            patch.object(users.profile, "get_placements", AsyncMock(return_value={3: 2})),
             patch.object(users.encounters, "get_roster_avg_mvp_bulk", AsyncMock(return_value={})),
             patch.object(users.encounters, "get_roster_top_characters_bulk", AsyncMock(return_value={})),
             # Resolving each tournament's effective grid version is a DB/cache
@@ -471,6 +397,7 @@ class UserProfileFlowsTests(IsolatedAsyncioTestCase):
             tournaments = await users.get_tournaments(session, 42, workspace_id=5, grid=division_grid.DEFAULT_GRID)
 
         self.assertEqual(1, len(tournaments.results))
+        self.assertEqual(2, tournaments.results[0].placement)  # participant_result, not the team's standing
         self.assertEqual(5, tournaments.results[0].workspace_id)
         self.assertEqual("overwatch", tournaments.results[0].discipline)
         # The tournament has no effective grid version: no id on the row, no version shipped.

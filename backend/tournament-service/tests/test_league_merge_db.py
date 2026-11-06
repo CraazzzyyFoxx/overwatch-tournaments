@@ -473,6 +473,42 @@ class LeagueMergeCase(IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(MergeError, f"tournament {self.ids['d2']} does not exist"):
                 await merge_league(s, self.entry())
 
+    async def test_refuses_a_day_that_is_not_a_league_tournament(self) -> None:
+        async with self.Session() as s:
+            # The column is gone after flowP6_02; add it inside the rolled-back transaction (every row: not a league).
+            await s.execute(
+                sa.text(
+                    "ALTER TABLE tournament.tournament ADD COLUMN IF NOT EXISTS is_league boolean NOT NULL DEFAULT false"
+                )
+            )
+            with self.assertRaisesRegex(MergeError, f"tournament {self.ids['d1']} is not a league tournament"):
+                await merge_league(s, self.entry())
+            await s.rollback()
+
+    async def test_an_achievement_cutoff_on_a_merged_day_moves_to_the_target(self) -> None:
+        async with self.Session() as s:
+            rule = models.AchievementRule(
+                workspace_id=self.ids["ws"],
+                slug=f"cut-{self.ids['ws']}",
+                name="cut",
+                description_ru="cut",
+                description_en="cut",
+                discipline="overwatch",
+                category="standing",
+                scope="tournament",
+                grain="user_tournament",
+                condition_tree={},
+                min_tournament_id=self.ids["d2"],
+            )
+            s.add(rule)
+            await s.commit()
+            rule_id = rule.id
+        log = await self._merge()
+        assert await self._scalars("SELECT min_tournament_id FROM achievements.rule WHERE id = :r", r=rule_id) == [
+            self.ids["d1"]
+        ]
+        assert log.moved["achievements.rule.min_tournament_id"] == 1
+
     async def _nodes(self) -> list[FlowNode]:
         async with self.Session() as s:
             return list(

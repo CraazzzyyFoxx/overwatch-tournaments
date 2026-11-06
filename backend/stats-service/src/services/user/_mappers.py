@@ -64,17 +64,6 @@ def _social_account_read(account: models.SocialAccount) -> schemas.SocialAccount
     return read
 
 
-def resolve_team_placement(team: models.Team) -> int | None:
-    """Pick the best (lowest, positive) overall_position across standings."""
-    standings = getattr(team, "standings", None) or []
-    positive_positions = [
-        standing.overall_position for standing in standings if getattr(standing, "overall_position", 0) > 0
-    ]
-    if positive_positions:
-        return min(positive_positions)
-    return None
-
-
 def _division_grid_version(tournament: models.Tournament) -> DivisionGridVersionRead | None:
     if getattr(tournament, "division_grid_version", None) is None:
         return None

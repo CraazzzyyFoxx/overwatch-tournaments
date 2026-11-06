@@ -7,13 +7,13 @@ set -euo pipefail
 : "${DUMP:?set DUMP=<object path from make backup-ls>}"
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 ENVFILE="${ENVFILE:-$SCRIPT_DIR/s3.env}"
-TMP="${TMP:-$SCRIPT_DIR/tmp}"
+TMP="$SCRIPT_DIR/tmp"  # not the inherited TMP: Git Bash and some distros export it, and the trap deletes here
 CONTAINER=owt-restore-pg
 DB=owt_restore
 # shellcheck disable=SC1090
 set -a; . "$ENVFILE"; set +a
 mkdir -p "$TMP"
-trap 'rm -rf "${TMP:?}"/*' EXIT
+trap 'rm -f "$TMP/restore.dump"' EXIT
 
 docker run --rm --env-file "$ENVFILE" -v "$TMP:/data" rclone/rclone \
   copyto "tw:$BUCKET/$DUMP" "/data/restore.dump" --s3-no-check-bucket --stats-one-line
