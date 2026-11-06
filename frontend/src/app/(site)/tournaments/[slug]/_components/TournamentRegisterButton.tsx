@@ -29,11 +29,14 @@ type Props = {
   tournament: Tournament;
   /** `sm` (the collapsed rail): every state at the rail's 32px control height. */
   size?: "default" | "sm";
+  /** Acts on this registration node instead of the viewer's current one (a register card per open node). */
+  registrationNodeId?: number;
 };
 
 export default function TournamentRegisterButton({
   tournament,
-  size = "default"
+  size = "default",
+  registrationNodeId: cardNodeId
 }: Readonly<Props>) {
   const small = size === "sm";
   const workspaceId = tournament.workspace_id;
@@ -44,7 +47,11 @@ export default function TournamentRegisterButton({
   const openAuthModal = useAuthModalStore((state) => state.open);
   const isAuthenticated = authStatus === "authenticated" && user !== null;
   const [showModal, setShowModal] = useState(false);
-  const registrationNode = useViewerRegistrationNode(tournament);
+  const viewerNode = useViewerRegistrationNode(tournament);
+  const registrationNode =
+    cardNodeId === undefined
+      ? viewerNode
+      : (nodesOfKind(tournament, "registration").find((node) => node.id === cardNodeId) ?? null);
   const registrationNodeId = registrationNode?.id ?? null;
 
   const formQuery = useQuery({

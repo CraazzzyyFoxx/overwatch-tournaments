@@ -3593,6 +3593,10 @@
         "ties": "Ties go to the most best places, then to the place in the latest result."
       }
     },
+    "registerCards": {
+      "title": "Registration",
+      "registerFor": "Register for {name}"
+    },
     "individualRounds": {
       "roundsLabel": "Rounds",
       "round": "Round {round}",

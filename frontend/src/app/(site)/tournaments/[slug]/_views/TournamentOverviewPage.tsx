@@ -7,6 +7,7 @@ import { visibleTournamentLinks } from "../_components/TournamentLinkChips";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentOverviewSkeleton } from "../_components/TournamentSkeletons";
 import { UpdatingBadge } from "../_components/UpdatingBadge";
+import { RegistrationNodeCards } from "../_components/RegistrationNodeCards";
 import { OverviewCompletedView } from "./_components/OverviewCompletedView";
 import { OverviewDraftView } from "./_components/OverviewDraftView";
 import { OverviewLiveView } from "./_components/OverviewLiveView";
@@ -188,6 +189,7 @@ export default function TournamentOverviewPage({
       aria-label={t("common.overview")}
     >
       {presentation.showUpdating ? <UpdatingBadge /> : null}
+      <RegistrationNodeCards tournament={tournament} />
       {branch}
     </section>
   );
