@@ -49724,24 +49724,24 @@
             }
           ],
           "default": null,
-          "title": "Regex"
-        }
-      },
-      "title": "FieldValidation",
-      "type": "object"
-    },
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
           "title": "Error Message"
         },
         "regex": {
           "anyOf": [
             {
               "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Regex"
+        }
+      },
+      "title": "FieldValidation",
+      "type": "object"
+    },
     "tournament.FilterNodeConfig": {
       "additionalProperties": false,
       "properties": {
@@ -49884,18 +49884,6 @@
           "type": "array"
         },
         "delete_node_ids": {
-        },
-        "nodes": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.FlowNodeUpsert"
-          },
-          "title": "Nodes",
-          "type": "array"
-        }
-      },
-      "title": "FlowChanges",
-      "type": "object"
-    },
           "items": {
             "type": "integer"
           },
@@ -49908,6 +49896,18 @@
           },
           "title": "Edges",
           "type": "array"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowNodeUpsert"
+          },
+          "title": "Nodes",
+          "type": "array"
+        }
+      },
+      "title": "FlowChanges",
+      "type": "object"
+    },
     "tournament.FlowConfigDefaults": {
       "description": "The config a freshly dropped node of each kind starts with; typed so OpenAPI carries every config class.",
       "properties": {
@@ -50476,6 +50476,18 @@
             {
               "type": "null"
             }
+          ],
+          "default": null,
+          "title": "Stage Id"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ],
+      "title": "FlowNodeUpsert",
+      "type": "object"
+    },
     "tournament.FlowParticipantRead": {
       "properties": {
         "name": {
@@ -50511,18 +50523,6 @@
         "name"
       ],
       "title": "FlowParticipantRead",
-      "type": "object"
-    },
-          ],
-          "default": null,
-          "title": "Stage Id"
-        }
-      },
-      "required": [
-        "kind",
-        "name"
-      ],
-      "title": "FlowNodeUpsert",
       "type": "object"
     },
     "tournament.FlowPortRead": {
@@ -50574,18 +50574,6 @@
           "type": "string"
         },
         "repeated": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "multi",
-        "repeated",
-        "unit_rule"
-      ],
-      "title": "FlowPortSpecRead",
-      "type": "object"
-    },
           "title": "Repeated",
           "type": "boolean"
         },
@@ -50598,6 +50586,18 @@
             "input"
           ],
           "title": "Unit Rule",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "multi",
+        "repeated",
+        "unit_rule"
+      ],
+      "title": "FlowPortSpecRead",
+      "type": "object"
+    },
     "tournament.FlowPreviewPortsRead": {
       "properties": {
         "node_id": {
@@ -50623,13 +50623,6 @@
       "properties": {
         "edges": {
           "items": {
-        "participants": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.FlowParticipantRead"
-          },
-          "title": "Participants",
-          "type": "array"
-        },
             "$ref": "#/components/schemas/tournament.FlowEdgeRead"
           },
           "title": "Edges",
@@ -50642,6 +50635,13 @@
           "title": "Nodes",
           "type": "array"
         },
+        "participants": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FlowParticipantRead"
+          },
+          "title": "Participants",
+          "type": "array"
+        },
         "results": {
           "items": {
             "$ref": "#/components/schemas/tournament.FlowNodeResultRead"
@@ -50650,18 +50650,6 @@
           "type": "array"
         }
       },
-      ],
-      "title": "FlowResultState",
-      "type": "string"
-    },
-    "tournament.FlowUnit": {
-      "enum": [
-        "players",
-        "teams"
-      ],
-      "title": "FlowUnit",
-      "type": "string"
-    },
       "required": [
         "nodes",
         "edges",
@@ -50674,6 +50662,18 @@
       "enum": [
         "tentative",
         "final"
+      ],
+      "title": "FlowResultState",
+      "type": "string"
+    },
+    "tournament.FlowUnit": {
+      "enum": [
+        "players",
+        "teams"
+      ],
+      "title": "FlowUnit",
+      "type": "string"
+    },
     "tournament.FlowValidationRead": {
       "description": "A dry run of a ``FlowChanges``: ids are the request's own (new nodes/edges negative); ``ref_ids`` /\n``new_edge_ids`` map them back.",
       "properties": {
@@ -51071,18 +51071,6 @@
           ],
           "default": null,
           "title": "Recommended Max"
-          "title": "Recommended Min"
-        },
-        "role": {
-          "$ref": "#/components/schemas/tournament.RoleRef"
-        }
-      },
-      "required": [
-        "role"
-      ],
-      "title": "FormatRuleWire",
-      "type": "object"
-    },
         },
         "recommended_min": {
           "anyOf": [
@@ -51095,6 +51083,18 @@
             }
           ],
           "default": null,
+          "title": "Recommended Min"
+        },
+        "role": {
+          "$ref": "#/components/schemas/tournament.RoleRef"
+        }
+      },
+      "required": [
+        "role"
+      ],
+      "title": "FormatRuleWire",
+      "type": "object"
+    },
     "tournament.FormationNodeConfig": {
       "additionalProperties": false,
       "properties": {
@@ -51375,18 +51375,6 @@
         },
         "actor_user_id": {
           "anyOf": [
-          "type": "string"
-        }
-      },
-      "required": [
-        "action",
-        "actor_user_id",
-        "actor_name",
-        "created_at"
-      ],
-      "title": "LastResolutionRead",
-      "type": "object"
-    },
             {
               "type": "integer"
             },
@@ -51399,6 +51387,18 @@
         "created_at": {
           "format": "date-time",
           "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "actor_user_id",
+        "actor_name",
+        "created_at"
+      ],
+      "title": "LastResolutionRead",
+      "type": "object"
+    },
     "tournament.LeaderboardNodeConfig": {
       "additionalProperties": false,
       "properties": {
@@ -52628,12 +52628,6 @@
             },
             {
               "type": "null"
-    "tournament.MergeNodeConfig": {
-      "additionalProperties": false,
-      "properties": {},
-      "title": "MergeNodeConfig",
-      "type": "object"
-    },
             }
           ],
           "default": null,
@@ -52644,6 +52638,12 @@
         "source_stage_ids"
       ],
       "title": "MergeGroupStagesRequest",
+      "type": "object"
+    },
+    "tournament.MergeNodeConfig": {
+      "additionalProperties": false,
+      "properties": {},
+      "title": "MergeNodeConfig",
       "type": "object"
     },
     "tournament.NativeFact": {
@@ -55310,18 +55310,6 @@
             },
             {
               "type": "null"
-          },
-          "title": "Roles",
-          "type": "array"
-        }
-      },
-      "required": [
-        "registration_id",
-        "display"
-      ],
-      "title": "RegistrationFreeAgentRead",
-      "type": "object"
-    },
             }
           ],
           "default": null,
@@ -55334,6 +55322,18 @@
         "roles": {
           "items": {
             "$ref": "#/components/schemas/tournament.RoleRef"
+          },
+          "title": "Roles",
+          "type": "array"
+        }
+      },
+      "required": [
+        "registration_id",
+        "display"
+      ],
+      "title": "RegistrationFreeAgentRead",
+      "type": "object"
+    },
     "tournament.RegistrationNodeConfig": {
       "additionalProperties": false,
       "properties": {
@@ -57743,18 +57743,6 @@
         },
         "user_id": {
           "title": "User Id",
-      ],
-      "title": "SocialAccountRead",
-      "type": "object"
-    },
-    "tournament.SortOrder": {
-      "enum": [
-        "asc",
-        "desc"
-      ],
-      "title": "SortOrder",
-      "type": "string"
-    },
           "type": "integer"
         },
         "username": {
@@ -57767,6 +57755,18 @@
         "user_id",
         "provider",
         "username"
+      ],
+      "title": "SocialAccountRead",
+      "type": "object"
+    },
+    "tournament.SortOrder": {
+      "enum": [
+        "asc",
+        "desc"
+      ],
+      "title": "SortOrder",
+      "type": "string"
+    },
     "tournament.SplitBucket": {
       "additionalProperties": false,
       "properties": {
@@ -58336,12 +58336,6 @@
         "stage_id",
         "name",
         "type",
-    "tournament.StageNodeConfig": {
-      "additionalProperties": false,
-      "properties": {},
-      "title": "StageNodeConfig",
-      "type": "object"
-    },
         "order"
       ],
       "title": "StageItemRead",
@@ -58478,6 +58472,12 @@
         }
       },
       "title": "StageItemUpdate",
+      "type": "object"
+    },
+    "tournament.StageNodeConfig": {
+      "additionalProperties": false,
+      "properties": {},
+      "title": "StageNodeConfig",
       "type": "object"
     },
     "tournament.StagePairingMode": {
@@ -59783,15 +59783,6 @@
           "title": "Draw"
         },
         "lose": {
-    "tournament.SubscriptionEnforcementStage": {
-      "description": "The EARLIEST admission gate a subscription requirement blocks at.\n\nOrdered, not a set: ``registration`` implies check-in too. Requiring a\nsubscription to sign up while admitting an unsubscribed player at check-in\nwould be incoherent, so there is no \"registration only\" value to pick wrongly.\n\nOff is not a member -- that is the registration node's ``require_subscription``\nbeing false. Same shape as ``require_open_profile`` + ``open_profile_scope``\nin the same table: one flag for whether, one value for how.",
-      "enum": [
-        "registration",
-        "check_in"
-      ],
-      "title": "SubscriptionEnforcementStage",
-      "type": "string"
-    },
           "anyOf": [
             {
               "type": "integer"
@@ -60003,6 +59994,15 @@
       ],
       "title": "SubroleOption",
       "type": "object"
+    },
+    "tournament.SubscriptionEnforcementStage": {
+      "description": "The EARLIEST admission gate a subscription requirement blocks at.\n\nOrdered, not a set: ``registration`` implies check-in too. Requiring a\nsubscription to sign up while admitting an unsubscribed player at check-in\nwould be incoherent, so there is no \"registration only\" value to pick wrongly.\n\nOff is not a member -- that is the registration node's ``require_subscription``\nbeing false. Same shape as ``require_open_profile`` + ``open_profile_scope``\nin the same table: one flag for whether, one value for how.",
+      "enum": [
+        "registration",
+        "check_in"
+      ],
+      "title": "SubscriptionEnforcementStage",
+      "type": "string"
     },
     "tournament.SubscriptionProviderConfigListResponse": {
       "properties": {

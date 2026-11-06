@@ -19814,6 +19814,8 @@ export interface components {
         /**
          * FlowNodeStatus
          * @enum {string}
+         */
+        "tournament.FlowNodeStatus": TournamentFlowNodeStatus;
         /** FlowParticipantRead */
         "tournament.FlowParticipantRead": {
             /** Name */
@@ -19829,8 +19831,6 @@ export interface components {
              */
             workspace_member_id: number | null;
         };
-         */
-        "tournament.FlowNodeStatus": TournamentFlowNodeStatus;
         /** FlowPortRead */
         "tournament.FlowPortRead": {
             /**
@@ -19848,10 +19848,10 @@ export interface components {
         "tournament.FlowRead": {
             /** Edges */
             edges: components["schemas"]["tournament.FlowEdgeRead"][];
-            /** Participants */
-            participants?: components["schemas"]["tournament.FlowParticipantRead"][];
             /** Nodes */
             nodes: components["schemas"]["tournament.FlowNodeRead"][];
+            /** Participants */
+            participants?: components["schemas"]["tournament.FlowParticipantRead"][];
             /** Results */
             results: components["schemas"]["tournament.FlowNodeResultRead"][];
         };
@@ -27168,15 +27168,12 @@ export interface components {
              */
             status: StreamStreamPollTickReadStatus;
             /**
-            config_defaults?: components["schemas"]["tournament.FlowConfigDefaults"];
              * Tournaments Active
              * @default 0
              */
             tournaments_active: number;
             /**
              * Tournaments Updated
-            /** Participants */
-            participants?: components["schemas"]["tournament.FlowParticipantRead"][];
              * @default 0
              */
             tournaments_updated: number;
@@ -27213,12 +27210,15 @@ export interface components {
         "tournament.AdminFlowRead": {
             /** Catalogue */
             catalogue: components["schemas"]["tournament.FlowKindPortsRead"][];
+            config_defaults?: components["schemas"]["tournament.FlowConfigDefaults"];
             /** Edges */
             edges: components["schemas"]["tournament.FlowEdgeRead"][];
             /** Issues */
             issues: components["schemas"]["tournament.FlowIssueRead"][];
             /** Nodes */
             nodes: components["schemas"]["tournament.FlowNodeRead"][];
+            /** Participants */
+            participants?: components["schemas"]["tournament.FlowParticipantRead"][];
             /** Results */
             results: components["schemas"]["tournament.FlowNodeResultRead"][];
         };
@@ -27326,48 +27326,6 @@ export interface components {
             updated_at: string | null;
             /** Workspace Id */
             workspace_id: number;
-            played_at: string | null;
-            /** Raw Available */
-            raw_available: boolean;
-            raw_status: components["schemas"]["tournament.RawSourceStatus"] | null;
-            /** Tournament Id */
-            tournament_id: number;
-            /** Tournament Name */
-            tournament_name: string;
-            /** Updated At */
-            updated_at: string | null;
-            /** Workspace Id */
-            workspace_id: number;
-        };
-        /**
-         * AdminReadinessSet
-         * @description Body for the admin readiness override: force one participation's captain
-         *     readiness on or off.
-         *
-         *     ``ready: false`` is only meaningful before a session exists -- readiness
-         *     gates session CREATION and nothing else -- so the service 409s once one
-         *     does (reset the session instead).
-         */
-        "tournament.AdminReadinessSet": {
-            /** Encounter Team Id */
-            encounter_team_id: number;
-            /** Ready */
-            ready: boolean;
-        };
-        /**
-         * AdminTechnicalLossInput
-         * @description Body for the technical-loss route: which PARTICIPATION forfeits,
-         *     optionally the exact scores to record it as (omitted = the default forfeit
-         *     score), and the reason -- a walkover is never anonymous.
-         */
-        "tournament.AdminTechnicalLossInput": {
-            /** Loser Team Id */
-            loser_team_id: number;
-            /** Reason */
-            reason: string;
-            /** Results */
-            results?: components["schemas"]["tournament.AdminForfeitResult"][];
-        };
         };
         /**
          * AdminMatchRow
@@ -27410,6 +27368,48 @@ export interface components {
             /** Participants */
             participants: components["schemas"]["tournament.MatchParticipantRead"][];
             /** Played At */
+            played_at: string | null;
+            /** Raw Available */
+            raw_available: boolean;
+            raw_status: components["schemas"]["tournament.RawSourceStatus"] | null;
+            /** Tournament Id */
+            tournament_id: number;
+            /** Tournament Name */
+            tournament_name: string;
+            /** Updated At */
+            updated_at: string | null;
+            /** Workspace Id */
+            workspace_id: number;
+        };
+        /**
+         * AdminReadinessSet
+         * @description Body for the admin readiness override: force one participation's captain
+         *     readiness on or off.
+         *
+         *     ``ready: false`` is only meaningful before a session exists -- readiness
+         *     gates session CREATION and nothing else -- so the service 409s once one
+         *     does (reset the session instead).
+         */
+        "tournament.AdminReadinessSet": {
+            /** Encounter Team Id */
+            encounter_team_id: number;
+            /** Ready */
+            ready: boolean;
+        };
+        /**
+         * AdminTechnicalLossInput
+         * @description Body for the technical-loss route: which PARTICIPATION forfeits,
+         *     optionally the exact scores to record it as (omitted = the default forfeit
+         *     score), and the reason -- a walkover is never anonymous.
+         */
+        "tournament.AdminTechnicalLossInput": {
+            /** Loser Team Id */
+            loser_team_id: number;
+            /** Reason */
+            reason: string;
+            /** Results */
+            results?: components["schemas"]["tournament.AdminForfeitResult"][];
+        };
         /** AggregateNodeConfig */
         "tournament.AggregateNodeConfig": {
             /**
@@ -29811,48 +29811,6 @@ export interface components {
              * Ended At
              * @default null
              */
-        /** FfaGameResultLineInput */
-        "tournament.FfaGameResultLineInput": {
-            /**
-             * Placement
-             * @default null
-             */
-            placement: number | null;
-            /** Stats */
-            stats: {
-                [key: string]: number;
-            };
-            /** Team Id */
-            team_id: number;
-        };
-        /** FfaGameResultsInput */
-        "tournament.FfaGameResultsInput": {
-            /**
-             * Reason
-             * @default null
-             */
-            reason: string | null;
-            /** Results */
-            results: components["schemas"]["tournament.FfaGameResultLineInput"][];
-        };
-        /** FfaGamesCountInput */
-        "tournament.FfaGamesCountInput": {
-            /** Games */
-            games: number;
-        };
-        /** FieldValidation */
-        "tournament.FieldValidation": {
-            /**
-             * Error Message
-             * @default null
-             */
-            error_message: string | null;
-            /**
-             * Regex
-             * @default null
-             */
-            regex: string | null;
-        };
             ended_at: string | null;
             /**
              * Name
@@ -29894,6 +29852,48 @@ export interface components {
         "tournament.FfaGameCancelInput": {
             /** Reason */
             reason: string;
+        };
+        /** FfaGameResultLineInput */
+        "tournament.FfaGameResultLineInput": {
+            /**
+             * Placement
+             * @default null
+             */
+            placement: number | null;
+            /** Stats */
+            stats: {
+                [key: string]: number;
+            };
+            /** Team Id */
+            team_id: number;
+        };
+        /** FfaGameResultsInput */
+        "tournament.FfaGameResultsInput": {
+            /**
+             * Reason
+             * @default null
+             */
+            reason: string | null;
+            /** Results */
+            results: components["schemas"]["tournament.FfaGameResultLineInput"][];
+        };
+        /** FfaGamesCountInput */
+        "tournament.FfaGamesCountInput": {
+            /** Games */
+            games: number;
+        };
+        /** FieldValidation */
+        "tournament.FieldValidation": {
+            /**
+             * Error Message
+             * @default null
+             */
+            error_message: string | null;
+            /**
+             * Regex
+             * @default null
+             */
+            regex: string | null;
         };
         /** FilterNodeConfig */
         "tournament.FilterNodeConfig": {
@@ -29994,8 +29994,6 @@ export interface components {
         /** FlowIssueRead */
         "tournament.FlowIssueRead": {
             /** Code */
-         *
-         *     A new ``stage`` node carries ``stage``: the save creates its Stage with it.
             code: string;
             /**
              * Edge Id
@@ -30028,8 +30026,6 @@ export interface components {
          * @description A node's whole schedule; replaces the stored one.
          */
         "tournament.FlowNodeScheduleSet": {
-            /** @default null */
-            stage: components["schemas"]["tournament.StageCreate"] | null;
             /** Schedule */
             schedule: components["schemas"]["tournament.FlowNodeScheduleEntry"][];
         };
@@ -30040,6 +30036,8 @@ export interface components {
         /**
          * FlowNodeUpsert
          * @description Create (``ref`` set, ``id`` unset) or update (``id`` set) one node. ``stage_id`` only matters for a new node.
+         *
+         *     A new ``stage`` node carries ``stage``: the save creates its Stage with it.
          */
         "tournament.FlowNodeUpsert": {
             /**
@@ -30050,6 +30048,50 @@ export interface components {
                 [key: string]: unknown;
             };
             /**
+             * Id
+             * @default null
+             */
+            id: number | null;
+            kind: components["schemas"]["tournament.FlowNodeKind"];
+            /** Name */
+            name: string;
+            /**
+             * Position X
+             * @default 0
+             */
+            position_x: number;
+            /**
+             * Position Y
+             * @default 0
+             */
+            position_y: number;
+            /**
+             * Ref
+             * @default null
+             */
+            ref: string | null;
+            /** @default null */
+            stage: components["schemas"]["tournament.StageCreate"] | null;
+            /**
+             * Stage Id
+             * @default null
+             */
+            stage_id: number | null;
+        };
+        /** FlowPortSpecRead */
+        "tournament.FlowPortSpecRead": {
+            /** Multi */
+            multi: boolean;
+            /** Name */
+            name: string;
+            /** Repeated */
+            repeated: boolean;
+            /**
+             * Unit Rule
+             * @enum {string}
+             */
+            unit_rule: TournamentFlowPortSpecReadUnit_rule;
+        };
         /** FlowPreviewPortsRead */
         "tournament.FlowPreviewPortsRead": {
             /** Node Id */
@@ -30073,48 +30115,6 @@ export interface components {
             ref_ids: {
                 [key: string]: number;
             };
-        };
-             * Id
-             * @default null
-             */
-            id: number | null;
-            kind: components["schemas"]["tournament.FlowNodeKind"];
-            /** Name */
-            name: string;
-            /**
-             * Position X
-             * @default 0
-             */
-            position_x: number;
-            /**
-             * Position Y
-             * @default 0
-             */
-            position_y: number;
-            /**
-             * Ref
-             * @default null
-             */
-            ref: string | null;
-            /**
-             * Stage Id
-             * @default null
-             */
-            stage_id: number | null;
-        };
-        /** FlowPortSpecRead */
-        "tournament.FlowPortSpecRead": {
-            /** Multi */
-            multi: boolean;
-            /** Name */
-            name: string;
-            /** Repeated */
-            repeated: boolean;
-            /**
-             * Unit Rule
-             * @enum {string}
-             */
-            unit_rule: TournamentFlowPortSpecReadUnit_rule;
         };
         /** FormField */
         "tournament.FormField": {
@@ -30233,14 +30233,6 @@ export interface components {
             /**
              * Mode
              * @enum {string}
-        /** FormationNodeConfig */
-        "tournament.FormationNodeConfig": {
-            /**
-             * Mode
-             * @enum {string}
-             */
-            mode: TournamentFormationNodeConfigMode;
-        };
              */
             mode: TournamentFormatDimensionWireMode;
             /**
@@ -30262,24 +30254,6 @@ export interface components {
              */
             hard_max: number | null;
             /**
-        /** LeaderboardNodeConfig */
-        "tournament.LeaderboardNodeConfig": {
-            /**
-             * Pins
-             * @default []
-             */
-            pins: components["schemas"]["tournament.LeaderboardPin"][];
-        };
-        /**
-         * LeaderboardPin
-         * @description An admin-fixed place on a leaderboard, like ``StandingPin`` on a stage table.
-         */
-        "tournament.LeaderboardPin": {
-            /** Participant Id */
-            participant_id: number;
-            /** Position */
-            position: number;
-        };
              * Hard Min
              * @default null
              */
@@ -30301,6 +30275,14 @@ export interface components {
             recommended_min: number | null;
             role: components["schemas"]["tournament.RoleRef"];
         };
+        /** FormationNodeConfig */
+        "tournament.FormationNodeConfig": {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: TournamentFormationNodeConfigMode;
+        };
         /**
          * IngestJobStatus
          * @enum {string}
@@ -30321,6 +30303,24 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** LeaderboardNodeConfig */
+        "tournament.LeaderboardNodeConfig": {
+            /**
+             * Pins
+             * @default []
+             */
+            pins: components["schemas"]["tournament.LeaderboardPin"][];
+        };
+        /**
+         * LeaderboardPin
+         * @description An admin-fixed place on a leaderboard, like ``StandingPin`` on a stage table.
+         */
+        "tournament.LeaderboardPin": {
+            /** Participant Id */
+            participant_id: number;
+            /** Position */
+            position: number;
         };
         /**
          * LogRecordRef
@@ -30485,8 +30485,6 @@ export interface components {
             /**
              * Stat Code
              * @constant
-        /** MergeNodeConfig */
-        "tournament.MergeNodeConfig": Record<string, never>;
              */
             stat_code: "score";
             /** Value */
@@ -30529,6 +30527,8 @@ export interface components {
              */
             target_name: string | null;
         };
+        /** MergeNodeConfig */
+        "tournament.MergeNodeConfig": Record<string, never>;
         /** Paginated[AdminMatchRow] */
         "tournament.Paginated_AdminMatchRow_": {
             /** Page */
@@ -31247,48 +31247,6 @@ export interface components {
              */
             stale_registrations: number | null;
             /** Subrole Catalog */
-         * RegistrationFormTemplateSave
-         * @description The name to file the tournament's current questions under.
-         */
-        "tournament.RegistrationFormTemplateSave": {
-            /** Name */
-            name: string;
-        };
-        /** RegistrationFormTemplateUpsert */
-        "tournament.RegistrationFormTemplateUpsert": {
-            /**
-             * Discipline
-             * @default null
-             */
-            discipline: string | null;
-            form_schema: components["schemas"]["tournament.FormSchema-Input"];
-            /** Name */
-            name: string;
-        };
-        /** RegistrationFormUpsert */
-        "tournament.RegistrationFormUpsert": {
-            form_schema: components["schemas"]["tournament.FormSchema-Input"];
-            /**
-             * Hide Registrations
-             * @default false
-             */
-            hide_registrations: boolean;
-            /**
-             * Open Profile Scope
-             * @default main
-             */
-            open_profile_scope: string;
-            /**
-             * Require Open Profile
-             * @default false
-             */
-            require_open_profile: boolean;
-            /**
-             * Show Ranks
-             * @default false
-             */
-            show_ranks: boolean;
-        };
             subrole_catalog?: {
                 [key: string]: components["schemas"]["tournament.SubroleOption"][];
             };
@@ -31331,6 +31289,48 @@ export interface components {
             workspace_id: number;
         };
         /**
+         * RegistrationFormTemplateSave
+         * @description The name to file the tournament's current questions under.
+         */
+        "tournament.RegistrationFormTemplateSave": {
+            /** Name */
+            name: string;
+        };
+        /** RegistrationFormTemplateUpsert */
+        "tournament.RegistrationFormTemplateUpsert": {
+            /**
+             * Discipline
+             * @default null
+             */
+            discipline: string | null;
+            form_schema: components["schemas"]["tournament.FormSchema-Input"];
+            /** Name */
+            name: string;
+        };
+        /** RegistrationFormUpsert */
+        "tournament.RegistrationFormUpsert": {
+            form_schema: components["schemas"]["tournament.FormSchema-Input"];
+            /**
+             * Hide Registrations
+             * @default false
+             */
+            hide_registrations: boolean;
+            /**
+             * Open Profile Scope
+             * @default main
+             */
+            open_profile_scope: string;
+            /**
+             * Require Open Profile
+             * @default false
+             */
+            require_open_profile: boolean;
+            /**
+             * Show Ranks
+             * @default false
+             */
+            show_ranks: boolean;
+        };
         /** RegistrationNodeConfig */
         "tournament.RegistrationNodeConfig": {
             /**
@@ -31636,10 +31636,28 @@ export interface components {
              * Size
              * @default null
              */
-            advance_count: number | null;
+            size: number | null;
+        };
+        /** SplitNodeConfig */
+        "tournament.SplitNodeConfig": {
+            /** Buckets */
+            buckets: components["schemas"]["tournament.SplitBucket"][];
             /**
              * Serpentine
              * @default false
+             */
+            serpentine: boolean;
+        };
+        /** StageCreate */
+        "tournament.StageCreate": {
+            /**
+             * Advance Count
+             * @default null
+             */
+            advance_count: number | null;
+            /**
+             * Advance Upper Count
+             * @default null
              */
             advance_upper_count: number | null;
             best_of?: components["schemas"]["tournament.StageBestOf"];
@@ -31741,8 +31759,6 @@ export interface components {
         /** StageItemInputCreate */
         "tournament.StageItemInputCreate": {
             /** @default empty */
-        /** StageNodeConfig */
-        "tournament.StageNodeConfig": Record<string, never>;
             input_type: components["schemas"]["tournament.StageItemInputType"];
             /** Slot */
             slot: number;
@@ -31797,6 +31813,8 @@ export interface components {
             /** @default null */
             type: components["schemas"]["tournament.StageItemType"] | null;
         };
+        /** StageNodeConfig */
+        "tournament.StageNodeConfig": Record<string, never>;
         /**
          * StageScoring
          * @description How a stage scores, at all three levels.
@@ -32015,20 +32033,6 @@ export interface components {
              */
             can_delete: boolean;
             /**
-        /**
-         * SubscriptionEnforcementStage
-         * @description The EARLIEST admission gate a subscription requirement blocks at.
-         *
-         *     Ordered, not a set: ``registration`` implies check-in too. Requiring a
-         *     subscription to sign up while admitting an unsubscribed player at check-in
-         *     would be incoherent, so there is no "registration only" value to pick wrongly.
-         *
-         *     Off is not a member -- that is the registration node's ``require_subscription``
-         *     being false. Same shape as ``require_open_profile`` + ``open_profile_scope``
-         *     in the same table: one flag for whether, one value for how.
-         * @enum {string}
-         */
-        "tournament.SubscriptionEnforcementStage": TournamentSubscriptionEnforcementStage;
              * Can Edit
              * @default false
              */
@@ -32093,6 +32097,20 @@ export interface components {
             /** Slug */
             slug: string;
         };
+        /**
+         * SubscriptionEnforcementStage
+         * @description The EARLIEST admission gate a subscription requirement blocks at.
+         *
+         *     Ordered, not a set: ``registration`` implies check-in too. Requiring a
+         *     subscription to sign up while admitting an unsubscribed player at check-in
+         *     would be incoherent, so there is no "registration only" value to pick wrongly.
+         *
+         *     Off is not a member -- that is the registration node's ``require_subscription``
+         *     being false. Same shape as ``require_open_profile`` + ``open_profile_scope``
+         *     in the same table: one flag for whether, one value for how.
+         * @enum {string}
+         */
+        "tournament.SubscriptionEnforcementStage": TournamentSubscriptionEnforcementStage;
         /** SubscriptionProviderConfigListResponse */
         "tournament.SubscriptionProviderConfigListResponse": {
             /** Configs */
@@ -64558,6 +64576,7 @@ export interface operations {
             path: {
                 tournament_id: string;
             };
+            cookie?: never;
         };
         requestBody?: never;
         responses: {
@@ -64641,7 +64660,6 @@ export interface operations {
             content: {
                 "application/json": components["schemas"]["tournament.FlowChanges"];
             };
-            cookie?: never;
         };
         responses: {
             /** @description Success */
@@ -84553,21 +84571,6 @@ export enum BalancerRankOverviewRowLayer {
 }
 export enum BalancerRankOverviewRowSourceAnyOf0 {
     author = "author",
-export enum TournamentAggregateNodeConfigMode {
-    sum_all = "sum_all",
-    sum_last_n = "sum_last_n",
-    sum_best_n = "sum_best_n",
-    average = "average"
-}
-export enum TournamentAggregateNodeConfigTiebreak {
-    best_places = "best_places",
-    last_input = "last_input"
-}
-export enum TournamentAggregateScorePreset {
-    stage_points = "stage_points",
-    placement_table = "placement_table",
-    formula = "formula"
-}
     workspace = "workspace",
     native = "native"
 }
@@ -84631,6 +84634,21 @@ export enum StreamStreamPollTickReadStatus {
     unauthorized = "unauthorized",
     unavailable = "unavailable",
     error = "error"
+}
+export enum TournamentAggregateNodeConfigMode {
+    sum_all = "sum_all",
+    sum_last_n = "sum_last_n",
+    sum_best_n = "sum_best_n",
+    average = "average"
+}
+export enum TournamentAggregateNodeConfigTiebreak {
+    best_places = "best_places",
+    last_input = "last_input"
+}
+export enum TournamentAggregateScorePreset {
+    stage_points = "stage_points",
+    placement_table = "placement_table",
+    formula = "formula"
 }
 export enum TournamentBalancerRankAutofillStageOw_value {
     composite = "composite",
@@ -84703,17 +84721,6 @@ export enum TournamentConditionOp {
     truthy = "truthy"
 }
 export enum TournamentDashboardIssueKey {
-export enum TournamentFilterNodeConfigMode {
-    top = "top",
-    range = "range",
-    per_item_top = "per_item_top",
-    swiss_status = "swiss_status",
-    manual = "manual"
-}
-export enum TournamentFilterNodeConfigSwiss_statusAnyOf0 {
-    qualified = "qualified",
-    eliminated = "eliminated"
-}
     results_disputed = "results_disputed",
     results_overdue = "results_overdue",
     results_pending_confirmation = "results_pending_confirmation",
@@ -84747,11 +84754,6 @@ export enum TournamentDivisionGridImportJobReadStatus {
     completed = "completed",
     failed = "failed"
 }
-export enum TournamentFormationNodeConfigMode {
-    balancer = "balancer",
-    draft = "draft",
-    registered = "registered",
-    manual = "manual"
 export enum TournamentDivisionGridPortableImportRequestMode {
     library = "library",
     sync = "sync",
@@ -84782,6 +84784,17 @@ export enum TournamentEncounterResultAuditAction {
     game_confirm = "game_confirm",
     game_correct = "game_correct",
     game_cancel = "game_cancel"
+}
+export enum TournamentFilterNodeConfigMode {
+    top = "top",
+    range = "range",
+    per_item_top = "per_item_top",
+    swiss_status = "swiss_status",
+    manual = "manual"
+}
+export enum TournamentFilterNodeConfigSwiss_statusAnyOf0 {
+    qualified = "qualified",
+    eliminated = "eliminated"
 }
 export enum TournamentFlowIssueReadSeverity {
     error = "error",
@@ -84816,14 +84829,11 @@ export enum TournamentFormatDimensionWireMode {
     preference = "preference",
     enforced = "enforced"
 }
-export enum TournamentRegistrationNodeConfigIntake {
-    solo = "solo",
-    team = "team"
-}
-export enum TournamentRegistrationNodeConfigSubscription_scope {
-    player = "player",
-    team = "team"
-}
+export enum TournamentFormationNodeConfigMode {
+    balancer = "balancer",
+    draft = "draft",
+    registered = "registered",
+    manual = "manual"
 }
 export enum TournamentIngestJobStatus {
     pending = "pending",
@@ -84877,10 +84887,6 @@ export enum TournamentPregameRoomRowAttention {
     result_disputed = "result_disputed",
     awaiting_choice = "awaiting_choice",
     overdue = "overdue",
-export enum TournamentSubscriptionEnforcementStage {
-    registration = "registration",
-    check_in = "check_in"
-}
     late_not_ready = "late_not_ready"
 }
 export enum TournamentPregameRoomRowPhase {
@@ -84891,6 +84897,14 @@ export enum TournamentPregameRoomRowPhase {
     report = "report",
     done = "done",
     idle = "idle"
+}
+export enum TournamentRegistrationNodeConfigIntake {
+    solo = "solo",
+    team = "team"
+}
+export enum TournamentRegistrationNodeConfigSubscription_scope {
+    player = "player",
+    team = "team"
 }
 export enum TournamentRegistrationTeamAdmissionRequestAdmission {
     pending = "pending",
@@ -84944,6 +84958,10 @@ export enum TournamentStatusMetaReadKind {
 export enum TournamentStatusMetaReadScope {
     registration = "registration",
     balancer = "balancer"
+}
+export enum TournamentSubscriptionEnforcementStage {
+    registration = "registration",
+    check_in = "check_in"
 }
 export enum TournamentTeamFormatReadSource {
     tournament = "tournament",
