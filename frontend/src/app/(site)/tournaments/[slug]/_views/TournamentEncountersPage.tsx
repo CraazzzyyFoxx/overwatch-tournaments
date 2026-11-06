@@ -17,7 +17,7 @@ import { useFormatter } from "@/lib/datetime/client";
 import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
 import { tournamentEncountersQueryOptions } from "@/lib/tournament/encounters-query";
 import { groupDisplayName, groupHue } from "@/lib/tournament/group";
-import { areStreamsVisible } from "@/lib/tournament/status";
+import { areStreamsVisible, displayStatus } from "@/lib/tournament/status";
 import { cn } from "@/lib/utils";
 import type { Encounter } from "@/types/encounter.types";
 import type { Tournament } from "@/types/tournament.types";
@@ -76,7 +76,7 @@ export default function TournamentEncountersPage({
   const tournament = useTournamentQuery(slug).data ?? overview;
   const encountersQuery = useQuery(tournamentEncountersQueryOptions(tournament));
   const streamsQuery = useTournamentStreamsQuery(
-    areStreamsVisible(tournament.status) ? tournament.id : undefined
+    areStreamsVisible(displayStatus(tournament)) ? tournament.id : undefined
   );
   const ffa = useFfaStageLobbies(tournament);
   const roster = useTournamentRoster(tournament);

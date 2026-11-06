@@ -7,16 +7,20 @@ from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.core import enums, errors, pagination
-from shared.core.tournament_state import IN_PLAY_STATUSES
+from shared.core.enums import FlowNodeKind
+from shared.core.flow_state import LIFECYCLE_KINDS
 from shared.division_grid import DivisionGrid
 from shared.models.identity.auth_user import AuthUser
 from shared.services.cache_generations import versioned
 from shared.services.challonge_refs import ChallongeRef, resolve_stage_challonge, resolve_tournament_challonge
 from shared.services.division_grid.normalization import DivisionGridNormalizationError, DivisionGridNormalizer
+from shared.services.flow_queries import upstream_registration_node_ids
 from shared.services.team_format import tournament_shape_reads
+from shared.services.tournament.in_play import TOURNAMENT_IN_PLAY
 from shared.services.tournament.visibility import visible_tournaments_predicate
 from src import schemas
 from src.core import config
+from src.schemas import flow as flow_schemas
 from src.services.admin.tournament_link import tournament_link_service
 from src.services.draft_guards import has_unfinished_draft_session, unfinished_draft_tournament_ids
 from src.services.registration.service import registration_service
@@ -24,7 +28,7 @@ from src.services.registration_team_guards import has_registered_teams, register
 from src.services.team.service import team_service
 
 from .cache_resources import DETAIL, tournament_generations
-from .service import TournamentService, tournament_service
+from .service import TournamentService, registering_tournament, tournament_service
 
 #: The entities ``to_pydantic`` honours: all a cached read's key keeps of the client's list (``canonical_entities``).
 READ_ENTITIES = frozenset(
@@ -36,9 +40,14 @@ READ_ENTITIES = frozenset(
         "division_grid_version",
         "roster_shape",
         "links",
+        "flow_nodes",
         "rules",
     }
 )
+
+#: The flow nodes ``TournamentRead.flow_nodes`` lists: the lifecycle ones plus ``leaderboard`` (the section nav asks
+#: "is there a table" without fetching the flow).
+TOURNAMENT_READ_NODE_KINDS: tuple[FlowNodeKind, ...] = (*LIFECYCLE_KINDS, FlowNodeKind.LEADERBOARD)
 
 
 def _entity_requested(entities: list[str], entity: str) -> bool:
@@ -165,6 +174,45 @@ class TournamentFlowsService:
                     schemas.TournamentLinkRead.model_validate(row, from_attributes=True)
                     for row in await tournament_link_service.list_links(session, tournament.id, active_only=True)
                 ]
+        flow_nodes: list[flow_schemas.TournamentFlowNodeRead] = []
+        if _entity_requested(entities, "flow_nodes"):
+            nodes = (
+                await session.scalars(
+                    sa.select(models.FlowNode)
+                    .where(
+                        models.FlowNode.tournament_id == tournament.id,
+                        models.FlowNode.kind.in_([kind.value for kind in TOURNAMENT_READ_NODE_KINDS]),
+                    )
+                    .order_by(models.FlowNode.id)
+                )
+            ).all()
+            schedules: dict[int, list[flow_schemas.FlowNodeScheduleEntry]] = {node.id: [] for node in nodes}
+            for row in await session.scalars(
+                sa.select(models.FlowNodeSchedule)
+                .where(models.FlowNodeSchedule.node_id.in_(schedules))
+                .order_by(models.FlowNodeSchedule.starts_at, models.FlowNodeSchedule.id)
+            ):
+                schedules[row.node_id].append(
+                    flow_schemas.FlowNodeScheduleEntry.model_validate(row, from_attributes=True)
+                )
+            pools = {
+                node.id: await upstream_registration_node_ids(session, node.id)
+                for node in nodes
+                if node.kind == FlowNodeKind.FORMATION
+            }
+            flow_nodes = [
+                flow_schemas.TournamentFlowNodeRead(
+                    id=node.id,
+                    kind=node.kind,
+                    name=node.name,
+                    status=node.status,
+                    stage_id=node.stage_id,
+                    config=node.config,
+                    pool_registration_node_ids=pools.get(node.id, []),
+                    schedule=schedules[node.id],
+                )
+                for node in nodes
+            ]
         tournament_challonge_id, tournament_challonge_slug = (
             challonge_ref if challonge_ref is not None else (None, None)
         )
@@ -174,12 +222,10 @@ class TournamentFlowsService:
             slug=tournament.slug,
             start_date=tournament.start_date,
             end_date=tournament.end_date,
-            is_league=tournament.is_league,
             is_finished=tournament.is_finished,
             is_hidden=tournament.is_hidden,
             cover_image_url=tournament.cover_image_url,
             logo_url=tournament.logo_url,
-            team_formation=tournament.team_formation,
             status=tournament.status,
             name=tournament.name,
             description=tournament.description,
@@ -190,19 +236,13 @@ class TournamentFlowsService:
             challonge_id=tournament_challonge_id,
             challonge_slug=tournament_challonge_slug,
             auto_transitions_enabled=tournament.auto_transitions_enabled,
-            allow_late_registration=tournament.allow_late_registration,
             discord_broadcasts_enabled=tournament.discord_broadcasts_enabled,
             discord_dms_enabled=tournament.discord_dms_enabled,
             logs_official=tournament.logs_official,
             pov_stream_delay_s=tournament.pov_stream_delay_s,
-            phase_schedule=[
-                schemas.TournamentPhaseScheduleRead.model_validate(row, from_attributes=True)
-                for row in _loaded_relationship(tournament, "phase_schedule") or []
-            ],
             division_grid_version_id=tournament.division_grid_version_id,
             division_grid_version=division_grid_version,
             discipline=tournament.discipline,
-            draft_format_json=tournament.draft_format_json,
             roster_shape=roster_shape,
             roster_locked_by_draft=roster_locked_by_draft,
             roster_locked_by_teams=roster_locked_by_teams,
@@ -211,6 +251,7 @@ class TournamentFlowsService:
             registrations_count=registrations_count,
             teams_count=teams_count,
             links=links,
+            flow_nodes=flow_nodes,
         )
 
     async def get(self, session: AsyncSession, id: int, entities: list[str]) -> models.Tournament:
@@ -294,7 +335,6 @@ class TournamentFlowsService:
         session: AsyncSession,
         *,
         workspace_id: int | None = None,
-        is_league: bool | None = None,
         discipline: str | None = None,
         limit: int = 500,
     ) -> list[schemas.LookupItem]:
@@ -308,8 +348,6 @@ class TournamentFlowsService:
         )
         if workspace_id is not None:
             query = query.where(models.Tournament.workspace_id == workspace_id)
-        if is_league is not None:
-            query = query.where(models.Tournament.is_league.is_(is_league))
         if discipline is not None:
             query = query.where(models.Tournament.discipline == discipline)
         result = await session.execute(query)
@@ -322,18 +360,14 @@ class TournamentFlowsService:
         viewer: AuthUser | None = None,
         workspace_id: int | None = None,
         status: enums.TournamentStatus | None = None,
-        is_league: bool | None = None,
         discipline: str | None = None,
         query: str = "",
     ) -> schemas.TournamentFacets:
         """Chip counters for the public tournaments page (rpc.tournament.tournaments_facets).
 
-        **Each axis is counted without its own filter.** ``by_status`` applies
-        ``is_league`` and the search but not ``status``; ``league``/``standard``
-        apply ``status`` and the search but not ``is_league``. Counting an axis
-        *with* its own filter would zero every sibling chip the moment one is
-        picked — the UI would show "registration 5, everything else 0" and offer
-        no click that leads back out of the filter.
+        **Each axis is counted without its own filter.** ``by_status`` applies the search but not ``status``.
+        Counting an axis *with* its own filter would zero every sibling chip the moment one is picked — the UI would
+        show "registration 5, everything else 0" and offer no click that leads back out of the filter.
 
         ``total`` and ``live`` are deliberately unconditional (visibility and
         workspace only): the page hero states a platform-wide fact ("42
@@ -349,12 +383,10 @@ class TournamentFlowsService:
         if discipline is not None:
             scope.append(models.Tournament.discipline == discipline)
         search = [models.Tournament.name.ilike(f"%{query}%")] if query else []
-        league = [] if is_league is None else [models.Tournament.is_league.is_(is_league)]
-        status_filter = [] if status is None else [models.Tournament.status == status]
 
         status_rows = await session.execute(
             sa.select(models.Tournament.status, sa.func.count(models.Tournament.id))
-            .where(*scope, *search, *league)
+            .where(*scope, *search)
             .group_by(models.Tournament.status)
         )
         # Every member present, always: an absent key would force each client to
@@ -363,34 +395,25 @@ class TournamentFlowsService:
         for row_status, count in status_rows.all():
             by_status[enums.TournamentStatus(row_status)] = int(count)
 
-        league_rows = await session.execute(
-            sa.select(models.Tournament.is_league, sa.func.count(models.Tournament.id))
-            .where(*scope, *search, *status_filter)
-            .group_by(models.Tournament.is_league)
-        )
-        league_count = 0
-        standard_count = 0
-        for is_league_value, count in league_rows.all():
-            if is_league_value:
-                league_count = int(count)
-            else:
-                standard_count = int(count)
-
         totals = (
             await session.execute(
                 sa.select(
                     sa.func.count(models.Tournament.id),
-                    sa.func.count(models.Tournament.id).filter(models.Tournament.status.in_(IN_PLAY_STATUSES)),
+                    sa.func.count(models.Tournament.id).filter(TOURNAMENT_IN_PLAY),
                 ).where(*scope)
             )
         ).one()
+        registration_open = (
+            await session.execute(
+                sa.select(sa.func.count(models.Tournament.id)).where(*scope, *search, registering_tournament())
+            )
+        ).one()[0]
 
         return schemas.TournamentFacets(
             total=int(totals[0]),
             live=int(totals[1]),
             by_status=by_status,
-            league=league_count,
-            standard=standard_count,
+            registration_open=int(registration_open),
         )
 
     async def get_stages_read(self, session: AsyncSession, tournament_id: int) -> list[schemas.StageRead]:

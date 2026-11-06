@@ -11,7 +11,7 @@ import {
   type MyRegistration,
   type PublicForm,
 } from "../support/registration";
-import { createTournament, createWorkspace, setStatus, uniq } from "../support/seed";
+import { createTournament, createWorkspace, flowNodes, nodeOf, transitionNode, uniq } from "../support/seed";
 
 // Individual registration after schemasplit01 moved it into the `registration`
 // schema: organizer form + templates + status catalog, the player's own
@@ -34,7 +34,7 @@ const fullAnswers = (username: string, extra: Record<string, unknown> = {}) => (
 });
 
 test.describe("organizer: registration form", () => {
-  test("form is absent until saved, versions on change, and is open only inside the REGISTRATION window", async ({ adminApi, anonApi }) => {
+  test("form is absent until saved, versions on change, and the registration node opens the sign-up", async ({ adminApi, anonApi }) => {
     const ws = await createWorkspace(adminApi);
     const t = await createTournament(adminApi, ws.id);
     expect(await adminApi.get(adminForm(t.id)), "admin form before any save").toBeNull();
@@ -53,15 +53,15 @@ test.describe("organizer: registration form", () => {
     const closed = await anonApi.get<PublicForm>(`${pub(t.id)}/form`);
     expect(closed.version_id).toBe(v1.version_id);
     expect(closed.form_schema.sections.map((s) => s.key)).toEqual(["accounts", "play", "details"]);
-    expect(closed.is_open, "no REGISTRATION schedule row means closed").toBe(false);
+    const node = await nodeOf(adminApi, t.id, "registration");
+    expect(node.status, "the intake is draft until an organizer opens it").toBe("draft");
 
-    // Openness is the schedule's alone: the tournament is still ANNOUNCEMENT here.
-    await adminApi.put(`/api/v1/admin/tournaments/${t.id}/schedule`, {
-      schedule: [{ status: "registration", starts_at: at(-HOUR), ends_at: at(24 * HOUR) }],
+    // Openness is the node's: its status, inside the `open` window.
+    await adminApi.put(`/api/v1/admin/flow-nodes/${node.id}/schedule`, {
+      schedule: [{ phase: "open", starts_at: at(-HOUR), ends_at: at(24 * HOUR) }],
     });
-    const open = await anonApi.get<PublicForm>(`${pub(t.id)}/form`);
-    expect(open.is_open).toBe(true);
-    expect(open.registration_late).toBe(false);
+    await transitionNode(adminApi, node.id, "open");
+    expect((await flowNodes(anonApi, t.id)).find((candidate) => candidate.id === node.id)?.status).toBe("open");
 
     const v2 = await adminApi.put<PublicForm>(adminForm(t.id), {
       form_schema: { sections: [...FULL_FORM.sections, { key: "extra", fields: [{ key: "team_pref", kind: "text", label: "Preferred team" }] }] },
@@ -129,7 +129,7 @@ test.describe("organizer: registration form", () => {
 
 test.describe("organizer: balancer status catalog", () => {
   test("custom statuses: create, rename, list in catalog, assign in bulk, delete", async ({ adminApi, makeUser }) => {
-    const { ws, t, version } = await openTournament(adminApi);
+    const { ws, t, version, registrationNodeId } = await openTournament(adminApi);
     const base = `/api/v1/admin/ws/${ws.id}/balancer-statuses`;
     type Status = { id: number; slug: string; scope: string; kind: string; name: string; excludes_from_balancer: boolean };
 
@@ -147,7 +147,7 @@ test.describe("organizer: balancer status catalog", () => {
     expect((await adminApi.get<Status[]>(base)).map((s) => s.slug).sort()).toEqual(["bench", "needs_info"]);
 
     const player = await makeUser("cst");
-    const reg = await registerSelf(player, t.id, version, { roles: ["damage"] });
+    const reg = await registerSelf(player, t.id, registrationNodeId, version, { roles: ["damage"] });
     await adminApi.patch(`${adminReg(reg.id)}/approve`);
     const res = await adminApi.post<{ updated: number; skipped: number }>(`${adminRegs(t.id)}/bulk-set-balancer-status`, {
       registration_ids: [reg.id],
@@ -238,27 +238,25 @@ test.describe("player: self-service registration", () => {
     const ws = await createWorkspace(adminApi);
     const t = await createTournament(adminApi, ws.id);
     const form = await adminApi.put<PublicForm>(adminForm(t.id), { form_schema: OW_FORM });
+    const node = await nodeOf(adminApi, t.id, "registration");
+    const setWindow = (starts: number, ends: number) =>
+      adminApi.put(`/api/v1/admin/flow-nodes/${node.id}/schedule`, { schedule: [{ phase: "open", starts_at: at(starts), ends_at: at(ends) }] });
     const player = await makeUser("win");
     const body = { form_version_id: form.version_id, answers: { identity_battlenet: [battleTag(player.username)], roles: [{ role: "tank", is_primary: true }] } };
 
-    expect((await player.api.raw("POST", pub(t.id), { body })).status(), "no window scheduled yet").toBe(400);
+    expect((await player.api.raw("POST", pub(t.id), { body })).status(), "the intake is still draft").toBe(400);
 
-    await adminApi.put(`/api/v1/admin/tournaments/${t.id}/schedule`, {
-      schedule: [{ status: "registration", starts_at: at(2 * HOUR), ends_at: at(24 * HOUR) }],
-    });
+    await setWindow(2 * HOUR, 24 * HOUR);
+    await transitionNode(adminApi, node.id, "open");
     expect((await player.api.raw("POST", pub(t.id), { body })).status(), "window not started").toBe(400);
 
-    await adminApi.put(`/api/v1/admin/tournaments/${t.id}/schedule`, {
-      schedule: [{ status: "registration", starts_at: at(-3 * HOUR), ends_at: at(-HOUR) }],
-    });
-    await setStatus(adminApi, t.id, "registration");
+    await setWindow(-3 * HOUR, -HOUR);
     expect((await player.api.raw("POST", pub(t.id), { body })).status(), "window already closed").toBe(400);
-    expect((await player.api.get<PublicForm>(`${pub(t.id)}/form`)).is_open).toBe(false);
 
-    await adminApi.patch(`/api/v1/admin/tournaments/${t.id}`, { allow_late_registration: true });
-    const lateForm = await player.api.get<PublicForm>(`${pub(t.id)}/form`);
-    expect(lateForm.is_open).toBe(true);
-    expect(lateForm.registration_late, "the form warns the registrant before they submit late").toBe(true);
+    // Late registration is the node's switch: it lifts the end of the window and nothing else.
+    await adminApi.put(`/api/v1/admin/tournaments/${t.id}/flow`, {
+      nodes: [{ id: node.id, kind: node.kind, name: node.name, config: { ...node.config, allow_late_registration: true } }],
+    });
     const reg = await player.api.post<MyRegistration>(pub(t.id), body, 201);
     expect(reg.submitted_late).toBe(true);
     const [row] = await adminApi.get<AdminRegistration[]>(adminRegs(t.id));
@@ -300,8 +298,8 @@ test.describe("player: self-service registration", () => {
   });
 
   test("saving the form evicts the cached public participants list at once", async ({ adminApi, anonApi, makeUser }) => {
-    const { t, version } = await openTournament(adminApi);
-    await registerSelf(await makeUser("evc"), t.id, version, { roles: ["tank"] });
+    const { t, version, registrationNodeId } = await openTournament(adminApi);
+    await registerSelf(await makeUser("evc"), t.id, registrationNodeId, version, { roles: ["tank"] });
     const before = await anonApi.get<{ hidden: boolean; registrations: unknown[] }>(`${pub(t.id)}/list`);
     expect(before.registrations).toHaveLength(1);
     const form = await adminApi.get<PublicForm>(adminForm(t.id));
@@ -314,9 +312,9 @@ test.describe("player: self-service registration", () => {
 
 test.describe("organizer: review queue", () => {
   test("filters, approve/reject, bulk approve, balancer inclusion, withdraw/restore, soft delete, admin check-in", async ({ adminApi, admin, makeUser }) => {
-    const { t, version } = await openTournament(adminApi);
+    const { t, version, registrationNodeId } = await openTournament(adminApi);
     const users = [await makeUser("rq"), await makeUser("rq"), await makeUser("rq"), await makeUser("rq")];
-    const [a, b, c, d] = await Promise.all(users.map((u, i) => registerSelf(u, t.id, version, { roles: [["tank", "damage", "support", "damage"][i]] })));
+    const [a, b, c, d] = await Promise.all(users.map((u, i) => registerSelf(u, t.id, registrationNodeId, version, { roles: [["tank", "damage", "support", "damage"][i]] })));
 
     const pending = await adminApi.get<AdminRegistration[]>(adminRegs(t.id), { status_filter: "pending" });
     expect(pending.map((r) => r.id).sort()).toEqual([a.id, b.id, c.id, d.id].sort());
@@ -380,18 +378,18 @@ test.describe("organizer: review queue", () => {
   });
 
   test("a plain user cannot read or act on the review queue", async ({ adminApi, makeUser }) => {
-    const { t, version } = await openTournament(adminApi);
+    const { t, version, registrationNodeId } = await openTournament(adminApi);
     const player = await makeUser("nr");
-    const reg = await registerSelf(player, t.id, version, { roles: ["tank"] });
+    const reg = await registerSelf(player, t.id, registrationNodeId, version, { roles: ["tank"] });
     expect((await player.api.raw("GET", adminRegs(t.id))).status()).toBe(403);
     expect((await player.api.raw("PATCH", `${adminReg(reg.id)}/approve`)).status()).toBe(403);
     expect((await player.api.raw("GET", adminForm(t.id))).status()).toBe(403);
   });
 
   test("rank autofill preview/apply keeps organizer ranks; rank history reads past registrations of one game", async ({ adminApi, makeUser }) => {
-    const { ws, t, version } = await openTournament(adminApi);
+    const { ws, t, version, registrationNodeId } = await openTournament(adminApi);
     const player = await makeUser("rk");
-    const reg = await registerSelf(player, t.id, version, { roles: ["tank", "support"] });
+    const reg = await registerSelf(player, t.id, registrationNodeId, version, { roles: ["tank", "support"] });
     await rankRegistration(adminApi, reg.id, [
       { role: ROLE("tank"), rank: 3100 },
       { role: ROLE("support"), rank: 2600 },
@@ -424,26 +422,26 @@ test.describe("organizer: review queue", () => {
 
 test.describe("check-in", () => {
   test("self check-in needs approval, CHECK_IN status and an open window; afterwards edits and withdrawal lock", async ({ adminApi, makeUser }) => {
-    const { t, version } = await openTournament(adminApi, {
+    const { t, version, registrationNodeId } = await openTournament(adminApi, {
       schedule: [
-        { status: "registration", starts_at: at(-HOUR), ends_at: at(24 * HOUR) },
-        { status: "check_in", starts_at: at(2 * HOUR), ends_at: at(36 * HOUR) },
+        { phase: "open", starts_at: at(-HOUR), ends_at: at(24 * HOUR) },
+        { phase: "check_in", starts_at: at(2 * HOUR), ends_at: at(36 * HOUR) },
       ],
     });
     const player = await makeUser("ci");
-    const reg = await registerSelf(player, t.id, version, { roles: ["tank"] });
+    const reg = await registerSelf(player, t.id, registrationNodeId, version, { roles: ["tank"] });
     const checkIn = () => player.api.raw("POST", `${pub(t.id)}/me/check-in`);
 
     expect((await checkIn()).status(), "pending registration").toBe(409);
     await adminApi.patch(`${adminReg(reg.id)}/approve`);
-    expect((await checkIn()).status(), "tournament still in REGISTRATION").toBe(409);
-    await setStatus(adminApi, t.id, "check_in");
+    expect((await checkIn()).status(), "the intake is still open, not in check-in").toBe(409);
+    await transitionNode(adminApi, registrationNodeId, "check_in");
     expect((await checkIn()).status(), "CHECK_IN window has not opened yet").toBe(409);
 
-    await adminApi.put(`/api/v1/admin/tournaments/${t.id}/schedule`, {
+    await adminApi.put(`/api/v1/admin/flow-nodes/${registrationNodeId}/schedule`, {
       schedule: [
-        { status: "registration", starts_at: at(-2 * HOUR), ends_at: at(24 * HOUR) },
-        { status: "check_in", starts_at: at(-HOUR), ends_at: at(36 * HOUR) },
+        { phase: "open", starts_at: at(-2 * HOUR), ends_at: at(24 * HOUR) },
+        { phase: "check_in", starts_at: at(-HOUR), ends_at: at(36 * HOUR) },
       ],
     });
     const res = await checkIn();
@@ -459,7 +457,7 @@ test.describe("check-in", () => {
 
 test.describe("subscription gate (Boosty challenge code)", () => {
   test("workspace requirement + code provider: sign-up allowed, check-in refused until a valid code is redeemed", async ({ adminApi, makeUser }) => {
-    const { ws, t, version } = await openTournament(adminApi, { form: OW_FORM });
+    const { ws, t, version, registrationNodeId } = await openTournament(adminApi, { form: OW_FORM });
     const code = uniq("PATRON");
     const requirement = await adminApi.put<{ requirement: Record<string, unknown> }>(`/api/v1/admin/ws/${ws.id}/subscription-requirement`, {
       requirement: { mode: "any", requirements: [{ provider: "boosty", min_tier_rank: 1 }] },
@@ -486,7 +484,7 @@ test.describe("subscription gate (Boosty challenge code)", () => {
     await adminApi.put(adminForm(t.id), { form_schema: form.form_schema, require_subscription: true, subscription_stage: "check_in" });
 
     const [payer, freeloader] = [await makeUser("sub"), await makeUser("sub")];
-    const regs = [await registerSelf(payer, t.id, version, { roles: ["tank"] }), await registerSelf(freeloader, t.id, version, { roles: ["damage"] })];
+    const regs = [await registerSelf(payer, t.id, registrationNodeId, version, { roles: ["tank"] }), await registerSelf(freeloader, t.id, registrationNodeId, version, { roles: ["damage"] })];
     type SubStatus = { required: boolean; outcome: string; blocks_registration: boolean; verdicts: Record<string, { state: string; code_accepted: boolean }> };
     const before = await payer.api.get<SubStatus>(`/api/v1/tournaments/${t.id}/subscription/me`);
     expect(before).toMatchObject({ required: true, outcome: "refused", blocks_registration: false });
@@ -499,7 +497,7 @@ test.describe("subscription gate (Boosty challenge code)", () => {
     expect(redeemed.verdicts.boosty.state).toBe("active");
 
     await adminApi.post(`${adminRegs(t.id)}/bulk-approve`, { registration_ids: regs.map((r) => r.id) });
-    await setStatus(adminApi, t.id, "check_in");
+    await transitionNode(adminApi, registrationNodeId, "check_in");
     const refused = await freeloader.api.raw("POST", `${pub(t.id)}/me/check-in`);
     expect(refused.status(), "check-in without the subscription").toBe(400);
     expect(JSON.stringify(await refused.json())).toContain("no_code_redeemed");

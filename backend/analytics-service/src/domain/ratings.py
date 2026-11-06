@@ -78,7 +78,7 @@ def compute_points_shifts(df: pd.DataFrame) -> pd.DataFrame:
     ``coef² · maps``; the sd sums that over the rows the shift accumulates. No maps in that window: NaN.
     """
     for _, rows in df.groupby("id_role", sort=False):
-        rows = rows.sort_values(["started_at", "tournament_id"])
+        rows = rows.sort_values(["started_at", "ended_at", "tournament_id"])
         is_novice = True
         previous_shift = 0.0
         previous_variance = 0.0
@@ -133,7 +133,7 @@ def compute_linear_metrics(df: pd.DataFrame, *, shift_scale: float = STABLE_SHIF
     noise_sd = raw_signal_sd(list(signals.values()))
 
     for _, group in df.groupby("id_role", sort=False):
-        group = group.sort_values(["started_at", "tournament_id"])
+        group = group.sort_values(["started_at", "ended_at", "tournament_id"])
         start = 0
         for position, (index, is_changed) in enumerate(zip(group.index, group["is_changed"], strict=True)):
             if is_changed:

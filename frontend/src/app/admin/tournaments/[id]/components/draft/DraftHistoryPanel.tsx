@@ -20,12 +20,15 @@ import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type Tone } from "@/components/ui/tone";
 import { notify } from "@/lib/notify";
+import { useFlowErrorNotifier } from "@/hooks/useFlowErrorNotifier";
+import { FLOW_NODE_PARAM } from "@/hooks/useFlowNodeParam";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import draftService from "@/services/draft.service";
 import type { DraftSession, DraftStatus } from "@/types/draft.types";
 
 interface DraftHistoryPanelProps {
   tournamentId: number;
+  formationNodeId: number;
   /** Notified with the erased session id so the caller can reset a stale wizard. */
   onSessionDeleted?: (sessionId: number) => void;
 }
@@ -40,24 +43,31 @@ const STATUS_TONE: Partial<Record<DraftStatus, Tone>> = {
   paused: "warning"
 };
 
-export function DraftHistoryPanel({ tournamentId, onSessionDeleted }: Readonly<DraftHistoryPanelProps>) {
+export function DraftHistoryPanel({
+  tournamentId,
+  formationNodeId,
+  onSessionDeleted
+}: Readonly<DraftHistoryPanelProps>) {
   const t = useTranslations("draftAdmin");
   const tTable = useTranslations("kitTable.dataTableExtra");
   const format = useFormatter();
   const queryClient = useQueryClient();
+  const notifyFlowError = useFlowErrorNotifier();
   const [pendingDelete, setPendingDelete] = useState<DraftSession | null>(null);
 
-  const sessionsKey = tournamentQueryKeys.draftSessions(tournamentId);
+  const sessionsKey = tournamentQueryKeys.draftSessions(tournamentId, formationNodeId);
   const sessionsQuery = useQuery({
     queryKey: sessionsKey,
-    queryFn: () => draftService.listSessions(tournamentId),
+    queryFn: () => draftService.listSessions(tournamentId, formationNodeId),
     enabled: Number.isFinite(tournamentId) && tournamentId > 0
   });
 
   const invalidate = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: sessionsKey }),
-      queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.draftBoard(tournamentId) })
+      queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.draftBoard(tournamentId, formationNodeId)
+      })
     ]);
   };
 
@@ -84,7 +94,7 @@ export function DraftHistoryPanel({ tournamentId, onSessionDeleted }: Readonly<D
       });
       await invalidate();
     },
-    onError: (error) => notify.apiError(error)
+    onError: (error) => notifyFlowError(error)
   });
 
   // Corrective, non-destructive counterpart to Export: the exported teams (and
@@ -186,7 +196,7 @@ export function DraftHistoryPanel({ tournamentId, onSessionDeleted }: Readonly<D
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem asChild>
-                      <Link href={`/draft/${tournamentId}`} target="_blank">
+                      <Link href={`/draft/${tournamentId}?${FLOW_NODE_PARAM}=${formationNodeId}`} target="_blank">
                         {t("openBoard")}
                       </Link>
                     </DropdownMenuItem>

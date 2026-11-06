@@ -1,8 +1,7 @@
 """Rolling-origin time-series splits over tournaments.
 
-Tournaments are ordered by **start date** (``coalesce(start_date, created_at)``,
-id as tie-break). Numeric id is NOT a chronology proxy in this database
-(tournament 62 started months before 61), so id-ordered splits would train on
+Tournaments are ordered by ``shared.core.chrono.tournament_chrono_key`` (start, end, id). Numeric id is NOT a
+chronology proxy in this database (tournament 62 started months before 61), so id-ordered splits would train on
 the future. For each cutoff fold the split returns
 ``(train_ids, val_id, test_id)`` where ``train`` is everything that started
 before the validation tournament.
@@ -17,11 +16,12 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.chrono import ChronoRow, chrono_sort_key, tournament_chrono_key
 from shared.services.workspace_scope import workspace_scope_filter
 
 __all__ = (
     "TimeSeriesSplit",
-    "tournament_ids_up_to",
+    "tournaments_up_to",
 )
 
 
@@ -38,15 +38,16 @@ class TimeSeriesSplit:
     test_id: int | None
 
     @classmethod
-    def from_ids(cls, ids: typing.Sequence[int], *, test_id: int) -> TimeSeriesSplit:
-        """Build a single split with the latest non-test id as validation.
+    def from_ids(cls, tournaments: typing.Sequence[ChronoRow], *, test_id: int) -> TimeSeriesSplit:
+        """Build a single split with the latest non-test tournament as validation.
 
-        ``ids`` MUST already be chronologically ordered (the contract of
-        :func:`tournament_ids_up_to`); their numeric values are opaque labels.
-        Sorting them here would re-impose id-as-time — the future leak this
-        module exists to prevent.
+        ``tournaments`` MUST come in :func:`tournaments_up_to`'s order and are refused otherwise; their ids are
+        opaque labels. Sorting them here would re-impose id-as-time — the future leak this module exists to prevent.
         """
-        ordered = [int(i) for i in ids if int(i) != int(test_id)]
+        keys = [chrono_sort_key(t) for t in tournaments]
+        if keys != sorted(keys):
+            raise ValueError("tournaments are not in chronological order")
+        ordered = [int(t.id) for t in tournaments if int(t.id) != int(test_id)]
         if not ordered:
             return cls(train_ids=(), val_id=None, test_id=int(test_id))
         val_id = ordered[-1]
@@ -54,28 +55,25 @@ class TimeSeriesSplit:
         return cls(train_ids=train_ids, val_id=val_id, test_id=int(test_id))
 
 
-async def tournament_ids_up_to(
+async def tournaments_up_to(
     session: AsyncSession,
     cutoff_tournament_id: int,
     *,
     discipline: str,
     workspace_id: int | None = None,
     workspace_ids: typing.Sequence[int] | None = None,
-) -> list[int]:
-    """Return ids of ``discipline`` tournaments that started on/before the cutoff, in start order.
+) -> list[sa.Row]:
+    """Return ``discipline`` tournaments up to and including the cutoff, in tournament chronology.
 
-    Chronology is ``(coalesce(start_date, created_at), id)`` — see the module
-    docstring for why numeric id must not order this list. An unknown cutoff id
+    Rows carry ``id, start_date, end_date, created_at``. An unknown cutoff id
     yields ``[]`` rather than a silently mis-anchored window. A cutoff that exists but belongs to another discipline,
     or to a workspace outside the requested scope, contradicts the request and raises ``ValueError``: it would anchor
     one game's (or one tenant's) history window on another's date.
     """
-    chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
     cutoff = (
         await session.execute(
             sa.select(
-                chrono.label("started"),
-                models.Tournament.id,
+                *tournament_chrono_key(),
                 models.Tournament.discipline,
                 models.Tournament.workspace_id,
             ).where(models.Tournament.id == cutoff_tournament_id)
@@ -91,9 +89,14 @@ async def tournament_ids_up_to(
     if scope is not None and cutoff.workspace_id not in {int(w) for w in scope}:
         raise ValueError(f"cutoff tournament {cutoff_tournament_id} is outside the requested workspace scope")
     query = (
-        sa.select(models.Tournament.id)
+        sa.select(
+            models.Tournament.id,
+            models.Tournament.start_date,
+            models.Tournament.end_date,
+            models.Tournament.created_at,
+        )
         .where(
-            sa.tuple_(chrono, models.Tournament.id) <= sa.tuple_(cutoff.started, cutoff.id),
+            sa.tuple_(*tournament_chrono_key()) <= sa.tuple_(*cutoff[:3]),
             models.Tournament.id >= 1,
             models.Tournament.discipline == discipline,
             # Hidden tournaments are containers, not seasons. The per-workspace
@@ -102,7 +105,7 @@ async def tournament_ids_up_to(
             models.Tournament.is_hidden.is_(False),
             *workspace_scope_filter(workspace_id, workspace_ids),
         )
-        .order_by(chrono, models.Tournament.id)
+        .order_by(*tournament_chrono_key())
     )
     result = await session.execute(query)
-    return [int(row[0]) for row in result.all()]
+    return list(result.all())

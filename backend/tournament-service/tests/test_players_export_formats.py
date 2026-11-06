@@ -34,6 +34,7 @@ from tests._rpc_fakes import CapturingBroker, FakeSessionMaker, make_identity  #
 
 SUBJECT = "rpc.tournament.sheet_players_export"
 TOURNAMENT_ID = 84
+NODE_ID = 12
 SHAPE = RosterShape(entries=tuple({"tank": 1, "damage": 2, "support": 2}.items()))
 GRID = DivisionGrid(version_id=7, tiers=())
 
@@ -86,9 +87,13 @@ class PlayersExportFormatsTests(IsolatedAsyncioTestCase):
         async def fake_permission(*_args, **_kwargs) -> None:
             return None
 
-        async def fake_for_tournament(_session, tournament_id, **_kwargs):
-            self.assertEqual(TOURNAMENT_ID, tournament_id)
+        async def fake_for_registration_node(_session, registration_node_id, **_kwargs):
+            self.assertEqual(NODE_ID, registration_node_id)
             return {1: _roster()}
+
+        async def fake_node_id(_session, _data, tournament_id):
+            self.assertEqual(TOURNAMENT_ID, tournament_id)
+            return NODE_ID
 
         async def fake_shape(_session, _tournament_id):
             return SHAPE
@@ -103,7 +108,8 @@ class PlayersExportFormatsTests(IsolatedAsyncioTestCase):
         with (
             patch.object(helpers.db, "async_session_maker", FakeSessionMaker(session)),
             patch.object(integrations.auth, "require_tournament_id_permission", fake_permission),
-            patch.object(player_export.roster_engine, "for_tournament", fake_for_tournament),
+            patch.object(player_export.roster_engine, "for_registration_node", fake_for_registration_node),
+            patch.object(integrations, "_registration_node_id", fake_node_id),
             patch.object(player_export, "tournament_slot_shape", fake_shape),
             patch.object(player_export, "get_effective_division_grid", fake_grid),
             # No registration form row -> the flex mode falls back to "optional".

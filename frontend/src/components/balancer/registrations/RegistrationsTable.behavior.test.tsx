@@ -135,6 +135,8 @@ function registration(id: number, overrides: Partial<AdminRegistration> = {}): A
   const balancerStatus = overrides.balancer_status ?? "ready";
   return {
     id,
+    entry_id: id + 1000,
+    registration_node_id: 7,
     tournament_id: 80,
     workspace_id: 1,
     user_id: id,
@@ -192,7 +194,7 @@ function Harness() {
   useEffect(() => {
     rerender = () => force((value) => value + 1);
   }, []);
-  return <RegistrationsTable tournamentId={80} />;
+  return <RegistrationsTable tournamentId={80} registrationNodeId={7} />;
 }
 
 const mounted: Root[] = [];
@@ -289,7 +291,7 @@ describe("RegistrationsTable toolbar", () => {
     await mount();
 
     expect(listRegistrations).toHaveBeenCalledTimes(1);
-    expect(listRegistrations).toHaveBeenLastCalledWith(80, { include_deleted: false });
+    expect(listRegistrations).toHaveBeenLastCalledWith(80, 7, { include_deleted: false });
   });
 
   it("turns the pending count into the pending filter, in the URL", async () => {
@@ -356,11 +358,11 @@ describe("RegistrationsTable toolbar", () => {
     await click(menuItem("menuitemradio", "Group by check-in"));
 
     // Both buckets: the pool has no checked-in rows, so one section holds all 25.
-    // A section header is a body row without a row id; the foot's total says the same words.
+    // A section header is a body row without a row id, its row count after the label.
     const sectionHeaders = [...scope.querySelectorAll("tbody tr:not([data-row-id])")].map(
       (node) => node.textContent ?? ""
     );
-    expect(sectionHeaders.some((text) => text.includes("25 registrations"))).toBe(true);
+    expect(sectionHeaders.some((text) => text.endsWith("25"))).toBe(true);
   });
 });
 
@@ -440,7 +442,7 @@ describe("RegistrationsTable bulk approve", () => {
       await tick();
     });
 
-    expect(updateRegistration).toHaveBeenCalledWith(1, { status: "pending" });
+    expect(updateRegistration).toHaveBeenCalledWith(1, 7, { status: "pending" });
     expect(vi.mocked(notify.success).mock.calls.at(-1)?.[0]).toBe("Approval undone");
   });
 });

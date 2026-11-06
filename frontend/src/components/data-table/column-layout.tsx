@@ -9,7 +9,7 @@ import type { AdminTableDensity } from "@/components/data-table/useTablePreferen
 const ADMIN_ACTION_COLUMN_MIN_WIDTH = 80;
 /** Width of the select/expand column — keep in sync with its `w-10` class. */
 const ADMIN_LEADING_COLUMN_WIDTH = 40;
-/** Flexible (unsized, undragged) columns split this share of the table evenly, so they read as a grid instead of shrink-wrapping to content; the filler absorbs the rest. */
+/** Flexible (unsized, undragged) columns split this share of the table evenly, so they read as a grid instead of shrink-wrapping to content; the filler in front of the actions column absorbs the rest. */
 const ADMIN_FLEXIBLE_FILL_PERCENT = 75;
 
 /**
@@ -93,6 +93,13 @@ export function buildColumnLayout<TData>({
     !explicitlySizedColumnIds.has(column.id) &&
     !readColumnMeta<TData>(column.columnDef.meta).sticky;
 
+  // The filler sits in front of the actions column or a right-pinned block. With neither after it,
+  // it would be a dead gap on the right edge, so the flexible columns take its share too.
+  const lastColumn = visibleColumns.at(-1);
+  const fillerTrails =
+    lastColumn === undefined ||
+    (lastColumn.id !== ADMIN_ACTION_COLUMN_ID && readColumnMeta<TData>(lastColumn.columnDef.meta).sticky !== "right");
+  const fillPercent = fillerTrails ? 100 : ADMIN_FLEXIBLE_FILL_PERCENT;
   const getColumnStyle = (column: Column<TData, unknown>) => {
     if (column.id === ADMIN_ACTION_COLUMN_ID) {
       // Exactly as wide as its menu button, whatever a saved sizing says: the
@@ -118,7 +125,7 @@ export function buildColumnLayout<TData>({
     // grid fills the screen instead of shrink-wrapping to content with a
     // dead gap on the right (the filler, below, absorbs what's left).
     const flexibleCount = visibleColumns.filter(isFlexibleColumn).length;
-    return flexibleCount > 0 ? { width: `${ADMIN_FLEXIBLE_FILL_PERCENT / flexibleCount}%` } : undefined;
+    return flexibleCount > 0 ? { width: `${fillPercent / flexibleCount}%` } : undefined;
   };
 
   // +1 for the filler column that swallows leftover width, keeping data columns
@@ -195,11 +202,11 @@ export function buildColumnLayout<TData>({
 
   // Auto table layout hands leftover width to every column in proportion to
   // its content, which reads as random gaps between columns. Flexible columns
-  // (see `getColumnStyle`) now claim an even `ADMIN_FLEXIBLE_FILL_PERCENT`
-  // share instead, so the grid fills the screen; the filler only mops up
-  // whatever's left over (all of it, if every column turned out sized/sticky).
+  // (see `getColumnStyle`) now claim an even share instead (`fillPercent`),
+  // so the grid fills the screen; the filler only mops up whatever's left
+  // over (all of it, if every column turned out sized/sticky).
   const flexibleColumnCount = visibleColumns.filter(isFlexibleColumn).length;
-  const fillerStyle = flexibleColumnCount > 0 ? { width: `${100 - ADMIN_FLEXIBLE_FILL_PERCENT}%` } : undefined;
+  const fillerStyle = flexibleColumnCount > 0 ? { width: `${100 - fillPercent}%` } : undefined;
   const fillerHead = (
     <TableHead
       key="filler"

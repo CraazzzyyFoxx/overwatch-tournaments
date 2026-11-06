@@ -9,11 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
 import { cn } from "@/lib/utils";
-import { isRegistrationOpen } from "@/lib/tournament/status";
-import { reachedAtLeast } from "@/lib/tournament/lifecycle";
+import { hasPlayStarted } from "@/lib/tournament/stages";
+import { displayStatus } from "@/lib/tournament/status";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { useViewerRegistrationNode } from "@/hooks/useViewerRegistrationNode";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import registrationService from "@/services/registration.service";
+import { isSignUpOpen, nodesOfKind, registrationIntake } from "@/lib/tournament/flow-nodes";
+import { tournamentMyRegistrationQueryOptions } from "@/lib/tournament/registrations-query";
 import { tournamentHref } from "@/lib/tournament/url";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -26,11 +29,14 @@ type Props = {
   tournament: Tournament;
   /** `sm` (the collapsed rail): every state at the rail's 32px control height. */
   size?: "default" | "sm";
+  /** Acts on this registration node instead of the viewer's current one (a register card per open node). */
+  registrationNodeId?: number;
 };
 
 export default function TournamentRegisterButton({
   tournament,
-  size = "default"
+  size = "default",
+  registrationNodeId: cardNodeId
 }: Readonly<Props>) {
   const small = size === "sm";
   const workspaceId = tournament.workspace_id;
@@ -41,6 +47,12 @@ export default function TournamentRegisterButton({
   const openAuthModal = useAuthModalStore((state) => state.open);
   const isAuthenticated = authStatus === "authenticated" && user !== null;
   const [showModal, setShowModal] = useState(false);
+  const viewerNode = useViewerRegistrationNode(tournament);
+  const registrationNode =
+    cardNodeId === undefined
+      ? viewerNode
+      : (nodesOfKind(tournament, "registration").find((node) => node.id === cardNodeId) ?? null);
+  const registrationNodeId = registrationNode?.id ?? null;
 
   const formQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationForm(workspaceId, tournamentId),
@@ -48,8 +60,7 @@ export default function TournamentRegisterButton({
   });
 
   const myRegQuery = useQuery({
-    queryKey: tournamentQueryKeys.registration(workspaceId, tournamentId),
-    queryFn: () => registrationService.getMyRegistration(tournamentId),
+    ...tournamentMyRegistrationQueryOptions(tournament, registrationNode),
     enabled: isAuthenticated
   });
 
@@ -66,6 +77,8 @@ export default function TournamentRegisterButton({
 
   if (formQuery.isLoading) return null;
   if (!form) return null;
+  // No registration node, nothing to register for.
+  if (registrationNodeId == null) return null;
   // Who is asking is unknown until the profile resolves, and the server render
   // and hydration always see "idle" — with the form seeded server-side, a
   // signed-in viewer would otherwise be offered "Login to register" first, and
@@ -76,7 +89,7 @@ export default function TournamentRegisterButton({
   // The viewer's own registration, for as long as it is news: through check-in
   // and the forming of the teams, open window or not. Once the matches are on,
   // the slot belongs to what the tournament is doing.
-  if (myReg && !reachedAtLeast(tournament.status, "live")) {
+  if (myReg && !hasPlayStarted(tournament.status, tournament.stages)) {
     const statusMap: Record<string, { icon: typeof Clock; label: string; className: string }> = {
       pending: {
         icon: Clock,
@@ -121,12 +134,12 @@ export default function TournamentRegisterButton({
   }
 
   // The form must exist (checked above) but no longer decides openness — the
-  // tournament's REGISTRATION schedule window does.
-  if (!isRegistrationOpen(tournament)) {
+  // registration node's status and sign-up window do.
+  if (!isSignUpOpen(registrationNode)) {
     // Someone may still come to sign up while the tournament registers or
     // checks in. From the forming of the teams on nobody asks, and a dead box
     // would be the loudest thing in the hero.
-    if (reachedAtLeast(tournament.status, "draft")) return null;
+    if (["forming", "live", "completed", "archived"].includes(displayStatus(tournament))) return null;
     return (
       // A STATE, not a control: the subtle button's box and palette, without the hover a click would need.
       <div
@@ -156,15 +169,17 @@ export default function TournamentRegisterButton({
   // slot nobody had asked them for — and once spent, founding a team is
   // foreclosed. `TeamRegistrationEntry` hides itself for a viewer who cannot act,
   // so this renders nothing rather than a dead control.
-  if (tournament.team_formation === "registration") {
-    return <TeamRegistrationEntry tournament={tournament} />;
+  if (registrationIntake(tournament, registrationNode) === "team") {
+    return <TeamRegistrationEntry tournament={tournament} registrationNodeId={registrationNodeId} />;
   }
 
   return (
     <>
       <Button type="button" size={small ? "sm" : "default"} onClick={() => setShowModal(true)}>
         <UserPlus aria-hidden />
-        {t("registration.button.register")}
+        {nodesOfKind(tournament, "registration").length > 1
+          ? t("registration.button.registerFor", { node: registrationNode?.name ?? "" })
+          : t("registration.button.register")}
       </Button>
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-h-[94vh] overflow-y-auto sm:max-w-2xl lg:max-w-3xl">
@@ -176,6 +191,7 @@ export default function TournamentRegisterButton({
           <RegistrationWizard
             workspaceId={workspaceId}
             tournamentId={tournamentId}
+            registrationNodeId={registrationNodeId}
             tournamentName={tournamentName}
             form={form}
             onClose={() => setShowModal(false)}

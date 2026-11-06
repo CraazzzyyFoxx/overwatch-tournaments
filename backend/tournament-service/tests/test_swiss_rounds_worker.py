@@ -35,7 +35,7 @@ def _round(round_number: int, *, completed: bool, stage_item_id: int = 501):
 class SwissRoundWorkerTests(IsolatedAsyncioTestCase):
     async def test_generated_round_does_not_commit_or_recalculate_directly(self) -> None:
         stage_item = SimpleNamespace(id=501)
-        stage = SimpleNamespace(id=77, is_active=True, items=[stage_item], max_rounds=5)
+        stage = SimpleNamespace(id=77, status="live", items=[stage_item], max_rounds=5)
         encounters = [_round(1, completed=True)]
         skeleton = SimpleNamespace(pairings=[SimpleNamespace(round_number=2)])
         generated = [SimpleNamespace(id=101)]
@@ -68,7 +68,7 @@ class SwissRoundWorkerTests(IsolatedAsyncioTestCase):
 
     async def test_stale_round_is_idempotently_skipped(self) -> None:
         stage_item = SimpleNamespace(id=501)
-        stage = SimpleNamespace(id=77, is_active=True, items=[stage_item], max_rounds=5)
+        stage = SimpleNamespace(id=77, status="live", items=[stage_item], max_rounds=5)
         # Round 2 already exists (and is still being played): the event is stale.
         encounters = [_round(2, completed=False)]
         session = SimpleNamespace()
@@ -92,7 +92,7 @@ class SwissRoundWorkerTests(IsolatedAsyncioTestCase):
 
     async def test_generate_ready_rounds_does_not_enqueue_a_bracket_job(self) -> None:
         item = SimpleNamespace(id=501)
-        stage = SimpleNamespace(id=77, is_active=True, items=[item], max_rounds=5)
+        stage = SimpleNamespace(id=77, status="live", items=[item], max_rounds=5)
         generated = [SimpleNamespace(id=101)]
 
         session = SimpleNamespace(

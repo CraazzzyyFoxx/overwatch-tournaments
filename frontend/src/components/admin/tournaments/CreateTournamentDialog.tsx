@@ -10,13 +10,18 @@ import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PresetPicker, DEFAULT_PRESET_CHOICE, presetChoiceValid } from "@/components/admin/tournaments/PresetPicker";
 import { GameField } from "@/components/workspace/GameField";
+import { draftFromRead, toChanges } from "@/lib/flow/flowDraft";
+import { applyPreset } from "@/lib/flow/presets";
+import { usePresetLabels } from "@/lib/flow/usePresetLabels";
 import { notify } from "@/lib/notify";
 import { normalizeChallongeSlug } from "@/lib/tournament/challonge";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import adminService from "@/services/admin.service";
+import flowService from "@/services/flow.service";
 import type { DisciplineDescriptor } from "@/types/discipline.types";
+import type { FlowChanges } from "@/types/flow.types";
 import type { Tournament } from "@/types/tournament.types";
 
 type Source = "manual" | "challonge";
@@ -27,8 +32,6 @@ const SOURCES = [
   { value: "challonge", title: "sourceChallonge", hint: "sourceChallongeHint" }
 ] as const satisfies readonly { value: Source; title: string; hint: string }[];
 
-const FORMATIONS = ["balancer", "draft", "registration", "solo"] as const;
-
 /** Visual required marker; `required` on the control carries the semantics. */
 const requiredMark = (
   <span aria-hidden className="ml-0.5 text-danger">
@@ -38,7 +41,7 @@ const requiredMark = (
 
 /**
  * "Create tournament": only what a tournament cannot exist without — its game (spec §7.2), where its bracket comes
- * from, a name and dates — plus the team formation, which decides the phases it has. It is created Unpublished;
+ * from, a name and dates — plus the preset its graph starts from, which decides the phases it has. It is created Unpublished;
  * the caller opens its Overview, whose checklist walks the rest of the setup.
  */
 export function CreateTournamentDialog({
@@ -64,41 +67,50 @@ export function CreateTournamentDialog({
   const [challongeSlug, setChallongeSlug] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [teamFormation, setTeamFormation] = useState<string>("balancer");
+  const [preset, setPreset] = useState(DEFAULT_PRESET_CHOICE);
+  const labels = usePresetLabels();
   const [submitted, setSubmitted] = useState(false);
 
   const errors: Record<string, string> = {};
   if (source === "manual" && !name.trim()) errors.name = t("validation.nameRequired");
   if (source === "challonge" && !challongeSlug.trim()) errors.challongeSlug = t("validation.challongeRequired");
   if (!startDate || !endDate) errors.dates = t("validation.datesRequired");
+  if (source === "manual" && !presetChoiceValid(preset)) errors.preset = t("validation.presetInvalid");
   const shownErrors = submitted ? errors : {};
 
   const create = useMutation({
     mutationFn: async (): Promise<Tournament> => {
       if (source === "manual") {
-        return adminService.createTournament({
+        const created = await adminService.createTournament({
           workspace_id: workspaceId,
           discipline: game,
           name: name.trim(),
-          is_league: false,
           is_hidden: true,
-          team_formation: teamFormation,
           start_date: startDate,
           end_date: endDate
         });
+        // The tournament is created with its starter registration → formation pair; the preset grows the graph.
+        // A failure here must not fail the mutation: a retry would create a second tournament.
+        try {
+          const read = await flowService.getAdmin(created.id);
+          const draft = applyPreset(draftFromRead(read), preset.preset, { days: preset.days ?? 3, best: preset.best ?? 2 }, labels);
+          await flowService.applyChanges(created.id, toChanges(draft) as FlowChanges);
+        } catch {
+          notify.warning(t("presetWarning"), { description: t("presetWarningDescription") });
+        }
+        return created;
       }
       const imported = await adminService.createTournamentWithGroups({
         workspace_id: workspaceId,
         discipline: game,
         challonge_slug: normalizeChallongeSlug(challongeSlug),
-        is_league: false,
         start_date: startDate,
         end_date: endDate
       });
-      // The import takes neither visibility nor formation. A failure here must not fail the mutation: a retry
-      // would import the bracket a second time.
+      // The import takes no visibility. A failure here must not fail the mutation: a retry would import the bracket a
+      // second time.
       try {
-        return await adminService.updateTournament(imported.id, { is_hidden: true, team_formation: teamFormation });
+        return await adminService.updateTournament(imported.id, { is_hidden: true });
       } catch {
         notify.warning(t("importHideWarning"), { description: t("importHideDescription") });
         return imported;
@@ -213,22 +225,15 @@ export function CreateTournamentDialog({
         />
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="create-tournament-formation">{t("teamFormation")}</Label>
-        <Select value={teamFormation} onValueChange={setTeamFormation}>
-          <SelectTrigger id="create-tournament-formation">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {FORMATIONS.map((formation) => (
-              <SelectItem key={formation} value={formation}>
-                {t(`formation.${formation}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">{t("teamFormationHelp")}</p>
-      </div>
+      {/* A Challonge import brings its own stages, so only a manual tournament starts from a preset. */}
+      {source === "manual" ? (
+        <fieldset className="space-y-1.5">
+          <legend className="mb-1.5 text-sm font-medium">{t("preset")}</legend>
+          <PresetPicker value={preset} onChange={setPreset} />
+          <p className="text-xs text-muted-foreground">{t("presetHelp")}</p>
+          {shownErrors.preset ? <p className="text-xs text-danger">{shownErrors.preset}</p> : null}
+        </fieldset>
+      ) : null}
     </EntityFormDialog>
   );
 }

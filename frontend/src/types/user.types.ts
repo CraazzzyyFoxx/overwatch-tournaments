@@ -141,7 +141,6 @@ export interface UserTournamentSummary {
   id: number;
   name: string;
   discipline: string;
-  is_league: boolean;
   is_finished?: boolean;
   status?: string | null;
 }
@@ -167,7 +166,6 @@ interface UserTournamentPlayer {
 interface UserEncounterTournament {
   id: number;
   name: string;
-  is_league: boolean;
   is_finished?: boolean;
   status?: string | null;
 }
@@ -258,7 +256,6 @@ export interface UserTournament {
   name: string;
   workspace_id: number;
   discipline: string;
-  is_league: boolean;
   team_id: number;
   team: string;
   players: UserTournamentPlayer[];

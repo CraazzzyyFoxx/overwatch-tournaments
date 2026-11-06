@@ -1,4 +1,6 @@
+import { formationModes } from "@/lib/tournament/flow-nodes";
 import type { RegistrationStatus } from "@/types/registration.types";
+import type { Tournament } from "@/types/tournament.types";
 
 import { IDENTITY_EXTRAS_COLUMN_ID } from "./_components/participantsColumns.model";
 
@@ -26,8 +28,11 @@ export const STATUS_FILTER_ORDER: RegistrationStatus[] = [
 
 // localeKeyMap removed to support DB status names without hardcoded translation
 
-/** Team formations whose roster is a player pool rather than a list of teams. */
-export const POOL_TEAM_FORMATIONS: Record<string, true> = { balancer: true, draft: true };
+/** The tournament has a formation whose roster is a player pool (balancer or draft) rather than a list of teams. */
+export function hasPoolFormation(tournament: Pick<Tournament, "flow_nodes">): boolean {
+  const modes = formationModes(tournament);
+  return modes.has("balancer") || modes.has("draft");
+}
 
 /** Organizer-only columns: the player's notes and their extra BattleTags —
  *  what the roster shows ABOUT a player rather than the state of their own

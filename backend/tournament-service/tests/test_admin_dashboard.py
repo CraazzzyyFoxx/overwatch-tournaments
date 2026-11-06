@@ -28,14 +28,16 @@ from shared.models.registration.registration import Registration, RegistrationFo
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember
 from shared.models.tournament import (
     BracketEncounter,
+    FlowNode,
     Stage,
     StageItem,
     StageItemInput,
     Team,
     Tournament,
-    TournamentPhaseSchedule,
     TournamentRecalculationState,
 )
+from shared.models.tournament.flow import FlowNodeSchedule
+from shared.testing.factories import add_entry, registration_node
 from src.schemas import AdminDashboard
 from src.services.dashboard.overview import DashboardPermissions, overview
 from src.services.dashboard.readiness import readiness
@@ -58,24 +60,46 @@ async def _workspace(session: Any) -> int:
     return workspace.id
 
 
+async def _register(session: Any, tournament: Tournament, display_name: str = "p", **entry_fields: Any) -> Registration:
+    """A registration with its entry (``entry_fields``) in the tournament's registration node, created on first use."""
+    registration = Registration(tournament_id=tournament.id, display_name=display_name)
+    session.add(registration)
+    await session.flush()
+    node_id = await session.scalar(
+        sa.select(FlowNode.id).where(FlowNode.tournament_id == tournament.id, FlowNode.kind == "registration")
+    )
+    if node_id is None:
+        node_id = await registration_node(session, tournament.id)
+    await add_entry(session, node_id, registration.id, **entry_fields)
+    return registration
+
+
 async def _tournament(
     session: Any,
     workspace_id: int,
     status: enums.TournamentStatus,
     *,
-    schedule: tuple[tuple[enums.TournamentStatus, datetime, datetime | None], ...] = (),
+    schedule: tuple[tuple[str, str, str, datetime, datetime | None], ...] = (),
     **columns: Any,
 ) -> Tournament:
+    """A tournament; ``schedule`` rows are ``(node kind, node status, phase, starts_at, ends_at)``, one node per
+    distinct ``(kind, node status)`` named after its kind."""
     suffix = uuid.uuid4().hex[:12]
     tournament = Tournament(
         workspace_id=workspace_id, name=f"{status.value} {suffix}", slug=f"dash-{suffix}", status=status, **columns
     )
     session.add(tournament)
     await session.flush()
-    session.add_all(
-        TournamentPhaseSchedule(tournament_id=tournament.id, status=phase, starts_at=starts_at, ends_at=ends_at)
-        for phase, starts_at, ends_at in schedule
-    )
+    nodes: dict[tuple[str, str], FlowNode] = {}
+    for kind, node_status, phase, starts_at, ends_at in schedule:
+        node = nodes.get((kind, node_status))
+        if node is None:
+            node = nodes[(kind, node_status)] = FlowNode(
+                tournament_id=tournament.id, kind=kind, name=kind.capitalize(), status=node_status, config={}
+            )
+            session.add(node)
+            await session.flush()
+        session.add(FlowNodeSchedule(node_id=node.id, phase=phase, starts_at=starts_at, ends_at=ends_at))
     await session.flush()
     return tournament
 
@@ -136,16 +160,13 @@ def _identity(workspace_id: int, perms: list[dict[str, str]]) -> dict:
 def test_every_unfinished_tournament_is_a_card_in_its_phase(db_session) -> None:
     async def seed(session: Any, workspace_id: int, now: datetime) -> dict[str, Any]:
         ids = {}
-        for status, hidden in (
-            (TS.ANNOUNCEMENT, False),
-            (TS.REGISTRATION, False),
-            (TS.CHECK_IN, False),
-            (TS.DRAFT, False),
-            (TS.LIVE, False),
-            (TS.PLAYOFFS, True),
-            (TS.ARCHIVED, False),
+        for label, status, hidden in (
+            ("announcement", TS.ANNOUNCEMENT, False),
+            ("live", TS.LIVE, False),
+            ("hidden_live", TS.LIVE, True),
+            ("archived", TS.ARCHIVED, False),
         ):
-            ids[status] = (await _tournament(session, workspace_id, status, is_hidden=hidden)).id
+            ids[label] = (await _tournament(session, workspace_id, status, is_hidden=hidden)).id
         # Finished a month ago: long past its wrap-up window.
         ids["old"] = (await _tournament(session, workspace_id, TS.COMPLETED, end_date=now - timedelta(days=30))).id
         return ids
@@ -153,17 +174,14 @@ def test_every_unfinished_tournament_is_a_card_in_its_phase(db_session) -> None:
     dashboard, ids, _now = _run(db_session, seed)
 
     assert {card.id: card.phase for card in dashboard.tournaments} == {
-        ids[TS.ANNOUNCEMENT]: "preparation",
-        ids[TS.REGISTRATION]: "registration",
-        ids[TS.CHECK_IN]: "formation",
-        ids[TS.DRAFT]: "formation",
-        ids[TS.LIVE]: "live",
-        ids[TS.PLAYOFFS]: "live",
+        ids["announcement"]: "preparation",
+        ids["live"]: "live",
+        ids["hidden_live"]: "live",
     }
     # Hidden tournaments keep their card; the live phase leads, newest first on a tie.
     assert [(card.id, card.is_hidden) for card in dashboard.tournaments[:2]] == [
-        (ids[TS.PLAYOFFS], True),
-        (ids[TS.LIVE], False),
+        (ids["hidden_live"], True),
+        (ids["live"], False),
     ]
 
 
@@ -263,33 +281,36 @@ def test_enabled_achievement_rules_hold_wrap_up_open_until_evaluated(db_session)
 # --- timeline + issues ---------------------------------------------------------
 
 
-def test_a_phase_start_is_overdue_only_past_the_grace_and_ahead_of_the_status(db_session) -> None:
+def test_a_phase_start_is_overdue_only_past_the_grace_and_while_its_node_has_not_moved(db_session) -> None:
     async def seed(session: Any, workspace_id: int, now: datetime) -> dict[str, Any]:
         behind = await _tournament(
             session,
             workspace_id,
-            TS.REGISTRATION,
+            TS.LIVE,
             schedule=(
-                (TS.REGISTRATION, now - timedelta(days=3), now + timedelta(hours=1)),
-                (TS.CHECK_IN, now - timedelta(minutes=30), None),
+                ("registration", "open", "open", now - timedelta(days=3), now + timedelta(hours=1)),
+                ("registration", "open", "check_in", now - timedelta(minutes=30), None),
                 # Inside the grace: the worker tick may simply not have run yet.
-                (TS.DRAFT, now - timedelta(minutes=5), None),
-                (TS.LIVE, now + timedelta(days=2), None),
+                ("formation", "draft", "start", now - timedelta(minutes=5), None),
+                ("formation", "forming", "start", now + timedelta(days=2), None),
             ),
         )
-        # Its check-in start passed, but the status already reached it.
+        # Its check-in start passed, but the node already made the move.
         on_time = await _tournament(
-            session, workspace_id, TS.CHECK_IN, schedule=((TS.CHECK_IN, now - timedelta(minutes=30), None),)
+            session,
+            workspace_id,
+            TS.LIVE,
+            schedule=(("registration", "check_in", "check_in", now - timedelta(minutes=30), None),),
         )
         return {"behind": behind.id, "on_time": on_time.id}
 
     dashboard, ids, now = _run(db_session, seed)
 
     assert dashboard.timeline is not None
-    assert [(e.tournament_id, e.status, e.edge, e.at, e.overdue) for e in dashboard.timeline] == [
-        (ids["behind"], "check_in", "start", now - timedelta(minutes=30), True),
-        (ids["behind"], "registration", "end", now + timedelta(hours=1), False),
-        (ids["behind"], "live", "start", now + timedelta(days=2), False),
+    assert [(e.tournament_id, e.node_name, e.phase, e.edge, e.at, e.overdue) for e in dashboard.timeline] == [
+        (ids["behind"], "Registration", "check_in", "start", now - timedelta(minutes=30), True),
+        (ids["behind"], "Registration", "open", "end", now + timedelta(hours=1), False),
+        (ids["behind"], "Formation", "start", "start", now + timedelta(days=2), False),
     ]
     assert ("phase_overdue", "critical", None) in _issues(dashboard, ids["behind"])
     assert _issues(dashboard, ids["on_time"]) == []
@@ -302,9 +323,11 @@ def test_pending_registrations_turn_critical_inside_24h_of_closing(db_session) -
     async def seed(session: Any, workspace_id: int, now: datetime) -> dict[str, Any]:
         ids = {}
         for label, closes_in in (("calm", timedelta(days=3)), ("urgent", timedelta(hours=2)), ("unscheduled", None)):
-            schedule = ((TS.REGISTRATION, now - timedelta(days=1), now + closes_in),) if closes_in else ()
-            tournament = await _tournament(session, workspace_id, TS.REGISTRATION, schedule=schedule)
-            session.add(Registration(tournament_id=tournament.id, display_name="p", status="pending"))
+            schedule = (
+                (("registration", "open", "open", now - timedelta(days=1), now + closes_in),) if closes_in else ()
+            )
+            tournament = await _tournament(session, workspace_id, TS.LIVE, schedule=schedule)
+            await _register(session, tournament, status="pending")
             ids[label] = tournament.id
         await session.flush()
         return ids
@@ -317,6 +340,44 @@ def test_pending_registrations_turn_critical_inside_24h_of_closing(db_session) -
         (ids["unscheduled"], "registrations_pending", "warning", 1),
     ]
     assert all(card.registrations_last_24h == 1 for card in dashboard.tournaments)
+
+
+def test_balancer_issues_follow_the_formation_nodes_of_the_flow(db_session) -> None:
+    async def seed(session: Any, workspace_id: int, now: datetime) -> dict[str, Any]:
+        ids = {}
+        for label, modes in (
+            ("balancer", ("balancer",)),
+            ("draft", ("draft",)),
+            ("both", ("draft", "balancer")),
+            ("none", ()),
+        ):
+            tournament = await _tournament(session, workspace_id, TS.LIVE)
+            await _register(session, tournament, status="approved", balancer_status="incomplete")
+            for mode in modes:
+                session.add(
+                    FlowNode(
+                        tournament_id=tournament.id,
+                        kind="formation",
+                        name="Teams",
+                        status="draft",
+                        config={"mode": mode},
+                    )
+                )
+            ids[label] = tournament.id
+        await session.flush()
+        return ids
+
+    dashboard, ids, _now = _run(db_session, seed)
+
+    cards = {card.id: card for card in dashboard.tournaments}
+    assert {label: cards[tid].readiness.formation_modes for label, tid in ids.items()} == {
+        "balancer": ["balancer"],
+        "draft": ["draft"],
+        "both": ["balancer", "draft"],
+        "none": [],
+    }
+    flagged = {label for label, tid in ids.items() if "pool_need_fix" in {i[0] for i in _issues(dashboard, tid)}}
+    assert flagged == {"balancer", "both"}
 
 
 # --- backlog -------------------------------------------------------------------
@@ -364,7 +425,7 @@ def test_backlog_totals_count_every_row_past_the_twenty_shown(db_session) -> Non
         await session.flush()
         session.add_all(StageItemInput(stage_item_id=item.id, slot=slot) for slot in (1, 2, 3))
         # A card: its issues are the work queue's, never the backlog's.
-        card = await _tournament(session, workspace_id, TS.REGISTRATION)
+        card = await _tournament(session, workspace_id, TS.LIVE)
         session.add(Team(tournament_id=card.id, name="Card", balancer_name="card"))
         await session.flush()
         return {"archived": [tournament.id for tournament in archived]}
@@ -403,28 +464,21 @@ def test_card_readiness_is_the_checklist_of_its_tournament(db_session) -> None:
             registration = await _tournament(
                 db_session,
                 workspace_id,
-                TS.REGISTRATION,
-                schedule=((TS.REGISTRATION, now - timedelta(days=1), now + timedelta(days=3)),),
+                TS.LIVE,
+                schedule=(("registration", "open", "open", now - timedelta(days=1), now + timedelta(days=3)),),
             )
             live = await _tournament(db_session, workspace_id, TS.LIVE)
             team = Team(tournament_id=live.id, name="Seeded", balancer_name="seeded")
             db_session.add(team)
-            db_session.add(RegistrationForm(tournament_id=registration.id, workspace_id=workspace_id, is_open=True))
+            db_session.add(RegistrationForm(tournament_id=registration.id, workspace_id=workspace_id))
             regs = [
-                Registration(
-                    tournament_id=registration.id,
-                    display_name="a",
-                    status="approved",
-                    checked_in=True,
-                    balancer_status="ready",
+                await _register(
+                    db_session, registration, "a", status="approved", checked_in=True, balancer_status="ready"
                 ),
-                Registration(
-                    tournament_id=registration.id, display_name="b", status="approved", balancer_status="incomplete"
-                ),
-                Registration(tournament_id=registration.id, display_name="c", status="pending"),
-                Registration(tournament_id=live.id, display_name="d", status="approved", checked_in=True),
+                await _register(db_session, registration, "b", status="approved", balancer_status="incomplete"),
+                await _register(db_session, registration, "c", status="pending"),
+                await _register(db_session, live, "d", status="approved", checked_in=True),
             ]
-            db_session.add_all(regs)
             await db_session.flush()
             roles = {
                 role.code: role
@@ -567,10 +621,10 @@ def test_the_dashboard_costs_the_same_statements_at_any_card_count(db_session) -
                     tournament = await _tournament(
                         db_session,
                         workspace_id,
-                        TS.REGISTRATION,
-                        schedule=((TS.REGISTRATION, now - timedelta(days=1), now + timedelta(days=3)),),
+                        TS.LIVE,
+                        schedule=(("registration", "open", "open", now - timedelta(days=1), now + timedelta(days=3)),),
                     )
-                    db_session.add(Registration(tournament_id=tournament.id, display_name="p", status="pending"))
+                    await _register(db_session, tournament, status="pending")
                 await db_session.commit()
                 db_session.expunge_all()
                 statements.clear()
@@ -601,10 +655,10 @@ def test_masked_groups_are_null_not_zero(rpc, db_session) -> None:
             tournament = await _tournament(
                 db_session,
                 workspace_id,
-                TS.REGISTRATION,
-                schedule=((TS.REGISTRATION, now - timedelta(days=1), now + timedelta(days=3)),),
+                TS.LIVE,
+                schedule=(("registration", "open", "open", now - timedelta(days=1), now + timedelta(days=3)),),
             )
-            db_session.add(Registration(tournament_id=tournament.id, display_name="p", status="pending"))
+            await _register(db_session, tournament, status="pending")
             archived = await _tournament(db_session, workspace_id, TS.ARCHIVED)
             db_session.add(Team(tournament_id=archived.id, name="Empty", balancer_name="empty"))
             await db_session.commit()
@@ -626,7 +680,7 @@ def test_masked_groups_are_null_not_zero(rpc, db_session) -> None:
     (card,) = data["tournaments"]
     assert card["id"] == tournament_id
     # tournament.read / match.read groups: masked.
-    assert card["phase_schedule"] == []
+    assert card["schedule"] == []
     assert card["next_deadline_at"] is None
     assert card["play"] is None
     assert card["readiness"]["stages_total"] is None

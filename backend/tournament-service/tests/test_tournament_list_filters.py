@@ -63,10 +63,9 @@ async def _make_tournament(
     *,
     workspace_id: int,
     name: str,
-    status: enums.TournamentStatus = enums.TournamentStatus.REGISTRATION,
+    status: enums.TournamentStatus = enums.TournamentStatus.ANNOUNCEMENT,
     description: str | None = None,
     start_date: datetime | None = None,
-    is_league: bool = False,
 ) -> Tournament:
     now = start_date or datetime.now(UTC)
     tournament = Tournament(
@@ -78,7 +77,6 @@ async def _make_tournament(
         description=description,
         status=status,
         is_hidden=False,
-        is_league=is_league,
         start_date=now,
         end_date=now + timedelta(days=1),
     )
@@ -194,7 +192,7 @@ async def _compiled(**overrides) -> tuple[str, str]:
 
 def test_sql_puts_the_status_filter_in_both_queries() -> None:
     page_sql, count_sql = asyncio.run(
-        _compiled(status=[enums.TournamentStatus.LIVE, enums.TournamentStatus.PLAYOFFS], per_page=10)
+        _compiled(status=[enums.TournamentStatus.LIVE, enums.TournamentStatus.COMPLETED], per_page=10)
     )
 
     assert "tournament.status IN " in page_sql
@@ -264,7 +262,7 @@ def test_status_filter_applies_to_page_and_count() -> None:
                     session,
                     workspace_id=ws.id,
                     name=f"reg-{uuid.uuid4().hex[:8]}",
-                    status=enums.TournamentStatus.REGISTRATION,
+                    status=enums.TournamentStatus.ANNOUNCEMENT,
                 )
                 await session.commit()
                 workspace_id = ws.id
@@ -284,7 +282,7 @@ def test_status_filter_applies_to_page_and_count() -> None:
                         _params(
                             workspace_id=workspace_id,
                             per_page=50,
-                            status=[enums.TournamentStatus.LIVE, enums.TournamentStatus.REGISTRATION],
+                            status=[enums.TournamentStatus.LIVE, enums.TournamentStatus.ANNOUNCEMENT],
                         ),
                     )
                 return (

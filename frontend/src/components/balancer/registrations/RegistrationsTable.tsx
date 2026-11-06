@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { useCurrentWorkspaceId } from "@/hooks/useCurrentWorkspace";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { balancerQueryKeys } from "@/lib/balancer/query-keys";
+import { nodesOfKind, registrationNodeConfig } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import adminService from "@/services/admin.service";
@@ -44,9 +45,12 @@ import adminService from "@/services/admin.service";
 import { ADMISSION_LABELS, adminRoleForm } from "./registrationsTable.model";
 
 export default function RegistrationsTable({
-  tournamentId
+  tournamentId,
+  registrationNodeId
 }: Readonly<{
   tournamentId: number | null;
+  /** The registration node whose entries the table lists and edits. */
+  registrationNodeId: number | null;
 }>) {
   // The only translated strings on this screen: reason codes are shared with the
   // public participants page, so they live in the message catalogue rather than
@@ -78,18 +82,12 @@ export default function RegistrationsTable({
   // honest — it used to be computed over an already status-filtered list, so
   // filtering to "approved" reported zero pending.
   const registrationsQuery = useQuery({
-    queryKey: balancerQueryKeys.registrations(tournamentId),
+    queryKey: balancerQueryKeys.registrations(tournamentId, registrationNodeId),
     queryFn: () =>
-      balancerAdminService.listRegistrations(tournamentId as number, {
+      balancerAdminService.listRegistrations(tournamentId as number, registrationNodeId as number, {
         include_deleted: false
       }),
-    enabled: tournamentId !== null
-  });
-
-  const formQuery = useQuery({
-    queryKey: balancerQueryKeys.registrationForm(tournamentId),
-    queryFn: () => balancerAdminService.getRegistrationForm(tournamentId as number),
-    enabled: tournamentId !== null
+    enabled: tournamentId !== null && registrationNodeId !== null
   });
 
   const publicFormQuery = useQuery({
@@ -114,8 +112,10 @@ export default function RegistrationsTable({
 
   // `require_open_profile` is deliberately NOT read here any more: admission is
   // resolved server-side and travels on each row. This flag survives only
-  // because the Subscription chip column exists or does not exist per tournament.
-  const requireSubscription = formQuery.data?.require_subscription ?? false;
+  // because the Subscription chip column exists or does not exist per registration node.
+  const requireSubscription = registrationNodeConfig(
+    nodesOfKind(tournament, "registration").find((node) => node.id === registrationNodeId)
+  ).require_subscription;
   // The questions the CURRENT schema asks, flattened in render order. A row
   // filed against an older version is still read through these: answers are
   // keyed, not positional. What the current schema no longer asks has no column
@@ -175,6 +175,7 @@ export default function RegistrationsTable({
     bulkAddToBalancerMutation
   } = useRegistrationMutations({
     tournamentId,
+    registrationNodeId,
     editingRegistration,
     onCreated: () => setCreateOpen(false),
     onUpdated: () => setEditingRegistration(null),
@@ -202,7 +203,9 @@ export default function RegistrationsTable({
     () => ({
       save: async (registration: AdminRegistration, next: string) => {
         patchRegistrationInCache(
-          await balancerAdminService.updateRegistration(registration.id, { admin_notes: next })
+          await balancerAdminService.updateRegistration(registration.id, registration.registration_node_id, {
+            admin_notes: next
+          })
         );
       },
       // Same gate as the row's Edit action: a withdrawn row is read-only.
@@ -277,14 +280,8 @@ export default function RegistrationsTable({
       (key) => t(`registrationsAdmin.grouping.${key}`)
     ).map((group) => ({
       key: group.key,
-      label: (
-        <>
-          <span className="text-foreground">{group.label}</span>
-          <span className="ml-2 font-normal normal-case text-muted-foreground">
-            {t("registrationsAdmin.table.registrationCount", { count: group.registrations.length })}
-          </span>
-        </>
-      ),
+      // The table's group header adds the row count after the label.
+      label: <span className="text-foreground">{group.label}</span>,
       rows: group.registrations.flatMap((registration) => {
         const row = rowsById.get(registration.id);
         return row ? [row] : [];

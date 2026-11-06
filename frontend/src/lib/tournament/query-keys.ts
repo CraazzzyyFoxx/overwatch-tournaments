@@ -14,6 +14,8 @@ export const tournamentQueryKeys = {
   stageBracketPreview: (tournamentId: number, stageId: number, stage: unknown) =>
     ["tournament", tournamentId, "stages", stageId, "bracket-preview", stage] as const,
   streams: (tournamentId: number) => ["tournament", tournamentId, "streams"] as const,
+  /** The tournament's flow graph (nodes, edges, results). */
+  flow: (tournamentId: number) => ["tournament", tournamentId, "flow"] as const,
   /** Participants' past broadcasts. No realtime resource: staleTime alone keeps it fresh. */
   vods: (tournamentId: number) => ["tournament", tournamentId, "vods"] as const,
   links: (tournamentId: number) => ["tournament", tournamentId, "links"] as const,
@@ -75,38 +77,53 @@ export const tournamentQueryKeys = {
     workspaceId == null
       ? (["statistics", "overall"] as const)
       : (["statistics", "overall", workspaceId] as const),
-  registration: (workspaceId: number, tournamentId: number) =>
-    ["registration", workspaceId, tournamentId] as const,
-  registrationsList: (workspaceId: number, tournamentId: number) =>
-    ["registrations-list", workspaceId, tournamentId] as const,
+  /** The caller's entry at one registration node; without the node, the prefix every node of the tournament sits under. */
+  registration: (workspaceId: number, tournamentId: number, registrationNodeId?: number) =>
+    registrationNodeId === undefined
+      ? (["registration", workspaceId, tournamentId] as const)
+      : (["registration", workspaceId, tournamentId, registrationNodeId] as const),
+  registrationsList: (workspaceId: number, tournamentId: number, registrationNodeId?: number) =>
+    registrationNodeId === undefined
+      ? (["registrations-list", workspaceId, tournamentId] as const)
+      : (["registrations-list", workspaceId, tournamentId, registrationNodeId] as const),
   registrationForm: (workspaceId: number, tournamentId: number) =>
     ["registration-form", workspaceId, tournamentId] as const,
   /** The public roster of registered teams (pre-formation). Distinct from
    *  `teams`, which is the post-balancer materialized `tournament.team` list. */
-  registrationTeams: (workspaceId: number, tournamentId: number) =>
-    ["registration-teams", workspaceId, tournamentId] as const,
+  registrationTeams: (workspaceId: number, tournamentId: number, registrationNodeId?: number) =>
+    registrationNodeId === undefined
+      ? (["registration-teams", workspaceId, tournamentId] as const)
+      : (["registration-teams", workspaceId, tournamentId, registrationNodeId] as const),
   /** Organizer view: same rows plus invites, and optionally terminal teams. The
    *  flag is part of the key because the two results are different data, not a
    *  filtered view of one cache entry. */
-  registrationTeamsAdmin: (workspaceId: number, tournamentId: number, includeTerminal: boolean) =>
-    ["registration-teams-admin", workspaceId, tournamentId, includeTerminal] as const,
+  registrationTeamsAdmin: (
+    workspaceId: number,
+    tournamentId: number,
+    registrationNodeId: number,
+    includeTerminal: boolean
+  ) => ["registration-teams-admin", workspaceId, tournamentId, registrationNodeId, includeTerminal] as const,
   /** The captain's invite picker: registrants on no team. */
-  registrationFreeAgents: (workspaceId: number, tournamentId: number) =>
-    ["registration-free-agents", workspaceId, tournamentId] as const,
+  registrationFreeAgents: (workspaceId: number, tournamentId: number, registrationNodeId: number) =>
+    ["registration-free-agents", workspaceId, tournamentId, registrationNodeId] as const,
   /** Invites addressed to the CURRENT user. No user id in the key: the server
    *  scopes it from the token, and a per-user key would imply the cache could
    *  legitimately hold another account's offers. Cleared on sign-out with the
    *  rest of the authenticated cache. */
-  registrationMyInvites: (workspaceId: number, tournamentId: number) =>
-    ["registration-my-invites", workspaceId, tournamentId] as const,
+  registrationMyInvites: (workspaceId: number, tournamentId: number, registrationNodeId: number) =>
+    ["registration-my-invites", workspaceId, tournamentId, registrationNodeId] as const,
   /** A team's full invite history. Keyed by TEAM, not tournament: it is fetched
    *  only when a captain or organizer expands one team's section, and keying it
    *  by tournament would make every team share — and invalidate — one entry. */
   registrationInviteHistory: (workspaceId: number, teamId: number) =>
     ["registration-invite-history", workspaceId, teamId] as const,
-  subscriptionStatus: (tournamentId: number) => ["subscription-status", tournamentId] as const,
-  draftBoard: (tournamentId: number) => ["draft", tournamentId, "board"] as const,
-  draftSessions: (tournamentId: number) => ["draft", tournamentId, "sessions"] as const,
+  subscriptionStatus: (tournamentId: number, registrationNodeId: number) =>
+    ["subscription-status", tournamentId, registrationNodeId] as const,
+  /** The formation node's current draft (active, else the latest). */
+  draftBoard: (tournamentId: number, formationNodeId: number) =>
+    ["draft", tournamentId, "board", formationNodeId] as const,
+  draftSessions: (tournamentId: number, formationNodeId: number) =>
+    ["draft", tournamentId, "sessions", formationNodeId] as const,
   draftSession: (sessionId: number) => ["draft", "session", sessionId] as const,
   /** One session's board, whoever owns the draft: the room's cache, patched by the session's own topic. */
   draftSessionBoard: (sessionId: number) => ["draft", "session", sessionId, "board"] as const,
@@ -153,17 +170,15 @@ export const tournamentQueryKeys = {
     workspaceId: KeyPart,
     discipline: KeyPart,
     status: KeyPart,
-    type: KeyPart,
     query: KeyPart,
     sort: KeyPart
-  ) => ["tournaments", "list", workspaceId, discipline, status, type, query, sort] as const,
+  ) => ["tournaments", "list", workspaceId, discipline, status, query, sort] as const,
   facets: (
     workspaceId: KeyPart,
     discipline: KeyPart,
     status: KeyPart,
-    type: KeyPart,
     query: KeyPart
-  ) => ["tournaments", "facets", workspaceId, discipline, status, type, query] as const,
+  ) => ["tournaments", "facets", workspaceId, discipline, status, query] as const,
   /** The workspace's own slice, or the platform-wide one under `"global"`. */
   byWorkspace: (workspaceScope: KeyPart) => ["tournaments", workspaceScope] as const,
   allActive: () => ["tournaments", "all-active"] as const,

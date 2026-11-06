@@ -29,6 +29,8 @@ import { visibleFields } from "@/lib/forms/visible-when";
 import { notify } from "@/lib/notify";
 import { roleOf, subRoleSlugOf, toRoleRef, type RoleRef } from "@/lib/roster/role-ref";
 import { ratedDimension, registrationRoles, showsRoles } from "@/lib/roster/ontology";
+import { isSignUpLate, nodesOfKind, registrationNodeConfig } from "@/lib/tournament/flow-nodes";
+import { tournamentOverviewQueryOptions } from "@/lib/tournament/overview-query";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { BUILTIN_STATUS_MESSAGE_KEYS } from "@/lib/registration/balancer-statuses";
 import registrationService from "@/services/registration.service";
@@ -81,6 +83,8 @@ interface RegistrationSchemaFormProps {
   mode: "public" | "admin";
   form: RegistrationForm;
   tournamentId: number;
+  /** The registration node the entry goes into; public mode reads its sign-up window and subscription rule. */
+  registrationNodeId?: number;
   tournamentName?: string;
   /** The row being edited; absent for a fresh registration. */
   initial?: Registration | AdminRegistration | null;
@@ -372,6 +376,7 @@ function RegistrationSchemaFormBody({
   mode,
   form,
   tournamentId,
+  registrationNodeId,
   tournamentName,
   initial = null,
   userProfile,
@@ -398,6 +403,10 @@ function RegistrationSchemaFormBody({
   const queryClient = useQueryClient();
   const openAccountSettings = useAccountSettingsModalStore((s) => s.open);
   const isAdmin = mode === "admin";
+  // The node's window and rule come from the tournament read (shared with the page behind the dialog).
+  const tournamentQuery = useQuery({ ...tournamentOverviewQueryOptions(tournamentId), enabled: !isAdmin });
+  const registrationNode =
+    nodesOfKind(tournamentQuery.data, "registration").find((node) => node.id === registrationNodeId) ?? null;
 
   const schema = form.form_schema;
   const adminInitial = initial && "admin_notes" in initial ? initial : null;
@@ -406,12 +415,12 @@ function RegistrationSchemaFormBody({
    *  its PRESENCE and not its length is the signal. */
   const isEditing = writableKeys !== undefined;
   /**
-   * The registration window's `ends_at` is behind us and `allow_late_registration`
+   * The node's sign-up window has closed (or it is in check-in) and `allow_late_registration`
    * is the only reason this form is still open, so the entry will be marked as a
    * late sign-up. Said here, before the submit — nothing else about the entry
    * changes, and a player who finds the mark afterwards reads it as a bug.
    */
-  const lateSignUp = !isAdmin && form.registration_late === true;
+  const lateSignUp = !isAdmin && isSignUpLate(registrationNode);
 
   /**
    * Every field this viewer may look at but not change, mapped to the sentence
@@ -499,9 +508,9 @@ function RegistrationSchemaFormBody({
   // Public mode only: the endpoint answers for the CALLER, so it is meaningless
   // while an organizer edits somebody else's registration.
   const subscriptionQuery = useQuery({
-    queryKey: tournamentQueryKeys.subscriptionStatus(tournamentId),
-    queryFn: () => registrationService.getMySubscriptionStatus(tournamentId),
-    enabled: !isAdmin && form.require_subscription === true,
+    queryKey: tournamentQueryKeys.subscriptionStatus(tournamentId, registrationNodeId ?? 0),
+    queryFn: () => registrationService.getMySubscriptionStatus(tournamentId, registrationNodeId!),
+    enabled: !isAdmin && registrationNodeId != null && registrationNodeConfig(registrationNode).require_subscription,
     staleTime: 30_000
   });
   // The server refuses this submit and no field on this form can change that:

@@ -8,12 +8,17 @@ from __future__ import annotations
 
 from typing import Any
 
+from shared.services.ontology import project_disciplines
 from src import schemas
 from src.services.division_grid.service import division_grid_service
 
 
 async def seed_lol_grid(session: Any, *, workspace_id: int, suffix: str) -> int:
-    """Create, publish and return the id of a LoL grid version (the caller pins it on its tournament)."""
+    """Create, publish and return the id of a LoL grid version (the caller pins it on its tournament).
+
+    The LoL role ontology is not ambient test-DB state (app-service projects it at startup): a LoL tournament's team
+    format checks against it, so it is projected here, like the other DB tests do."""
+    await project_disciplines(session)
     grid = await division_grid_service.create_grid(
         session,
         workspace_id,

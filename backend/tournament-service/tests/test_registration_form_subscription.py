@@ -3,11 +3,10 @@
 Pure schema/serializer coverage: the round-trip from an API payload to the stored
 blob and back out through the form read model.
 
-The split is the point. ``require_subscription`` is the tournament's toggle and stays
-on ``RegistrationFormUpsert``; the rule itself is the workspace's and is written
-through ``WorkspaceSubscriptionRequirementUpsert``, which owns the save-time
-validation the form schema used to carry. ``RegistrationFormRead`` still exposes the
-rule -- server-resolved and read-only -- because the public check-in dialog renders it.
+The split is the point. ``require_subscription`` is the registration node's toggle (its config); the rule itself
+is the workspace's and is written through ``WorkspaceSubscriptionRequirementUpsert``, which owns the save-time
+validation the form schema used to carry. ``RegistrationFormRead`` still exposes the rule -- server-resolved
+and read-only -- because the public check-in dialog renders it.
 """
 
 from __future__ import annotations
@@ -17,11 +16,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from shared.core.enums import SubscriptionEnforcementStage  # noqa: E402
+from shared.domain.flow.config import RegistrationNodeConfig  # noqa: E402
 from shared.domain.forms import default_schema  # noqa: E402
 from shared.services.subscriptions import Outcome, parse_requirement  # noqa: E402
 from src.schemas.registration import WorkspaceSubscriptionRequirementUpsert  # noqa: E402
@@ -46,17 +46,11 @@ class _FormRow:
         self.id = 1
         self.tournament_id = 10
         self.workspace_id = 7
-        self.is_open = True
-        self.auto_approve = False
         self.require_open_profile = False
         self.open_profile_scope = "main"
         self.show_ranks = False
         self.hide_registrations = False
-        self.max_participants = None
         self.current_version = SimpleNamespace(id=31, number=1, schema_json=DEFAULT_SCHEMA.model_dump(mode="json"))
-        self.max_substitutes = 0
-        self.require_subscription = False
-        self.subscription_stage = "check_in"
         for key, value in overrides.items():
             setattr(self, key, value)
 
@@ -66,36 +60,18 @@ def _upsert(**overrides) -> RegistrationFormUpsert:
     return RegistrationFormUpsert(form_schema=DEFAULT_SCHEMA, **overrides)
 
 
-class TestFormUpsertSchema:
+class TestNodeConfig:
     def test_the_toggle_defaults_off(self):
-        """A tournament that never configures this must not start enforcing."""
-        assert _upsert().require_subscription is False
+        """A registration node that never configures this must not start enforcing."""
+        assert RegistrationNodeConfig().require_subscription is False
 
-    def test_the_stage_defaults_to_check_in(self):
-        """The looser stage. A client that never sends the field -- or an older one that
-        cannot -- must not arm a sign-up wall by omission."""
-        assert _upsert().subscription_stage == SubscriptionEnforcementStage.check_in
+    def test_max_substitutes_defaults_to_zero_and_rejects_a_negative(self):
+        assert RegistrationNodeConfig().max_substitutes == 0
+        with pytest.raises(ValidationError):
+            RegistrationNodeConfig(max_substitutes=-1)
 
-    def test_max_substitutes_defaults_to_zero(self):
-        assert _upsert().max_substitutes == 0
 
-    def test_max_substitutes_rejects_a_negative(self):
-        try:
-            _upsert(max_substitutes=-1)
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("a negative bench must not validate")
-
-    def test_the_stage_rejects_a_value_outside_the_enum(self):
-        """Better a 422 on save than a stored typo that silently reads as check-in."""
-        try:
-            _upsert(subscription_stage="whenever")
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("an unknown stage must not validate")
-
+class TestFormUpsertSchema:
     def test_the_rule_is_not_writable_through_the_form(self):
         """The rule moved to the workspace; the form must not carry a second copy.
 
@@ -109,7 +85,6 @@ class TestFormUpsertSchema:
 
         body = RegistrationFormUpsert.model_validate(
             {
-                "is_open": True,
                 "require_subscription": True,
                 "form_schema": DEFAULT_SCHEMA.model_dump(mode="json"),
                 "subscription_requirement_json": {
@@ -119,7 +94,7 @@ class TestFormUpsertSchema:
             }
         )
         assert "subscription_requirement_json" not in body.model_dump()
-        assert body.require_subscription is True
+        assert "require_subscription" not in body.model_dump()
 
 
 class TestWorkspaceRequirementUpsertSchema:
@@ -176,49 +151,35 @@ class TestReadSchema:
             tournament_id=1,
             workspace_id=1,
             discipline="overwatch",
-            is_open=False,
             form_schema=DEFAULT_SCHEMA,
             version_id=1,
             version_number=1,
         )
-        assert form.require_subscription is False
         assert form.subscription_requirement_json == {}
-        assert form.max_substitutes == 0
         # Organizer-only, so the public read is free to leave it unanswered.
         assert form.stale_registrations is None
 
 
 class TestSerializer:
-    def test_carries_the_toggle_and_the_workspace_rule(self):
+    def test_carries_the_workspace_rule(self):
         read = serialize_registration_form(
-            _FormRow(require_subscription=True),
-            discipline="overwatch",
-            is_open=True,
-            subscription_requirement=ANY_BOOSTY_OR_TWITCH,
+            _FormRow(), discipline="overwatch", subscription_requirement=ANY_BOOSTY_OR_TWITCH
         )
-        assert read.require_subscription is True
         assert read.subscription_requirement_json == ANY_BOOSTY_OR_TWITCH
 
     def test_a_workspace_without_a_rule_serializes_as_an_empty_object(self):
         """The resolved projection must never be null -- the dialog reads it directly."""
-        read = serialize_registration_form(
-            _FormRow(require_subscription=True), discipline="overwatch", is_open=True, subscription_requirement=None
-        )
+        read = serialize_registration_form(_FormRow(), discipline="overwatch", subscription_requirement=None)
         assert read.subscription_requirement_json == {}
 
-    def test_untouched_form_serializes_as_disabled(self):
-        read = serialize_registration_form(_FormRow(), discipline="overwatch", is_open=False)
-        assert read.require_subscription is False
+    def test_untouched_form_serializes_without_a_rule(self):
+        read = serialize_registration_form(_FormRow(), discipline="overwatch")
         assert read.subscription_requirement_json == {}
-
-    def test_carries_max_substitutes(self):
-        read = serialize_registration_form(_FormRow(max_substitutes=2), discipline="overwatch", is_open=True)
-        assert read.max_substitutes == 2
 
     def test_carries_the_version_the_schema_came_from(self):
         """The wizard posts this id back on submit; a read that lost it would make
         every submission look stale."""
-        read = serialize_registration_form(_FormRow(), discipline="overwatch", is_open=True, stale_registrations=4)
+        read = serialize_registration_form(_FormRow(), discipline="overwatch", stale_registrations=4)
         assert (read.version_id, read.version_number) == (31, 1)
         assert read.form_schema.canonical_json() == DEFAULT_SCHEMA.canonical_json()
         assert read.stale_registrations == 4
@@ -229,9 +190,8 @@ class TestRoundTrip:
         """The whole point: what the organizer saved is what the gate evaluates."""
         body = WorkspaceSubscriptionRequirementUpsert(requirement=ANY_BOOSTY_OR_TWITCH)
         read = serialize_registration_form(
-            _FormRow(require_subscription=True),
+            _FormRow(),
             discipline="overwatch",
-            is_open=True,
             subscription_requirement=body.requirement,
         )
         requirement = parse_requirement(read.subscription_requirement_json)
@@ -267,5 +227,5 @@ class TestRoundTrip:
 class TestFormOwnerDiscipline:
     def test_form_read_carries_the_discipline_it_was_given_not_a_default(self):
         """Every form consumer scopes its roles, characters and identity provider from this field."""
-        assert serialize_registration_form(_FormRow(), discipline="lol", is_open=True).discipline == "lol"
-        assert serialize_registration_form(_FormRow(), discipline="overwatch", is_open=True).discipline == "overwatch"
+        assert serialize_registration_form(_FormRow(), discipline="lol").discipline == "lol"
+        assert serialize_registration_form(_FormRow(), discipline="overwatch").discipline == "overwatch"

@@ -227,11 +227,32 @@ class ActingAsTheClickerTests(IsolatedAsyncioTestCase):
         self.assertEqual(subject, "rpc.tournament.regteam_accept")
         self.assertEqual(body, {"identity": IDENTITY, "payload": {"invite_id": 42}})
 
+    async def test_the_entry_buttons_send_the_registration_node_as_a_query_parameter(self) -> None:
+        """The entry routes require ``?registration_node_id=``; the target is ``<tournament>-<node>``."""
+        replies = {
+            IDENTITY_SUBJECT: rpc_ok(IDENTITY),
+            "rpc.tournament.reg_pub_check_in": rpc_ok({"id": 1}),
+            "rpc.tournament.reg_pub_get_me": rpc_ok(None),
+        }
+        rpc = _Rpc(replies)
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            await _dispatcher().perform(4242, "check_in", "3-7")
+            await _dispatcher().perform(4242, "registration.view", "3-7")
+            malformed = await _dispatcher().perform(4242, "check_in", "3")
+
+        expected = {"identity": IDENTITY, "tournament_id": 3, "query": {"registration_node_id": ["7"]}}
+        self.assertEqual(
+            [call for call in rpc.calls if call[0] != IDENTITY_SUBJECT],
+            [("rpc.tournament.reg_pub_check_in", expected), ("rpc.tournament.reg_pub_get_me", expected)],
+        )
+        self.assertEqual((malformed.status, malformed.code), ("failed", "bad_values"))
+
     async def test_a_deactivated_account_is_not_acted_for(self) -> None:
         rpc = _Rpc({IDENTITY_SUBJECT: rpc_error("forbidden", "Inactive user")})
 
         with patch.object(dispatcher_module, "request_rpc", rpc):
-            outcome = await _dispatcher().perform(4242, "check_in", "3")
+            outcome = await _dispatcher().perform(4242, "check_in", "3-7")
 
         self.assertEqual(outcome.status, "inactive")
         self.assertEqual(rpc.subjects(), [IDENTITY_SUBJECT])
@@ -240,7 +261,7 @@ class ActingAsTheClickerTests(IsolatedAsyncioTestCase):
         rpc = _Rpc({IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.tournament.reg_pub_check_in": TimeoutError()})
 
         with patch.object(dispatcher_module, "request_rpc", rpc):
-            outcome = await _dispatcher().perform(4242, "check_in", "3")
+            outcome = await _dispatcher().perform(4242, "check_in", "3-7")
 
         self.assertEqual(outcome.status, "unavailable")
 
@@ -250,8 +271,8 @@ class ActingAsTheClickerTests(IsolatedAsyncioTestCase):
         dispatcher = _dispatcher()
 
         with patch.object(dispatcher_module, "request_rpc", rpc):
-            await dispatcher.perform(4242, "check_in", "3")
-            await dispatcher.perform(4242, "check_in", "3")
+            await dispatcher.perform(4242, "check_in", "3-7")
+            await dispatcher.perform(4242, "check_in", "3-7")
 
         self.assertEqual(rpc.subjects().count(IDENTITY_SUBJECT), 1)
         self.assertEqual(rpc.subjects().count("rpc.tournament.reg_pub_check_in"), 2)
@@ -262,8 +283,8 @@ class ActingAsTheClickerTests(IsolatedAsyncioTestCase):
         dispatcher = _dispatcher()
 
         with patch.object(dispatcher_module, "request_rpc", rpc):
-            await dispatcher.perform(4242, "check_in", "3")
-            await dispatcher.perform(4242, "check_in", "3")
+            await dispatcher.perform(4242, "check_in", "3-7")
+            await dispatcher.perform(4242, "check_in", "3-7")
 
         self.assertEqual(rpc.subjects(), [IDENTITY_SUBJECT, IDENTITY_SUBJECT])
 
@@ -283,6 +304,9 @@ class ButtonContractTests(IsolatedAsyncioTestCase):
             None,
         ):
             self.assertIsNone(parse_custom_id(refused), refused)
+        self.assertEqual(parse_custom_id("owt:check_in:3-7"), ("check_in", "3-7"))
+        self.assertIsNone(parse_custom_id("owt:check_in:3"))  # the pre-flow format: no registration node
+        self.assertIsNone(parse_custom_id("owt:registration.view:3"))
 
     async def test_a_refusal_is_worded_by_its_machine_code(self) -> None:
         error = rpc_error(

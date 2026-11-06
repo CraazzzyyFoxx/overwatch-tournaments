@@ -16,16 +16,27 @@ import { PresetRunPanel } from "@/app/balancer/components/PresetRunPanel";
 import { TeamDistributionPanel } from "@/app/balancer/components/TeamDistributionPanel";
 import { VariantSelector } from "@/app/balancer/components/VariantSelector";
 import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTournamentId";
+import { FlowNodeSelect } from "@/components/kit/FlowNodeSelect";
+import { FlowNodeControls } from "@/components/tournaments/FlowNodeControls";
+import {
+  UnlinkedRegistrationsNotice,
+  countUnlinkedRegistrations
+} from "@/components/kit/UnlinkedRegistrationsNotice";
+import { FLOW_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
+import { useQueryParams } from "@/hooks/useQueryParams";
 import { useBalancerJob } from "@/app/balancer/components/useBalancerJob";
 import { useBalancerMutations } from "@/app/balancer/components/useBalancerMutations";
 import {
   balancerRealtimeTopic,
   useBalancerRealtime
 } from "@/app/balancer/components/useBalancerRealtime";
-import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
+import { useTournamentDivisionGridVersion } from "@/hooks/useCurrentWorkspace";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
+import { nodesOfKind, poolRegistrationNodeIds } from "@/lib/tournament/flow-nodes";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
+import { usePoolRegistrations } from "@/hooks/usePoolRegistrations";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { mergeStatusOptions } from "@/lib/registration/balancer-statuses";
 import { ratedDimension, slotCodeOrder } from "@/lib/roster/ontology";
@@ -37,6 +48,7 @@ import balancerService from "@/services/balancer.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { BalancerPlayerExportFormat } from "@/types/balancer-admin.types";
 import type { BalancerConfig, BalancerConfigValue } from "@/types/balancer.types";
+import type { DivisionGrid } from "@/types/workspace.types";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -85,6 +97,9 @@ import {
   useIsWideBalancerLayout
 } from "./useBalancerLayout";
 
+/** Until the tournament's grid resolves: crests render their neutral missing state, never another grid's. */
+const EMPTY_GRID: DivisionGrid = { tiers: [] };
+
 // Dialogs and sheets that render nothing until opened: lazy chunks, so they
 // (and the image rasteriser behind the export dialog) are not first-load JS.
 const PlayerEditModal = dynamic(
@@ -111,6 +126,7 @@ export function BalancerMainPageClient() {
     (state) => state.entityWorkspaceId ?? state.currentWorkspaceId
   );
   const { canAccessPermission } = usePermissions();
+  const flowErrorMessage = useFlowErrorMessage();
   const currentUserId = useAuthProfileStore((state) => state.user?.id ?? null);
   const queryClient = useQueryClient();
   const sidebarRef = useRef<BalancingPoolSidebarHandle>(null);
@@ -161,37 +177,48 @@ export function BalancerMainPageClient() {
     if (isPlayersSidebarCollapsed) playersPanelRef.current?.collapse();
   }, [railPercent, isPoolSidebarCollapsed, isPlayersSidebarCollapsed]);
 
-  const registrationsQuery = useQuery({
-    queryKey: balancerQueryKeys.registrations(tournamentId),
-    queryFn: () =>
-      balancerAdminService.listRegistrations(tournamentId as number, {
-        include_deleted: false
-      }),
-    enabled: tournamentId !== null,
-    refetchOnWindowFocus: false
-  });
-
-  const savedBalanceQuery = useQuery({
-    queryKey: balancerQueryKeys.publicBalance(tournamentId),
-    queryFn: () => balancerAdminService.getBalance(tournamentId as number),
-    enabled: tournamentId !== null,
-    refetchOnWindowFocus: false
-  });
-
-  const tournamentConfigQuery = useQuery({
-    queryKey: balancerQueryKeys.tournamentConfig(tournamentId),
-    queryFn: () => balancerAdminService.getTournamentConfig(tournamentId as number),
-    enabled: tournamentId !== null,
-    refetchOnWindowFocus: false
-  });
-
   // Owner metadata supplies both roster shape and the player editor's grid pin.
   // Reuse the public shell's query and embedded version rather than refetching it.
   const tournamentQuery = useQuery({
     ...tournamentOverviewQueryOptions(tournamentId as number),
     enabled: tournamentId !== null
   });
-  const divisionGrid = useDivisionGrid(tournamentQuery.data?.discipline);
+  // The balance, its config and every export belong to one formation node of the tournament.
+  const formationNodeId = useFlowNodeParam(tournamentQuery.data, "formation", "balancer");
+  const formationNode = nodesOfKind(tournamentQuery.data, "formation").find((node) => node.id === formationNodeId);
+  // The pool is what the formation takes as input: the entries of every upstream registration node (Decision 9).
+  const registrationNodeIds = poolRegistrationNodeIds(formationNode);
+  const { setParams } = useQueryParams();
+
+  const registrationsQuery = usePoolRegistrations({
+    tournamentId,
+    nodeIds: registrationNodeIds,
+    includeDeleted: false,
+    queryKey: (nodeId) => balancerQueryKeys.registrations(tournamentId, nodeId)
+  });
+
+  const savedBalanceQuery = useQuery({
+    queryKey: balancerQueryKeys.publicBalance(tournamentId, formationNodeId),
+    queryFn: () => balancerAdminService.getBalance(tournamentId as number, formationNodeId as number),
+    enabled: tournamentId !== null && formationNodeId !== null,
+    refetchOnWindowFocus: false
+  });
+
+  const tournamentConfigQuery = useQuery({
+    queryKey: balancerQueryKeys.tournamentConfig(tournamentId, formationNodeId),
+    queryFn: () =>
+      balancerAdminService.getTournamentConfig(tournamentId as number, formationNodeId as number),
+    enabled: tournamentId !== null && formationNodeId !== null,
+    refetchOnWindowFocus: false
+  });
+
+  // The one grid every rank on this page resolves through — pool, editor, export and the player sheet alike.
+  const divisionGridVersion = useTournamentDivisionGridVersion(
+    tournamentQuery.data?.discipline,
+    tournamentQuery.data?.division_grid_version_id,
+    tournamentQuery.data?.division_grid_version
+  );
+  const divisionGrid: DivisionGrid = divisionGridVersion ?? EMPTY_GRID;
   // The solver config of the tournament's game: its defaults and presets carry that game's role weights.
   const configDiscipline = tournamentQuery.data?.discipline ?? null;
   const balancerConfigQuery = useQuery({
@@ -248,7 +275,7 @@ export function BalancerMainPageClient() {
     setLastJsonImportFile(null);
     setDraftConfig({});
     setSavedTournamentConfig({});
-  }, [tournamentId]);
+  }, [tournamentId, formationNodeId]);
 
   useEffect(() => {
     if (!balancerConfigQuery.data) {
@@ -375,8 +402,8 @@ export function BalancerMainPageClient() {
       : t("presets.CUSTOM");
   const saveConfigMutation = useMutation({
     mutationFn: async () => {
-      if (!tournamentId) throw new Error(t("errors.noTournament"));
-      const saved = await balancerAdminService.upsertTournamentConfig(tournamentId, {
+      if (!tournamentId || formationNodeId === null) throw new Error(t("errors.noTournament"));
+      const saved = await balancerAdminService.upsertTournamentConfig(tournamentId, formationNodeId, {
         config_json: sanitizeBalancerConfig(draftConfig) as Record<string, unknown>
       });
       return saved.config_json as BalancerConfig;
@@ -385,7 +412,7 @@ export function BalancerMainPageClient() {
       setDraftConfig(config);
       setSavedTournamentConfig(config);
       await queryClient.invalidateQueries({
-        queryKey: balancerQueryKeys.tournamentConfig(tournamentId)
+        queryKey: balancerQueryKeys.tournamentConfig(tournamentId, formationNodeId)
       });
       notify.success(t("toasts.settingsSaved"));
     }
@@ -400,12 +427,17 @@ export function BalancerMainPageClient() {
       includePrivate: boolean;
     }) => {
       const selectedTournamentId = tournamentId;
-      if (!selectedTournamentId) throw new Error(t("errors.noTournament"));
-      const payload = await balancerAdminService.exportPlayers(
-        selectedTournamentId,
-        format,
-        includePrivate
+      if (!selectedTournamentId || registrationNodeIds.length === 0) throw new Error(t("errors.noTournament"));
+      // One export per feeding node, merged oldest first so the newest node's row wins per player.
+      const payloads = await Promise.all(
+        registrationNodeIds.map((nodeId) =>
+          balancerAdminService.exportPlayers(selectedTournamentId, nodeId, format, includePrivate)
+        )
       );
+      const payload = {
+        ...payloads[0]!,
+        players: Object.assign({}, ...[...payloads].reverse().map((exported) => exported.players))
+      };
       return { payload, tournamentId: selectedTournamentId };
     },
     onSuccess: ({ payload, tournamentId: exportedTournamentId }) => {
@@ -447,10 +479,10 @@ export function BalancerMainPageClient() {
       setDraftConfig(sanitized);
       setSavedTournamentConfig(sanitized);
       void queryClient.invalidateQueries({
-        queryKey: balancerQueryKeys.tournamentConfig(tournamentId)
+        queryKey: balancerQueryKeys.tournamentConfig(tournamentId, formationNodeId)
       });
     },
-    [queryClient, tournamentId]
+    [queryClient, tournamentId, formationNodeId]
   );
 
   const handleResetConfig = useCallback(() => {
@@ -461,6 +493,7 @@ export function BalancerMainPageClient() {
 
   const { registerLocalJob } = useBalancerRealtime({
     tournamentId,
+    formationNodeId,
     dispatchJob,
     setVariants,
     setActiveVariantId,
@@ -480,6 +513,8 @@ export function BalancerMainPageClient() {
     importBalanceMutation
   } = useBalancerMutations({
     tournamentId,
+    formationNodeId,
+    registrationNodeIds,
     workspaceId,
     queryClient,
     dispatchJob,
@@ -628,11 +663,11 @@ export function BalancerMainPageClient() {
           );
         },
         onError: (error) => {
-          setTournamentExportError(getErrorMessage(error, t("errors.exportFailed")));
+          setTournamentExportError(flowErrorMessage(error) ?? getErrorMessage(error, t("errors.exportFailed")));
         }
       }
     );
-  }, [exportToTournamentMutation, handleTournamentExportStageChange, t]);
+  }, [exportToTournamentMutation, handleTournamentExportStageChange, flowErrorMessage, t]);
 
   const savedBalanceId = savedBalanceQuery.data?.id ?? null;
   const startRanksExport = useCallback(() => {
@@ -758,6 +793,20 @@ export function BalancerMainPageClient() {
     // right-hand cards, the variant strip and the actions bar the moment the
     // pool sidebar is widened.
     <div className="flex min-h-0 min-w-0 flex-col gap-3">
+      <FlowNodeSelect
+        tournament={tournamentQuery.data}
+        kind="formation"
+        value={formationNodeId}
+        onChange={(nodeId) => setParams({ [FLOW_NODE_PARAM]: nodeId })}
+      />
+      {formationNode && tournamentQuery.data ? (
+        <FlowNodeControls
+          tournament={tournamentQuery.data}
+          node={formationNode}
+          canUpdate={canAccessPermission("tournament.update", workspaceId)}
+        />
+      ) : null}
+      <UnlinkedRegistrationsNotice count={countUnlinkedRegistrations(registrations)} />
       <PresetRunPanel
         counters={[
           { label: t("counters.pool"), value: poolPlayers.length, icon: Users },
@@ -840,9 +889,8 @@ export function BalancerMainPageClient() {
           player={quickEditPlayer}
           registration={quickEditRegistration}
           discipline={tournamentQuery.data?.discipline}
-          divisionGridVersionId={tournamentQuery.data?.division_grid_version_id}
           ontology={ontology}
-          divisionGridVersion={tournamentQuery.data?.division_grid_version}
+          divisionGridVersion={divisionGridVersion}
           statusOptions={playerStatusOptions}
           open={editingPlayerId !== null}
           onOpenChange={(open) => {

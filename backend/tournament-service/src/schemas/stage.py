@@ -27,7 +27,7 @@ __all__ = (
 )
 
 GrandFinalType = Literal["no_reset", "with_reset"]
-SeedRankingValue = Literal["slot", "avg_sr", "total_sr", "random"]
+SeedRankingValue = Literal["slot", "source", "avg_sr", "total_sr", "random", "cross", "snake"]
 
 
 class BracketSeedCounts(BaseModel):
@@ -235,8 +235,7 @@ class StageItemInputRead(BaseRead):
     slot: int
     input_type: enums.StageItemInputType
     team_id: int | None
-    source_stage_item_id: int | None
-    source_position: int | None
+    source_result_id: int | None
 
 
 class StageItemRead(BaseRead):
@@ -244,8 +243,6 @@ class StageItemRead(BaseRead):
     name: str
     type: enums.StageItemType
     order: int
-    advance_count: int | None = None
-    advance_upper_count: int | None = None
     inputs: list[StageItemInputRead] = []
 
 
@@ -254,8 +251,6 @@ class StageItemSummaryRead(BaseRead):
     name: str
     type: enums.StageItemType
     order: int
-    advance_count: int | None = None
-    advance_upper_count: int | None = None
 
 
 class StageSummaryRead(BaseRead, _StageRegulationRead):
@@ -264,12 +259,10 @@ class StageSummaryRead(BaseRead, _StageRegulationRead):
     description: str | None
     stage_type: enums.StageType
     max_rounds: int = 5
-    advance_count: int | None = None
-    advance_upper_count: int | None = None
     order: int
-    is_active: bool
+    node_id: int | None = None  #: ``None`` only on a scrim room's stage (no flow node)
+    status: enums.FlowNodeStatus | None = None
     is_published: bool = False
-    is_completed: bool
     challonge_id: int | None = None
     challonge_slug: str | None = None
     has_custom_bracket: bool = False
@@ -281,12 +274,10 @@ class StageRead(BaseRead, _StageRegulationRead):
     description: str | None
     stage_type: enums.StageType
     max_rounds: int = 5
-    advance_count: int | None = None
-    advance_upper_count: int | None = None
     order: int
-    is_active: bool
+    node_id: int | None = None
+    status: enums.FlowNodeStatus | None = None
     is_published: bool = False
-    is_completed: bool
     challonge_id: int | None = None
     challonge_slug: str | None = None
     has_custom_bracket: bool = False

@@ -55,12 +55,18 @@ import {
 export function RegistrationTeamsBrowser({
   tournamentId,
   workspaceId,
-  discipline
+  discipline,
+  registrationNodeIds,
+  formationNodeId
 }: Readonly<{
   tournamentId: number;
   workspaceId: number;
+  /** Every registration node whose teams are listed; a team is edited through its own node. */
+  registrationNodeIds: readonly number[];
   /** The tournament's game: its scoped ontology names and draws every roster slot. */
   discipline: string;
+  /** The formation node the export writes teams into; `null` while the tournament has none. */
+  formationNodeId: number | null;
 }>) {
   const t = useTranslations("registrationTeams");
   const ontology = useDisciplineMetadata(workspaceId, discipline).data ?? null;
@@ -78,11 +84,13 @@ export function RegistrationTeamsBrowser({
   const [renameTarget, setRenameTarget] = useState<RegistrationTeam | null>(null);
 
   const canManageTeams = canAccessPermission("team.update", workspaceId);
-  const canExport = canAccessPermission("team.create", workspaceId);
+  const canExport = canAccessPermission("team.create", workspaceId) && formationNodeId !== null;
 
   const actions = useRegistrationTeamActions({
     tournamentId,
     workspaceId,
+    registrationNodeIds,
+    formationNodeId,
     closeConfirm: () => setConfirm(null),
     closeRename: () => setRenameTarget(null),
     closePlace: () => setPlaceTarget(null)

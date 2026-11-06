@@ -86,9 +86,11 @@ export function PlaceMemberDialog({
     setSubstitute(false);
   }
 
+  // Free agents are the registrants of the node this team's members are entries of.
+  const nodeId = team?.registration_node_id ?? 0;
   const freeAgentsQuery = useQuery({
-    queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId),
-    queryFn: () => registrationTeamService.listFreeAgents(tournamentId),
+    queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId, nodeId),
+    queryFn: () => registrationTeamService.listFreeAgents(tournamentId, nodeId),
     enabled: team != null
   });
 

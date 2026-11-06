@@ -14,6 +14,7 @@ from shared import models
 from shared.core.utils import join_entity, prepare_entities, selectin_entity
 from shared.repository.base import BaseRepository
 from shared.repository.identity import UserRepository
+from shared.repository.participant_result import is_member_tournament_row
 
 #: A public ref that is a legacy numeric id rather than a slug.
 _NUMERIC_REF = re.compile(r"[1-9]\d*")
@@ -110,7 +111,6 @@ class TournamentRepository(BaseRepository[models.Tournament]):
         self,
         session: AsyncSession,
         *,
-        is_league: bool | None = None,
         is_finished: bool | None = None,
         workspace_id: int | None = None,
         options: Sequence[_AbstractLoad] | None = None,
@@ -121,8 +121,6 @@ class TournamentRepository(BaseRepository[models.Tournament]):
         wants the rows.
         """
         query = self._apply_options(self.select(), options).order_by(models.Tournament.id.asc())
-        if is_league is not None:
-            query = query.where(models.Tournament.is_league.is_(is_league))
         if is_finished is not None:
             query = query.where(models.Tournament.is_finished.is_(is_finished))
         if workspace_id is not None:
@@ -149,18 +147,6 @@ class TournamentRepository(BaseRepository[models.Tournament]):
                 )
             )
         ).one_or_none()
-
-    async def get_draft_format_json(self, session: AsyncSession, tournament_id: int) -> dict | None:
-        """The stored draft format rule; ``None`` when the tournament never set one (snake)."""
-        return await session.scalar(
-            sa.select(models.Tournament.draft_format_json).where(models.Tournament.id == tournament_id)
-        )
-
-    async def get_team_formation(self, session: AsyncSession, tournament_id: int) -> str | None:
-        """How the tournament forms its teams (``balancer``, ``draft``, ...); ``None`` when it does not exist."""
-        return await session.scalar(
-            sa.select(models.Tournament.team_formation).where(models.Tournament.id == tournament_id)
-        )
 
     async def get_for_registration(self, session: AsyncSession, registration_id: int) -> models.Tournament | None:
         """The tournament a balancer registration belongs to."""
@@ -436,7 +422,7 @@ class PlayerRepository(BaseRepository[models.Player]):
         tournament_id: int,
         options: Sequence[_AbstractLoad] | None = None,
     ) -> models.Player | None:
-        """One roster row for a user in a tournament.
+        """The member's tournament row (spec §11.4): the final team's, else the latest non-substitute row.
 
         ``user_id`` is a ``User.id``, reached through ``workspace_member`` — ``Player``
         has no ``user_id`` column; ``workspace_member_id`` is the sole identity anchor.
@@ -445,6 +431,7 @@ class PlayerRepository(BaseRepository[models.Player]):
             sa.select(models.Player).where(
                 models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
                 models.Player.tournament_id == tournament_id,
+                is_member_tournament_row(),
             ),
             options,
         )
@@ -846,31 +833,6 @@ class TournamentPreviewAccessRepository(BaseRepository[models.TournamentPreviewA
             sa.delete(models.TournamentPreviewAccess).where(
                 models.TournamentPreviewAccess.tournament_id == tournament_id,
                 models.TournamentPreviewAccess.auth_user_id == auth_user_id,
-            )
-        )
-
-
-class TournamentPhaseScheduleRepository(BaseRepository[models.TournamentPhaseSchedule]):
-    """``tournament_phase_schedule`` — planned status windows for auto-transitions."""
-
-    def __init__(self) -> None:
-        super().__init__(models.TournamentPhaseSchedule)
-
-    async def list_for_tournament(
-        self, session: AsyncSession, tournament_id: int
-    ) -> Sequence[models.TournamentPhaseSchedule]:
-        result = await session.execute(
-            self.select()
-            .where(models.TournamentPhaseSchedule.tournament_id == tournament_id)
-            .order_by(models.TournamentPhaseSchedule.starts_at)
-        )
-        return result.scalars().all()
-
-    async def delete_for_tournament(self, session: AsyncSession, tournament_id: int) -> None:
-        """Statement delete — the schedule is always rewritten wholesale."""
-        await session.execute(
-            sa.delete(models.TournamentPhaseSchedule).where(
-                models.TournamentPhaseSchedule.tournament_id == tournament_id
             )
         )
 

@@ -27,7 +27,7 @@ from shared.models.registration.registration import (
     RegistrationRole,
 )
 from shared.models.tenancy.workspace import Workspace
-from shared.models.tournament import Stage, Tournament, TournamentPhaseSchedule
+from shared.models.tournament import Stage, Tournament
 from tests.encounter_seed import seed_encounter, seed_scoring_rule
 
 TOPIC = "rpc.tournament.tournament_readiness"
@@ -46,31 +46,36 @@ def seeded(db):
         workspace_id=ws.id,
         name=f"Readiness {suffix}",
         slug=f"readiness-{suffix}",
-        status=enums.TournamentStatus.REGISTRATION,
+        status=enums.TournamentStatus.LIVE,
     )
     db.add(t)
     db.flush()
-    db.add(
-        TournamentPhaseSchedule(
-            tournament_id=t.id,
-            status=enums.TournamentStatus.REGISTRATION,
-            starts_at=datetime.now(UTC),
-        )
-    )
     rule = ScoringRule(workspace_id=ws.id, preset="wins", game_formula="win", end_formula="games >= best_of")
     db.add(rule)
     db.flush()
     db.add(Stage(tournament_id=t.id, name="Groups", stage_type=enums.StageType.ROUND_ROBIN, scoring_rule_id=rule.id))
-    db.add(RegistrationForm(tournament_id=t.id, workspace_id=ws.id, is_open=True))
-    regs = [
-        Registration(tournament_id=t.id, display_name="a", status="approved", checked_in=True, balancer_status="ready"),
-        Registration(
-            tournament_id=t.id, display_name="b", status="approved", checked_in=True, balancer_status="incomplete"
-        ),
-        Registration(tournament_id=t.id, display_name="c", status="approved"),
-        Registration(tournament_id=t.id, display_name="d", status="pending"),
-    ]
-    db.add_all(regs)
+    db.add(RegistrationForm(tournament_id=t.id, workspace_id=ws.id))
+    regs = [Registration(tournament_id=t.id, display_name=name) for name in "abcd"]
+    node = models.FlowNode(tournament_id=t.id, kind="registration", name="Registration", status="open", config={})
+    formation = models.FlowNode(
+        tournament_id=t.id, kind="formation", name="Teams", status="draft", config={"mode": "balancer"}
+    )
+    db.add_all([*regs, node, formation])
+    db.flush()
+    db.add(models.FlowNodeSchedule(node_id=node.id, phase="open", starts_at=datetime.now(UTC)))
+    db.add_all(
+        models.RegistrationEntry(registration_node_id=node.id, registration_id=reg.id, **fields)
+        for reg, fields in zip(
+            regs,
+            (
+                {"status": "approved", "checked_in": True, "balancer_status": "ready"},
+                {"status": "approved", "checked_in": True, "balancer_status": "incomplete"},
+                {"status": "approved"},
+                {"status": "pending"},
+            ),
+            strict=True,
+        )
+    )
     db.flush()
     # Saved rank data on two registrations (one approved, one pending); the
     # role without rank_value must NOT count as ranked.
@@ -128,8 +133,8 @@ def test_readiness_counts(rpc, seeded):
 
     r = asyncio.run(run())
     assert r.tournament_id == tournament_id
-    assert r.status == "registration"
-    assert r.team_formation == "balancer"
+    assert r.status == "live"
+    assert r.formation_modes == ["balancer"]
     # tournament.read group
     assert r.schedule_configured is True
     assert r.grid_selected is False
@@ -191,8 +196,8 @@ def test_readiness_masks_fields_without_tournament_read(rpc, seeded):
     d = resp["data"]
     # always-visible header
     assert d["tournament_id"] == tournament_id
-    assert d["status"] == "registration"
-    assert d["team_formation"] == "balancer"
+    assert d["status"] == "live"
+    assert d["formation_modes"] == ["balancer"]
     # tournament.read-gated fields are masked
     assert d["stages_total"] is None
     assert d["logs_used"] is None

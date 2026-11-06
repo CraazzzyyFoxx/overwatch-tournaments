@@ -2,7 +2,7 @@
 
     uv run pytest tournament-service/tests/test_dashboard_trends.py -v
 
-The selection (status/hidden/league/workspace/discipline, NULLS LAST, limit,
+The selection (status/hidden/workspace/discipline, the chronology key, limit,
 oldest-first) and the per-tournament aggregates (newcomers, duel-only log
 coverage, the confirmation median's exclusions) are all SQL, so they are
 pinned against a seeded workspace that is dropped again. Uses the shared
@@ -69,11 +69,10 @@ async def _seed(session: Any) -> _Seed:
     rows["ow2"].status = enums.TournamentStatus.ARCHIVED
     rows |= {
         "older": tournament("older", _day(2030, 6, 1)),
-        # DESC NULLS LAST: an undated tournament is the first to fall off the limit.
-        "undated": tournament("undated", None),
+        # Undated: the key falls back to its creation time, seeded older than every dated row here.
+        "undated": tournament("undated", None, created_at=_day(2030, 5, 1)),
         "lol": tournament("lol", _day(2031, 2, 1), discipline="lol"),
         # Newer than everything above, and excluded regardless.
-        "league": tournament("league", _day(2031, 3, 1), is_league=True),
         "hidden": tournament("hidden", _day(2031, 3, 2), is_hidden=True),
         "live": tournament("live", _day(2031, 3, 3), status=enums.TournamentStatus.LIVE),
         "foreign": tournament("foreign", _day(2031, 3, 4), workspace_id=other.id),
@@ -162,7 +161,7 @@ def test_trends_pick_the_last_ten_finished_public_tournaments_oldest_first(db_se
     seed, found = _run(db_session, body)
     ids = seed.tournaments
     # League, hidden, live and the other workspace's tournament never appear; lol
-    # is the newest, so the ten newest drop ow1, older and undated.
+    # is the newest, so the ten newest drop ow1, older and undated (at its creation time).
     assert found[None] == [*(ids[f"ow{day}"] for day in range(2, 11)), ids["lol"]]
     assert found["overwatch"] == [ids[f"ow{day}"] for day in range(1, 11)]
     assert found["lol"] == [ids["lol"]]

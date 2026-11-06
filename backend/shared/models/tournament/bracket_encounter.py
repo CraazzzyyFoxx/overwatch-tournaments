@@ -25,6 +25,8 @@ class BracketEncounter(db.Base):
             ["encounter.encounter.id", "encounter.encounter.tournament_id"],
             ondelete="CASCADE",
             name="fk_bracket_encounter",
+            deferrable=True,
+            initially="IMMEDIATE",
         ),
         # A deleted stage leaves the encounter in place with no position, the
         # way a deleted stage item does.
@@ -33,6 +35,8 @@ class BracketEncounter(db.Base):
             ["tournament.stage.id", "tournament.stage.tournament_id"],
             ondelete="SET NULL (stage_id)",
             name="fk_bracket_stage",
+            deferrable=True,
+            initially="IMMEDIATE",
         ),
         ForeignKeyConstraint(
             ["stage_item_id", "stage_id"],

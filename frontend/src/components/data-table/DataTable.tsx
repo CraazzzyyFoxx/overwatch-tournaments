@@ -276,6 +276,14 @@ export function DataTable<TData>({
   }, []);
 
   const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
+  // Groups the reader folded, by key. Their rows stay in the table (search, selection, CSV), only off screen.
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleGroup = (key: string) =>
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
 
   const hasRowAction = Boolean(onRowClick || onRowDoubleClick);
   const hasLeadingColumn = Boolean(enableRowSelection || renderExpanded);
@@ -302,6 +310,7 @@ export function DataTable<TData>({
     useVirtualBody({
       pageRows,
       groupRows,
+      collapsedGroups,
       hasExpandedDetail: Boolean(renderExpanded),
       isMobile,
       density,
@@ -309,7 +318,11 @@ export function DataTable<TData>({
     });
   // Roving tabindex: one row is in the Tab order, arrows move between the rest.
   // Only the two rows whose `tabbable` flips repaint when focus moves.
-  const tabbableRowId = focusedRowId !== null && table.getRowModel().rowsById[focusedRowId] ? focusedRowId : firstRowId;
+  // A row folded away with its group is not on screen to take the Tab stop.
+  const tabbableRowId =
+    focusedRowId !== null && bodyItems.some((item) => item.kind === "row" && item.row.id === focusedRowId)
+      ? focusedRowId
+      : firstRowId;
 
   const handleRowClick = (event: React.MouseEvent<HTMLTableRowElement>, row: Row<TData>) => {
     // A sweep, Ctrl+click or Shift+click ends in a click too; that one selected, it does not open.
@@ -416,7 +429,8 @@ export function DataTable<TData>({
     inspectorId,
     tabbableRowId,
     renderExpanded,
-    measureElement: virtualizer.measureElement
+    measureElement: virtualizer.measureElement,
+    onToggleGroup: toggleGroup
   };
 
   /**

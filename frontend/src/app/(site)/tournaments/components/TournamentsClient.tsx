@@ -10,7 +10,7 @@ import encounterService from "@/services/encounter.service";
 import statisticsService from "@/services/statistics.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
-import { TOURNAMENT_STATUS_ORDER } from "@/lib/tournament/status";
+import { TOURNAMENT_PHASES } from "@/lib/tournament/lifecycle";
 import type { TournamentStatus } from "@/types/tournament.types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InfiniteScrollFooter } from "@/components/ui/infinite-scroll";
@@ -27,7 +27,6 @@ import FeaturedLive from "./FeaturedLive";
 import TournamentsFilters, {
   type SortBy,
   type StatusFilter,
-  type TypeFilter,
   type ViewMode
 } from "./TournamentsFilters";
 import TournamentsGrid from "./TournamentsGrid";
@@ -38,7 +37,6 @@ import { groupLiveByTournament } from "./tournaments-helpers";
 const PER_PAGE = 12;
 
 const SORT_BY: readonly SortBy[] = ["latest", "oldest", "participants"];
-const TYPE_FILTERS: readonly TypeFilter[] = ["all", "standard", "league"];
 const VIEWS: readonly ViewMode[] = ["cards", "list"];
 
 /**
@@ -55,11 +53,7 @@ const SORT_QUERY: Record<SortBy, { sort: "start_date" | "participants_count"; or
 /** Chip counts before the facets land, so the toolbar never renders `NaN`. */
 const NO_STATUS_COUNTS: Record<TournamentStatus, number> = {
   announcement: 0,
-  draft: 0,
-  registration: 0,
-  check_in: 0,
   live: 0,
-  playoffs: 0,
   completed: 0,
   archived: 0
 };
@@ -104,15 +98,11 @@ const TournamentsClient = ({
   const { searchParams, setParams } = useQueryParams();
 
   const statusParam = searchParams?.get("status");
+  // `registration` is not a stored status: it asks for the tournaments whose registration node is open or in check-in.
   const statusFilter: StatusFilter =
-    statusParam && (TOURNAMENT_STATUS_ORDER as string[]).includes(statusParam)
-      ? (statusParam as TournamentStatus)
+    statusParam && (["registration", ...TOURNAMENT_PHASES] as string[]).includes(statusParam)
+      ? (statusParam as StatusFilter)
       : "all";
-
-  const typeParam = searchParams?.get("type");
-  const typeFilter: TypeFilter = TYPE_FILTERS.includes(typeParam as TypeFilter)
-    ? (typeParam as TypeFilter)
-    : "all";
 
   const viewParam = searchParams?.get("view");
   const view: ViewMode = VIEWS.includes(viewParam as ViewMode) ? (viewParam as ViewMode) : "cards";
@@ -138,16 +128,15 @@ const TournamentsClient = ({
     // every unrelated filter change and fight the writer that caused it.
   }, [query]);
 
-  const hasActiveFilters = statusFilter !== "all" || typeFilter !== "all" || query !== "";
+  const hasActiveFilters = statusFilter !== "all" || query !== "";
   const clearFilters = () => {
     setSearchInput("");
-    setParams({ status: null, type: null, q: null });
+    setParams({ status: null, q: null });
   };
 
   const filterQuery = {
     workspaceId,
-    status: statusFilter === "all" ? undefined : statusFilter,
-    isLeague: typeFilter === "all" ? undefined : typeFilter === "league",
+    status: statusFilter === "all" || statusFilter === "registration" ? undefined : statusFilter,
     query: query || undefined,
     discipline: disciplineFilter
   };
@@ -164,11 +153,12 @@ const TournamentsClient = ({
   } = useInfiniteQuery({
     // Every filter is in the key: a narrowed filter is a different list, so the
     // pages already accumulated for the old one must not carry over.
-    queryKey: tournamentQueryKeys.listPage(workspaceId, disciplineKey, statusFilter, typeFilter, query, sortBy),
+    queryKey: tournamentQueryKeys.listPage(workspaceId, disciplineKey, statusFilter, query, sortBy),
     queryFn: ({ pageParam, signal }) =>
       tournamentService.listTournaments(
         {
           ...filterQuery,
+          registrationOpen: statusFilter === "registration",
           ...SORT_QUERY[sortBy],
           page: pageParam,
           perPage: PER_PAGE
@@ -188,7 +178,7 @@ const TournamentsClient = ({
   });
 
   const { data: facets } = useQuery({
-    queryKey: tournamentQueryKeys.facets(workspaceId, disciplineKey, statusFilter, typeFilter, query),
+    queryKey: tournamentQueryKeys.facets(workspaceId, disciplineKey, statusFilter, query),
     queryFn: ({ signal }) => tournamentService.getFacets(filterQuery, { signal }),
     enabled: ready
   });
@@ -264,13 +254,9 @@ const TournamentsClient = ({
 
       <TournamentsFilters
         total={facets?.total ?? 0}
-        statusCounts={facets?.by_status ?? NO_STATUS_COUNTS}
+        statusCounts={{ ...(facets?.by_status ?? NO_STATUS_COUNTS), registration: facets?.registration_open ?? 0 }}
         statusFilter={statusFilter}
         onStatusChange={(value) => setParams({ status: value === "all" ? null : value })}
-        typeFilter={typeFilter}
-        leagueCount={facets?.league ?? 0}
-        standardCount={facets?.standard ?? 0}
-        onTypeChange={(value) => setParams({ type: value === "all" ? null : value })}
         search={searchInput}
         onSearchChange={setSearchInput}
         sortBy={sortBy}

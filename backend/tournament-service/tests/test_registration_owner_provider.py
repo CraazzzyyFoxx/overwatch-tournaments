@@ -18,7 +18,6 @@ from __future__ import annotations
 import asyncio
 import sys
 import uuid
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -44,10 +43,11 @@ from shared.models.registration.registration import (  # noqa: E402
     RegistrationFormVersion,
 )
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
-from shared.models.tournament import Tournament, TournamentPhaseSchedule  # noqa: E402
+from shared.models.tournament import Tournament  # noqa: E402
 from shared.services.ontology import project_disciplines  # noqa: E402
 from shared.services.social_identity import social_identity_service  # noqa: E402
 from shared.services.team_format import save_tournament_format  # noqa: E402
+from shared.testing.factories import registration_node  # noqa: E402
 from src.schemas.registration import RegistrationSubmit  # noqa: E402
 from src.services.registration import service as reg_service  # noqa: E402
 from src.services.registration.teams import invitee as invitee_module  # noqa: E402
@@ -89,8 +89,7 @@ async def _seed(session: Any, *, discipline: str) -> SimpleNamespace:
         name=f"Owner provider {suffix}",
         slug=f"ownprov-{suffix}",
         discipline=discipline,
-        status=enums.TournamentStatus.REGISTRATION,
-        team_formation="registration",
+        status=enums.TournamentStatus.LIVE,
     )
     session.add(tournament)
     await session.flush()
@@ -99,15 +98,6 @@ async def _seed(session: Any, *, discipline: str) -> SimpleNamespace:
         await session.flush()
     await save_tournament_format(
         session, tournament, TeamFormat(discipline=discipline, name="Open three", starter_min=3, starter_max=3)
-    )
-    now = datetime.now(UTC)
-    session.add(
-        TournamentPhaseSchedule(
-            tournament_id=tournament.id,
-            status=enums.TournamentStatus.REGISTRATION,
-            starts_at=now - timedelta(days=1),
-            ends_at=now + timedelta(days=1),
-        )
     )
 
     form = RegistrationForm(tournament_id=tournament.id, workspace_id=workspace.id)
@@ -127,10 +117,12 @@ async def _seed(session: Any, *, discipline: str) -> SimpleNamespace:
         session.add(user)
         users.append(user)
     await session.flush()
+    node_id = await registration_node(session, tournament.id)
     await session.commit()
     return SimpleNamespace(
         workspace_id=workspace.id,
         tournament_id=tournament.id,
+        node_id=node_id,
         version_id=version.id,
         captain=users[0],
         agent=users[1],
@@ -186,15 +178,20 @@ def test_every_receiver_names_the_owning_games_handle(db_session, discipline: st
             team, captain, _issues = await teams_service.create_team(
                 db_session,
                 tournament_id=seeded.tournament_id,
+                registration_node_id=seeded.node_id,
                 auth_user=seeded.captain,
                 name=f"Squad {seeded.tournament_id}",
                 slot_code="flex",
                 body=_submit(seeded, "Cap"),
             )
             agent_read = await reg_service.registration_service.submit_public_registration(
-                db_session, tournament_id=seeded.tournament_id, auth_user=seeded.agent, body=_submit(seeded, "Agent")
+                db_session,
+                tournament_id=seeded.tournament_id,
+                registration_node_id=seeded.node_id,
+                auth_user=seeded.agent,
+                body=_submit(seeded, "Agent"),
             )
-            free_agents = await teams_service.list_free_agents(db_session, seeded.tournament_id)
+            free_agents = await teams_service.list_free_agents(db_session, seeded.tournament_id, seeded.node_id)
             await teams_service.invite_member(
                 db_session,
                 team_id=team.id,
@@ -272,6 +269,7 @@ def test_a_typed_handle_cannot_take_another_players_account(db_session) -> None:
                 await reg_service.registration_service.submit_public_registration(
                     db_session,
                     tournament_id=seeded.tournament_id,
+                    registration_node_id=seeded.node_id,
                     auth_user=seeded.captain,
                     body=RegistrationSubmit(form_version_id=seeded.version_id, answers={"identity_riot": [riot_id]}),
                 )

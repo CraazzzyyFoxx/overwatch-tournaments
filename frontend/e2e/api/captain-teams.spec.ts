@@ -12,7 +12,7 @@ import {
   type MyRegistration,
   type RegTeam,
 } from "../support/registration";
-import { setStatus } from "../support/seed";
+import { transitionNode } from "../support/seed";
 
 // Team registration (team_formation = "registration"): a captain founds a team
 // with their own sign-up, fills the 5v5 role-queue roster by invites, and the
@@ -27,7 +27,7 @@ async function teamTournament(adminApi: Api, formExtra?: Record<string, unknown>
 }
 
 test("captain founds a team; name rules; a free agent is invited, sees the offer and accepts", async ({ adminApi, anonApi, makeUser }) => {
-  const { t, version } = await teamTournament(adminApi);
+  const { t, version, registrationNodeId } = await teamTournament(adminApi);
   const captain = await makeUser("cap");
   const team = await createTeam(captain, t.id, version, "tank");
   expect(team.status).toBe("forming");
@@ -51,7 +51,7 @@ test("captain founds a team; name rules; a free agent is invited, sees the offer
   expect(badSlot.status()).toBeLessThan(500);
 
   const agent = await makeUser("fa");
-  const agentReg = await registerSelf(agent, t.id, version, { roles: ["damage"] });
+  const agentReg = await registerSelf(agent, t.id, registrationNodeId, version, { roles: ["damage"] });
   const free = await captain.api.get<{ items: { registration_id: number; primary_handle: string }[] }>(`${teamsOf(t.id)}/free-agents`);
   expect(free.items.map((f) => f.registration_id)).toEqual([agentReg.id]);
   expect((await anonApi.raw("GET", `${teamsOf(t.id)}/free-agents`)).status()).toBe(401);
@@ -111,11 +111,11 @@ test("link invite: anonymous preview, accept needs the form answered, a used lin
 });
 
 test("invite lifecycle: extend, decline, revoke, captain + organizer history, cap reset, organizer revoke", async ({ adminApi, makeUser }) => {
-  const { t, version } = await teamTournament(adminApi);
+  const { t, version, registrationNodeId } = await teamTournament(adminApi);
   const captain = await makeUser("cap");
   const team = await createTeam(captain, t.id, version, "tank");
   const agent = await makeUser("fa");
-  const agentReg = await registerSelf(agent, t.id, version, { roles: ["support"] });
+  const agentReg = await registerSelf(agent, t.id, registrationNodeId, version, { roles: ["support"] });
 
   const offer = await captain.api.post<CreatedInvite>(`${regTeam(team.id)}/invites`, { slot_code: "support", target_registration_id: agentReg.id, ttl_days: 2 }, 201);
   const extended = await captain.api.post<CreatedInvite>(`${regTeam(team.id)}/invites/${offer.id}/extend`, { ttl_days: 14 });
@@ -198,7 +198,7 @@ test("roster management: place, manager, transfer captaincy, kick, leave; only t
 });
 
 test("complete roster locks; organizer unlocks; team check-in needs CHECK_IN and approved members", async ({ adminApi, makeUser }) => {
-  const { t, version } = await teamTournament(adminApi);
+  const { t, version, registrationNodeId } = await teamTournament(adminApi);
   const captain = await makeUser("cap");
   let team = await createTeam(captain, t.id, version, "tank");
   const early = await captain.api.raw("POST", `${regTeam(team.id)}/lock`);
@@ -212,7 +212,7 @@ test("complete roster locks; organizer unlocks; team check-in needs CHECK_IN and
   expect(unlocked.roster_locked_at).toBeNull();
 
   const ids = team.members.map((m) => m.registration_id);
-  await setStatus(adminApi, t.id, "check_in");
+  await transitionNode(adminApi, registrationNodeId, "check_in");
   const unapproved = await captain.api.raw("POST", `${regTeam(team.id)}/check-in`, { body: {} });
   expect(unapproved.status(), "every member must be approved first").toBe(409);
   await adminApi.post(`/api/v1/admin/balancer/tournaments/${t.id}/registrations/bulk-approve`, { registration_ids: ids });
@@ -223,11 +223,11 @@ test("complete roster locks; organizer unlocks; team check-in needs CHECK_IN and
 });
 
 test("organizer moderation: rename, admission, notes, attach by handle, reject with withdrawal; captain still sees the reason", async ({ adminApi, anonApi, makeUser }) => {
-  const { t, version } = await teamTournament(adminApi);
+  const { t, version, registrationNodeId } = await teamTournament(adminApi);
   const captain = await makeUser("cap");
   const team = await createTeam(captain, t.id, version, "tank");
   const agent = await makeUser("fa");
-  const agentReg = await registerSelf(agent, t.id, version, { roles: ["support"] });
+  const agentReg = await registerSelf(agent, t.id, registrationNodeId, version, { roles: ["support"] });
 
   const listed = await adminApi.get<{ items: RegTeam[]; total: number; unassigned_players: number }>(adminTeams(t.id));
   expect(listed.total).toBe(1);

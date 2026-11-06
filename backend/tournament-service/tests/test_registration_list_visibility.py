@@ -23,6 +23,8 @@ from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from shared import models
+
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "tournament-service"))
@@ -35,12 +37,29 @@ def _role(role: str, *, is_primary: bool = True, priority: int = 0) -> SimpleNam
     return SimpleNamespace(role=role, is_primary=is_primary, priority=priority)
 
 
-def _registration(reg_id: int, *roles: SimpleNamespace, status: str = "approved") -> SimpleNamespace:
-    return SimpleNamespace(id=reg_id, status=status, roles=list(roles))
+def _registration(reg_id: int, *roles: SimpleNamespace) -> SimpleNamespace:
+    return SimpleNamespace(id=reg_id, roles=list(roles))
+
+
+def _entry(reg_id: int, *roles: SimpleNamespace, status: str = "approved") -> SimpleNamespace:
+    """The registration's entry in the listed node: the list is made of entries."""
+    return SimpleNamespace(id=reg_id, registration_id=reg_id, status=status, registration=_registration(reg_id, *roles))
 
 
 def _form(**overrides) -> SimpleNamespace:
-    return SimpleNamespace(**{"hide_registrations": False, "max_participants": None, "show_ranks": False, **overrides})
+    return SimpleNamespace(**{"hide_registrations": False, "show_ranks": False, **overrides})
+
+
+def _node(max_participants: int | None) -> models.FlowNode:
+    """The listed registration node: its config sets the capacity the list reports."""
+    return models.FlowNode(
+        id=3,
+        tournament_id=42,
+        kind="registration",
+        name="Registration",
+        status="open",
+        config={"max_participants": max_participants},
+    )
 
 
 class RoleCountTests(IsolatedAsyncioTestCase):
@@ -75,7 +94,7 @@ class RoleCountTests(IsolatedAsyncioTestCase):
 
 
 class HiddenListTests(IsolatedAsyncioTestCase):
-    async def _build(self, form: SimpleNamespace, rows: list[SimpleNamespace]):
+    async def _build(self, form: SimpleNamespace, rows: list[SimpleNamespace], *, max_participants: int | None = None):
         session = SimpleNamespace(
             scalars=AsyncMock(return_value=rows),
             # Left as an AsyncMock so the test can assert it stayed unused: this
@@ -86,20 +105,27 @@ class HiddenListTests(IsolatedAsyncioTestCase):
             patch.object(
                 service.registration_service.tournament_repo,
                 "get",
-                AsyncMock(return_value=SimpleNamespace(workspace_id=7, status=None, phase_schedule=[])),
+                AsyncMock(return_value=SimpleNamespace(workspace_id=7, status=None)),
             ),
             patch.object(service._common_service, "get_registration_form", AsyncMock(return_value=form)),
+            patch.object(
+                service._common_service, "ensure_registration_node", AsyncMock(return_value=_node(max_participants))
+            ),
+            patch.object(service.windows_service, "load_schedule", AsyncMock(return_value=[])),
         ):
-            return session, await service.registration_service.build_public_registration_list(session, tournament_id=42)
+            return session, await service.registration_service.build_public_registration_list(
+                session, tournament_id=42, registration_node_id=3
+            )
 
     async def test_a_hidden_list_answers_with_the_aggregate_and_no_rows(self):
         session, response = await self._build(
-            _form(hide_registrations=True, max_participants=60),
+            _form(hide_registrations=True),
             [
-                _registration(1, _role("tank")),
-                _registration(2, _role("damage")),
-                _registration(3, _role("damage")),
+                _entry(1, _role("tank")),
+                _entry(2, _role("damage")),
+                _entry(3, _role("damage")),
             ],
+            max_participants=60,
         )
 
         self.assertTrue(response.hidden)
@@ -109,14 +135,14 @@ class HiddenListTests(IsolatedAsyncioTestCase):
         self.assertEqual(response.max_participants, 60)
 
     async def test_a_hidden_list_never_reads_the_identities_it_is_hiding(self):
-        session, _ = await self._build(_form(hide_registrations=True), [_registration(1, _role("tank"))])
+        session, _ = await self._build(_form(hide_registrations=True), [_entry(1, _role("tank"))])
 
         session.execute.assert_not_awaited()
 
     async def test_a_withdrawn_registration_is_not_counted(self):
         _, response = await self._build(
             _form(hide_registrations=True),
-            [_registration(1, _role("tank")), _registration(2, _role("damage"), status="withdrawn")],
+            [_entry(1, _role("tank")), _entry(2, _role("damage"), status="withdrawn")],
         )
 
         self.assertEqual(response.total, 1)
@@ -127,9 +153,9 @@ class VisibleListTests(IsolatedAsyncioTestCase):
     async def test_a_withdrawn_row_is_listed_but_not_counted(self):
         """The Withdrawn filter needs the row; "Registered N" must not count it."""
         rows = [
-            _registration(1, _role("tank")),
-            _registration(2, _role("damage"), status="withdrawn"),
-            _registration(3, _role("damage")),
+            _entry(1, _role("tank")),
+            _entry(2, _role("damage"), status="withdrawn"),
+            _entry(3, _role("damage")),
         ]
         result = MagicMock()
         result.scalars.return_value.all.return_value = rows
@@ -146,6 +172,8 @@ class VisibleListTests(IsolatedAsyncioTestCase):
             patch.object(
                 service._common_service, "get_registration_form", AsyncMock(return_value=_form(current_version_id=None))
             ),
+            patch.object(service._common_service, "ensure_registration_node", AsyncMock(return_value=_node(None))),
+            patch.object(service.windows_service, "load_schedule", AsyncMock(return_value=[])),
             patch.object(service.registration_service, "resolve_admission_list", AsyncMock(return_value={})),
             patch.multiple(
                 service,
@@ -155,11 +183,13 @@ class VisibleListTests(IsolatedAsyncioTestCase):
                 registration_public_keys=MagicMock(return_value=lambda _: frozenset()),
                 discipline_identity_provider=MagicMock(return_value="battlenet"),
                 submitted_late=MagicMock(return_value=False),
-                _reg_to_read=lambda r, **_: {"id": r.id, "status": r.status},
+                _reg_to_read=lambda r, e, **_: {"id": r.id, "status": e.status},
                 RegistrationListRead=construct,
             ),
         ):
-            response = await service.registration_service.build_public_registration_list(session, tournament_id=42)
+            response = await service.registration_service.build_public_registration_list(
+                session, tournament_id=42, registration_node_id=3
+            )
 
         self.assertFalse(response.hidden)
         self.assertEqual([read.id for read in response.registrations], [1, 2, 3])

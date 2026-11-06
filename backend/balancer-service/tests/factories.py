@@ -18,6 +18,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from shared import models
 from shared.core.social import SocialProvider
 from shared.domain.roster import CharacterRef, PlayerRoster, RosterRole
 from shared.schemas.identity import PlayerIdentityRead
@@ -128,3 +132,64 @@ def roster(
         admin_notes=admin_notes,
         custom_fields=dict(custom_fields or {}),
     )
+
+
+async def formation_node(
+    session: AsyncSession, tournament_id: int, *, status: str = "forming", mode: str = "balancer"
+) -> int:
+    """A formation node of the tournament (flushed, not committed): what a balance, a draft or a team now belongs to."""
+    node = models.FlowNode(
+        tournament_id=tournament_id, kind="formation", name="Teams", status=status, config={"mode": mode}
+    )
+    session.add(node)
+    await session.flush()
+    return node.id
+
+
+async def wire_input(session: AsyncSession, node_id: int) -> int:
+    """Feed ``node_id`` an (empty) registration node's ``participants`` output; the registration node's id."""
+    tournament_id = await session.scalar(sa.select(models.FlowNode.tournament_id).where(models.FlowNode.id == node_id))
+    registration = models.FlowNode(tournament_id=tournament_id, kind="registration", name="R", status="closed")
+    session.add(registration)
+    await session.flush()
+    session.add(
+        models.FlowEdge(
+            tournament_id=tournament_id,
+            source_node_id=registration.id,
+            source_port="participants",
+            target_node_id=node_id,
+            target_port="players",
+        )
+    )
+    await session.flush()
+    return registration.id
+
+
+async def add_input(session: AsyncSession, registration_node_id: int, member_id: int) -> None:
+    """Put the workspace member on the registration node's ``participants`` output, after everyone already there."""
+    taken = await session.scalar(
+        sa.select(sa.func.count())
+        .select_from(models.FlowNodeResult)
+        .where(models.FlowNodeResult.node_id == registration_node_id)
+    )
+    session.add(
+        models.FlowNodeResult(
+            node_id=registration_node_id,
+            port="participants",
+            rank=taken + 1,
+            workspace_member_id=member_id,
+            state="final",
+        )
+    )
+    await session.flush()
+
+
+async def new_member(session: AsyncSession, workspace_id: int, name: str) -> tuple[int, int]:
+    """A player and its workspace member (flushed): ``(member id, user id)``; the caller deletes the user."""
+    user = models.User(name=name)
+    session.add(user)
+    await session.flush()
+    member = models.WorkspaceMember(workspace_id=workspace_id, player_id=user.id)
+    session.add(member)
+    await session.flush()
+    return member.id, user.id

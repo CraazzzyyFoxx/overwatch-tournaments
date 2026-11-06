@@ -2,7 +2,8 @@ import { expect } from "@playwright/test";
 import type { Api } from "./api";
 import {
   createStage,
-  generateStage,
+  formTeams,
+  startStage,
   listEncounters,
   seedTeams,
   setResult,
@@ -13,7 +14,8 @@ import {
   type TournamentJob,
 } from "./flows";
 import { setPoints } from "./results";
-import { createTournament, createWorkspace, setStatus } from "./seed";
+import { nodeNamed, waitNode, type AdminFlow } from "./flow";
+import { createTournament, createWorkspace } from "./seed";
 
 /**
  * Reference models for the tournament-correctness specs. Every expectation is
@@ -321,35 +323,66 @@ export function ladder([p1, p2, p3, p4]: number[]): Result[] {
 }
 
 /**
- * A LIVE tournament (win/draw/loss 3/1/0) with 8 teams in a generated
- * two-group round robin that advances its top 2, and an unseeded single
- * elimination playoff after it -- what activation auto-wires from the groups.
+ * Groups → a `per_item_top` filter → playoff, wired in one graph save (`PUT /admin/tournaments/{id}/flow`): the
+ * filter passes the top `top` of every group, and the playoff is seated from it once the filter is `final`.
+ * Returns the filter's node id.
+ */
+export async function wireGroupsToPlayoff(
+  api: Api,
+  tournamentId: number,
+  groups: Pick<Stage, "node_id">,
+  playoff: Pick<Stage, "node_id">,
+  top = 2
+): Promise<number> {
+  const name = `Top ${top} per group`;
+  const flow = await api.put<AdminFlow>(`/api/v1/admin/tournaments/${tournamentId}/flow`, {
+    nodes: [{ ref: "cut", kind: "filter", name, config: { mode: "per_item_top", n: top } }],
+    edges: [
+      { source: groups.node_id, source_port: "ranking", target: "cut", target_port: "ranking" },
+      { source: "cut", source_port: "passed", target: playoff.node_id, target_port: "participants" },
+    ],
+  });
+  return nodeNamed(flow, "filter", name).id;
+}
+
+/** The playoff stage fed by the filter: waits for the groups to close (the filter `final`), then seats it (`ready`) and starts it. */
+export async function startPlayoff(api: Api, tournamentId: number, filterNodeId: number, playoff: Pick<Stage, "node_id">) {
+  await waitNode(api, tournamentId, filterNodeId, "final");
+  await startStage(api, playoff);
+}
+
+/**
+ * A tournament that derives `live` (win/draw/loss 3/1/0) with 8 teams in a generated
+ * two-group round robin, and an unseeded single elimination playoff after it, wired by
+ * a `per_item_top` filter (top 2 of each group) with `cross` seeding.
  */
 export async function seedGroupsToPlayoffs(api: Api) {
   const workspace = await createWorkspace(api);
   const tournament = await createTournament(api, workspace.id);
   const teams = await seedTeams(api, tournament.id, 8, { players: false });
+  await formTeams(api, tournament.id);
   const created = await createStage(
     api,
     tournament.id,
     teams.map((t) => t.id),
-    { stageType: "round_robin", groups: 2, bestOf: 1, extra: { advance_count: 2 } }
+    { stageType: "round_robin", groups: 2, bestOf: 1 }
   );
   await setPoints(api, created.id, 3, 1, 0);
-  await generateStage(api, created.id);
+  await startStage(api, created);
   const playoff = await api.post<Stage>(
     `/api/v1/admin/stages/tournament/${tournament.id}`,
-    { name: "Playoffs", stage_type: "single_elimination", best_of: { default: 1 }, order: 1 },
+    { name: "Playoffs", stage_type: "single_elimination", best_of: { default: 1 }, order: 1, seed_ranking: "cross" },
     201
   );
   await api.post(`/api/v1/admin/stages/${playoff.id}/items`, { name: "Bracket", type: "single_bracket", order: 0 }, 201);
-  await setStatus(api, tournament.id, "live", true);
+  const filterNodeId = await wireGroupsToPlayoff(api, tournament.id, created, playoff);
   const groupStage = await api.get<Stage>(`/api/v1/admin/stages/${created.id}`);
   return {
     tournament,
     teams,
     groupStage,
     playoff,
+    filterNodeId,
     groupA: seedOrder(groupStage, 0),
     groupB: seedOrder(groupStage, 1),
     encounters: await listEncounters(api, tournament.id, groupStage.id),

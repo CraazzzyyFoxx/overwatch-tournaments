@@ -78,7 +78,7 @@ export function buildChecklist(
   const matchAccess = readiness.results_disputed != null;
 
   const rank = phaseRank(ctx.status);
-  /** The item matters from `from` through `until`, and only then. */
+  /** The item matters from `from` through `until`, and only then. The registration, check-in, draft and play phases are one `live` status. */
   const during = (from: TournamentStatus, until: TournamentStatus) =>
     phaseRank(from) <= rank && rank <= phaseRank(until);
   const completed = ctx.status === "completed";
@@ -91,7 +91,7 @@ export function buildChecklist(
   const items: ChecklistItem[] = [];
 
   // ── Setup ──────────────────────────────────────────────────────────────
-  if (during("announcement", "registration")) {
+  if (during("announcement", "live")) {
     items.push({
       key: "schedule",
       phase: "setup",
@@ -100,7 +100,7 @@ export function buildChecklist(
       href: settingsHref
     });
   }
-  if (during("announcement", "draft")) {
+  if (during("announcement", "live")) {
     items.push({
       key: "grid",
       phase: "setup",
@@ -109,7 +109,7 @@ export function buildChecklist(
       href: settingsHref
     });
   }
-  if (!ctx.hasChallongeSource && during("announcement", "registration")) {
+  if (!ctx.hasChallongeSource && during("announcement", "live")) {
     items.push({
       key: "registration_form",
       phase: "setup",
@@ -126,7 +126,7 @@ export function buildChecklist(
   // ── Registration ───────────────────────────────────────────────────────
   const approved = readiness.registrations_approved ?? 0;
   const pending = readiness.registrations_pending ?? 0;
-  if (during("registration", "check_in")) {
+  if (during("live", "live")) {
     items.push({
       key: "registrations_reviewed",
       phase: "registration",
@@ -136,7 +136,7 @@ export function buildChecklist(
       href: registrationHref
     });
   }
-  if (during("registration", "draft")) {
+  if (during("live", "live")) {
     const ranked = readiness.registrations_ranked ?? 0;
     items.push({
       key: "ranks",
@@ -147,7 +147,7 @@ export function buildChecklist(
       href: registrationHref
     });
   }
-  if (during("check_in", "check_in")) {
+  if (during("live", "live")) {
     // No-shows are normal, so "everyone checked in" is no finish line: progress only.
     items.push({
       key: "check_in",
@@ -161,9 +161,9 @@ export function buildChecklist(
     });
   }
 
-  // ── Formation (by team_formation, §3) ──────────────────────────────────
-  if (during("registration", "draft")) {
-    if (readiness.team_formation === "draft") {
+  // ── Formation (by the formation nodes' modes, §3) ──────────────────────
+  if (during("live", "live")) {
+    if (readiness.formation_modes.includes("draft")) {
       const draftStatus = readiness.draft_session_status;
       items.push({
         key: "draft_completed",
@@ -216,7 +216,7 @@ export function buildChecklist(
   }
 
   // ── Bracket ────────────────────────────────────────────────────────────
-  if (during("announcement", "draft")) {
+  if (during("announcement", "live")) {
     items.push({
       key: "stages",
       phase: "bracket",
@@ -225,7 +225,7 @@ export function buildChecklist(
       href: stagesHref
     });
   }
-  if (during("check_in", "playoffs")) {
+  if (during("live", "live")) {
     items.push({
       key: "slots",
       phase: "bracket",

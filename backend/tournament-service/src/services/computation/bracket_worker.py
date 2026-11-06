@@ -64,16 +64,6 @@ async def _execute_bracket_operation(
             commit=False,
             schedule_standings=False,
         )
-    if job.operation == "activate_and_generate":
-        _, encounters = await stage_service.activate_and_generate(
-            session,
-            int(job.stage_id),
-            force=bool(payload.get("force", False)),
-            notify=False,
-            commit=False,
-            schedule_standings=False,
-        )
-        return encounters
     if job.operation == "generate_next_swiss_round":
         return await swiss_rounds_service.generate_next_swiss_round(
             session,

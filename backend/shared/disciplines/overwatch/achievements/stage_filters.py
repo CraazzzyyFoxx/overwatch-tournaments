@@ -10,7 +10,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from shared import models
-from shared.core.enums import StageItemType, StageType
+from shared.core.enums import FlowNodeStatus, StageItemType, StageType
+from shared.services.flow_queries import stage_node_status
 
 BRACKET_STAGE_TYPES = (
     StageType.SINGLE_ELIMINATION,
@@ -131,10 +132,10 @@ def standing_is_groups(
 
 
 def stage_is_completed(*, stage=models.Stage) -> sa.ColumnElement[bool]:
-    """The row's stage has finished (``Stage.is_completed``, kept by the standings recalc).
+    """The row's stage has finished (its flow node is ``completed``, moved by the standings worker).
 
     A row with no stage at all (legacy, pre-stage-system data) passes: those
     tournaments were imported finished, and dropping them here would revoke
     achievements nobody could ever re-earn.
     """
-    return sa.or_(stage.id.is_(None), stage.is_completed.is_(True))
+    return sa.or_(stage.id.is_(None), stage_node_status(stage.id) == FlowNodeStatus.COMPLETED)

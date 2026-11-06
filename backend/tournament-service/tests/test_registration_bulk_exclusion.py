@@ -43,12 +43,17 @@ class _Result:
         return self._rows
 
 
-def _registration(registration_id: int, *, status: str, ranked: bool) -> SimpleNamespace:
-    return SimpleNamespace(
+def _entry(registration_id: int, *, status: str, ranked: bool) -> SimpleNamespace:
+    registration = SimpleNamespace(
         id=registration_id,
         tournament_id=7,
-        status=status,
         roles=[SimpleNamespace(is_active=True, rank_value=2500 if ranked else None)],
+    )
+    return SimpleNamespace(
+        registration=registration,
+        registration_id=registration_id,
+        registration_node_id=5,
+        status=status,
         exclude_reason=None,
         balancer_status="incomplete",
     )
@@ -57,6 +62,7 @@ def _registration(registration_id: int, *, status: str, ranked: bool) -> SimpleN
 def _session(*execute_results: object) -> SimpleNamespace:
     return SimpleNamespace(
         execute=AsyncMock(side_effect=list(execute_results)),
+        scalar=AsyncMock(return_value=7),
         commit=AsyncMock(),
         info={},
     )
@@ -67,13 +73,13 @@ class BulkSetBalancerStatusTests(IsolatedAsyncioTestCase):
         """ "excluded" (like every non-not_in_balancer target) filters to
         approved rows at the SQL level -- this fake session can't express
         that filter, so it only hands back the row that would actually match."""
-        approved = _registration(1, status="approved", ranked=True)
+        approved = _entry(1, status="approved", ranked=True)
         tournament = SimpleNamespace(workspace_id=99)
         session = _session(_TournamentResult(tournament), _Result([approved]))
 
         updated, skipped = await lifecycle_service.bulk_set_balancer_status(
             session,
-            7,
+            5,
             [1, 404],
             balancer_status="excluded",
             exclude_reason="manual_exclusion",
@@ -85,8 +91,8 @@ class BulkSetBalancerStatusTests(IsolatedAsyncioTestCase):
         session.commit.assert_awaited_once()
 
     async def test_not_in_balancer_does_not_require_approved_and_clears_reason(self) -> None:
-        approved = _registration(1, status="approved", ranked=True)
-        pending = _registration(2, status="pending", ranked=False)
+        approved = _entry(1, status="approved", ranked=True)
+        pending = _entry(2, status="pending", ranked=False)
         approved.balancer_status = "ready"
         approved.exclude_reason = None
         tournament = SimpleNamespace(workspace_id=99)
@@ -94,7 +100,7 @@ class BulkSetBalancerStatusTests(IsolatedAsyncioTestCase):
 
         updated, skipped = await lifecycle_service.bulk_set_balancer_status(
             session,
-            7,
+            5,
             [1, 2],
             balancer_status="not_in_balancer",
             exclude_reason="ignored",
@@ -111,5 +117,5 @@ class BulkSetBalancerStatusTests(IsolatedAsyncioTestCase):
     async def test_rejects_auto_managed_statuses_outright(self) -> None:
         session = _session()
         with self.assertRaises(HTTPException):
-            await lifecycle_service.bulk_set_balancer_status(session, 7, [1], balancer_status="ready")
+            await lifecycle_service.bulk_set_balancer_status(session, 5, [1], balancer_status="ready")
         session.execute.assert_not_awaited()

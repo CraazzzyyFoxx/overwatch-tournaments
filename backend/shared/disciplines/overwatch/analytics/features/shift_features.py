@@ -26,8 +26,10 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.chrono import tournament_chrono_key
 from shared.division_grid import DEFAULT_GRID
 from shared.domain.analytics import PERFORMANCE_MODEL
+from shared.repository.participant_result import is_member_tournament_row
 from shared.services.division_grid.access import load_division_grids
 from shared.services.workspace_scope import workspace_scope_filter
 
@@ -49,22 +51,22 @@ async def load_player_rank_history(
     workspace_id: int | None = None,
     workspace_ids: typing.Sequence[int] | None = None,
 ) -> pd.DataFrame:
-    """Return ``(user_id, role, tournament_id, started_at, rank, div, prior_*, next_*)`` rows.
+    """Return ``(user_id, role, tournament_id, started_at, ended_at, rank, div, prior_*, next_*)`` rows.
 
-    Each player's chronology is tournament start order ``(coalesce(start_date, created_at), id)``: ids are not
-    chronological. The history runs through the chronologically latest of ``tournament_ids`` and
+    Each player's chronology is the tournament chronology key ``(start, end, id)`` of ``shared.core.chrono``: ids are
+    not chronological. The history runs through the chronologically latest of ``tournament_ids`` and
     ``history_through_tournament_id``; the latter lets training include the known future rows needed to label the
     last tournament in ``tournament_ids``.
     """
     if not tournament_ids:
         return pd.DataFrame()
 
-    chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
+    start, end, tid = tournament_chrono_key()
     horizon_ids = [*tournament_ids, *([history_through_tournament_id] if history_through_tournament_id else [])]
     horizon = (
-        sa.select(chrono.label("started_at"), models.Tournament.id.label("tournament_id"))
+        sa.select(start.label("started_at"), end.label("ended_at"), tid.label("tournament_id"))
         .where(models.Tournament.id.in_(horizon_ids))
-        .order_by(chrono.desc(), models.Tournament.id.desc())
+        .order_by(*(c.desc() for c in tournament_chrono_key()))
         .limit(1)
         .subquery("horizon")
     )
@@ -75,7 +77,8 @@ async def load_player_rank_history(
             models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role.label("role"),
             models.Player.tournament_id.label("tournament_id"),
-            chrono.label("started_at"),
+            start.label("started_at"),
+            end.label("ended_at"),
             models.Player.rank.label("rank"),
             models.Player.is_newcomer.label("is_newcomer"),
             models.Tournament.division_grid_version_id.label("version_id"),
@@ -87,14 +90,15 @@ async def load_player_rank_history(
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .join(
             horizon,
-            sa.tuple_(chrono, models.Tournament.id) <= sa.tuple_(horizon.c.started_at, horizon.c.tournament_id),
+            sa.tuple_(start, end, tid) <= sa.tuple_(horizon.c.started_at, horizon.c.ended_at, horizon.c.tournament_id),
         )
         .where(
             models.Player.is_substitution.is_(False),
+            is_member_tournament_row(),
             models.Tournament.discipline == "overwatch",
             *workspace_scope_filter(workspace_id, workspace_ids),
         )
-        .order_by(models.WorkspaceMember.player_id, models.Player.role, models.Tournament.id)
+        .order_by(models.WorkspaceMember.player_id, models.Player.role, *tournament_chrono_key())
     )
     result = await session.execute(query)
     df = pd.DataFrame(result.mappings().all())
@@ -102,7 +106,7 @@ async def load_player_rank_history(
         return df
 
     df["tournament_id"] = df["tournament_id"].astype(int)
-    df = df.sort_values(["user_id", "role", "started_at", "tournament_id"]).reset_index(drop=True)
+    df = df.sort_values(["user_id", "role", "started_at", "ended_at", "tournament_id"]).reset_index(drop=True)
 
     # Resolve every player's division on the canonical OW grid so
     # div/prior_div/next_tournament_div are comparable across workspaces.

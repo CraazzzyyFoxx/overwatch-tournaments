@@ -1,7 +1,7 @@
 """``sync_player_ranks`` runs its real query against a real engine (SQLite).
 
 The claims under test are properties of the emitted SQL and the in-place update:
-only rows of the named tournament are touched, only rows whose rank actually
+only rows of the named formation node are touched, only rows whose rank actually
 differs are counted, and a payload member with no materialized row is a no-op.
 A mocked session could not falsify any of them.
 """
@@ -94,7 +94,7 @@ class SyncPlayerRanksTests(IsolatedAsyncioTestCase):
                     id=tournament_id, tournament_id=tournament_id, name="Team", balancer_name="A#1"
                 )
             )
-        # (name, tournament, rank) — "A#1" is in both tournaments on purpose.
+        # (name, tournament, rank) — "A#1" is in both formation nodes on purpose.
         for player_id, (name, tournament_id, rank) in enumerate(
             [("A#1", 1, 1000), ("B#2", 1, 2000), ("A#1", 2, 500)], start=1
         ):
@@ -105,6 +105,7 @@ class SyncPlayerRanksTests(IsolatedAsyncioTestCase):
                 sa.insert(Player.__table__).values(
                     id=player_id,
                     tournament_id=tournament_id,
+                    formation_node_id=10 + tournament_id,
                     team_id=tournament_id,
                     workspace_member_id=player_id,
                     name=name,
@@ -121,12 +122,12 @@ class SyncPlayerRanksTests(IsolatedAsyncioTestCase):
     def _rank(self, player_id: int) -> int | None:
         return self.session.scalar(sa.select(Player.rank).where(Player.id == player_id))
 
-    async def test_updates_only_changed_rows_of_this_tournament(self) -> None:
+    async def test_updates_only_changed_rows_of_this_formation_node(self) -> None:
         # B#2 already holds 2000, C#3 was never materialized, and the A#1 of
         # tournament 2 is a different roster row that must not move.
         updated = await sync_player_ranks(
             self.shim,
-            1,
+            11,
             [_team("A#1", ("A#1", 3000), ("B#2", 2000), ("C#3", 999))],
         )
 
@@ -137,11 +138,11 @@ class SyncPlayerRanksTests(IsolatedAsyncioTestCase):
         self.assertEqual(500, self._rank(3))
 
     async def test_empty_payload_touches_nothing(self) -> None:
-        self.assertEqual(0, await sync_player_ranks(self.shim, 1, [_team("A#1")]))
+        self.assertEqual(0, await sync_player_ranks(self.shim, 11, [_team("A#1")]))
         self.assertEqual(1000, self._rank(1))
 
     async def test_a_zero_rank_is_no_rank(self) -> None:
         """0 has no meaning: the materialization boundary stores it as NULL, never as a 0."""
-        self.assertEqual(2, await sync_player_ranks(self.shim, 1, [_team("A#1", ("A#1", 0), ("B#2", None))]))
+        self.assertEqual(2, await sync_player_ranks(self.shim, 11, [_team("A#1", ("A#1", 0), ("B#2", None))]))
         self.session.expire_all()
         self.assertEqual((None, None), (self._rank(1), self._rank(2)))

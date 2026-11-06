@@ -90,7 +90,7 @@ async def _seed(session: Any) -> tuple[int, int]:
         workspace_id=workspace.id,
         name=f"Form templates {suffix}",
         slug=f"formtpl-{suffix}",
-        status=enums.TournamentStatus.REGISTRATION,
+        status=enums.TournamentStatus.LIVE,
     )
     session.add(tournament)
     await session.flush()
@@ -355,7 +355,7 @@ def test_apply_to_a_tournament_with_no_form_creates_one(db_session) -> None:
                 workspace_id=workspace_id,
                 name=f"Baseline {uuid.uuid4().hex[:8]}",
                 slug=f"baseline-{uuid.uuid4().hex[:8]}",
-                status=enums.TournamentStatus.REGISTRATION,
+                status=enums.TournamentStatus.LIVE,
             )
             db_session.add(baseline_tournament)
             await db_session.flush()
@@ -772,21 +772,10 @@ class TemplateHandlersReadTheRequest(IsolatedAsyncioTestCase):
             id=5,
             tournament_id=9,
             workspace_id=1,
-            auto_approve=False,
             require_open_profile=False,
             open_profile_scope="main",
             show_ranks=False,
             hide_registrations=False,
-            max_participants=None,
-            max_substitutes=0,
-            require_subscription=False,
-            subscription_stage="check_in",
-            subscription_scope="player",
-            team_rank_min=None,
-            team_rank_max=None,
-            team_max_rank_spread=None,
-            team_unique_identity=False,
-            team_require_discord_guild=False,
             current_version=SimpleNamespace(id=3, number=2, schema_json=_schema_with("vk").model_dump(mode="json")),
         )
 
@@ -795,9 +784,6 @@ class TemplateHandlersReadTheRequest(IsolatedAsyncioTestCase):
 
         async def _blob(_session, _workspace_id):
             return {}
-
-        async def _open(_session, _tournament_id):
-            return True
 
         async def _stale(_session, _form):
             return 0
@@ -817,7 +803,6 @@ class TemplateHandlersReadTheRequest(IsolatedAsyncioTestCase):
                     "load_workspace_requirement_blob",
                     _blob,
                 ),
-                patch.object(registration_admin.windows_service, "load_registration_open", _open),
                 patch.object(registration_admin.form_service, "stale_count", _stale),
                 patch.object(registration_admin.reg_common._common_service, "get_tournament_discipline", _discipline),
             ),

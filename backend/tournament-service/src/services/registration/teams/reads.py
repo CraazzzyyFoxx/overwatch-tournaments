@@ -26,7 +26,7 @@ from src.schemas.registration_team import (
 )
 from src.services.person_names import registration_display, registration_person_loader
 from src.services.registration.service import _owned_by
-from src.services.registration.teams._core import TeamServiceBase
+from src.services.registration.teams._core import TeamServiceBase, _node_config
 from src.services.registration.teams._shared import (
     _MUTABLE_TEAM_STATUSES,
     _SLOT_RELEASING_STATUSES,
@@ -37,7 +37,7 @@ from src.services.registration.teams._shared import (
     _free_agent_clause,
     _occupancy_of,
 )
-from src.services.registration.windows import is_registration_open
+from src.services.registration.windows import windows_service
 
 
 def _primary_handle(registration: models.Registration, provider: str) -> str | None:
@@ -48,8 +48,8 @@ def _primary_handle(registration: models.Registration, provider: str) -> str | N
 class ReadsMixin(TeamServiceBase):
     """Serialization and listing; no writes."""
 
-    async def count_unassigned_players(self, session: AsyncSession, tournament_id: int) -> int:
-        """How many free agents there are.
+    async def count_unassigned_players(self, session: AsyncSession, registration_node_id: int) -> int:
+        """How many free agents the registration node has.
 
         These are invisible to the export: it materializes registered teams, and on a
         team-registration tournament neither the balancer nor the draft runs. So an
@@ -57,13 +57,22 @@ class ReadsMixin(TeamServiceBase):
         Surfacing the count is what lets an organizer notice them BEFORE pressing
         export, which is the only moment it is still cheap to fix.
         """
-        return await self.registration_repo.count(session, filters=_free_agent_clause(tournament_id))
+        return int(
+            await session.scalar(
+                sa.select(sa.func.count(models.Registration.id))
+                .join(models.RegistrationEntry, models.RegistrationEntry.registration_id == models.Registration.id)
+                .where(*_free_agent_clause(registration_node_id))
+            )
+            or 0
+        )
 
-    async def list_free_agents(self, session: AsyncSession, tournament_id: int) -> list[RegistrationFreeAgentRead]:
-        """The free agents a captain may invite, newest registration last.
+    async def list_free_agents(
+        self, session: AsyncSession, tournament_id: int, registration_node_id: int
+    ) -> list[RegistrationFreeAgentRead]:
+        """The free agents a captain may invite in the node, newest registration last.
 
         This is what makes a targeted invite possible without a global account search:
-        the captain picks from people who already registered for THIS tournament, so no
+        the captain picks from people who already registered through THIS node, so no
         new identity surface is opened. Everything returned here is already on the
         public participants list — the account requirement on the route exists because
         the only use of this list is to act on it.
@@ -77,13 +86,14 @@ class ReadsMixin(TeamServiceBase):
         provider = identity_provider(tournament.discipline)
         rows = await session.scalars(
             self.registration_repo.select()
-            .where(*_free_agent_clause(tournament_id))
+            .join(models.RegistrationEntry, models.RegistrationEntry.registration_id == models.Registration.id)
+            .where(*_free_agent_clause(registration_node_id))
             .options(
                 selectinload(models.Registration.roles),
                 selectinload(models.Registration.identities),
                 registration_person_loader(),
             )
-            .order_by(models.Registration.submitted_at.asc())
+            .order_by(models.RegistrationEntry.created_at.asc(), models.RegistrationEntry.id.asc())
         )
         return [
             RegistrationFreeAgentRead(
@@ -104,13 +114,17 @@ class ReadsMixin(TeamServiceBase):
         session: AsyncSession,
         *,
         tournament_id: int,
+        registration_node_id: int,
         include_terminal: bool = False,
         include_terminal_for_auth_user_id: int | None = None,
     ) -> list[models.RegistrationTeam]:
-        """Every registered team, by name — the page :meth:`describe_teams` serializes
+        """Every team registered through the node, by name — the page :meth:`describe_teams` serializes
         with its live occupancy (the organizer's "who is incomplete, and what are they
         missing?")."""
-        conditions = [models.RegistrationTeam.tournament_id == tournament_id]
+        conditions = [
+            models.RegistrationTeam.tournament_id == tournament_id,
+            models.RegistrationTeam.registration_node_id == registration_node_id,
+        ]
         if not include_terminal:
             visible = sa.and_(
                 models.RegistrationTeam.deleted_at.is_(None),
@@ -169,7 +183,7 @@ class ReadsMixin(TeamServiceBase):
         include_staff: bool = False,
         eligibility: Mapping[int, list[EligibilityIssue]] | None = None,
     ) -> list[RegistrationTeamRead]:
-        """:meth:`describe_team` for a page of ONE tournament's teams.
+        """:meth:`describe_team` for a page of ONE registration node's teams.
 
         The tournament, shape and bench size are read once, members and live invites
         with one ``IN (…)`` each, and eligibility (with its one Discord batch) once for
@@ -189,20 +203,34 @@ class ReadsMixin(TeamServiceBase):
             raise _fail(404, "tournament_not_found", "Tournament not found")
         provider = identity_provider(tournament.discipline)
         shape = await self._resolve_shape(session, tournament)
-        max_substitutes = await self._max_substitutes(session, tournament.id)
+        max_substitutes = await self._max_substitutes(session, teams[0].registration_node_id)
         team_ids = [team.id for team in teams]
 
-        rosters: dict[int, list[models.Registration]] = {team_id: [] for team_id in team_ids}
-        for registration in await session.scalars(
-            self.registration_repo.select()
+        # A roster is the entries, in each team's own node, of the registrations seated on it.
+        rosters: dict[int, list[models.RegistrationEntry]] = {team_id: [] for team_id in team_ids}
+        for member in await session.scalars(
+            self.entry_repo.select()
+            .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
+            .join(
+                models.RegistrationTeam,
+                sa.and_(
+                    models.RegistrationTeam.id == models.Registration.registration_team_id,
+                    models.RegistrationTeam.registration_node_id == models.RegistrationEntry.registration_node_id,
+                ),
+            )
             .where(
                 models.Registration.registration_team_id.in_(team_ids),
                 models.Registration.deleted_at.is_(None),
-                models.Registration.status.notin_(_SLOT_RELEASING_STATUSES),
+                models.RegistrationEntry.deleted_at.is_(None),
+                models.RegistrationEntry.status.notin_(_SLOT_RELEASING_STATUSES),
             )
-            .options(selectinload(models.Registration.identities), registration_person_loader())
+            .options(
+                selectinload(models.RegistrationEntry.registration).options(
+                    selectinload(models.Registration.identities), registration_person_loader()
+                )
+            )
         ):
-            rosters[registration.registration_team_id].append(registration)
+            rosters[member.registration.registration_team_id].append(member)
         pending: dict[int, list[models.RegistrationTeamInvite]] = {team_id: [] for team_id in team_ids}
         for invite in await self.invite_repo.list_pending_for_teams(session, team_ids, pending_state=INVITE_PENDING):
             pending[invite.team_id].append(invite)
@@ -222,9 +250,7 @@ class ReadsMixin(TeamServiceBase):
         issues = dict(eligibility or {})
         unevaluated = [team for team in private if team.id not in issues]
         if unevaluated:
-            form = await session.scalar(
-                sa.select(models.RegistrationForm).where(models.RegistrationForm.tournament_id == tournament.id)
-            )
+            config = await _node_config(session, teams[0].registration_node_id)
             workspace = await session.scalar(
                 sa.select(models.Workspace).where(models.Workspace.id == tournament.workspace_id)
             )
@@ -232,7 +258,7 @@ class ReadsMixin(TeamServiceBase):
                 await team_eligibility.evaluate_many(
                     session,
                     [(team, rosters[team.id]) for team in unevaluated],
-                    form=form,
+                    config=config,
                     shape=shape,
                     workspace=workspace,
                     discord=discord_client(),
@@ -249,20 +275,23 @@ class ReadsMixin(TeamServiceBase):
                     _occupancy_of(shape, roster, pending[team.id], max_substitutes=max_substitutes),
                     members=[
                         RegistrationTeamMemberRead(
-                            registration_id=registration.id,
-                            display_name=registration.display_name,
-                            primary_handle=(handle := _primary_handle(registration, provider)),
+                            registration_id=member.registration_id,
+                            display_name=member.registration.display_name,
+                            primary_handle=(handle := _primary_handle(member.registration, provider)),
                             display=registration_display(
-                                registration, provider=provider, workspace_id=tournament.workspace_id, handle=handle
+                                member.registration,
+                                provider=provider,
+                                workspace_id=tournament.workspace_id,
+                                handle=handle,
                             ),
-                            slot_code=registration.team_slot_code,
-                            is_substitute=bool(registration.is_substitute),
-                            is_captain=registration.id == team.captain_registration_id,
-                            is_manager=bool(registration.is_team_manager),
-                            checked_in=bool(registration.checked_in),
-                            status=registration.status,
+                            slot_code=member.registration.team_slot_code,
+                            is_substitute=bool(member.is_substitute),
+                            is_captain=member.registration_id == team.captain_registration_id,
+                            is_manager=bool(member.registration.is_team_manager),
+                            checked_in=bool(member.checked_in),
+                            status=member.status,
                         )
-                        for registration in roster
+                        for member in roster
                     ],
                     invites=[
                         serialize_invite(invite, target_handle=tags.get(invite.target_auth_user_id))
@@ -292,7 +321,7 @@ class ReadsMixin(TeamServiceBase):
 
         :meth:`is_team_staff` for a whole page, in one query: the account's
         registrations in the tournament decide both (captaincy by id, management by
-        the live, flagged member row).
+        the live, flagged member entry in the team's own node).
         """
         if not teams:
             return set()
@@ -303,18 +332,28 @@ class ReadsMixin(TeamServiceBase):
                     models.Registration.registration_team_id,
                     models.Registration.is_team_manager,
                     models.Registration.deleted_at,
-                    models.Registration.status,
-                ).where(
+                    models.RegistrationEntry.status,
+                    models.RegistrationEntry.registration_node_id,
+                    models.RegistrationEntry.deleted_at.label("entry_deleted_at"),
+                )
+                .select_from(models.Registration)
+                .outerjoin(models.RegistrationEntry, models.RegistrationEntry.registration_id == models.Registration.id)
+                .where(
                     models.Registration.tournament_id == teams[0].tournament_id,
                     _owned_by(auth_user_id),
                 )
             )
         ).all()
         own = {row.id for row in rows}
+        node_of = {team.id: team.registration_node_id for team in teams}
         managed = {
             row.registration_team_id
             for row in rows
-            if row.is_team_manager and row.deleted_at is None and row.status not in _SLOT_RELEASING_STATUSES
+            if row.is_team_manager
+            and row.deleted_at is None
+            and row.entry_deleted_at is None
+            and row.registration_node_id == node_of.get(row.registration_team_id)
+            and row.status not in _SLOT_RELEASING_STATUSES
         }
         return {team.id for team in teams if team.captain_registration_id in own or team.id in managed}
 
@@ -323,9 +362,10 @@ class ReadsMixin(TeamServiceBase):
         session: AsyncSession,
         *,
         tournament_id: int,
+        registration_node_id: int,
         auth_user: models.AuthUser,
     ) -> list[RegistrationTeamInviteOffer]:
-        """Targeted invites addressed to the caller in this tournament.
+        """Targeted invites addressed to the caller for teams of this registration node.
 
         Targeted invites carry no token, so this read is the ONLY way their recipient
         can learn one exists; without it the mode would be strictly worse than a link.
@@ -338,7 +378,7 @@ class ReadsMixin(TeamServiceBase):
         guard would refuse is not an offer, and the recipient has no action for it.
         """
         tournament = await self.tournament_repo.get(session, tournament_id)
-        if tournament is None or not is_registration_open(tournament):
+        if tournament is None or not await windows_service.load_sign_up_open(session, registration_node_id):
             return []
         # Only structurally available offers; acceptance still rechecks under lock.
         rows = await session.scalars(
@@ -349,15 +389,19 @@ class ReadsMixin(TeamServiceBase):
             )
             .where(
                 models.RegistrationTeam.tournament_id == tournament_id,
+                models.RegistrationTeam.registration_node_id == registration_node_id,
                 models.RegistrationTeam.deleted_at.is_(None),
                 models.RegistrationTeam.status.in_(sorted(_MUTABLE_TEAM_STATUSES)),
                 models.RegistrationTeam.exported_team_id.is_(None),
                 models.RegistrationTeam.roster_locked_at.is_(None),
                 ~sa.exists(
-                    sa.select(models.Registration.id).where(
-                        models.Registration.tournament_id == tournament_id,
+                    sa.select(models.RegistrationEntry.id)
+                    .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
+                    .where(
+                        models.RegistrationEntry.registration_node_id == registration_node_id,
                         models.Registration.deleted_at.is_(None),
-                        models.Registration.status.in_(sorted(_SLOT_RELEASING_STATUSES)),
+                        models.RegistrationEntry.deleted_at.is_(None),
+                        models.RegistrationEntry.status.in_(sorted(_SLOT_RELEASING_STATUSES)),
                         _owned_by(auth_user.id),
                     )
                 ),
@@ -375,7 +419,7 @@ class ReadsMixin(TeamServiceBase):
         if not invites:
             return []
         shape = await self._resolve_shape(session, tournament)
-        max_substitutes = await self._max_substitutes(session, tournament_id)
+        max_substitutes = await self._max_substitutes(session, registration_node_id)
         occupancies: dict[int, RosterOccupancy] = {}
         offers = []
         for invite in invites:

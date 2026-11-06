@@ -129,7 +129,7 @@ const OW5V5_SHAPE: RosterShape = {
 /** Spelled out rather than cast: `tsconfig.json` excludes test files, so a
  *  fixture that lies about its shape type-checks green. */
 function makeTournament(
-  teamFormation: string,
+  formationMode: "balancer" | "draft" | "registered",
   status: TournamentStatus,
   rosterShape: RosterShape | null
 ): Tournament {
@@ -144,14 +144,23 @@ function makeTournament(
     description: null,
     challonge_id: null,
     challonge_slug: null,
-    is_league: false,
     is_finished: false,
     is_hidden: false,
-    team_formation: teamFormation,
     status,
     auto_transitions_enabled: true,
-    allow_late_registration: false,
-    phase_schedule: [],
+    // The formation mode decides the pool view; a `registered` one is fed by a team intake.
+    flow_nodes: [
+      {
+        id: 21,
+        kind: "registration",
+        name: "Registration",
+        status: "open",
+        config: { intake: formationMode === "registered" ? "team" : "solo" },
+        schedule: [],
+        stage_id: null
+      },
+      { id: 22, kind: "formation", name: "Teams", status: "draft", config: { mode: formationMode }, schedule: [], stage_id: null }
+    ],
     stages: [],
     participants_count: 4,
     registrations_count: 4,
@@ -161,6 +170,16 @@ function makeTournament(
     discipline: "overwatch",
     roster_shape: rosterShape,
     roster_locked_by_draft: null
+  };
+}
+
+/** The subscription rule is the registration node's setting, not the form's. */
+function requiringSubscription(base: Tournament): Tournament {
+  return {
+    ...base,
+    flow_nodes: base.flow_nodes.map((node) =>
+      node.kind === "registration" ? { ...node, config: { ...node.config, require_subscription: true } } : node
+    )
   };
 }
 
@@ -231,9 +250,7 @@ function makeForm(overrides: Partial<RegistrationForm> = {}): RegistrationForm {
     id: 9,
     tournament_id: TOURNAMENT_ID,
     workspace_id: 3,
-    is_open: false,
     require_open_profile: false,
-    require_subscription: false,
     // Explicit: an empty schema means "this form asks nothing", which would
     // leave the gated `public_notes`/`identity_battlenet_extras` columns out
     // for an unrelated reason.
@@ -280,7 +297,7 @@ beforeEach(() => {
   });
   canReadOrganizerColumns = false;
   searchParams = new URLSearchParams();
-  tournament = makeTournament("draft", "check_in", OW5V5_SHAPE);
+  tournament = makeTournament("draft", "live", OW5V5_SHAPE);
   // The service returns the whole list envelope; the pool reads its rows.
   listRegistrations.mockResolvedValue({
     registrations: POOL_ROSTER,
@@ -429,7 +446,7 @@ describe("participants pool", () => {
   });
 
   it("gives team registration the table and no view switch", async () => {
-    tournament = makeTournament("registration", "check_in", null);
+    tournament = makeTournament("registered", "live", null);
     await mount();
 
     expect(container.querySelector('[role="radiogroup"]')).toBeNull();
@@ -456,8 +473,7 @@ describe("participants pool", () => {
   });
 
   it("keeps organizer-only columns out of the config without the grant", async () => {
-    tournament = makeTournament("registration", "check_in", null);
-    getForm.mockResolvedValue(makeForm({ require_subscription: true }));
+    tournament = requiringSubscription(makeTournament("registered", "live", null));
     await mount();
 
     const columns = (
@@ -476,8 +492,7 @@ describe("participants pool", () => {
 
   it("restores organizer-only columns for a reader who may see them", async () => {
     canReadOrganizerColumns = true;
-    tournament = makeTournament("registration", "check_in", null);
-    getForm.mockResolvedValue(makeForm({ require_subscription: true }));
+    tournament = requiringSubscription(makeTournament("registered", "live", null));
     await mount();
 
     const columns = (
@@ -499,7 +514,7 @@ describe("the pool of a one-role game", () => {
       top_characters: []
     });
     tournament = {
-      ...makeTournament("draft", "check_in", {
+      ...makeTournament("draft", "live", {
         slots: { agent: 6 },
         team_size: 6,
         flex_slots: 0,

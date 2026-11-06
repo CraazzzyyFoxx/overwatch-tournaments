@@ -42,6 +42,7 @@ from src.services.draft.board import board_service  # noqa: E402
 from src.services.draft.feasibility import feasibility_service  # noqa: E402
 from src.services.draft.rosters import draft_rosters  # noqa: E402
 from src.services.mix_draft import mix_draft_service  # noqa: E402
+from tests.factories import formation_node  # noqa: E402
 
 #: A 2v2: one tank and one damage seat a team, so a draft is one round of two picks.
 _TWO_SEATS = TeamFormat(
@@ -337,6 +338,7 @@ class MixDraftTests(EncounterWriterCase):
             draft = await lifecycle.lifecycle_service.create_session(
                 s,
                 tournament_id=self.ids["t"],
+                formation_node_id=await formation_node(s, self.ids["t"], mode="draft"),
                 workspace_id=self.ids["ws"],
                 shape=await team_format.custom_game_slot_shape(s, game),
             )

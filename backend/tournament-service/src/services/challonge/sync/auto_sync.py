@@ -5,25 +5,22 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from shared import models
-from shared.core import enums
+from shared.core.enums import TournamentStatus
 from src.core import config
-
-# "Active" = matches are in play.
-ACTIVE_TOURNAMENT_STATUSES = (
-    enums.TournamentStatus.LIVE,
-    enums.TournamentStatus.PLAYOFFS,
-)
 
 
 class AutoSyncMixin:
     """``ChallongeSyncService``'s background auto-sync; the service owns the repositories."""
 
     async def list_active_challonge_tournament_ids(self, session: AsyncSession) -> list[int]:
-        """Active tournaments that have a Challonge link, i.e. any ``challonge_source`` row."""
+        """Unfinished tournaments that have a Challonge link, i.e. any ``challonge_source`` row.
+
+        Not "a stage node is live": Challonge-created stages start ``draft`` and it is this sync that moves them.
+        """
         result = await session.execute(
             sa.select(models.Tournament.id)
             .where(
-                models.Tournament.status.in_(ACTIVE_TOURNAMENT_STATUSES),
+                models.Tournament.status.in_([TournamentStatus.ANNOUNCEMENT, TournamentStatus.LIVE]),
                 self.source_repo.linked_tournament_exists(),
             )
             .order_by(models.Tournament.id.asc())

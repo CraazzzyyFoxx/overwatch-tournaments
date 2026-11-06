@@ -26,7 +26,9 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from shared import models
+from shared.core.chrono import tournament_chrono_key
 from shared.repository import MLModelArtifactRepository
+from shared.repository.participant_result import is_member_tournament_row
 from shared.services.workspace_scope import workspace_filter, workspace_scope_filter
 from src.core.analytics_exports import analytics_exports, tournament_discipline
 from src.domain.ratings import LINEAR, OPENSKILL, POINTS
@@ -38,7 +40,7 @@ from ..models.base import models_dir_override
 from .calibration import compute_calibration_report
 from .orchestrator import train_all_models
 from .registry import registry_service
-from .splits import tournament_ids_up_to
+from .splits import tournaments_up_to
 
 logger = logging.getLogger(__name__)
 
@@ -101,14 +103,14 @@ async def _realised_shift_map(
     version) to match the module's ``load_player_rank_history``, so the label
     scale lines up with what the model was trained to predict.
 
-    Each player's chronology is tournament start order ``(coalesce(start_date, created_at), id)``: ids are not
+    Each player's chronology is the tournament chronology key ``(start, end, id)`` of ``shared.core.chrono``: ids are not
     chronological. ``history_through_tournament_id`` must cover each player's *next* tournament;
     players whose next-division is unknown (e.g. the most recent tournament) are
     dropped because their realised move cannot be observed yet.
     """
-    chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
+    start, end, tid = tournament_chrono_key()
     horizon = (
-        sa.select(chrono.label("started_at"), models.Tournament.id.label("tournament_id"))
+        sa.select(start.label("started_at"), end.label("ended_at"), tid.label("tournament_id"))
         .where(models.Tournament.id == history_through_tournament_id)
         .subquery("horizon")
     )
@@ -118,7 +120,8 @@ async def _realised_shift_map(
             models.WorkspaceMember.player_id.label("user_id"),
             models.Player.role.label("role"),
             models.Player.tournament_id.label("tournament_id"),
-            chrono.label("started_at"),
+            start.label("started_at"),
+            end.label("ended_at"),
             models.Player.rank.label("rank"),
             models.Tournament.division_grid_version_id.label("version_id"),
         )
@@ -130,10 +133,11 @@ async def _realised_shift_map(
         .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
         .join(
             horizon,
-            sa.tuple_(chrono, models.Tournament.id) <= sa.tuple_(horizon.c.started_at, horizon.c.tournament_id),
+            sa.tuple_(start, end, tid) <= sa.tuple_(horizon.c.started_at, horizon.c.ended_at, horizon.c.tournament_id),
         )
         .where(
             models.Player.is_substitution.is_(False),
+            is_member_tournament_row(),
             # Unranked rows have no division: the realised move is between consecutive ranked tournaments.
             models.Player.rank.is_not(None),
             models.Tournament.discipline == discipline,
@@ -146,7 +150,7 @@ async def _realised_shift_map(
         return {}
 
     df["tournament_id"] = df["tournament_id"].astype(int)
-    df = df.sort_values(["user_id", "role", "started_at", "tournament_id"]).reset_index(drop=True)
+    df = df.sort_values(["user_id", "role", "started_at", "ended_at", "tournament_id"]).reset_index(drop=True)
 
     grids = await load_source_grids(session, df["version_id"].dropna().unique())
     analytics_exports(discipline).assign_canonical_division(df, grids, rank_col="rank")
@@ -262,10 +266,9 @@ def _spearman_correlation(actual: dict[int, int], predicted: dict[int, float]) -
 
 
 async def _latest_tournament_id(session: AsyncSession, *, discipline: str, workspace_id: int | None) -> int:
-    # Latest by start date (``coalesce(start_date, created_at)``, id tie-break), the chronology of
-    # ``tournament_ids_up_to``: ids are not chronological. Same exclusion too: the per-workspace scrim container is
+    # Latest by the tournament chronology key (``shared.core.chrono``), the one ``tournaments_up_to`` bounds history
+    # by: ids are not chronological. Same exclusion too: the per-workspace scrim container is
     # hidden and carries no ranked roster data, so it must not end a timeline the backtest scores nothing against.
-    chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
     tid = await session.scalar(
         sa.select(models.Tournament.id)
         .where(
@@ -273,7 +276,7 @@ async def _latest_tournament_id(session: AsyncSession, *, discipline: str, works
             models.Tournament.discipline == discipline,
             *workspace_filter(workspace_id),
         )
-        .order_by(chrono.desc(), models.Tournament.id.desc())
+        .order_by(*(c.desc() for c in tournament_chrono_key()))
         .limit(1)
     )
     return int(tid or 0)
@@ -365,12 +368,15 @@ class BacktestService:
             cutoff_tournament_id = await _latest_tournament_id(
                 session, discipline=discipline, workspace_id=workspace_id
             )
-        all_ids = await tournament_ids_up_to(
-            session,
-            cutoff_tournament_id,
-            discipline=discipline,
-            workspace_id=workspace_id,
-        )
+        all_ids = [
+            t.id
+            for t in await tournaments_up_to(
+                session,
+                cutoff_tournament_id,
+                discipline=discipline,
+                workspace_id=workspace_id,
+            )
+        ]
         if len(all_ids) < window + 1:
             logger.warning("Not enough tournaments for backtest window=%d", window)
             return {"folds": {}, "summary": {}, "n_tournaments": len(all_ids), "discipline": discipline}

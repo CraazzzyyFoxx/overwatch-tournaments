@@ -36,14 +36,11 @@ export interface StageForm {
   stageType: StageType;
   /** Kept as strings: an empty field is "inherit", which `0` cannot express. */
   maxRounds: string;
-  advanceCount: string;
   deGrandFinalType: "no_reset" | "with_reset";
   /** `individual_swiss`: how a round forms its lobbies. */
   pairingMode: StagePairingMode;
   /** `individual_swiss`: how many teams the playoff takes (each takes its role slots of the table). */
   playoffTeamCount: number;
-  /** How many of each group's advancing teams start upper; `""` — all of them. */
-  advanceUpperCount: string;
   seedRanking: SeedRanking;
   rankingPreset: string;
   tiebreakOrder: string[];
@@ -77,11 +74,9 @@ export function stageFormFromStage(stage: Stage): StageForm {
     order: stage.order,
     stageType: stage.stage_type,
     maxRounds: String(stage.max_rounds ?? 5),
-    advanceCount: numberOrEmpty(stage.advance_count),
     deGrandFinalType: stage.de_grand_final_type,
     pairingMode: stage.pairing_mode ?? "score",
     playoffTeamCount: stage.playoff_team_count ?? 4,
-    advanceUpperCount: numberOrEmpty(stage.advance_upper_count),
     seedRanking: stage.seed_ranking,
     rankingPreset: stage.ranking_preset || "default",
     tiebreakOrder:
@@ -113,14 +108,6 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
     order: form.order,
     stage_type: form.stageType,
     max_rounds: normalizeMaxRounds(form.maxRounds, stage.max_rounds ?? 5),
-    advance_count:
-      form.advanceCount !== "" ? normalizeMaxRounds(form.advanceCount, 1) : null,
-    // `0` is a real answer here (the whole group starts a bracket down), so an
-    // empty field — not a falsy number — is what means "all of them upper".
-    advance_upper_count:
-      form.advanceUpperCount !== ""
-        ? Math.max(0, Math.floor(Number(form.advanceUpperCount)))
-        : null,
     // Both exist only on an individual Swiss stage; the server clears them elsewhere.
     ...(isIndividualSwiss
       ? { pairing_mode: form.pairingMode, playoff_team_count: form.playoffTeamCount }
@@ -192,11 +179,9 @@ const FIELD_LABELS: Record<keyof StageForm, string> = {
   order: "phase",
   stageType: "format",
   maxRounds: "swissRounds",
-  advanceCount: "teamsAdvancing",
   deGrandFinalType: "grandFinal",
   pairingMode: "pairingMode",
   playoffTeamCount: "playoffTeams",
-  advanceUpperCount: "toUpperBracket",
   seedRanking: "bracketSeeds",
   rankingPreset: "standingsPreset",
   tiebreakOrder: "tiebreakerOrder",

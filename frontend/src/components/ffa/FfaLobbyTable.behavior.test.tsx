@@ -1,21 +1,17 @@
 // @vitest-environment happy-dom
 //
 // What a spectator can read off an FFA lobby table. The lobby IS the group's
-// standings — there is no second screen that says who is through — so the four
-// claims below are the whole contract of the table:
+// standings, so the claims below are the whole contract of the table:
 //
-// 1. The cut-line sits under the lobby's own `advance_count`, not under a
-//    stage-wide guess: a lobby that takes 2 of 5 draws it after the second row.
-// 2. A tie cluster the line runs through says so. Those teams are separated by
-//    the assigned order rather than by anything they did in the lobby, which is
-//    the one thing the table must not print as a settled "advancing".
-// 3. A game nobody has entered yet renders an EMPTY cell — never a zero. A `0`
+// 1. No ranks before the first game counts: every team is level then, and "all
+//    1st" would be a claim about a lobby nobody has played.
+// 2. A game nobody has entered yet renders an EMPTY cell — never a zero. A `0`
 //    there reads as "played, scored nothing", which is a different claim.
-// 4. The table totals one column per PUBLIC column of the stage, headed by the
+// 3. The table totals one column per PUBLIC column of the stage, headed by the
 //    organizer's own label, and never prints a hidden column — the organizer's
 //    own screens render this very table from the admin read, which carries the
 //    hidden values, so the component is the one place that can guarantee it.
-// 5. A played cell says what it paid: the place, the points, and — for a reader
+// 4. A played cell says what it paid: the place, the points, and — for a reader
 //    who cannot see two stacked numbers — the public values of that game.
 import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
@@ -83,7 +79,6 @@ function lobby(rows: FfaLobbyRow[], extra: Partial<FfaLobby> = {}): FfaLobby {
     result_status: "none",
     best_of: 1,
     scheduled_at: null,
-    advance_count: 2,
     rules: rules(),
     rows,
     ...extra
@@ -103,13 +98,6 @@ async function mount(value: FfaLobby) {
   });
 }
 
-/** The 1-based row the cut-line sits under, or -1 when there is none. */
-function cutAfterRow() {
-  return [...container.querySelectorAll("tbody tr")].findIndex(
-    (node) => node.querySelector("[data-ffa-cut]") != null
-  );
-}
-
 function headers() {
   return [...container.querySelectorAll("thead th")].map((node) => node.textContent);
 }
@@ -127,77 +115,16 @@ beforeEach(() => {
   root = createRoot(container);
 });
 
-describe("ffa lobby cut-line", () => {
-  it("draws the lobby's advance line under the second of five rows", async () => {
-    await mount(lobby([1, 2, 3, 4, 5].map((slot) => row(slot))));
-
-    expect(cutAfterRow()).toBe(2);
-    expect(
-      [...container.querySelectorAll("tbody tr[data-advancing] [data-ffa-rank]")].map(
-        (node) => node.textContent
-      )
-    ).toEqual(["1", "2"]);
-  });
-
-  it("draws no line when the lobby advances everyone", async () => {
-    await mount(lobby([1, 2].map((slot) => row(slot)), { advance_count: 2 }));
-
-    expect(cutAfterRow()).toBe(-1);
-  });
-});
-
-describe("ffa lobby ties", () => {
-  it("marks the cluster the advance line runs through", async () => {
-    // Rows 2 and 3 share `tie_group` 2: the engine never separated them, and
-    // the line falls between them.
-    await mount(
-      lobby([
-        row(1),
-        row(2, { position: 2, tie_group: 2 }),
-        row(3, { position: 3, tie_group: 2 }),
-        row(4)
-      ])
-    );
-
-    const tied = [...container.querySelectorAll("tbody tr[data-tie]")];
-    expect(tied).toHaveLength(2);
-    expect(tied.map((node) => node.querySelector("[data-ffa-status]")?.textContent)).toEqual([
-      en.ffa.tieStatus,
-      en.ffa.tieStatus
-    ]);
-    expect(tied[0].querySelector("[data-ffa-status]")?.getAttribute("title")).toBe(
-      en.ffa.tieDecidesAdvance
-    );
-  });
-
-  it("leaves a tie clear of the line unmarked", async () => {
-    await mount(
-      lobby([
-        row(1),
-        row(2),
-        row(3, { position: 3, tie_group: 3 }),
-        row(4, { position: 3, tie_group: 3 })
-      ])
-    );
-
-    expect(container.querySelector("tbody tr[data-tie]")).toBeNull();
-  });
-
-  it("claims no ranks, ties or verdicts before the first game counts", async () => {
+describe("ffa lobby ranks", () => {
+  it("claims no ranks or ties before the first game counts", async () => {
     // What the engine answers for a fresh lobby: every team level on every
-    // tiebreaker, one cluster headed at 1, straddling the line. Printed as-is it
-    // said "all 1st" and "the assigned order decides who advances".
+    // tiebreaker, one cluster headed at 1. Printed as-is it said "all 1st".
     const unplayed = { games_played: 0, points: 0, tie_group: 1, games: [] };
     await mount(lobby([1, 2, 3, 4].map((slot) => row(slot, unplayed))));
 
     expect(
       [...container.querySelectorAll("tbody [data-ffa-rank]")].map((node) => node.textContent)
     ).toEqual(["—", "—", "—", "—"]);
-    expect(container.querySelector("tbody tr[data-tie]")).toBeNull();
-    expect(container.querySelector("tbody tr[data-advancing]")).toBeNull();
-    expect(container.querySelector("[data-ffa-status]")).toBeNull();
-    // The rule is known before any result is: the line still says who goes on.
-    expect(cutAfterRow()).toBe(2);
   });
 });
 

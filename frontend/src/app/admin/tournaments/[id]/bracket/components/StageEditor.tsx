@@ -7,17 +7,19 @@ import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { usePathname, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
+  CheckCircle2,
   Crown,
+  Flag,
   GitMerge,
   MoreHorizontal,
   PlayCircle,
+  RotateCcw,
   Shuffle,
   Trash2,
   Undo2,
   Wand2,
-  Workflow,
   Link2,
-  Zap
+  type LucideIcon
 } from "lucide-react";
 
 import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
@@ -34,7 +36,8 @@ import {
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
-import type { Stage, Tournament } from "@/types/tournament.types";
+import { NODE_TRANSITIONS } from "@/lib/tournament/lifecycle";
+import type { Stage, StageNodeStatus, Tournament } from "@/types/tournament.types";
 import type { Team } from "@/types/team.types";
 
 import {
@@ -69,10 +72,9 @@ import { TiebreakersSection } from "./stage-settings/TiebreakersSection";
 import { tabFallback } from "../../hubQueries";
 import { useStageOperations } from "./stage-editor/useStageOperations";
 import { MatchesView } from "../../matches/MatchesView";
-import { PlayerStandingsSection } from "./PlayerStandingsSection";
 
-// The standings table is the heaviest thing the editor can show and only one
-// tab of four needs it, so it is split out of the Bracket tab's bundle.
+// The standings tables are the heaviest thing the editor can show and only one
+// tab of four needs them, so they are split out of the Bracket tab's bundle.
 const StandingsBrowser = dynamic(
   () =>
     import("@/components/admin/StandingsBrowser").then((module) => ({
@@ -80,10 +82,26 @@ const StandingsBrowser = dynamic(
     })),
   { loading: () => tabFallback }
 );
+const PlayerStandingsSection = dynamic(
+  () => import("./PlayerStandingsSection").then((module) => ({ default: module.PlayerStandingsSection })),
+  { loading: () => tabFallback }
+);
 
 /** The tabs, each named by its own key in `adminBracket.editor`. */
 const BRACKET_SECTIONS = ["settings", "layout", "standings", "items"] as const;
 type BracketSection = (typeof BRACKET_SECTIONS)[number];
+
+/** What the action menu calls each `from>to` step of a stage node, keyed by `NODE_TRANSITIONS.stage`. */
+const STAGE_MOVES: Record<
+  string,
+  { label: "markReady" | "start" | "revert" | "complete" | "reopen"; icon: LucideIcon }
+> = {
+  "draft>ready": { label: "markReady", icon: Flag },
+  "ready>live": { label: "start", icon: PlayCircle },
+  "ready>draft": { label: "revert", icon: Undo2 },
+  "live>completed": { label: "complete", icon: CheckCircle2 },
+  "completed>live": { label: "reopen", icon: RotateCcw }
+};
 
 interface StageEditorProps {
   stage: Stage;
@@ -159,14 +177,13 @@ export function StageEditor({
     () =>
       projectStage({
         stage,
-        stages,
         stageType: form.stageType,
         maxRounds: normalizeMaxRounds(form.maxRounds, stage.max_rounds ?? 5),
         bestOf: form.bestOf,
         plannedRounds,
         formatRound
       }),
-    [stage, stages, form.stageType, form.maxRounds, form.bestOf, plannedRounds, formatRound]
+    [stage, form.stageType, form.maxRounds, form.bestOf, plannedRounds, formatRound]
   );
 
   const mergeCandidates = isMergeableGroupStage(stage)
@@ -184,11 +201,9 @@ export function StageEditor({
     intent,
     opPending,
     runPendingOp,
-    activateMutation,
+    transitionMutation,
     generateMutation,
-    applyBestOfMutation,
-    autoWireMutation,
-    activateAndGenerateMutation
+    applyBestOfMutation
   } = useStageOperations({ stage, teams, mergeCandidates, mergedName, onChanged, onSelect });
 
   const isFfaForm = FFA_STAGE_TYPES.includes(form.stageType);
@@ -272,7 +287,7 @@ export function StageEditor({
 
   const isBracket = BRACKET_STAGE_TYPES.includes(stage.stage_type);
   // A lobby is seated the same way a group is filled: teams into the stage's
-  // items. Only a bracket takes its slots from a preceding stage instead.
+  // items. Only a bracket takes its slots from its flow input instead.
   const canSeed = !isBracket && teams.length > 0 && stage.items.length > 0;
   // The draft playoff takes its seeds from the captains' ranks; only a tournament that ran an individual Swiss has them.
   const canSeedByCaptain =
@@ -280,7 +295,8 @@ export function StageEditor({
     stage.items.length > 0 &&
     stage.stage_type !== "individual_swiss" &&
     stages.some((candidate) => candidate.stage_type === "individual_swiss");
-  const canDeactivate = (stage.is_active || stage.is_published) && !stage.is_completed;
+  // The lifecycle moves the server allows from here; `draft` is the confirm-guarded revert.
+  const transitions = NODE_TRANSITIONS.stage[stage.status] ?? [];
 
   const tabs: LinkTabItem[] = BRACKET_SECTIONS.map((key) => ({
     key,
@@ -360,33 +376,24 @@ export function StageEditor({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {stage.is_active ? null : (
-                    <DropdownMenuItem
-                      disabled={activateMutation.isPending}
-                      onSelect={() => activateMutation.mutate()}
-                    >
-                      <PlayCircle className="size-4" aria-hidden />
-                      {t("activate")}
-                    </DropdownMenuItem>
-                  )}
-                  {isBracket ? (
-                    <DropdownMenuItem
-                      disabled={activateAndGenerateMutation.isPending}
-                      onSelect={() => activateAndGenerateMutation.mutate(undefined)}
-                    >
-                      <Zap className="size-4" aria-hidden />
-                      {t("activateGenerate")}
-                    </DropdownMenuItem>
-                  ) : null}
-                  {isBracket ? (
-                    <DropdownMenuItem
-                      disabled={autoWireMutation.isPending}
-                      onSelect={() => autoWireMutation.mutate()}
-                    >
-                      <Workflow className="size-4" aria-hidden />
-                      {t("autoWire")}
-                    </DropdownMenuItem>
-                  ) : null}
+                  {transitions.map((target) => {
+                    const move = STAGE_MOVES[`${stage.status}>${target}`];
+                    const Icon = move.icon;
+                    return (
+                      <DropdownMenuItem
+                        key={target}
+                        disabled={transitionMutation.isPending}
+                        onSelect={() =>
+                          target === "draft"
+                            ? setPendingOp({ kind: "revert" })
+                            : transitionMutation.mutate(target as StageNodeStatus)
+                        }
+                      >
+                        <Icon className="size-4" aria-hidden />
+                        {t(move.label)}
+                      </DropdownMenuItem>
+                    );
+                  })}
                   {canSeed ? (
                     <DropdownMenuItem onSelect={() => setPendingOp({ kind: "seed" })}>
                       <Shuffle className="size-4" aria-hidden />
@@ -405,12 +412,6 @@ export function StageEditor({
                     <DropdownMenuItem onSelect={() => setPendingOp({ kind: "merge" })}>
                       <GitMerge className="size-4" aria-hidden />
                       {t("merge")}
-                    </DropdownMenuItem>
-                  ) : null}
-                  {canDeactivate ? (
-                    <DropdownMenuItem onSelect={() => setPendingOp({ kind: "deactivate" })}>
-                      <Undo2 className="size-4" aria-hidden />
-                      {t("revert")}
                     </DropdownMenuItem>
                   ) : null}
                   <DropdownMenuItem
@@ -448,13 +449,7 @@ export function StageEditor({
             {/* Right under the fields that shape it: format and grand final. */}
             <BracketPreview projection={projection} stage={stage} teams={teams} className="px-1 py-2" />
 
-            <SeedingSection
-              stage={stage}
-              stages={stages}
-              form={form}
-              onChange={patchForm}
-              onChanged={onChanged}
-            />
+            <SeedingSection form={form} onChange={patchForm} />
 
             {isFfaForm ? (
               <FfaScoringSection form={form} onChange={patchForm} saveError={saveError} />
@@ -505,7 +500,6 @@ export function StageEditor({
         {activeSection === "items" ? (
           <StageItemsSection
             stage={stage}
-            stages={stages}
             teams={teams}
             isTeamsLoading={isTeamsLoading}
             progress={progress}

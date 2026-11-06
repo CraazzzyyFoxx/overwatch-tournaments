@@ -25,6 +25,7 @@ from shared.domain.tournament_utils import (
     has_incomplete_playable_rounds,
 )
 from shared.repository import EncounterRepository, StageRepository
+from shared.services.flow_queries import stage_node_status
 from src.services.admin.stage import _collect_item_team_ids, stage_service
 from src.services.notifications.lifecycle import lifecycle_notifier
 from src.services.standings.service import StageEncounter, standings_service
@@ -92,7 +93,7 @@ class SwissRoundsService:
                 .where(
                     models.Stage.tournament_id == tournament_id,
                     models.Stage.stage_type == enums.StageType.SWISS,
-                    models.Stage.is_active == True,  # noqa: E712
+                    stage_node_status(models.Stage.id) == enums.FlowNodeStatus.LIVE,
                 )
                 .options(selectinload(models.Stage.items).selectinload(models.StageItem.inputs))
                 # Fresh even when the identity map holds these rows: a rolled-back savepoint left them expired.
@@ -100,7 +101,11 @@ class SwissRoundsService:
             )
             swiss_stages = result.scalars().all()
         else:
-            swiss_stages = [stage for stage in stages if stage.stage_type == enums.StageType.SWISS and stage.is_active]
+            swiss_stages = [
+                stage
+                for stage in stages
+                if stage.stage_type == enums.StageType.SWISS and stage.status == enums.FlowNodeStatus.LIVE
+            ]
         if not swiss_stages:
             return []
 
@@ -167,9 +172,9 @@ class SwissRoundsService:
         """
         stage = stage or await stage_service.get_stage(session, stage_id)
 
-        if not stage.is_active:
+        if stage.status != enums.FlowNodeStatus.LIVE:
             logger.warning(
-                "Swiss auto-round: stage is not active, skipping",
+                "Swiss auto-round: stage is not live, skipping",
                 stage_id=stage_id,
             )
             return []

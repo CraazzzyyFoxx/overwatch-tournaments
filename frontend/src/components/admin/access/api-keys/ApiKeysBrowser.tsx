@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Check, Copy, Plus, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { DataTable, type TableCommand } from "@/components/data-table";
@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { FilterBar } from "@/components/kit/FilterBar";
 import { useFilters } from "@/components/kit/useFilters";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import {
   fetchAccountApiKeys,
@@ -109,42 +109,43 @@ export function ApiKeysBrowser({
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {ta("oneTimeDescription")}
               </p>
-              <Input
-                id={secretId}
-                readOnly
-                value={oneTimeKey}
-                className="mt-2 font-mono"
-                onFocus={(event) => event.currentTarget.select()}
-              />
+              <InputGroup className="mt-2">
+                <InputGroupInput
+                  id={secretId}
+                  readOnly
+                  value={oneTimeKey}
+                  className="font-mono"
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+                <InputGroupAddon align="inline-end" className="pr-1.5">
+                  <Button
+                    size="xs"
+                    aria-label={t("copyApiSecret")}
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(oneTimeKey);
+                      setCopiedSecret(true);
+                      notify.success(ta("copied"));
+                    }}
+                  >
+                    {copiedSecret ? <Check aria-hidden /> : <Copy aria-hidden />}
+                    {copiedSecret ? t("copied") : t("copySecret")}
+                  </Button>
+                </InputGroupAddon>
+              </InputGroup>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <output className="text-xs text-muted-foreground">
-                {copiedSecret ? t("copied") : null}
-              </output>
-              <Button
-                size="sm"
-                aria-label={t("copyApiSecret")}
-                onClick={async () => {
-                  await navigator.clipboard.writeText(oneTimeKey);
-                  setCopiedSecret(true);
-                  notify.success(ta("copied"));
-                }}
-              >
-                {t("copySecret")}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-toolbar"
-                aria-label={t("dismissSecret")}
-                title={t("dismissSecret")}
-                onClick={() => {
-                  setOneTimeKey(null);
-                  setCopiedSecret(false);
-                }}
-              >
-                <X aria-hidden className="size-4" />
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              size="icon-toolbar"
+              className="shrink-0"
+              aria-label={t("dismissSecret")}
+              title={t("dismissSecret")}
+              onClick={() => {
+                setOneTimeKey(null);
+                setCopiedSecret(false);
+              }}
+            >
+              <X aria-hidden className="size-4" />
+            </Button>
           </div>
         </div>
       ) : null}

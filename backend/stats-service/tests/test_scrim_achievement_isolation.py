@@ -88,8 +88,9 @@ TABLE_NAMES = (
     "division_grid_tier",
     "workspace_division_grid_default",
     "tournament.tournament",
-    "tournament.tournament_phase_schedule",
+    "tournament.flow_node_schedule",
     "tournament.stage",
+    "tournament.flow_node",
     "tournament.stage_round_best_of",
     "tournament.stage_item",
     "tournament.team",
@@ -99,6 +100,7 @@ TABLE_NAMES = (
     "catalog.role",
     "tournament.bracket_encounter",
     "tournament.standing",
+    "tournament.participant_result",
     "stats.match",
     "stats.match_team",
     "stats.match_player",
@@ -110,6 +112,7 @@ TABLE_NAMES = (
     "catalog.entity",
     "rank.rank_snapshot",
     "registration.registration",
+    "registration.registration_entry",
     "registration.role",
     "draft.session",
     "draft.team",
@@ -300,7 +303,17 @@ class _Fixture:
     def insert(self, table, **values) -> None:  # noqa: ANN001, ANN003
         self.session.execute(sa.insert(table).values(**values))
 
-    def tournament(self, tournament_id: int, *, name: str, is_hidden: bool, start: datetime | None) -> None:
+    def tournament(
+        self,
+        tournament_id: int,
+        *,
+        name: str,
+        is_hidden: bool,
+        start: datetime | None,
+        end: datetime | None = None,
+        created: datetime | None = None,
+    ) -> None:
+        # `created` unset leaves `created_at` to its server default (now).
         self.insert(
             models.Tournament.__table__,
             id=tournament_id,
@@ -308,8 +321,9 @@ class _Fixture:
             name=name,
             slug=f"tournament-{tournament_id}",
             is_hidden=is_hidden,
-            is_league=False,
             start_date=start,
+            end_date=end,
+            **({} if created is None else {"created_at": created}),
         )
 
     def member(self, user_id: int, *, workspace_id: int = WORKSPACE_ID) -> int:
@@ -594,6 +608,23 @@ class _Fixture:
             lose=0,
             points=1.0,
         )
+        self.placement(tournament_id, team_id, 1)
+
+    def placement(self, tournament_id: int, team_id: int, placement: int | None, *, field_size: int = 2) -> None:
+        """The tournament result of every non-substitute player of ``team_id`` (the writer's rule 2, by hand)."""
+        players = models.Player.__table__.c
+        members = self.session.scalars(
+            sa.select(players.workspace_member_id).where(players.team_id == team_id, players.is_substitution.is_(False))
+        ).all()
+        for member_id in members:
+            self.insert(
+                models.ParticipantResult.__table__,
+                tournament_id=tournament_id,
+                workspace_member_id=member_id,
+                final_team_id=team_id,
+                placement=placement,
+                field_size=field_size,
+            )
 
     def rostered_tournament(self, tournament_id: int) -> dict[str, int]:
         """A real tournament: two teams, both captained, both with a roster."""
@@ -792,15 +823,15 @@ class ScrimTournamentTimelineTests(_EngineTestCase):
     """The container must not disturb the streak conditions' ordinal timeline.
 
     ``conditions/streak.py`` ranks the workspace's non-league tournaments with
-    ``dense_rank() OVER (ORDER BY start_date NULLS LAST, id)`` — an ordinal
+    ``dense_rank() OVER (ORDER BY <tournament chronology key>)`` — an ordinal
     timeline, so any row that takes a rank BETWEEN two real tournaments splits a
     streak spanning them.
 
     This used to hold by accident: the container had no start date, so
-    ``NULLS LAST`` parked it at the end. It now carries its creation date
-    (``TournamentRead`` requires one), so the accident is gone and the
-    ``is_hidden`` filter is what keeps the sequence honest. The dated case below
-    is the one that fails without that filter.
+    ``NULLS LAST`` parked it at the end. The key now places an undated
+    tournament at its creation date, so the ``is_hidden`` filter is what keeps
+    the sequence honest. The dated case below is the one that fails without
+    that filter.
     """
 
     async def _streak_users(self) -> set:

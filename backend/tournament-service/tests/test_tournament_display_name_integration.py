@@ -58,7 +58,7 @@ def test_registered_tag_then_linked_game_handle_then_site_name(db_session, disci
                 workspace_id=workspace.id,
                 name=f"{label} {suffix}",
                 slug=f"dname-{label}-{suffix}",
-                status=enums.TournamentStatus.REGISTRATION,
+                status=enums.TournamentStatus.LIVE,
                 discipline=discipline,
             )
             for label in ("this", "other")

@@ -11,6 +11,8 @@ import SubscriptionRuleNotice from "./SubscriptionRuleNotice";
 
 interface CheckInSubscriptionProofProps {
   tournamentId: number;
+  /** The registration node the standing is read for; none, nothing to ask. */
+  registrationNodeId: number | null;
   /** Declaration order for the rows; falls back to whatever the server resolved. */
   requirement?: SubscriptionRequirement | null;
   /** Whether the check-in dialog is on screen. Gates the query so a closed dialog
@@ -33,27 +35,28 @@ interface CheckInSubscriptionProofProps {
  */
 export default function CheckInSubscriptionProof({
   tournamentId,
+  registrationNodeId,
   requirement,
   active
 }: Readonly<CheckInSubscriptionProofProps>) {
   const queryClient = useQueryClient();
 
   const statusQuery = useQuery({
-    queryKey: tournamentQueryKeys.subscriptionStatus(tournamentId),
-    queryFn: () => registrationService.getMySubscriptionStatus(tournamentId),
-    enabled: active,
+    queryKey: tournamentQueryKeys.subscriptionStatus(tournamentId, registrationNodeId ?? 0),
+    queryFn: () => registrationService.getMySubscriptionStatus(tournamentId, registrationNodeId!),
+    enabled: active && registrationNodeId != null,
     staleTime: 30_000
   });
 
   const status = statusQuery.data;
-  if (!status?.required) return null;
+  if (!status?.required || registrationNodeId == null) return null;
 
   const handleRedeemCode = async (code: string, provider: string) => {
-    const next = await registrationService.redeemSubscriptionCode(tournamentId, code, provider);
+    const next = await registrationService.redeemSubscriptionCode(tournamentId, registrationNodeId, code, provider);
     // The redemption response IS the recomposed status: writing it back turns the
     // chip green in place, so the patron sees the code land before pressing
     // check-in rather than discovering it in a 400.
-    queryClient.setQueryData(tournamentQueryKeys.subscriptionStatus(tournamentId), next);
+    queryClient.setQueryData(tournamentQueryKeys.subscriptionStatus(tournamentId, registrationNodeId), next);
   };
 
   const declared = requiredProviders(requirement);

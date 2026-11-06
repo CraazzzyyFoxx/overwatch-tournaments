@@ -26,6 +26,7 @@ export type RealtimeResource =
   | "tournament.standings"
   | "tournament.teams"
   | "tournament.structure"
+  | "tournament.flow"
   | "tournament.registrations"
   | "tournament.registration_form"
   | "tournament.streams"
@@ -94,6 +95,14 @@ export const RESOURCE_QUERY_KEYS: Record<RealtimeResource, KeyBuilder> = {
     getTournamentWorkspaceQueryKeys(id).standingsTable,
     getTournamentWorkspaceQueryKeys(id).encounters,
     getTournamentWorkspaceQueryKeys(id).teams,
+  ],
+  // A node's status moved: the flow graph in both its public and admin keys, and the tournament read whose
+  // `flow_nodes` and derived `status` changed with it.
+  "tournament.flow": (id, ctx) => [
+    tournamentQueryKeys.detail(ctx.detailRef ?? id),
+    tournamentQueryKeys.flow(id),
+    getTournamentWorkspaceQueryKeys(id).tournament,
+    adminQueryKeys.tournamentFlow(id),
   ],
   "tournament.registrations": (id, ctx) => [
     tournamentQueryKeys.detail(ctx.detailRef ?? id),

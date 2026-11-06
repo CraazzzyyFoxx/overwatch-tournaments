@@ -8,7 +8,7 @@ the schemas package stays wire shapes only. This module must NOT import fastapi.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared import models
+from shared.core.chrono import tournament_chrono_key
 from shared.disciplines import discipline, rated_role_codes
 from shared.division_grid import DivisionGrid
 from shared.domain.forms import RolesParams, schema_from_form, schema_from_version
@@ -111,6 +112,11 @@ def registration_read_loaders() -> tuple[Any, ...]:
         selectinload(models.Registration.registration_team),
         selectinload(models.Registration.tournament),
     )
+
+
+def entry_read_loaders() -> tuple[Any, ...]:
+    """Eager-load options for a query of ``RegistrationEntry`` rows whose registrations feed ``_reg_to_read``."""
+    return (selectinload(models.RegistrationEntry.registration).options(*registration_read_loaders()),)
 
 
 # Max past-tournament history entries returned per participant. The public
@@ -220,6 +226,7 @@ class QueuePlace:
 
 def _reg_to_read(
     reg: models.Registration,
+    entry: models.RegistrationEntry,
     *,
     workspace_id: int,
     #: The owning tournament's identity provider (``identity_provider(discipline)``):
@@ -306,20 +313,22 @@ def _reg_to_read(
             name=team_row.name,
             status=team_row.status,
             slot_code=reg.team_slot_code,
-            is_substitute=bool(reg.is_substitute),
+            is_substitute=bool(entry.is_substitute),
             is_captain=team_row.captain_registration_id == reg.id,
         )
         if team_row is not None
         else None
     )
 
-    answers = answer_service.answers_of(reg)
+    answers = answer_service.answers_of(reg, entry)
     primary_handle = identity.handle if (identity := reg.primary_game_identity(provider=provider)) else None
     if public_keys is not None:
         answers = {key: value for key, value in answers.items() if key in public_keys}
 
     return RegistrationRead(
         id=reg.id,
+        entry_id=entry.id,
+        registration_node_id=entry.registration_node_id,
         tournament_id=reg.tournament_id,
         workspace_id=workspace_id,
         # Derived from the workspace_member anchor (callers eager-load it; see helper).
@@ -330,22 +339,22 @@ def _reg_to_read(
         roles=roles,
         form_version_id=reg.form_version_id,
         form_version_stale=current_version_id is not None and reg.form_version_id != current_version_id,
-        status=reg.status,
-        status_meta=(status_meta_map["registration"].get(reg.status) if status_meta_map is not None else None)
-        or build_unknown_status_meta("registration", reg.status),
-        balancer_status=reg.balancer_status,
+        status=entry.status,
+        status_meta=(status_meta_map["registration"].get(entry.status) if status_meta_map is not None else None)
+        or build_unknown_status_meta("registration", entry.status),
+        balancer_status=entry.balancer_status,
         balancer_status_meta=(
-            status_meta_map["balancer"].get(reg.balancer_status) if status_meta_map is not None else None
+            status_meta_map["balancer"].get(entry.balancer_status) if status_meta_map is not None else None
         )
-        or build_unknown_status_meta("balancer", reg.balancer_status),
-        checked_in=reg.checked_in,
+        or build_unknown_status_meta("balancer", entry.balancer_status),
+        checked_in=entry.checked_in,
         admission=admission if admission is not None else AdmissionRead.unknown(),
         profiles_open=profiles_open,
         subscription_outcome=subscription_outcome,
         subscription_verdicts=subscription_verdicts,
         team=team,
         submitted_at=reg.submitted_at,
-        reviewed_at=reg.reviewed_at,
+        reviewed_at=entry.reviewed_at,
         submitted_late=submitted_late,
         queue_position=queue.position if queue is not None else None,
         queue_total=queue.total if queue is not None else None,
@@ -363,6 +372,7 @@ def _reg_to_read(
 async def _public_rosters(
     session: AsyncSession,
     registrations: Sequence[Any],
+    entries: Mapping[int, models.RegistrationEntry],
     *,
     form: models.RegistrationForm | None = None,
 ) -> dict[int, PlayerRoster]:
@@ -389,6 +399,7 @@ async def _public_rosters(
         form=form,
         discipline=tournament.discipline,
         role_codes=rated_role_codes(tournament.discipline),
+        entries=entries,
     )
 
 
@@ -443,6 +454,7 @@ async def _build_tournament_history(
     # Duplicate (player, tournament) rows (substitutions) are collapsed first; then
     # each player keeps the most recent ``HISTORY_LIMIT`` tournaments and a window
     # count of the true unique total.
+    start, end, _ = tournament_chrono_key()
     history_ranked = (
         sa.select(
             models.Player.tournament_id.label("tournament_id"),
@@ -450,7 +462,8 @@ async def _build_tournament_history(
             models.Player.role,
             models.Player.rank,
             models.Tournament.name.label("tournament_name"),
-            models.Tournament.start_date.label("start_date"),
+            start.label("chrono_start"),
+            end.label("chrono_end"),
             models.Player.sub_role,
             models.Tournament.discipline,
             sa.func.row_number()
@@ -491,7 +504,8 @@ async def _build_tournament_history(
             .over(
                 partition_by=history_ranked.c.player_id,
                 order_by=(
-                    history_ranked.c.start_date.desc().nullslast(),
+                    history_ranked.c.chrono_start.desc(),
+                    history_ranked.c.chrono_end.desc(),
                     history_ranked.c.tournament_id.desc(),
                 ),
             )

@@ -58,7 +58,7 @@ async def _make_tournament(session, *, workspace_id: int, is_hidden: bool) -> To
         # NOT NULL and globally unique; production writes go through
         # `generate_unique_tournament_slug`, which this factory bypasses.
         slug=f"hidden-vis-{suffix}",
-        status=enums.TournamentStatus.DRAFT,
+        status=enums.TournamentStatus.LIVE,
         is_hidden=is_hidden,
         start_date=now,
         end_date=now + timedelta(days=1),

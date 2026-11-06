@@ -21,8 +21,8 @@ import type {
  * no form yet has no schema to echo, so its caller must resolve the owner's
  * identity provider before generating the same default the server would build.
  *
- * `is_open` and `subscription_requirement_json` are absent on purpose: both are
- * server-derived read-only projections, and the schema drops them on the way in.
+ * `subscription_requirement_json` is absent on purpose: it is a server-derived read-only projection, and the schema
+ * drops it on the way in. The intake settings are not on the form at all: they are the registration node's config.
  */
 /** The default questionnaire of the owner's game; with the provider unresolved there is no honest default. */
 function ownerDefaultSchema(identityProvider: string | undefined) {
@@ -35,23 +35,10 @@ export function toRegistrationFormUpsert(
   identityProvider?: string
 ): AdminRegistrationFormUpsert {
   return {
-    auto_approve: form?.auto_approve ?? false,
     require_open_profile: form?.require_open_profile ?? false,
     open_profile_scope: form?.open_profile_scope ?? "main",
     show_ranks: form?.show_ranks ?? false,
     hide_registrations: form?.hide_registrations ?? false,
-    max_participants: form?.max_participants ?? null,
-    max_substitutes: form?.max_substitutes ?? 0,
-    subscription_scope: form?.subscription_scope === "team" ? "team" : "player",
-    team_rank_min: form?.team_rank_min ?? null,
-    team_rank_max: form?.team_rank_max ?? null,
-    team_max_rank_spread: form?.team_max_rank_spread ?? null,
-    team_unique_identity: form?.team_unique_identity ?? false,
-    team_require_discord_guild: form?.team_require_discord_guild ?? false,
-    require_subscription: form?.require_subscription ?? false,
-    // The looser stage for a form saved before the field existed, so loading an
-    // old form never silently arms a sign-up wall.
-    subscription_stage: form?.subscription_stage === "registration" ? "registration" : "check_in",
     form_schema: form?.form_schema ?? ownerDefaultSchema(identityProvider)
   };
 }

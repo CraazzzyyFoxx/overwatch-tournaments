@@ -27,26 +27,39 @@ import type {
  */
 const registrationTeamService = {
   /** The public roster of registered teams. Invites are omitted server-side. */
-  async listPublic(tournamentId: number): Promise<RegistrationTeamListResponse> {
-    const response = await apiFetch(`/api/v1/tournaments/${tournamentId}/registration-teams`);
+  async listPublic(tournamentId: number, registrationNodeId: number): Promise<RegistrationTeamListResponse> {
+    const response = await apiFetch(`/api/v1/tournaments/${tournamentId}/registration-teams`, {
+      query: { registration_node_id: registrationNodeId },
+    });
     return response.json();
   },
 
   /** Organizer view: includes invites, and optionally terminal teams. */
   async listAdmin(
     tournamentId: number,
+    registrationNodeId: number,
     options?: { includeTerminal?: boolean },
   ): Promise<RegistrationTeamListResponse> {
     const response = await apiFetch(
       `/api/v1/admin/balancer/tournaments/${tournamentId}/registration-teams`,
-      { query: options?.includeTerminal ? { include_terminal: "true" } : undefined },
+      {
+        query: {
+          registration_node_id: registrationNodeId,
+          ...(options?.includeTerminal ? { include_terminal: "true" } : {}),
+        },
+      },
     );
     return response.json();
   },
 
-  async create(tournamentId: number, input: RegistrationTeamCreateInput): Promise<RegistrationTeam> {
+  async create(
+    tournamentId: number,
+    registrationNodeId: number,
+    input: RegistrationTeamCreateInput,
+  ): Promise<RegistrationTeam> {
     const response = await apiFetch(`/api/v1/tournaments/${tournamentId}/registration-teams`, {
       method: "POST",
+      query: { registration_node_id: registrationNodeId },
       body: input,
     });
     return response.json();
@@ -145,23 +158,32 @@ const registrationTeamService = {
     return response.json();
   },
 
-  /** Materialize complete teams into `tournament.team`. Refuses when standings
+  /** Materialize complete teams into the forming formation node's teams. Refuses when standings
    *  already exist for teams it does not own, so it cannot invalidate a bracket. */
   async exportRegistered(
     tournamentId: number,
+    formationNodeId: number,
     teamIds?: number[],
   ): Promise<RegistrationTeamExportResult> {
     const response = await apiFetch(
       `/api/v1/balancer/tournaments/${tournamentId}/registered-teams/export`,
-      { method: "POST", body: teamIds !== undefined ? { team_ids: teamIds } : {} },
+      {
+        method: "POST",
+        query: { formation_node_id: formationNodeId },
+        body: teamIds !== undefined ? { team_ids: teamIds } : {},
+      },
     );
     return response.json();
   },
 
   /** Who the captain may invite: this tournament's registrants on no team. */
-  async listFreeAgents(tournamentId: number): Promise<RegistrationFreeAgentListResponse> {
+  async listFreeAgents(
+    tournamentId: number,
+    registrationNodeId: number,
+  ): Promise<RegistrationFreeAgentListResponse> {
     const response = await apiFetch(
       `/api/v1/tournaments/${tournamentId}/registration-teams/free-agents`,
+      { query: { registration_node_id: registrationNodeId } },
     );
     return response.json();
   },
@@ -172,9 +194,13 @@ const registrationTeamService = {
    * Scoped server-side from the caller's token — there is no id to pass, because
    * "whose invites" is never the client's answer.
    */
-  async listMyInvites(tournamentId: number): Promise<RegistrationTeamInviteOfferListResponse> {
+  async listMyInvites(
+    tournamentId: number,
+    registrationNodeId: number,
+  ): Promise<RegistrationTeamInviteOfferListResponse> {
     const response = await apiFetch(
       `/api/v1/tournaments/${tournamentId}/registration-teams/my-invites`,
+      { query: { registration_node_id: registrationNodeId } },
     );
     return response.json();
   },
@@ -273,8 +299,13 @@ const registrationTeamService = {
     return response.json();
   },
 
-  async checkInRoster(teamId: number, excludeRegistrationIds: number[] = []): Promise<RegistrationTeam> {
+  async checkInRoster(
+    teamId: number,
+    registrationNodeId: number,
+    excludeRegistrationIds: number[] = [],
+  ): Promise<RegistrationTeam> {
     const response = await apiFetch(`/api/v1/registration-teams/${teamId}/check-in`, {
+      query: { registration_node_id: registrationNodeId },
       method: "POST",
       body: { exclude_registration_ids: excludeRegistrationIds },
     });

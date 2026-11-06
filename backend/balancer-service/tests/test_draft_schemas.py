@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import sys
 from pathlib import Path
 
@@ -24,6 +23,7 @@ from shared.core.enums import (  # noqa: E402
 )
 from shared.domain.roster_shape import RosterShape  # noqa: E402
 from shared.models.draft import DraftSession  # noqa: E402
+from shared.schemas.draft_format import session_format  # noqa: E402
 from shared.schemas.roster_slots import RosterShapeRead  # noqa: E402
 from src import schemas  # noqa: E402
 from src.domain.draft import rules  # noqa: E402
@@ -31,7 +31,7 @@ from src.services.draft import lifecycle  # noqa: E402
 
 
 def test_create_request_defaults() -> None:
-    req = schemas.DraftSessionCreateRequest()
+    req = schemas.DraftSessionCreateRequest(formation_node_id=1)
     assert req.pool_source == DraftPoolSource.BALANCER_BALANCE
     assert req.pick_time_seconds == 45
     assert req.autopick_strategy == DraftAutopickStrategy.BEST_FIT
@@ -49,11 +49,11 @@ def test_create_request_no_longer_carries_the_roster_size_or_the_format() -> Non
 def test_create_request_ignores_a_stale_client_sending_rounds_or_team_size() -> None:
     # Pydantic's default `extra="ignore"`: the keys are accepted and dropped, so
     # an old admin bundle keeps working and cannot influence the created session.
-    req = schemas.DraftSessionCreateRequest(rounds=7, team_size=11)
+    req = schemas.DraftSessionCreateRequest(formation_node_id=1, rounds=7, team_size=11)
 
     assert not hasattr(req, "rounds")
     assert not hasattr(req, "team_size")
-    assert req.model_dump() == schemas.DraftSessionCreateRequest().model_dump()
+    assert req.model_dump() == schemas.DraftSessionCreateRequest(formation_node_id=1).model_dump()
 
 
 def test_lifecycle_rejects_rounds_that_do_not_match_the_shape() -> None:
@@ -114,7 +114,7 @@ def test_roster_shape_read_is_one_class_shared_with_tournament_service() -> None
 @pytest.mark.parametrize("seconds", [9, 601])
 def test_create_request_rejects_bad_pick_time(seconds: int) -> None:
     with pytest.raises(ValidationError):
-        schemas.DraftSessionCreateRequest(pick_time_seconds=seconds)
+        schemas.DraftSessionCreateRequest(formation_node_id=1, pick_time_seconds=seconds)
 
 
 def test_select_request_requires_expected_version() -> None:
@@ -133,13 +133,13 @@ def test_patch_request_pick_time_validation() -> None:
 @pytest.mark.parametrize("seconds", [-1, 301])
 def test_create_request_rejects_overtime_outside_the_allowed_window(seconds: int) -> None:
     with pytest.raises(ValidationError):
-        schemas.DraftSessionCreateRequest(overtime_seconds=seconds)
+        schemas.DraftSessionCreateRequest(formation_node_id=1, overtime_seconds=seconds)
 
 
 def test_create_request_defaults_to_no_overtime() -> None:
     # 0 keeps the pre-overtime behaviour: an expired clock autopicks at once.
-    assert schemas.DraftSessionCreateRequest().overtime_seconds == 0
-    assert schemas.DraftSessionCreateRequest(overtime_seconds=300).overtime_seconds == 300
+    assert schemas.DraftSessionCreateRequest(formation_node_id=1).overtime_seconds == 0
+    assert schemas.DraftSessionCreateRequest(formation_node_id=1, overtime_seconds=300).overtime_seconds == 300
 
 
 def test_patch_request_overtime_is_optional_and_range_checked() -> None:
@@ -162,33 +162,19 @@ def test_extend_request_requires_the_optimistic_token() -> None:
     assert (ok.expected_version, ok.seconds) == (3, 30)
 
 
-# ─── the format is the tournament's, not the request's ───────────────────────
+# ─── the format is the formation node's, not the request's ───────────────────
 
 
-class _FormatSession:
-    """Just enough AsyncSession for ``tournament_draft_format``."""
-
-    def __init__(self, raw: dict | None) -> None:
-        self._raw = raw
-
-    async def scalar(self, statement: object) -> dict | None:
-        return self._raw
-
-
-def _tournament_format(raw: dict | None, rounds: int):
-    return asyncio.run(
-        lifecycle.lifecycle_service.tournament_draft_format(_FormatSession(raw), 1, rounds=rounds)  # type: ignore[arg-type]
-    )
+def _node_format(raw: dict | None, rounds: int):
+    return session_format(raw, rounds)
 
 
 def test_a_tournament_without_a_stored_format_drafts_snake() -> None:
-    assert _tournament_format(None, 4) == (DraftFormat.SNAKE, {})
+    assert _node_format(None, 4) == (DraftFormat.SNAKE, {})
 
 
 def test_a_custom_tournament_copies_its_rules_padded_to_the_round_count() -> None:
-    fmt, settings = _tournament_format(
-        {"format": "custom", "round_rules": ["reverse"], "avg_tie_seed_reverse": True}, 3
-    )
+    fmt, settings = _node_format({"format": "custom", "round_rules": ["reverse"], "avg_tie_seed_reverse": True}, 3)
 
     assert fmt is DraftFormat.CUSTOM
     assert settings == {"round_rules": ["reverse", "linear", "linear"], "avg_tie_seed_reverse": True}

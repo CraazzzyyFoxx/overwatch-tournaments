@@ -28,7 +28,7 @@ export default function TournamentParticipantsPage({ slug }: Readonly<{ slug: st
     }
     return <TournamentParticipantsSkeleton />;
   }
-  if (overviewVariant(tournamentQuery.data.status) === "completed") {
+  if (overviewVariant(tournamentQuery.data) === "completed") {
     return <FinishedParticipantsView tournament={tournamentQuery.data} />;
   }
   return <TournamentParticipantsView tournament={tournamentQuery.data} />;

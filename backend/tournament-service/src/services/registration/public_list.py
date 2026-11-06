@@ -21,23 +21,29 @@ __all__ = ("build_registration_list", "coalesced_registration_list")
 @versioned(
     generations=tournament_generations("{tournament_id}", REGISTRATION_LIST),
     ttl=settings.tournaments_cache_ttl,
-    key="registration_list:v3:{tournament_id}:",
+    key="registration_list:v4:{tournament_id}:{registration_node_id}:",
     prefix="fastapi:",
 )
-async def build_registration_list(session_maker: async_sessionmaker[AsyncSession], tournament_id: int) -> Any:
+async def build_registration_list(
+    session_maker: async_sessionmaker[AsyncSession], tournament_id: int, registration_node_id: int
+) -> Any:
     """Build the list on a session of its own.
 
     The result is shared by every concurrent follower, so it cannot ride any one
     caller's session.
     """
     async with session_maker() as session:
-        return await registration_service.build_public_registration_list(session, tournament_id=tournament_id)
+        return await registration_service.build_public_registration_list(
+            session, tournament_id=tournament_id, registration_node_id=registration_node_id
+        )
 
 
-async def coalesced_registration_list(session_maker: async_sessionmaker[AsyncSession], tournament_id: int) -> Any:
-    """One build per burst for a tournament (see ``single_flight``).
+async def coalesced_registration_list(
+    session_maker: async_sessionmaker[AsyncSession], tournament_id: int, registration_node_id: int
+) -> Any:
+    """One build per burst for a registration node (see ``single_flight``).
 
-    Keyed by tournament, not by viewer: callers run the viewer-dependent
+    Keyed by tournament and node, not by viewer: callers run the viewer-dependent
     visibility gate on their own session before reaching this. And keyed by the
     list's generations: a request arriving after a write starts its own build.
     """
@@ -46,6 +52,6 @@ async def coalesced_registration_list(session_maker: async_sessionmaker[AsyncSes
     except CacheBackendInteractionError:
         generation = None  # the build bypasses the cache too; coalescing is all that is left
     return await single_flight(
-        (build_registration_list.__name__, tournament_id, generation),
-        lambda: build_registration_list(session_maker, tournament_id),
+        (build_registration_list.__name__, tournament_id, registration_node_id, generation),
+        lambda: build_registration_list(session_maker, tournament_id, registration_node_id),
     )

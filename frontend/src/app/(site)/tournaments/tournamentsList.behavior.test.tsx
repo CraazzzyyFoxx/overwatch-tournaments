@@ -116,14 +116,12 @@ function tournament(id: number, over: Partial<Tournament> = {}): Tournament {
     description: null,
     challonge_id: null,
     challonge_slug: null,
-    is_league: false,
     is_finished: false,
     is_hidden: false,
-    team_formation: "balancer",
-    status: "registration",
+    // `live` because a registration node is open: the card reads "Registration" (`displayStatus`).
+    status: "live",
+    flow_nodes: [{ id: 1, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null }],
     auto_transitions_enabled: false,
-    allow_late_registration: false,
-    phase_schedule: [],
     stages: [],
     participants_count: 30,
     registrations_count: null,
@@ -148,17 +146,13 @@ function facets(over: Partial<TournamentFacets> = {}): TournamentFacets {
   return {
     total: 42,
     live: 3,
+    registration_open: 2,
     by_status: {
       live: 2,
-      playoffs: 1,
-      registration: 5,
-      check_in: 0,
+      announcement: 5,
       completed: 30,
-      archived: 4,
-      draft: 0
+      archived: 4
     } as Record<TournamentStatus, number>,
-    league: 6,
-    standard: 36,
     ...over
   };
 }
@@ -325,7 +319,6 @@ describe("tournaments list", () => {
         order: "desc",
         workspaceId: 1,
         status: undefined,
-        isLeague: undefined,
         query: undefined
       })
     ]);
@@ -420,8 +413,6 @@ describe("tournaments list", () => {
     expect(chipCount(en.common.all)).toBe("42");
     expect(chipCount(en.common.statusBadge.live)).toBe("2");
     expect(chipCount(en.common.statusBadge.completed)).toBe("30");
-    expect(chipCount(en.tournamentsList.filters.standard)).toBe("36");
-    expect(chipCount(en.common.league)).toBe("6");
   });
 
   it("reports live events from the unfiltered facet, not from the loaded rows", async () => {

@@ -179,6 +179,14 @@ class _Fixture:
                 " encounter_id INTEGER PRIMARY KEY, tournament_id INTEGER NOT NULL,"
                 " stage_id INTEGER, stage_item_id INTEGER, round INTEGER NOT NULL)"
             )
+            # Stage.node loads with the stage; no scrim stage has one, so the table only has to exist (JSONB has no sqlite form).
+            conn.exec_driver_sql(
+                "CREATE TABLE tournament.flow_node ("
+                " id INTEGER PRIMARY KEY, tournament_id INTEGER NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL,"
+                " status TEXT NOT NULL, config TEXT NOT NULL DEFAULT '{}', stage_id INTEGER,"
+                " position_x REAL NOT NULL DEFAULT 0, position_y REAL NOT NULL DEFAULT 0,"
+                " started_at TIMESTAMP, completed_at TIMESTAMP, created_at TIMESTAMP, updated_at TIMESTAMP)"
+            )
         self.session = Session(self.engine)
         self.shim = _AsyncSessionShim(self.session)
         self._next_id = 900
@@ -190,7 +198,6 @@ class _Fixture:
             name=scrim.CONTAINER_NAME,
             slug="scrims",
             is_hidden=True,
-            is_league=False,
             start_date=datetime(2026, 8, 12, tzinfo=UTC),
             end_date=datetime(2026, 8, 12, tzinfo=UTC),
         )

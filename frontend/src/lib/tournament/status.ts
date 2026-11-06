@@ -1,15 +1,15 @@
-import { reachedAtLeast } from "@/lib/tournament/lifecycle";
-import type { Tournament, TournamentStatus } from "@/types/tournament.types";
+import { nodesOfKind } from "@/lib/tournament/flow-nodes";
+import type { Tournament, TournamentDisplayStatus } from "@/types/tournament.types";
 
 // Display text is `common.statusBadge.<status>` in the message catalogs, never here.
 type TournamentStatusMeta = {
   /**
-   * Which of the four presentation buckets this status falls into. The public
-   * tournament surfaces collapse seven statuses into live / upcoming /
-   * finished / draft; three files each re-derived that with the same nested
+   * Which of the three presentation buckets this status falls into. The public
+   * tournament surfaces collapse the display statuses into live / upcoming /
+   * finished; three files each re-derived that with the same nested
    * ternary. It is a domain fact about the status, so it lives here once.
    */
-  variant: "live" | "upcoming" | "finished" | "draft";
+  variant: "live" | "upcoming" | "finished";
   textClassName: string;
   badgeClassName: string;
   dotClassName: string;
@@ -17,10 +17,9 @@ type TournamentStatusMeta = {
   isEnded: boolean;
 };
 
-// Colors mirror `TournamentStatusPill`'s variants (draft=blue, upcoming=amber,
-// live=rose, finished=dim) so a card and the tournament page never disagree
+// Colors mirror `TournamentStatusPill`'s variants (upcoming=amber, live=rose, finished=dim) so a card and the tournament page never disagree
 // about what a status looks like.
-const TOURNAMENT_STATUS_META: Record<TournamentStatus, TournamentStatusMeta> = {
+const TOURNAMENT_STATUS_META: Record<TournamentDisplayStatus, TournamentStatusMeta> = {
   // Announced but not yet open. It shares the amber "upcoming" bucket with
   // registration deliberately: to a visitor both mean "this has not started",
   // and the badge text is what tells them whether they can sign up yet.
@@ -32,11 +31,13 @@ const TOURNAMENT_STATUS_META: Record<TournamentStatus, TournamentStatusMeta> = {
     isActive: true,
     isEnded: false
   },
-  draft: {
-    variant: "draft",
-    textClassName: "text-[color:var(--aqt-blue)]",
-    badgeClassName: "text-[color:var(--aqt-blue)]",
-    dotClassName: "bg-[color:var(--aqt-blue)]",
+  // Registration is over and no stage has started: teams are forming. The tournament is `live` in the store, but to a
+  // visitor it has not started, so it takes the amber bucket instead of the rose "Live" one.
+  forming: {
+    variant: "upcoming",
+    textClassName: "text-[color:var(--aqt-amber)]",
+    badgeClassName: "text-[color:var(--aqt-amber)]",
+    dotClassName: "bg-[color:var(--aqt-amber)]",
     isActive: true,
     isEnded: false
   },
@@ -64,14 +65,6 @@ const TOURNAMENT_STATUS_META: Record<TournamentStatus, TournamentStatusMeta> = {
     isActive: true,
     isEnded: false
   },
-  playoffs: {
-    variant: "live",
-    textClassName: "text-[color:var(--aqt-rose)]",
-    badgeClassName: "text-[color:var(--aqt-rose)]",
-    dotClassName: "bg-[color:var(--aqt-rose)]",
-    isActive: true,
-    isEnded: false
-  },
   completed: {
     variant: "finished",
     textClassName: "text-[color:var(--aqt-fg-muted)]",
@@ -90,92 +83,54 @@ const TOURNAMENT_STATUS_META: Record<TournamentStatus, TournamentStatusMeta> = {
   }
 };
 
-export function getTournamentStatusMeta(status: TournamentStatus) {
+/**
+ * The phase a surface shows (Decision 15): `registration` / `check_in` while the tournament is `live` only because a
+ * registration node is open / in check-in and no stage is `live`; `forming` while it is `live` but no stage has started
+ * or finished and no registration is open (teams forming); otherwise the tournament's status. A read without the
+ * `flow_nodes` entity shows the plain status.
+ */
+export function displayStatus(tournament: Pick<Tournament, "status" | "flow_nodes">): TournamentDisplayStatus {
+  if (tournament.status !== "live") return tournament.status;
+  const nodes = tournament.flow_nodes;
+  if (!nodes) return "live";
+  if (nodes.some((node) => node.kind === "stage" && (node.status === "live" || node.status === "completed"))) return "live";
+  const registrations = nodesOfKind(tournament, "registration");
+  if (registrations.some((node) => node.status === "open")) return "registration";
+  if (registrations.some((node) => node.status === "check_in")) return "check_in";
+  return "forming";
+}
+
+export function getTournamentStatusMeta(status: TournamentDisplayStatus) {
   return TOURNAMENT_STATUS_META[status];
 }
 
-export function isTournamentStatusActive(status: TournamentStatus) {
+export function isTournamentStatusActive(status: TournamentDisplayStatus) {
   return TOURNAMENT_STATUS_META[status].isActive;
 }
 
-export function isTournamentStatusEnded(status: TournamentStatus) {
+export function isTournamentStatusEnded(status: TournamentDisplayStatus) {
   return TOURNAMENT_STATUS_META[status].isEnded;
 }
 
-export const TOURNAMENT_STATUS_ORDER: TournamentStatus[] = [
+export const TOURNAMENT_STATUS_ORDER: TournamentDisplayStatus[] = [
   "live",
-  "playoffs",
   "registration",
   "check_in",
+  "forming",
   "announcement",
   "completed",
-  "archived",
-  "draft"
+  "archived"
 ];
-
-/**
- * True when the tournament currently sits in `status` and `now` falls inside
- * that phase's schedule row window. A missing row or a `null` ends_at means
- * the window spans the whole phase.
- */
-export function isPhaseWindowActive(
-  tournament: Pick<Tournament, "status" | "phase_schedule">,
-  status: TournamentStatus,
-  now: number = Date.now()
-) {
-  if (tournament.status !== status) return false;
-
-  const row = tournament.phase_schedule?.find((entry) => entry.status === status);
-  if (!row) return true;
-
-  const startsAt = new Date(row.starts_at).getTime();
-  const endsAt = row.ends_at ? new Date(row.ends_at).getTime() : null;
-  return startsAt <= now && (endsAt === null || now <= endsAt);
-}
-
-/**
- * Mirrors the backend registration gate (`shared.services.registration_window`):
- * the REGISTRATION phase window plus one override.
- *
- * A MISSING row means closed — deliberately the opposite of
- * `isPhaseWindowActive` above, whose "no row spans the whole phase" rule stays
- * as-is for check-in. The tournament's own phase does not participate: an
- * `ends_at` reaching past the LIVE start keeps registration open by itself.
- *
- * `allow_late_registration` lifts `ends_at` and NOTHING else — it cannot open a
- * tournament with no row, one whose window has not started, or a finished one.
- * Keep this in lockstep with the backend predicate: this function only decides
- * whether to render the register button, and a client that disagrees with the
- * server either hides a working button or offers one that 400s.
- */
-export function isRegistrationOpen(
-  tournament: Pick<Tournament, "status" | "phase_schedule" | "allow_late_registration">,
-  now: number = Date.now()
-) {
-  if (tournament.status === "completed" || tournament.status === "archived") return false;
-
-  const row = tournament.phase_schedule?.find((entry) => entry.status === "registration");
-  if (!row) return false;
-
-  const startsAt = new Date(row.starts_at).getTime();
-  if (startsAt > now) return false;
-
-  const endsAt = row.ends_at ? new Date(row.ends_at).getTime() : null;
-  return endsAt === null || tournament.allow_late_registration === true || now <= endsAt;
-}
 
 /**
  * Whether the tournament's streams belong on screen at all.
  *
- * Only while something is actually being broadcast: the live player draft, and
- * match play (`live`/`playoffs`, the two statuses that share the "live"
- * presentation bucket — checked through that bucket so a future in-progress
- * status is included by the same rule that colours it green). Earlier the dock
- * is a permanent "channel is offline" card and the Streams tab an empty list;
- * afterwards a finished event's channel is somebody else's stream.
+ * Only while something is actually being broadcast: the live player draft and match play, the display statuses that
+ * share the "live" presentation bucket. Earlier the dock is a permanent "channel is offline" card and the Streams tab an
+ * empty list; afterwards a finished event's channel is somebody else's stream.
  */
-export function areStreamsVisible(status: TournamentStatus) {
-  return status === "draft" || TOURNAMENT_STATUS_META[status].variant === "live";
+export function areStreamsVisible(status: TournamentDisplayStatus) {
+  return TOURNAMENT_STATUS_META[status].variant === "live";
 }
 
 /**
@@ -183,6 +138,11 @@ export function areStreamsVisible(status: TournamentStatus) {
  * broadcasts are worth a read. The poller records POV sessions from check-in
  * on, and unlike live streams they stay worth showing after the event ends.
  */
-export function mayHavePastBroadcasts(status: TournamentStatus) {
-  return reachedAtLeast(status, "check_in");
+export function mayHavePastBroadcasts(status: TournamentDisplayStatus) {
+  return reachedCheckIn(status);
+}
+
+/** Whether sign-up is behind the phase shown: check-in or anything later. */
+export function reachedCheckIn(status: TournamentDisplayStatus) {
+  return status !== "announcement" && status !== "registration";
 }

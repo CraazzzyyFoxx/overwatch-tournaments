@@ -24,8 +24,8 @@ def test_a_stored_rule_reads_back_as_saved() -> None:
             "description": None,
             "stage_type": "ffa_league",
             "order": 0,
-            "is_active": True,
-            "is_completed": False,
+            "node_id": 1,
+            "status": "live",
             "scoring": _STORED,
         }
     )

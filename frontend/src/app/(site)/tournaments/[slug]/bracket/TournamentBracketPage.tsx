@@ -5,11 +5,15 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
+import { LinkTabs } from "@/components/kit/LinkTabs";
 import { ConnectionIndicator } from "@/components/realtime/ConnectionIndicator";
 import { EncounterEditDialog } from "@/components/tournaments/EncounterEditDialog";
 import { MatchReportDialog } from "@/components/tournaments/MatchReportDialog";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
+import { bracketBranches, branchOf } from "@/lib/flow/branches";
+import { pickCurrentStage } from "@/lib/tournament/stages";
 import { isTournamentStatusEnded } from "@/lib/tournament/status";
+import { tournamentHref } from "@/lib/tournament/url";
 import { useRealtimeStore } from "@/stores/realtime.store";
 import { FFA_STAGE_TYPES, INDIVIDUAL_SWISS_STAGE_TYPES } from "@/lib/bracket/projection";
 import type { Tournament } from "@/types/tournament.types";
@@ -19,6 +23,7 @@ import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentBracketSkeleton } from "../_components/TournamentSkeletons";
 import { UpdatingBadge } from "../_components/UpdatingBadge";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
+import { flowQueryOptions } from "../_queries/flow";
 import { createBracketQueryPlan, deriveBracketLoadState } from "./bracketData";
 import { buildLiveTeamStreams } from "./bracketLiveStreams";
 import { buildBracketTabs, buildGroupStagePanels, selectBracketStages } from "./bracketStages.model";
@@ -81,7 +86,15 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
     encountersQueryKey: queryPlan.encounters.queryKey
   });
 
-  const selection = selectBracketStages(stages, viewParam, queryPlan.initialStageId);
+  // The flow only groups the bracket by branch; when it fails to load, the stages still render ungrouped.
+  const flowQuery = useQuery(flowQueryOptions(tournament));
+  const branches = useMemo(() => bracketBranches(flowQuery.data), [flowQuery.data]);
+  const branch = branchOf(branches, queryPlan.initialStageId);
+  const selection = selectBracketStages(
+    branch ? stages.filter((stage) => branch.stageIds.includes(stage.id)) : stages,
+    viewParam,
+    queryPlan.initialStageId
+  );
   const { activeStages, activeGroupStages, groupStages, eliminationStages, shouldShowGroupStage } =
     selection;
 
@@ -186,6 +199,22 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
       />
       <div className="grid w-full min-w-0 max-w-full gap-4 *:min-w-0" data-page-section="bracket">
         {loadState.isUpdating && loadState.kind !== "refresh-error" ? <UpdatingBadge /> : null}
+        {branches.length > 1 ? (
+          <LinkTabs
+            variant="pill"
+            ariaLabel={t("tournamentDetail.bracketBranches")}
+            activeKey={branch?.key ?? ""}
+            items={branches.map((item) => {
+              const branchStages = stages.filter((stage) => item.stageIds.includes(stage.id));
+              const target = pickCurrentStage(branchStages, tournament.status) ?? branchStages[0];
+              return {
+                key: item.key,
+                label: item.label,
+                href: tournamentHref(tournament, target ? `/bracket?stage=${target.id}` : "/bracket")
+              };
+            })}
+          />
+        ) : null}
         {activeStages.length > 0 ? (
           <div className="space-y-6">
             {shouldShowGroupStage

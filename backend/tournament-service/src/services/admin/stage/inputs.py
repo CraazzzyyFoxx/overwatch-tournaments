@@ -1,6 +1,5 @@
 """Stage item inputs, one row at a time: create, edit, move between items and slots, delete."""
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -76,28 +75,6 @@ class StageInputsMixin(StageServiceBase):
             .limit(1)
         )
 
-    async def _assert_source_in_tournament(
-        self, session: AsyncSession, source_stage_item_id: int | None, tournament_id: int
-    ) -> None:
-        """A TENTATIVE seed qualifies from a group of THIS tournament.
-
-        Activation copies the team the source's standings name, so a foreign
-        item would seat another tournament's -- or workspace's -- team here.
-        The foreign key only proves the item exists.
-        """
-        if source_stage_item_id is None:
-            return
-        source_tournament_id = await session.scalar(
-            select(models.Stage.tournament_id)
-            .join(models.StageItem, models.StageItem.stage_id == models.Stage.id)
-            .where(models.StageItem.id == source_stage_item_id)
-        )
-        if source_tournament_id != tournament_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Source stage item does not belong to this tournament",
-            )
-
     async def create_stage_item_input(
         self,
         session: AsyncSession,
@@ -110,7 +87,6 @@ class StageInputsMixin(StageServiceBase):
         if not stage_item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stage item not found")
         tournament_id = stage_item.stage.tournament_id
-        await self._assert_source_in_tournament(session, data.source_stage_item_id, tournament_id)
         duplicate = await self._assert_input_assignable(
             session,
             stage_id=stage_item.stage_id,
@@ -124,7 +100,7 @@ class StageInputsMixin(StageServiceBase):
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Selected team is already assigned in this stage; replace a populated slot to swap teams",
             )
-        inp = models.StageItemInput(stage_item_id=stage_item_id, **data.model_dump())
+        inp = models.StageItemInput(stage_item_id=stage_item_id, seat_source="manual", **data.model_dump())
         await self.stage_item_input_repo.create(session, inp)
         await enqueue_tournament_recalculation(session, tournament_id)
         await self._publish_structure_changed(session, tournament_id)
@@ -157,8 +133,6 @@ class StageInputsMixin(StageServiceBase):
 
         next_input_type = update_data.get("input_type", inp.input_type)
         next_team_id = update_data.get("team_id", inp.team_id)
-        next_source_stage_item_id = update_data.get("source_stage_item_id", inp.source_stage_item_id)
-        next_source_position = update_data.get("source_position", inp.source_position)
 
         if "team_id" in update_data and next_team_id is not None:
             existing_input = await self._assert_input_assignable(
@@ -179,10 +153,12 @@ class StageInputsMixin(StageServiceBase):
                         ),
                     )
                 existing_input.team_id = inp.team_id
+                existing_input.source_result_id = None
+                existing_input.seat_source = "manual"
 
             next_input_type = enums.StageItemInputType.FINAL
-            next_source_stage_item_id = None
-            next_source_position = None
+            inp.source_result_id = None
+            inp.seat_source = "manual"
 
         if next_input_type == enums.StageItemInputType.FINAL:
             if next_team_id is None:
@@ -190,29 +166,13 @@ class StageInputsMixin(StageServiceBase):
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="FINAL inputs require team_id",
                 )
-            next_source_stage_item_id = None
-            next_source_position = None
-        elif next_input_type == enums.StageItemInputType.TENTATIVE:
-            if next_source_stage_item_id is None or next_source_position is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=("TENTATIVE inputs require source_stage_item_id and source_position"),
-                )
-            if next_team_id is not None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="TENTATIVE inputs must not have team_id",
-                )
         elif next_input_type == enums.StageItemInputType.EMPTY:
             next_team_id = None
-            next_source_stage_item_id = None
-            next_source_position = None
+            inp.source_result_id = None
+            inp.seat_source = "flow"
 
-        await self._assert_source_in_tournament(session, next_source_stage_item_id, tournament_id)
         inp.input_type = next_input_type
         inp.team_id = next_team_id
-        inp.source_stage_item_id = next_source_stage_item_id
-        inp.source_position = next_source_position
 
         await enqueue_tournament_recalculation(session, tournament_id)
         await self._publish_structure_changed(session, tournament_id)
@@ -287,6 +247,7 @@ class StageInputsMixin(StageServiceBase):
         )
         target.insert(len(target) if slot is None else min(slot - 1, len(target)), inp)
         inp.stage_item_id = target_item_id
+        inp.seat_source = "manual"
         await self._reseat_slots(session, *([target] if target is source else [source, target]))
 
     async def _reseat_slots(self, session: AsyncSession, *items: list[models.StageItemInput]) -> None:

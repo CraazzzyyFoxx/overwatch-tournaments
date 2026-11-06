@@ -4,7 +4,7 @@ Read-only, always. This service owns no table in ``tournament.*``, ``balancer.*`
 or ``players.*`` and writes to none of them. Every query behind
 this module lives in ``shared.repository`` (``TournamentRepository``,
 ``TournamentLinkRepository``, ``StreamTargetRepository``); this module owns the
-domain rules on top of them — which statuses count as "active", and how a
+domain rules on top of them — which tournaments count as "active", and how a
 channel's two consent sources merge when they name the same login.
 
 Two consented sources, deliberately no third:
@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import Final
 from urllib.parse import urlparse
 
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
@@ -34,7 +35,7 @@ from shared.core import enums
 from shared.repository import StreamTargetRepository, TournamentLinkRepository, TournamentPollTarget
 
 __all__ = (
-    "POLLED_TOURNAMENT_STATUSES",
+    "POLLED_TOURNAMENT",
     "TWITCH_HOSTS",
     "ParticipantChannel",
     "StreamTargetsService",
@@ -43,19 +44,28 @@ __all__ = (
     "twitch_channel_from_url",
 )
 
-#: ``check_in`` and ``draft`` are in on purpose: the official broadcast goes live
-#: before the first map, and an organizer whose stream badge only appears at
-#: ``live`` would rather not have the feature. ``registration`` is out — it can
-#: run for weeks and would burn the shared Helix bucket on an empty hall.
-#: ``completed``/``archived`` are never polled.
+#: A live tournament with a lifecycle node in play: a registration at ``check_in``, or a formation or stage that has
+#: left ``draft``. The official broadcast goes live before the first map, and an organizer whose stream badge only
+#: appears at the first match would rather not have the feature. A registration that is merely ``open`` is out — it
+#: can run for weeks and would burn the shared Helix bucket on an empty hall. ``completed``/``archived`` are never
+#: polled.
 #:
-#: Keyed on ``status``, NOT on ``Tournament.is_finished``: that flag is set by
-#: separate code paths and is not kept in sync with the status enum.
-POLLED_TOURNAMENT_STATUSES: Final[tuple[enums.TournamentStatus, ...]] = (
-    enums.TournamentStatus.CHECK_IN,
-    enums.TournamentStatus.DRAFT,
-    enums.TournamentStatus.LIVE,
-    enums.TournamentStatus.PLAYOFFS,
+#: Keyed on ``status``, NOT on ``Tournament.is_finished``: that flag is derived from the status separately.
+POLLED_TOURNAMENT: Final[sa.ColumnElement[bool]] = sa.and_(
+    models.Tournament.status == enums.TournamentStatus.LIVE,
+    sa.exists().where(
+        models.FlowNode.tournament_id == models.Tournament.id,
+        sa.or_(
+            sa.and_(
+                models.FlowNode.kind == enums.FlowNodeKind.REGISTRATION,
+                models.FlowNode.status == enums.FlowNodeStatus.CHECK_IN,
+            ),
+            sa.and_(
+                models.FlowNode.kind.in_((enums.FlowNodeKind.FORMATION, enums.FlowNodeKind.STAGE)),
+                models.FlowNode.status != enums.FlowNodeStatus.DRAFT,
+            ),
+        ),
+    ),
 )
 
 #: The kind stamped on ``TournamentLink`` rows this feature polls.
@@ -138,7 +148,7 @@ class StreamTargetsService:
 
     async def active_tournaments(self, session: AsyncSession) -> list[TournamentPollTarget]:
         """Tournaments in a phase where somebody could be broadcasting."""
-        return list(await self.targets.list_active_tournaments(session, POLLED_TOURNAMENT_STATUSES))
+        return list(await self.targets.list_active_tournaments(session, POLLED_TOURNAMENT))
 
     async def official_stream_links(self, session: AsyncSession, tournament_id: int) -> list[models.TournamentLink]:
         """Active ``kind='stream'`` links for one tournament, in organizer order.

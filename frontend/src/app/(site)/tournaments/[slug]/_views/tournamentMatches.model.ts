@@ -170,9 +170,8 @@ export type TimeSections = {
  * The time view's sections: what is on air, what is still to come, then the
  * record by day.
  *
- * Note §7 ④ asks for the stage name in the day heading "from `phase_schedule`
- * when the day falls inside a phase". `phase_schedule` carries lifecycle phases
- * (registration / check-in / draft / live), never stage names — so the stage
+ * Note §7 ④ asks for the stage name in the day heading "when the day falls inside
+ * a phase". A node's schedule names lifecycle phases, never stages — so the stage
  * comes from the day's own encounters when they unanimously share one, and the
  * phase is the fallback for a day whose matches carry no stage at all.
  *

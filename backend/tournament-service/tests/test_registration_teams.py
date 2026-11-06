@@ -24,6 +24,7 @@ import textwrap
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest import IsolatedAsyncioTestCase, TestCase
 
@@ -368,6 +369,7 @@ class TeamNameConstraintTests(IsolatedAsyncioTestCase):
             await teams.teams_service.create_team(
                 None,  # type: ignore[arg-type]
                 tournament_id=1,
+                registration_node_id=2,
                 auth_user=models.AuthUser(id=1),
                 name="Team #1",
                 slot_code="tank",
@@ -381,6 +383,7 @@ class TeamNameConstraintTests(IsolatedAsyncioTestCase):
             await teams.teams_service.create_team(
                 None,  # type: ignore[arg-type]
                 tournament_id=1,
+                registration_node_id=2,
                 auth_user=models.AuthUser(id=1),
                 name="   ",
                 slot_code="tank",
@@ -397,6 +400,7 @@ class TeamNameConstraintTests(IsolatedAsyncioTestCase):
                 await teams.teams_service.create_team(
                     None,  # type: ignore[arg-type]
                     tournament_id=1,
+                    registration_node_id=2,
                     auth_user=models.AuthUser(id=1),
                     name=name,
                     slot_code="tank",
@@ -464,6 +468,7 @@ class _PreviewTeam:
     id: int = 7
     name: str = "Alpha"
     tournament_id: int = 3
+    registration_node_id: int = 5
     workspace_id: int = 1
     status: str = teams.TEAM_FORMING
     exported_team_id: int | None = None
@@ -527,6 +532,8 @@ class InvitePreviewTests(IsolatedAsyncioTestCase):
         # The tournament id is why this endpoint exists: the token alone tells the
         # landing page nothing about where to register.
         self.assertEqual(3, preview.tournament_id)
+        # ... and the node it signs up in.
+        self.assertEqual(5, preview.registration_node_id)
         self.assertEqual("Autumn Cup", preview.tournament_name)
         # The offered slot is named in the tournament's own game, so the page needs it with the offer.
         self.assertEqual("lol", preview.discipline)
@@ -593,22 +600,18 @@ class _TargetRegistration:
     id: int = 900
     tournament_id: int = 3
     registration_team_id: int | None = None
-    status: str = "approved"
     workspace_member: Any = field(default_factory=_TargetMember)
 
 
 class _TargetSession:
-    """Returns the registration for the ORM select and the account id for the
-    scalar lookup that follows it, in that order."""
+    """Returns the registration for the ORM select, its entry in the node, and the account id for the scalar
+    lookup that follows them, in that order."""
 
-    def __init__(self, registration: Any, auth_user_id: int | None) -> None:
-        self._registration = registration
-        self._auth_user_id = auth_user_id
-        self.calls = 0
+    def __init__(self, registration: Any, auth_user_id: int | None, *, status: str = "approved") -> None:
+        self._answers = [registration, SimpleNamespace(status=status), auth_user_id]
 
     async def scalar(self, *_args: Any, **_kwargs: Any) -> Any:
-        self.calls += 1
-        return self._registration if self.calls == 1 else self._auth_user_id
+        return self._answers.pop(0)
 
 
 class TargetedInviteResolutionTests(IsolatedAsyncioTestCase):
@@ -620,9 +623,12 @@ class TargetedInviteResolutionTests(IsolatedAsyncioTestCase):
     why each carries its own code.
     """
 
-    async def _resolve(self, registration: Any, auth_user_id: int | None = 77) -> int:
+    async def _resolve(self, registration: Any, auth_user_id: int | None = 77, *, status: str = "approved") -> int:
         return await teams.teams_service._resolve_invite_target(
-            _TargetSession(registration, auth_user_id), tournament_id=3, registration_id=900
+            _TargetSession(registration, auth_user_id, status=status),
+            tournament_id=3,
+            registration_node_id=5,
+            registration_id=900,
         )
 
     async def test_a_free_agent_resolves_to_their_account(self) -> None:
@@ -650,7 +656,7 @@ class TargetedInviteResolutionTests(IsolatedAsyncioTestCase):
         for status in sorted(_shared._SLOT_RELEASING_STATUSES):
             with self.subTest(status=status):
                 with self.assertRaises(ApiHTTPException) as caught:
-                    await self._resolve(_TargetRegistration(status=status))
+                    await self._resolve(_TargetRegistration(), status=status)
                 self.assertEqual("player_not_free", _code(caught.exception))
 
     async def test_a_player_with_no_site_account_is_refused_with_the_way_out(self) -> None:

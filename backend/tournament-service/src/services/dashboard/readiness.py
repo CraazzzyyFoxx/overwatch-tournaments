@@ -36,6 +36,7 @@ from src.schemas import TournamentReadiness
 __all__ = (
     "ReadinessService",
     "build_readiness",
+    "formation_modes",
     "has_enabled_achievement_rules",
     "latest_evaluation_run_status",
     "readiness",
@@ -73,9 +74,21 @@ def standings_recalc_pending(tournament_id: sa.SQLColumnExpression[int] | int) -
     )
 
 
+def formation_modes(tournament_id: sa.SQLColumnExpression[int] | int) -> sa.Label[Any]:
+    """The distinct ``mode`` of the tournament's formation nodes (``NULL`` without one): the flow decides which
+    formation checks apply, so this is unmasked like the tournament's name."""
+    node = models.FlowNode
+    return (
+        sa.select(sa.func.array_agg(sa.distinct(node.config["mode"].astext)))
+        .where(node.tournament_id == tournament_id, node.kind == enums.FlowNodeKind.FORMATION)
+        .scalar_subquery()
+        .label("formation_modes")
+    )
+
+
 def setup_counts(tournament_id: sa.SQLColumnExpression[int] | int) -> list[sa.Label[Any]]:
-    """Stage, bracket-slot and bracketed-encounter counts: the part of the ``tournament.read`` group that
-    neither the tournament row nor the encounter counts answer."""
+    """Stage, bracket-slot, bracketed-encounter and node-schedule facts: the part of the ``tournament.read`` group
+    that neither the tournament row nor the encounter counts answer."""
     stage = models.Stage
     slot = models.StageItemInput
     stages_total = sa.select(sa.func.count(stage.id)).where(stage.tournament_id == tournament_id)
@@ -91,11 +104,15 @@ def setup_counts(tournament_id: sa.SQLColumnExpression[int] | int) -> list[sa.La
         .join(models.BracketEncounter, models.BracketEncounter.encounter_id == models.Encounter.id)
         .where(models.Encounter.tournament_id == tournament_id, models.BracketEncounter.stage_id.is_not(None))
     )
+    schedule_configured = sa.exists().where(
+        models.FlowNode.tournament_id == tournament_id, models.FlowNodeSchedule.node_id == models.FlowNode.id
+    )
     return [
         stages_total.scalar_subquery().label("stages_total"),
         slots_total.scalar_subquery().label("slots_total"),
         slots_empty.scalar_subquery().label("slots_empty"),
         encounters_bracket.scalar_subquery().label("bracket_encounters"),
+        schedule_configured.label("schedule_configured"),
     ]
 
 
@@ -106,10 +123,21 @@ def team_counts(tournament_id: sa.SQLColumnExpression[int] | int) -> list[sa.Lab
     subqueries like the counters.
     """
     reg = models.Registration
+    entry = models.RegistrationEntry
     active = (reg.tournament_id == tournament_id, reg.deleted_at.is_(None))
-    reg_pending = sa.select(sa.func.count(reg.id)).where(*active, reg.status == "pending")
-    reg_approved = sa.select(sa.func.count(reg.id)).where(*active, reg.status == "approved")
-    reg_checked_in = sa.select(sa.func.count(reg.id)).where(*active, reg.checked_in.is_(True))
+
+    def registrations_where(*conditions: sa.ColumnElement[bool]) -> sa.Select[Any]:
+        """Distinct registrations with a live entry (at ANY registration node of the tournament) meeting ``conditions``."""
+        return (
+            sa.select(sa.func.count(sa.distinct(reg.id)))
+            .select_from(reg)
+            .join(entry, entry.registration_id == reg.id)
+            .where(*active, entry.deleted_at.is_(None), *conditions)
+        )
+
+    reg_pending = registrations_where(entry.status == "pending")
+    reg_approved = registrations_where(entry.status == "approved")
+    reg_checked_in = registrations_where(entry.checked_in.is_(True))
     # Saved rank data only: >=1 role row with a stored rank_value. A join, not ``IN (subquery)``: SQLAlchemy
     # correlates a subquery with its immediately enclosing SELECT only, and the dashboard correlates on ``Tournament``.
     role = models.RegistrationRole
@@ -118,8 +146,8 @@ def team_counts(tournament_id: sa.SQLColumnExpression[int] | int) -> list[sa.Lab
         .join(reg, reg.id == role.registration_id)
         .where(*active, role.rank_value.is_not(None))
     )
-    pool_ready = sa.select(sa.func.count(reg.id)).where(*active, reg.balancer_status == "ready")
-    pool_need_fix = sa.select(sa.func.count(reg.id)).where(*active, reg.balancer_status == "incomplete")
+    pool_ready = registrations_where(entry.balancer_status == "ready")
+    pool_need_fix = registrations_where(entry.balancer_status == "incomplete")
     # "A form row exists", not "registration is open": openness is the phase
     # schedule's window, and a tournament whose window merely ENDED still has
     # its form configured.
@@ -182,14 +210,13 @@ def build_readiness(
     fields.update(
         tournament_id=tournament.id,
         status=tournament.status.value,
-        team_formation=tournament.team_formation,
+        formation_modes=sorted(mode for mode in values.get("formation_modes") or [] if mode),
     )
 
     if can_tournament_read:
         duels_with_logs = count("duels_with_logs")
         fields.update(
-            # The schedule is loaded with every tournament (``lazy="selectin"``).
-            schedule_configured=bool(tournament.phase_schedule),
+            schedule_configured=bool(values.get("schedule_configured")),
             grid_selected=tournament.division_grid_version_id is not None,
             stages_total=count("stages_total"),
             stage_slots_filled=count("slots_total") > 0 and count("slots_empty") == 0,
@@ -262,7 +289,7 @@ class ReadinessService:
                 .scalar_subquery()
             )
 
-        columns: list[Any] = []
+        columns: list[Any] = [formation_modes(tournament_id)]
         if can_tournament_read:
             # A lobby never produces a match log: only duels count toward log coverage.
             duel = encounter.slot_count == 2
@@ -295,7 +322,7 @@ class ReadinessService:
                 latest_evaluation_run_status(tournament.id).label("run_status"),
             ]
 
-        values = (await session.execute(sa.select(*columns))).one()._mapping if columns else {}
+        values = (await session.execute(sa.select(*columns))).one()._mapping
         return build_readiness(
             tournament,
             values,

@@ -18,6 +18,7 @@ import { userQueryKeys } from "@/lib/users/query-keys";
 interface RegistrationWizardProps {
   workspaceId: number;
   tournamentId: number;
+  registrationNodeId: number;
   tournamentName?: string;
   form: RegistrationForm;
   onClose: () => void;
@@ -26,6 +27,7 @@ interface RegistrationWizardProps {
 export default function RegistrationWizard({
   workspaceId,
   tournamentId,
+  registrationNodeId,
   tournamentName,
   form,
   onClose,
@@ -49,7 +51,7 @@ export default function RegistrationWizard({
 
   const mutation = useMutation({
     mutationFn: (payload: RegistrationSubmitInput) =>
-      registrationService.register(tournamentId, payload),
+      registrationService.register(tournamentId, registrationNodeId, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.registration(workspaceId, tournamentId) });
       await queryClient.invalidateQueries({
@@ -82,6 +84,7 @@ export default function RegistrationWizard({
       <RegistrationSchemaForm
         mode="public"
         tournamentId={tournamentId}
+        registrationNodeId={registrationNodeId}
         form={form}
         tournamentName={tournamentName}
         userProfile={userQuery.data}

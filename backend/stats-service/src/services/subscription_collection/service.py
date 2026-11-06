@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core.enums import SubscriptionCollectionSource
-from shared.services.registration_window import registration_open_clause
+from shared.services.registration_window import tournament_sign_up_open_clause
 from shared.services.subscriptions import parse_requirement
 from shared.services.subscriptions.wiring import build_resolver
 from src.core.broker import optional_broker
@@ -60,10 +60,6 @@ class SubscriptionCollectionService:
                 models.WorkspaceSubscriptionRequirement.requirement_json,
             )
             .join(
-                models.RegistrationForm,
-                models.Tournament.id == models.RegistrationForm.tournament_id,
-            )
-            .join(
                 models.WorkspaceSubscriptionRequirement,
                 sa.and_(
                     models.WorkspaceSubscriptionRequirement.workspace_id == models.Tournament.workspace_id,
@@ -72,9 +68,10 @@ class SubscriptionCollectionService:
             )
             .where(
                 models.Tournament.is_finished.is_(False),
-                models.RegistrationForm.require_subscription.is_(True),
-                # Openness is the REGISTRATION schedule window, not a form flag.
-                registration_open_clause(),
+                # Some registration node accepts sign-ups (status and window) and enforces a subscription (config).
+                tournament_sign_up_open_clause(
+                    None, models.FlowNode.config["require_subscription"].as_boolean().is_(True)
+                ),
             )
         )
         if workspace_id is not None:
@@ -101,10 +98,11 @@ class SubscriptionCollectionService:
         return targets
 
     async def load_auth_user_ids_for_tournament(self, session: AsyncSession, tournament_id: int) -> list[int]:
-        """Get all auth_user_ids for registered participants in a tournament."""
+        """Get all auth_user_ids for participants with a live, not withdrawn entry at any registration node of a tournament."""
         stmt = (
             sa.select(models.User.auth_user_id)
             .select_from(models.Registration)
+            .join(models.RegistrationEntry, models.RegistrationEntry.registration_id == models.Registration.id)
             .join(
                 models.WorkspaceMember,
                 models.Registration.workspace_member_id == models.WorkspaceMember.id,
@@ -113,7 +111,8 @@ class SubscriptionCollectionService:
             .where(
                 models.Registration.tournament_id == tournament_id,
                 models.Registration.deleted_at.is_(None),
-                models.Registration.status != "withdrawn",
+                models.RegistrationEntry.deleted_at.is_(None),
+                models.RegistrationEntry.status != "withdrawn",
                 models.User.auth_user_id.isnot(None),
             )
             .distinct()

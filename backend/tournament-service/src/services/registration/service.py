@@ -19,6 +19,7 @@ from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import GAME_PROVIDERS, normalize_social_handle
 from shared.disciplines import identity_provider as discipline_identity_provider
+from shared.domain.flow.config import RegistrationNodeConfig
 from shared.domain.forms import (
     ErrorCode,
     FieldError,
@@ -33,6 +34,7 @@ from shared.rbac import assign_workspace_system_role
 from shared.registration_statuses import get_status_metas_map
 from shared.repository import (
     CatalogRoleRepository,
+    RegistrationEntryRepository,
     RegistrationRepository,
     SocialAccountRepository,
     TournamentRepository,
@@ -40,6 +42,7 @@ from shared.repository import (
     get_or_create_workspace_member,
 )
 from shared.services.realtime import Resource, Scope, emit
+from shared.services.roster import registration_load_options
 from shared.services.social_identity import social_identity_service
 from src.core.clients import subscription_resolver
 from src.schemas.registration import (
@@ -62,15 +65,15 @@ from src.services.registration.read_model import (
     _public_rosters,
     _reg_to_read,
     _resolve_top_heroes_config,
+    entry_read_loaders,
     registration_public_keys,
-    registration_read_loaders,
 )
-from src.services.registration.self_edit import self_edit_policy, submitted_late
+from src.services.registration.self_edit import self_edit_policy, submitted_late, writable_answer_keys
 from src.services.registration.serializers import serialize_registration_form
 from src.services.registration.subscription_config import subscription_config_service
 from src.services.registration.windows import (
-    is_check_in_window_active,
-    is_registration_open,
+    is_sign_up_open_for,
+    node_config,
     windows_service,
 )
 from src.services.tournament.events import enqueue_registration_approved
@@ -144,18 +147,17 @@ def _role_counts(registrations: Sequence[models.Registration]) -> dict[str, int]
     return counts
 
 
-def _in_field(registrations: Iterable[models.Registration]) -> list[models.Registration]:
-    """The rows the public aggregate counts: every live registration but a withdrawn one.
+def _in_field(entries: Iterable[models.RegistrationEntry]) -> list[models.RegistrationEntry]:
+    """The entries the public aggregate counts: every live entry but a withdrawn one.
 
-    Same rule as ``get_registration_count_by_tournament``, so the list's ``total``
-    and ``Tournament.registrations_count`` agree. Only the aggregate is filtered:
-    the visible list still ships withdrawn rows for its Withdrawn filter.
+    Same rule as ``get_registration_count_by_tournament`` (per node here, per tournament there). Only the
+    aggregate is filtered: the visible list still ships withdrawn rows for its Withdrawn filter.
     """
-    return [registration for registration in registrations if registration.status != "withdrawn"]
+    return [entry for entry in entries if entry.status != "withdrawn"]
 
 
-def _primary_role_select(tournament_id: int) -> sa.Subquery:
-    """``(registration_id, role)`` — one row per live registration, its primary role.
+def _primary_role_select(registration_node_id: int) -> sa.Subquery:
+    """``(registration_id, role)`` — one row per live entry of the node, its registration's primary role.
 
     The SQL form of the rule ``_role_counts`` applies in Python: the role flagged
     primary, or the highest-priority one when none is. ``DISTINCT ON`` rather
@@ -170,8 +172,10 @@ def _primary_role_select(tournament_id: int) -> sa.Subquery:
             models.Registration,
             models.Registration.id == models.RegistrationRole.registration_id,
         )
+        .join(models.RegistrationEntry, models.RegistrationEntry.registration_id == models.Registration.id)
         .where(
-            models.Registration.tournament_id == tournament_id,
+            models.RegistrationEntry.registration_node_id == registration_node_id,
+            models.RegistrationEntry.deleted_at.is_(None),
             models.Registration.deleted_at.is_(None),
         )
         .distinct(models.RegistrationRole.registration_id)
@@ -203,11 +207,13 @@ class RegistrationService:
         self,
         *,
         registration_repo: RegistrationRepository = RegistrationRepository(),
+        entry_repo: RegistrationEntryRepository = RegistrationEntryRepository(),
         tournament_repo: TournamentRepository = TournamentRepository(),
         user_repo: UserRepository = UserRepository(),
         social_account_repo: SocialAccountRepository = SocialAccountRepository(),
     ) -> None:
         self.registration_repo = registration_repo
+        self.entry_repo = entry_repo
         self.tournament_repo = tournament_repo
         self.user_repo = user_repo
         self.social_account_repo = social_account_repo
@@ -229,20 +235,24 @@ class RegistrationService:
     async def get_registration(
         self,
         session: AsyncSession,
-        tournament_id: int,
+        registration_node_id: int,
         auth_user_id: int,
-    ) -> models.Registration | None:
-        # Feeds ``_reg_to_read``: ``registration_read_loaders()`` carries the nested
-        # hero catalog, the tournament, the member's player and the team brief, none
-        # of which may lazy-load in async code.
+    ) -> models.RegistrationEntry | None:
+        """The account's live entry in the node, with its registration loaded for ``_reg_to_read``.
+
+        ``registration_read_loaders()`` carries the nested hero catalog, the tournament, the member's player and the
+        team brief, none of which may lazy-load in async code.
+        """
         result = await session.execute(
-            self.registration_repo.select()
+            self.entry_repo.select()
+            .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
             .where(
-                models.Registration.tournament_id == tournament_id,
+                models.RegistrationEntry.registration_node_id == registration_node_id,
+                models.RegistrationEntry.deleted_at.is_(None),
                 _owned_by(auth_user_id),
                 models.Registration.deleted_at.is_(None),
             )
-            .options(*registration_read_loaders())
+            .options(*entry_read_loaders())
         )
         return result.scalar_one_or_none()
 
@@ -593,11 +603,35 @@ class RegistrationService:
                 continue
             await social_identity_service.upsert(session, user_id=player_id, provider=provider, username=handle)
 
+    def new_entry(
+        self,
+        registration: models.Registration,
+        registration_node_id: int,
+        *,
+        auto_approve: bool,
+        values: Mapping[str, Any],
+    ) -> models.RegistrationEntry:
+        """A self-service entry of ``registration`` in the node.
+
+        Not added to the session: it joins through the cascade of a NEW registration; a caller holding a stored
+        registration adds it (backref assignment no longer cascades).
+        """
+        now = datetime.now(UTC)
+        entry = models.RegistrationEntry(
+            registration_node_id=registration_node_id,
+            status="approved" if auto_approve else "pending",
+            reviewed_at=now if auto_approve else None,
+            is_reserve=bool(values.get("reserve")),
+        )
+        entry.registration = registration
+        return entry
+
     async def create_registration(
         self,
         session: AsyncSession,
         *,
         tournament_id: int,
+        registration_node_id: int,
         workspace_id: int,
         auth_user_id: int,
         values: Mapping[str, Any],
@@ -608,8 +642,8 @@ class RegistrationService:
         auth_user: models.AuthUser | None = None,
         commit: bool = True,
         tournament: models.Tournament | None = None,
-    ) -> models.Registration:
-        """Create a self-service registration and auto-enroll the registrant.
+    ) -> models.RegistrationEntry:
+        """Create a self-service registration (profile + its entry in the node) and auto-enroll the registrant.
 
         ``values`` is an already-validated answer document (see
         :meth:`RegistrationAnswerService.validate`); every column, identity row
@@ -642,11 +676,10 @@ class RegistrationService:
         registration = models.Registration(
             tournament_id=tournament_id,
             form_version_id=form_version_id,
-            status="approved" if auto_approve else "pending",
             submitted_at=datetime.now(UTC),
-            reviewed_at=datetime.now(UTC) if auto_approve else None,
             identities=[],
         )
+        entry = self.new_entry(registration, registration_node_id, auto_approve=auto_approve, values=values)
         # Before the INSERT: the answers carry the game handle the row is named
         # after, and ``ensure_player_identity`` below resolves the domain player
         # from it.
@@ -697,7 +730,7 @@ class RegistrationService:
                 auth_user_id=auth_user_id,
             )
         if auto_approve:
-            await enqueue_registration_approved(session, registration)
+            await enqueue_registration_approved(session, registration, registration_node_id=registration_node_id)
         else:
             await emit(
                 session,
@@ -709,14 +742,14 @@ class RegistrationService:
             await session.refresh(registration)
         else:
             await session.flush()
-        return registration
+        return entry
 
     async def _reload_for_read(
         self,
         session: AsyncSession,
-        registration: models.Registration,
-    ) -> models.Registration:
-        """Re-read a just-written row with every loader its read model needs.
+        entry: models.RegistrationEntry,
+    ) -> models.RegistrationEntry:
+        """Re-read a just-written entry (and its registration) with every loader its read model needs.
 
         NOT ``session.refresh``: refresh re-runs the strategy each relationship
         was loaded under but NOT the chain nested beneath it, so ``roles`` would
@@ -726,24 +759,24 @@ class RegistrationService:
         keep pointing at the version the row answered before.
         """
         await session.get(
-            models.Registration,
-            registration.id,
-            options=list(registration_read_loaders()),
+            models.RegistrationEntry,
+            entry.id,
+            options=list(entry_read_loaders()),
             populate_existing=True,
         )
-        return registration
+        return entry
 
     async def update_registration(
         self,
         session: AsyncSession,
-        registration: models.Registration,
+        entry: models.RegistrationEntry,
         *,
         tournament: models.Tournament,
         values: Mapping[str, Any],
         schema: FormSchema,
         hero_catalog: HeroCatalog | None = None,
         form_version_id: int | None = None,
-    ) -> models.Registration:
+    ) -> models.RegistrationEntry:
         """Apply a validated PARTIAL answer document to an existing registration.
 
         The REGISTRANT's own edit, so it is gated by ``self_edit_policy``: the
@@ -753,16 +786,26 @@ class RegistrationService:
 
         Only the questions the document mentions move; the registration's
         ``form_version_id`` advances to the version it was validated against, so
-        the stale badge and the read-side public-key set follow the edit.
+        the stale badge and the read-side public-key set follow the edit. ``entry`` is the registration's
+        participation in the node the registrant edits through: its state gates the edit and the ``reserve``
+        answer lands on it.
         """
-        policy = self_edit_policy(registration, tournament, schema)
+        registration = entry.registration
+        node = await session.get(models.FlowNode, entry.registration_node_id)
+        policy = self_edit_policy(
+            registration,
+            entry,
+            await self.entry_repo.live_for_registration(session, registration.id),
+            is_sign_up_open_for(node, await windows_service.load_schedule(session, entry.registration_node_id)),
+            schema,
+        )
         if not policy.can_edit:
             raise HTTPException(status_code=409, detail=policy.reason)
         # Reported per key, not as one refusal: the message belongs under the
         # control the registrant just touched. An answer equal to the stored one
         # touches nothing -- a client sending back the document it read edits
         # only what it changed.
-        stored = answer_service.answers_of(registration)
+        stored = answer_service.answers_of(registration, entry)
         locked = sorted(key for key in set(values) - policy.writable_keys if values[key] != stored.get(key))
         if locked:
             raise_field_errors(
@@ -776,7 +819,7 @@ class RegistrationService:
             session, discipline=tournament.discipline, workspace_id=tournament.workspace_id
         )
         answer_service.apply(
-            registration, values, schema=schema, hero_catalog=hero_catalog, catalog_roles=catalog_roles
+            registration, values, schema=schema, hero_catalog=hero_catalog, catalog_roles=catalog_roles, entry=entry
         )
         if form_version_id is not None:
             registration.form_version_id = form_version_id
@@ -791,7 +834,43 @@ class RegistrationService:
             )
         await self._registration_changed(session, registration)
         await session.commit()
-        return await self._reload_for_read(session, registration)
+        return await self._reload_for_read(session, entry)
+
+    async def live_profile_by_primary_handle(
+        self,
+        session: AsyncSession,
+        *,
+        tournament_id: int,
+        values: Mapping[str, Any],
+    ) -> models.Registration | None:
+        """The tournament's live profile whose primary game handle ``values`` names, loaded for the roster engine.
+
+        The inverse of :meth:`ensure_unique_primary_game_handles`: that one refuses the handle, this one returns its
+        owner, so an organizer adding a known person to another node reuses the profile instead of colliding with it.
+        """
+        for provider in GAME_PROVIDERS:
+            handles = values.get(identity_key(provider)) or []
+            if not handles:
+                continue
+            normalized = normalize_social_handle(provider, handles[0])
+            profile = await session.scalar(
+                self.registration_repo.select()
+                .where(
+                    models.Registration.tournament_id == tournament_id,
+                    models.Registration.deleted_at.is_(None),
+                    models.Registration.identities.any(
+                        sa.and_(
+                            models.RegistrationIdentity.provider == provider,
+                            models.RegistrationIdentity.position == 0,
+                            models.RegistrationIdentity.handle_normalized == normalized,
+                        )
+                    ),
+                )
+                .options(*registration_load_options())
+            )
+            if profile is not None:
+                return profile
+        return None
 
     async def ensure_unique_primary_game_handles(
         self,
@@ -847,13 +926,20 @@ class RegistrationService:
         session: AsyncSession,
         tournament_id: int,
     ) -> int:
-        return await self.registration_repo.count(
-            session,
-            filters=[
-                models.Registration.tournament_id == tournament_id,
-                models.Registration.deleted_at.is_(None),
-                models.Registration.status != "withdrawn",
-            ],
+        """Distinct registrations with a live, not withdrawn entry at any registration node of the tournament."""
+        return int(
+            await session.scalar(
+                sa.select(sa.func.count(sa.distinct(models.Registration.id)))
+                .select_from(models.RegistrationEntry)
+                .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
+                .where(
+                    models.Registration.tournament_id == tournament_id,
+                    models.Registration.deleted_at.is_(None),
+                    models.RegistrationEntry.deleted_at.is_(None),
+                    models.RegistrationEntry.status != "withdrawn",
+                )
+            )
+            or 0
         )
 
     async def get_registration_count_by_tournament_bulk(
@@ -865,11 +951,14 @@ class RegistrationService:
             return {}
         # Analytical: grouped aggregate over many tournaments in one round trip.
         result = await session.execute(
-            sa.select(models.Registration.tournament_id, sa.func.count())
+            sa.select(models.Registration.tournament_id, sa.func.count(sa.distinct(models.Registration.id)))
+            .select_from(models.RegistrationEntry)
+            .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
             .where(
                 models.Registration.tournament_id.in_(tournament_ids),
                 models.Registration.deleted_at.is_(None),
-                models.Registration.status != "withdrawn",
+                models.RegistrationEntry.deleted_at.is_(None),
+                models.RegistrationEntry.status != "withdrawn",
             )
             .group_by(models.Registration.tournament_id)
         )
@@ -878,38 +967,75 @@ class RegistrationService:
     async def withdraw_registration(
         self,
         session: AsyncSession,
-        registration: models.Registration,
+        entry: models.RegistrationEntry,
     ) -> None:
         # Check-in is the point where the attendee list becomes load-bearing: the
         # balancer and the draft are run against it. Letting a participant drop
         # themselves afterwards silently invalidates a composed roster, so
         # self-withdrawal is final here. Organizers can still withdraw them through
         # the admin path (lifecycle_service.withdraw_registration), which owns that call.
-        if registration.checked_in:
+        if entry.checked_in:
             raise HTTPException(status_code=409, detail="Cannot withdraw after check-in")
-        registration.status = "withdrawn"
-        await self._registration_changed(session, registration)
+        entry.status = "withdrawn"
+        await self._registration_changed(session, entry.registration)
         await session.commit()
 
     async def check_in_registration(
         self,
         session: AsyncSession,
-        registration: models.Registration,
+        entry: models.RegistrationEntry,
         *,
         checked_in_by: int | None,
-    ) -> models.Registration:
-        if registration.status != "approved":
+    ) -> models.RegistrationEntry:
+        if entry.status != "approved":
             raise HTTPException(status_code=409, detail="Registration must be approved before check-in")
 
-        if not is_check_in_window_active(registration.tournament):
-            raise HTTPException(status_code=409, detail="Check-in is not active for this tournament")
+        if not await windows_service.load_check_in_open(session, entry.registration_node_id):
+            raise HTTPException(status_code=409, detail="Check-in is not active for this registration")
 
-        registration.checked_in = True
-        registration.checked_in_at = datetime.now(UTC)
-        registration.checked_in_by = checked_in_by
-        await self._registration_changed(session, registration)
+        entry.checked_in = True
+        entry.checked_in_at = datetime.now(UTC)
+        entry.checked_in_by = checked_in_by
+        await self._registration_changed(session, entry.registration)
         await session.commit()
-        return await self._reload_for_read(session, registration)
+        return await self._reload_for_read(session, entry)
+
+    async def _update_profile_answers(
+        self,
+        session: AsyncSession,
+        profile: models.Registration,
+        entry: models.RegistrationEntry,
+        *,
+        tournament: models.Tournament,
+        values: Mapping[str, Any],
+        schema: FormSchema,
+        hero_catalog: HeroCatalog | None,
+    ) -> None:
+        """Write a further intake's validated answers onto the shared profile, the keys the registrant may still move.
+
+        The same writable set as the self-edit, judged over the profile's OTHER entries (``entry`` is brand new):
+        answers an earlier intake's review, balancer or check-in already acted on stay as they are.
+        """
+        live = await self.entry_repo.live_for_registration(session, profile.id)
+        siblings = [other for other in live if other is not entry]
+        writable = writable_answer_keys(profile, entry, siblings, schema)
+        answers = {key: value for key, value in values.items() if key in writable}
+        if not answers:
+            return
+        await self.ensure_unique_primary_game_handles(
+            session, tournament_id=profile.tournament_id, values=answers, exclude_registration_id=profile.id
+        )
+        catalog_roles = await CatalogRoleRepository().rated_rows(
+            session, discipline=tournament.discipline, workspace_id=tournament.workspace_id
+        )
+        answer_service.apply(profile, answers, schema=schema, hero_catalog=hero_catalog, catalog_roles=catalog_roles)
+        if any(identity_provider(key) for key in answers):
+            await self.ensure_player_identity(
+                session,
+                profile,
+                provider=discipline_identity_provider(tournament.discipline),
+                workspace_id=tournament.workspace_id,
+            )
 
     # ── public self-service use-cases (called by rpc/public_rpc.py) ──────────
 
@@ -918,16 +1044,19 @@ class RegistrationService:
         session: AsyncSession,
         *,
         tournament_id: int,
+        registration_node_id: int,
         auth_user: models.AuthUser,
         body: RegistrationSubmit | None,
         team_placement: TeamPlacement | None = None,
         commit: bool = True,
         form: models.RegistrationForm | None = None,
-    ) -> models.Registration:
-        """Validate and write a public self-registration; no read model is built.
+    ) -> models.RegistrationEntry:
+        """Validate and write a public self-registration into a registration node; no read model is built.
 
         Validates the answers against the form's CURRENT version, rejects
-        duplicates and writes the registration with its identity and role rows.
+        duplicates and writes the registration with its identity and role rows
+        plus its entry in ``registration_node_id``. A registrant who already has a profile in this tournament (an
+        earlier intake) keeps it as is and only gains the entry; a second entry in the SAME node is a 409.
         :meth:`submit_public_registration` serializes the result; the team flows
         only need the row, under a lock where a read model would be built and thrown
         away.
@@ -953,9 +1082,12 @@ class RegistrationService:
         """
         form = form or await _common_service.get_registration_form(session, tournament_id)
         tournament = await self.tournament_repo.get(session, tournament_id)
-        # ``form is None`` gates too: a tournament with no registration form has
-        # nothing to submit against. Openness itself is the schedule's alone.
-        if form is None or tournament is None or not is_registration_open(tournament):
+        node = await _common_service.ensure_registration_node(session, tournament_id, registration_node_id)
+        config = node_config(node)
+        schedule = await windows_service.load_schedule(session, registration_node_id)
+        # ``form is None`` gates too: a tournament with no registration form has nothing to submit against.
+        # Openness itself is the node's: its status and window.
+        if form is None or tournament is None or not is_sign_up_open_for(node, schedule):
             raise HTTPException(status_code=400, detail="Registration is not open for this tournament")
         if body is None:
             raise_field_errors([FieldError("answers", ErrorCode.REQUIRED.value, _ANSWERS_REQUIRED)])
@@ -979,12 +1111,25 @@ class RegistrationService:
             hero_catalog=hero_catalog,
         )
 
-        existing_status = await session.scalar(
-            sa.select(models.Registration.status).where(
+        profile = await session.scalar(
+            self.registration_repo.select()
+            .where(
                 models.Registration.tournament_id == tournament_id,
                 _owned_by(auth_user.id),
                 models.Registration.deleted_at.is_(None),
             )
+            .options(*registration_load_options())
+        )
+        existing_status = (
+            await session.scalar(
+                sa.select(models.RegistrationEntry.status).where(
+                    models.RegistrationEntry.registration_node_id == registration_node_id,
+                    models.RegistrationEntry.registration_id == profile.id,
+                    models.RegistrationEntry.deleted_at.is_(None),
+                )
+            )
+            if profile is not None
+            else None
         )
         if existing_status is not None:
             if existing_status == "withdrawn":
@@ -992,72 +1137,112 @@ class RegistrationService:
             raise HTTPException(status_code=409, detail="Already registered for this tournament")
 
         try:
-            registration = await self.create_registration(
-                session,
-                tournament_id=tournament_id,
-                workspace_id=workspace_id,
-                auth_user_id=auth_user.id,
-                values=values,
-                schema=schema,
-                hero_catalog=hero_catalog,
-                form_version_id=form.current_version_id,
-                auto_approve=form.auto_approve,
-                auth_user=auth_user,
-                # One transaction for the row, its answers and (below) its team
-                # slot: a registration with a team_id but no slot_code would be
-                # counted by the roster reader and placed nowhere.
-                commit=False,
-                tournament=tournament,
-            )
+            if profile is None:
+                entry = await self.create_registration(
+                    session,
+                    tournament_id=tournament_id,
+                    registration_node_id=registration_node_id,
+                    workspace_id=workspace_id,
+                    auth_user_id=auth_user.id,
+                    values=values,
+                    schema=schema,
+                    hero_catalog=hero_catalog,
+                    form_version_id=form.current_version_id,
+                    auto_approve=config.auto_approve,
+                    auth_user=auth_user,
+                    # One transaction for the row, its answers and (below) its team
+                    # slot: a registration with a team_id but no slot_code would be
+                    # counted by the roster reader and placed nowhere.
+                    commit=False,
+                    tournament=tournament,
+                )
+            else:
+                if team_placement is not None and profile.registration_team_id is not None:
+                    # The team pointer lives on the profile, one per tournament: seating the person here would
+                    # silently take them off the team of their other intake.
+                    raise ApiHTTPException(
+                        status_code=409,
+                        detail=[ApiExc(msg="You are already on a team in this tournament", code="already_on_team")],
+                    )
+                # The profile is the person's, one per tournament: a later intake adds its entry and updates the
+                # answers the floor and the form's editable flags still leave open (see ``writable_answer_keys``).
+                entry = self.new_entry(profile, registration_node_id, auto_approve=config.auto_approve, values=values)
+                session.add(entry)
+                await self._update_profile_answers(
+                    session,
+                    profile,
+                    entry,
+                    tournament=tournament,
+                    values=values,
+                    schema=schema,
+                    hero_catalog=hero_catalog,
+                )
+                if config.auto_approve:
+                    await enqueue_registration_approved(session, profile, registration_node_id=registration_node_id)
+                else:
+                    await self._registration_changed(session, profile)
+            registration = entry.registration
             if team_placement is not None:
                 registration.registration_team_id = team_placement.registration_team_id
                 registration.team_slot_code = team_placement.slot_code
-                registration.is_substitute = team_placement.is_substitute
+                entry.is_substitute = team_placement.is_substitute
             if commit:
                 await session.commit()
             else:
                 await session.flush()
         except IntegrityError:
             raise HTTPException(status_code=409, detail="Already registered for this tournament")
-        return registration
+        return entry
 
     async def submit_public_registration(
         self,
         session: AsyncSession,
         *,
         tournament_id: int,
+        registration_node_id: int,
         auth_user: models.AuthUser,
         body: RegistrationSubmit | None,
         form: models.RegistrationForm | None = None,
     ) -> RegistrationRead:
         """Solo sign-up: write the row (one commit) and answer with the registrant's own card."""
         form = form or await _common_service.get_registration_form(session, tournament_id)
-        registration = await self.write_public_registration(
-            session, tournament_id=tournament_id, auth_user=auth_user, body=body, form=form
+        entry = await self.write_public_registration(
+            session,
+            tournament_id=tournament_id,
+            registration_node_id=registration_node_id,
+            auth_user=auth_user,
+            body=body,
+            form=form,
         )
-        return await self.build_own_read(session, await self._reload_for_read(session, registration), form=form)
+        return await self.build_own_read(session, await self._reload_for_read(session, entry), form=form)
 
     async def build_own_read(
         self,
         session: AsyncSession,
-        registration: models.Registration,
+        entry: models.RegistrationEntry,
         *,
         form: models.RegistrationForm | None,
         chips: AdmissionChips | None = None,
     ) -> RegistrationRead:
         """The registrant's own card: sign-up, get-me, self-edit and check-in all answer with it.
 
-        The row must carry ``registration_read_loaders()``; the tournament (phase
-        schedule included) comes off it and the form is the caller's, so neither is
-        read again. ``chips`` is the admission verdict, when the caller resolved one.
+        The entry's registration must carry ``registration_read_loaders()``; the tournament comes off it and the
+        form is the caller's, so neither is read again. The entry's node and its schedule are read here: they decide
+        whether the registrant may still edit and whether the sign-up was late.
+        ``chips`` is the admission verdict, when the caller resolved one.
         """
+        registration = entry.registration
         tournament = registration.tournament
         workspace_id = form.workspace_id if form is not None else tournament.workspace_id
         schema = schema_from_form(form)
         chips = chips or AdmissionChips.of(None)
-        rosters = await _public_rosters(session, [registration], form=form)
+        node = await session.get(models.FlowNode, entry.registration_node_id)
+        schedule = await windows_service.load_schedule(session, entry.registration_node_id)
+        sign_up_open = is_sign_up_open_for(node, schedule)
+        rosters = await _public_rosters(session, [registration], {registration.id: entry}, form=form)
         return _reg_to_read(
             registration,
+            entry,
             workspace_id=workspace_id,
             provider=discipline_identity_provider(tournament.discipline),
             status_meta_map=await get_status_metas_map(session, workspace_id=workspace_id),
@@ -1067,24 +1252,36 @@ class RegistrationService:
             subscription_outcome=chips.subscription_outcome,
             subscription_verdicts=chips.subscription_verdicts,
             roster=rosters.get(registration.id),
-            queue=await self.queue_position(session, registration),
+            queue=await self.queue_position(session, entry),
             # Their OWN card: no public-key filter (they wrote every answer), but it
             # must say when the questions moved on.
             current_version_id=form.current_version_id if form is not None else None,
             # No schema means no questions to rewrite: ``None`` reads as
             # ``can_edit=False``, which is the truth.
-            self_edit=self_edit_policy(registration, tournament, schema) if schema is not None else None,
-            submitted_late=submitted_late(registration, tournament),
+            self_edit=(
+                self_edit_policy(
+                    registration,
+                    entry,
+                    await self.entry_repo.live_for_registration(session, registration.id),
+                    sign_up_open,
+                    schema,
+                )
+                if schema is not None
+                else None
+            ),
+            submitted_late=submitted_late(entry, schedule),
         )
 
     async def resolve_admission_list(
         self,
         session: AsyncSession,
         registrations: Sequence[Any],
+        entries: Mapping[int, models.RegistrationEntry],
         *,
         form: models.RegistrationForm | None,
+        node_config: RegistrationNodeConfig,
     ) -> dict[int, AdmissionEvaluation]:
-        """One admission evaluation per registration, for a whole list.
+        """One admission evaluation per registration, for a whole list (``entries``: each one's entry in the node).
 
         Shared by the public participants list and the admin registrations table
         so both render the same object instead of re-deriving "is this player
@@ -1112,19 +1309,19 @@ class RegistrationService:
         # off pays nothing.
         rule = (
             await resolver.load_requirement(workspace_id=form.workspace_id)
-            if form is not None and form.require_subscription and form.workspace_id is not None
+            if form is not None and node_config.require_subscription and form.workspace_id is not None
             else None
         )
-        config = AdmissionConfig.from_form(form, subscription_rule=rule)
-        return await resolve_admission(session, registrations, config=config, resolver=resolver)
+        config = AdmissionConfig.from_form(form, node_config, subscription_rule=rule)
+        return await resolve_admission(session, registrations, entries=entries, config=config, resolver=resolver)
 
-    async def queue_position(self, session: AsyncSession, reg: models.Registration) -> QueuePlace:
-        """Where this entry sits in the queue, overall and inside its own role.
+    async def queue_position(self, session: AsyncSession, entry: models.RegistrationEntry) -> QueuePlace:
+        """Where this entry sits in its node's queue, overall and inside its own role.
 
-        Ordered by ``(submitted_at, id)`` — the list's own ``ORDER BY
-        submitted_at`` plus a deterministic tiebreak, so "position 5" is the
+        Ordered by ``(created_at, id)`` of the entry — the list's own ``ORDER BY
+        created_at`` plus a deterministic tiebreak, so "position 5" is the
         fifth row of the participants table and not a second opinion about it.
-        ``submitted_at`` is NOT NULL, so the row comparison has no null branch.
+        ``created_at`` is NOT NULL, so the row comparison has no null branch.
 
         The role place is the one that actually answers "am I getting in": a
         tournament fills role by role, so 2nd of 119 means nothing next to 42
@@ -1143,11 +1340,12 @@ class RegistrationService:
         ``Tournament.registrations_count``: two caches can disagree, and "5 of
         4" is worse than one aggregate.
         """
-        mine = _primary_role_select(reg.tournament_id)
-        role = await session.scalar(sa.select(mine.c.role).where(mine.c.registration_id == reg.id))
-        by_row = _primary_role_select(reg.tournament_id)
-        ordered = sa.tuple_(models.Registration.submitted_at, models.Registration.id) <= sa.tuple_(
-            reg.submitted_at, reg.id
+        node_id = entry.registration_node_id
+        mine = _primary_role_select(node_id)
+        role = await session.scalar(sa.select(mine.c.role).where(mine.c.registration_id == entry.registration_id))
+        by_row = _primary_role_select(node_id)
+        ordered = sa.tuple_(models.RegistrationEntry.created_at, models.RegistrationEntry.id) <= sa.tuple_(
+            entry.created_at, entry.id
         )
         same_role = by_row.c.role == role
         result = await session.execute(
@@ -1157,12 +1355,14 @@ class RegistrationService:
                 sa.func.count().filter(sa.and_(same_role, ordered)),
                 sa.func.count().filter(same_role),
             )
-            .select_from(models.Registration)
+            .select_from(models.RegistrationEntry)
+            .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
             # OUTER: a registration that declared no role is still one of the
             # entries, it just lands in no role bucket.
             .outerjoin(by_row, by_row.c.registration_id == models.Registration.id)
             .where(
-                models.Registration.tournament_id == reg.tournament_id,
+                models.RegistrationEntry.registration_node_id == node_id,
+                models.RegistrationEntry.deleted_at.is_(None),
                 models.Registration.deleted_at.is_(None),
             )
         )
@@ -1186,12 +1386,9 @@ class RegistrationService:
         subrole_catalog = await resolve_subrole_catalog(session, form.workspace_id, discipline=discipline)
         # The requirement is the workspace's rule; read here so the sync serializer stays free of round trips.
         requirement = await subscription_config_service.load_workspace_requirement_blob(session, form.workspace_id)
-        is_open, registration_late = await windows_service.load_registration_state(session, tournament_id)
         return serialize_registration_form(
             form,
             discipline=discipline,
-            is_open=is_open,
-            registration_late=registration_late,
             subrole_catalog=subrole_catalog,
             subscription_requirement=requirement,
             stale_registrations=None,
@@ -1202,11 +1399,12 @@ class RegistrationService:
         session: AsyncSession,
         *,
         tournament_id: int,
+        registration_node_id: int,
     ) -> RegistrationListResponse:
-        """Anonymous participants-list read model.
+        """Anonymous participants-list read model of ONE registration node.
 
         ``public_list.build_registration_list`` caches this payload
-        (``registration_list:v3:{id}:``, same TTL as other tournament reads) and
+        (``registration_list:v4:{id}:{node}:``, same TTL as other tournament reads) and
         coalesces concurrent misses. ``registration_changed`` invalidates it; TTL
         bounds admin writes that only hit the balancer WS topic.
 
@@ -1217,65 +1415,78 @@ class RegistrationService:
         ``cache.disabling(...)``: it flips a *process-global* flag on the shared
         cashews backend and races with every concurrent request on this worker.
         """
-        # One row for two answers: the workspace this list belongs to, and the
-        # phase schedule each row's ``submitted_late`` is measured against.
+        # One row for two answers: the workspace this list belongs to, and the registration node whose
+        # schedule each row's ``submitted_late`` is measured against and whose config sets the capacity.
         tournament = await self.tournament_repo.get(session, tournament_id)
         if tournament is None:
             raise HTTPException(status_code=404, detail="Tournament not found")
         workspace_id = tournament.workspace_id
 
         form = await _common_service.get_registration_form(session, tournament_id)
-        max_participants = form.max_participants if form is not None else None
+        node = await _common_service.ensure_registration_node(session, tournament_id, registration_node_id)
+        config = node_config(node)
+        schedule = await windows_service.load_schedule(session, registration_node_id)
+        max_participants = config.max_participants
 
         # The organizer publishes the shape of the field, not the field. Enforced
         # HERE and not in the client because this payload is cached per tournament
-        # with no viewer in the key (``registration_list:v3:{id}:``) -- a per-viewer
+        # with no viewer in the key (``registration_list:v4:{id}:{node}:``) -- a per-viewer
         # branch would serve one reader's answer to the next. Organizers read the
         # full roster through the admin registrations table.
         if form is not None and form.hide_registrations:
-            hidden_rows = _in_field(
+            hidden_entries = _in_field(
                 await session.scalars(
-                    self.registration_repo.select()
+                    self.entry_repo.select()
+                    .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
                     .where(
-                        models.Registration.tournament_id == tournament_id,
+                        models.RegistrationEntry.registration_node_id == registration_node_id,
+                        models.RegistrationEntry.deleted_at.is_(None),
                         models.Registration.deleted_at.is_(None),
                     )
                     # Roles only: no identity, no team, no history, no admission.
                     # ponytail: counted in Python over two light queries rather than
                     # one GROUP BY, so both paths share ``_in_field`` + ``_role_counts``
                     # and cannot drift. Push it into SQL if a field ever gets big enough to care.
-                    .options(selectinload(models.Registration.roles))
+                    .options(
+                        selectinload(models.RegistrationEntry.registration).selectinload(models.Registration.roles)
+                    )
                 )
             )
             return RegistrationListResponse(
                 hidden=True,
-                total=len(hidden_rows),
-                role_counts=_role_counts(hidden_rows),
+                total=len(hidden_entries),
+                role_counts=_role_counts([entry.registration for entry in hidden_entries]),
                 max_participants=max_participants,
             )
 
         # Analytical: the whole participants table in one ordered read with every
         # loader the serializer needs.
         result = await session.execute(
-            self.registration_repo.select()
+            self.entry_repo.select()
+            .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
             .where(
-                # tournament_id already pins this to a single workspace
+                # The node pins this to a single tournament, hence a single workspace
                 # (Registration has no denormalized workspace_id).
-                models.Registration.tournament_id == tournament_id,
+                models.RegistrationEntry.registration_node_id == registration_node_id,
+                models.RegistrationEntry.deleted_at.is_(None),
                 models.Registration.deleted_at.is_(None),
             )
             # Needed by _build_tournament_history and _reg_to_read below — the
             # member is the registration's only identity anchor, and the team brief
             # feeds the participants table's team column.
-            .options(*registration_read_loaders())
-            .order_by(models.Registration.submitted_at.asc())
+            .options(*entry_read_loaders())
+            .order_by(models.RegistrationEntry.created_at.asc(), models.RegistrationEntry.id.asc())
         )
-        registrations = result.scalars().all()
+        entries = list(result.scalars().all())
+        registrations = [entry.registration for entry in entries]
+        entry_by_registration = {entry.registration_id: entry for entry in entries}
         status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
 
-        admissions = await self.resolve_admission_list(session, registrations, form=form)
+        admissions = await self.resolve_admission_list(
+            session, registrations, entry_by_registration, form=form, node_config=config
+        )
         show_ranks = form.show_ranks if form is not None else False
-        rosters = await _public_rosters(session, registrations, form=form)
+        rosters = await _public_rosters(session, registrations, entry_by_registration, form=form)
 
         history_map, history_count_map, division_grids = await _build_tournament_history(
             session,
@@ -1290,10 +1501,12 @@ class RegistrationService:
         current_version_id = form.current_version_id if form is not None else None
         provider = discipline_identity_provider(tournament.discipline)
         registrations_read = []
-        for r in registrations:
+        for entry in entries:
+            r = entry.registration
             chips = AdmissionChips.of(admissions.get(r.id))
             read = _reg_to_read(
                 r,
+                entry,
                 workspace_id=workspace_id,
                 provider=provider,
                 status_meta_map=status_meta_map,
@@ -1305,7 +1518,7 @@ class RegistrationService:
                 roster=rosters.get(r.id),
                 public_keys=public_keys_for(r),
                 current_version_id=current_version_id,
-                submitted_late=submitted_late(r, tournament),
+                submitted_late=submitted_late(entry, schedule),
             )
             # ``dict(read)``, not ``model_dump()``: the nested reads stay model
             # instances, which pydantic accepts as-is instead of dumping them to
@@ -1317,12 +1530,12 @@ class RegistrationService:
                     tournament_history_count=history_count_map.get(r.id, 0),
                 )
             )
-        in_field = _in_field(registrations)
+        in_field = _in_field(entries)
         return RegistrationListResponse(
             registrations=registrations_read,
             division_grids=division_grids,
             total=len(in_field),
-            role_counts=_role_counts(in_field),
+            role_counts=_role_counts([entry.registration for entry in in_field]),
             max_participants=max_participants,
         )
 

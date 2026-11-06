@@ -27,6 +27,7 @@ from sqlalchemy.orm import configure_mappers  # noqa: E402
 import shared.models  # noqa: E402, F401  (registers every mapper)
 from shared.models.registration.registration import (  # noqa: E402
     Registration,
+    RegistrationEntry,
     RegistrationTeam,
     RegistrationTeamInvite,
 )
@@ -42,7 +43,8 @@ class MapperContractTests(TestCase):
         columns = Registration.__table__.columns
         self.assertIn("registration_team_id", columns)
         self.assertIn("team_slot_code", columns)
-        self.assertIn("is_substitute", columns)
+        # The bench flag is the participation's: it lives on the registration entry of the team's node.
+        self.assertIn("is_substitute", RegistrationEntry.__table__.columns)
 
     def test_the_new_registration_columns_need_no_backfill(self) -> None:
         """Existing rows must mean "not on a team" without being touched."""
@@ -50,8 +52,9 @@ class MapperContractTests(TestCase):
         self.assertTrue(columns["registration_team_id"].nullable)
         self.assertTrue(columns["team_slot_code"].nullable)
         # Not nullable, but server-defaulted — which is equally backfill-free.
-        self.assertFalse(columns["is_substitute"].nullable)
-        self.assertIsNotNone(columns["is_substitute"].server_default)
+        is_substitute = RegistrationEntry.__table__.columns["is_substitute"]
+        self.assertFalse(is_substitute.nullable)
+        self.assertIsNotNone(is_substitute.server_default)
 
     def test_team_name_uniqueness_is_partial_on_soft_delete(self) -> None:
         index = next(i for i in RegistrationTeam.__table__.indexes if i.name == "uq_registration_team_name_active")

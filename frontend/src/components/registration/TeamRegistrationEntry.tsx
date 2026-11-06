@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { slotCodesOf } from "@/lib/roster/shape";
-import { isRegistrationOpen } from "@/lib/tournament/status";
+import { isSignUpOpen, nodesOfKind } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { tournamentMyRegistrationQueryOptions } from "@/lib/tournament/registrations-query";
 import registrationService from "@/services/registration.service";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -34,17 +35,18 @@ import TeamRegistrationWizard from "./TeamRegistrationWizard";
  */
 export default function TeamRegistrationEntry({
   tournament,
-}: Readonly<{ tournament: Tournament }>) {
+  registrationNodeId,
+}: Readonly<{ tournament: Tournament; registrationNodeId: number }>) {
   const t = useTranslations("registrationTeams");
   const { status: authStatus, user } = useAuthProfile();
   const isAuthenticated = authStatus === "authenticated" && user != null;
   const [open, setOpen] = useState(false);
 
-  const registrationOpen = isRegistrationOpen(tournament);
+  const registrationNode = nodesOfKind(tournament, "registration").find((node) => node.id === registrationNodeId) ?? null;
+  const registrationOpen = isSignUpOpen(registrationNode);
 
   const myRegQuery = useQuery({
-    queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationService.getMyRegistration(tournament.id),
+    ...tournamentMyRegistrationQueryOptions(tournament, registrationNode),
     enabled: isAuthenticated,
   });
   const formQuery = useQuery({
@@ -84,6 +86,7 @@ export default function TeamRegistrationEntry({
           <TeamRegistrationWizard
             workspaceId={tournament.workspace_id}
             tournamentId={tournament.id}
+            registrationNodeId={registrationNodeId}
             tournamentName={tournament.name}
             form={formQuery.data}
             availableSlots={availableSlots}

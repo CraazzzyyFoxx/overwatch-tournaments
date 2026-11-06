@@ -8,12 +8,13 @@ import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialo
 import { Button } from "@/components/ui/button";
 import { WizardShell, type WizardStep } from "@/components/kit/WizardShell";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
+import { useFlowErrorNotifier } from "@/hooks/useFlowErrorNotifier";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { notify } from "@/lib/notify";
 import type { RosterShape } from "@/lib/roster/shape";
 import { roleOf, toRoleRef } from "@/lib/roster/role-ref";
+import { nodeDraftFormat } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
-import balancerAdminService from "@/services/balancer-admin.service";
 import draftService from "@/services/draft.service";
 import type {
   DraftBoard,
@@ -50,13 +51,21 @@ import {
 } from "./setup-model";
 import { configFromSession, createEmptyCaptainSetup, formatFromSession } from "./setup-session";
 import type { DraftCaptainSetup, DraftSetupConfig } from "./setup-types";
+import {
+  UnlinkedRegistrationsNotice,
+  countUnlinkedRegistrations
+} from "@/components/kit/UnlinkedRegistrationsNotice";
 import { captainSeat, isInDraftPool, poolRegistrationSummary } from "./setup-types";
+import { usePoolRegistrations } from "@/hooks/usePoolRegistrations";
 import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import adminService from "@/services/admin.service";
 
 interface DraftSetupWizardProps {
   tournamentId: number;
+  formationNodeId: number;
+  /** Every registration node whose entries make the pool, newest first. */
+  registrationNodeIds: readonly number[];
   board: DraftBoard | null;
   /** Resolved tournament roster shape; a live session's own shape wins over it. */
   rosterShape: RosterShape;
@@ -66,13 +75,16 @@ interface DraftSetupWizardProps {
 
 export function DraftSetupWizard({
   tournamentId,
+  formationNodeId,
+  registrationNodeIds,
   board,
   rosterShape,
   aside
 }: Readonly<DraftSetupWizardProps>) {
   const t = useTranslations("draftAdmin");
   const queryClient = useQueryClient();
-  const boardKey = tournamentQueryKeys.draftBoard(tournamentId);
+  const notifyFlowError = useFlowErrorNotifier();
+  const boardKey = tournamentQueryKeys.draftBoard(tournamentId, formationNodeId);
   const initialSession = board?.session ?? null;
   const [localSession, setLocalSession] = useState<DraftSession | null>(initialSession);
   const session =
@@ -117,9 +129,11 @@ export function DraftSetupWizard({
     setStep("config");
   };
 
-  const poolQuery = useQuery({
-    queryKey: balancerQueryKeys.draftSetupPool(tournamentId),
-    queryFn: () => balancerAdminService.listRegistrations(tournamentId, { include_deleted: true })
+  const poolQuery = usePoolRegistrations({
+    tournamentId,
+    nodeIds: registrationNodeIds,
+    includeDeleted: true,
+    queryKey: (nodeId) => balancerQueryKeys.draftSetupPool(tournamentId, nodeId)
   });
   const allRegistrations = poolQuery.data ?? [];
   const pool = useMemo(() => allRegistrations.filter(isInDraftPool), [allRegistrations]);
@@ -195,15 +209,12 @@ export function DraftSetupWizard({
     () => derivePoolReadiness(candidates, teamCount, shape),
     [candidates, teamCount, shape]
   );
-  // The session's snapshot once it exists; before that the tournament's rule —
+  // The session's snapshot once it exists; before that the formation node's rule —
   // the one the server will copy into the session it creates.
+  const nodeFormat = nodeDraftFormat(tournament?.flow_nodes?.find((node) => node.id === formationNodeId));
   const draftFormat = useMemo(
-    () =>
-      resolveDraftFormat(
-        session ? formatFromSession(session) : (tournament?.draft_format_json ?? null),
-        shape.draft_rounds
-      ),
-    [session, tournament?.draft_format_json, shape.draft_rounds]
+    () => resolveDraftFormat(session ? formatFromSession(session) : nodeFormat, shape.draft_rounds),
+    [session, nodeFormat, shape.draft_rounds]
   );
   const ranks = useMemo(
     () =>
@@ -235,6 +246,7 @@ export function DraftSetupWizard({
   const createMutation = useMutation({
     mutationFn: () =>
       draftService.createSession(tournamentId, {
+        formation_node_id: formationNodeId,
         pool_source: "balancer_balance",
         pick_time_seconds: config.pickTimeSeconds,
         overtime_seconds: config.overtimeSeconds,
@@ -297,7 +309,7 @@ export function DraftSetupWizard({
       notify.success(t("draftSeeded"));
       await invalidate();
     },
-    onError: (error) => notify.apiError(error, { title: t("seedFailed") })
+    onError: (error) => notifyFlowError(error, t("seedFailed"))
   });
 
   const startMutation = useMutation({
@@ -307,7 +319,7 @@ export function DraftSetupWizard({
       notify.success(t("draftStarted"));
       await invalidate();
     },
-    onError: (error) => notify.apiError(error, { title: t("startFailed") })
+    onError: (error) => notifyFlowError(error, t("startFailed"))
   });
 
   const cancelMutation = useMutation({
@@ -458,6 +470,7 @@ export function DraftSetupWizard({
 
   return (
     <>
+      <UnlinkedRegistrationsNotice count={countUnlinkedRegistrations(allRegistrations)} />
       <WizardShell
         steps={wizardSteps}
         aside={aside}
@@ -492,6 +505,7 @@ export function DraftSetupWizard({
               ontology={ontology}
               format={draftFormat}
               tournamentId={tournamentId}
+              formationNodeId={formationNodeId}
               locked={!!session}
             />
           )}
@@ -553,6 +567,7 @@ export function DraftSetupWizard({
           {step === "ready" && session && (
             <DraftReadyStep
               tournamentId={tournamentId}
+              formationNodeId={formationNodeId}
               session={session}
               feasibility={committedFeasibility ?? feasibilityQuery.data ?? null}
               // A retry in flight reads as "Checking…" again, not as the stale error.

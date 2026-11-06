@@ -309,7 +309,7 @@ class PlayerRefreshRequestedEvent(BaseEvent):
 class TournamentStateChangedEvent(BaseEvent):
     """Domain event emitted when tournament lifecycle state changes.
 
-    Published by: tournament-service (``transition_status``, manual and automatic).
+    Published by: tournament-service (``FlowNodeService.sync_tournament_status`` and ``set_archived``).
     Consumed by: analytics-worker (``tournament_state_changed``: a ``completed``
     tournament gets its compute job created without anyone clicking), and the
     discord bot's channel registry (per-replica exclusive queue: a finished
@@ -321,6 +321,22 @@ class TournamentStateChangedEvent(BaseEvent):
     workspace_id: int | None = Field(default=None, description="Workspace ID")
     old_status: str | None = Field(default=None, description="Previous tournament status")
     new_status: str = Field(..., description="New tournament status")
+
+
+class FlowNodeStateChangedEvent(BaseEvent):
+    """Domain event emitted when a registration, formation or stage node changes status.
+
+    Published by: tournament-service (``FlowNodeService.transition``, manual and automatic).
+    Consumed by: discord-service (channel registry reload; a stage going live or completing requests a voice sync).
+    """
+
+    event_type: str = Field(default="flow_node_state_changed", frozen=True)
+    tournament_id: int = Field(..., description="Tournament ID")
+    workspace_id: int = Field(..., description="Workspace ID")
+    node_id: int = Field(..., description="Flow node ID")
+    kind: str = Field(..., description="Node kind: registration, formation or stage")
+    old_status: str = Field(..., description="Previous node status")
+    new_status: str = Field(..., description="New node status")
 
 
 class TournamentVoiceSyncRequestedEvent(BaseEvent):

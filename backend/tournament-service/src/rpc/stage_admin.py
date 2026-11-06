@@ -1,8 +1,8 @@
 """Stage WORKFLOW admin methods over typed RPC.
 
-Scope: ONLY the stage workflow endpoints (progress, merge-group-stages, activate,
-generate, activate-and-generate, auto-wire, wire-from-groups, seed-teams,
-bracket-template read/save/reset). Stage /
+Scope: ONLY the stage workflow endpoints (progress, merge-group-stages,
+generate, seed-teams,
+bracket-template read/save/reset). A stage's lifecycle is its flow node: ``rpc.tournament.flow_node_transition``. Stage /
 stage_item / stage_item_input CRUD create/update/delete go through the generic CRUD
 engine and are handled separately.
 
@@ -15,11 +15,10 @@ The gateway passes path params as ``data["<name>"]`` (and the primary id as
 
 Commit semantics:
 - ``get_stage_progress`` is read-only.
-- ``merge_group_stages``, ``seed_teams``, ``wire_from_groups``,
+- ``merge_group_stages``, ``seed_teams``,
   ``set_bracket_template``, ``clear_bracket_template`` commit internally.
-- ``activate_stage`` commits internally (``commit=True`` default).
-- ``request_bracket_job`` (generate / activate-and-generate) does NOT commit —
-  ``create_job`` only flushes and enqueues an outbox event, so these handlers
+- ``request_bracket_job`` (generate) does NOT commit —
+  ``create_job`` only flushes and enqueues an outbox event, so the handler
   ``await session.commit()`` explicitly.
 """
 
@@ -32,7 +31,6 @@ from faststream.rabbit.annotations import RabbitMessage
 from shared import models
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.rpc.common import q1
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.audit import record_admin_audit
 from shared.services.tournament.computation import request_bracket_job
@@ -200,55 +198,6 @@ def register(broker: Any, logger: Any) -> None:
 
         return await _run(logger, op)
 
-    # ── activate ──────────────────────────────────────────────────────────
-
-    @broker.subscriber("rpc.tournament.stage_activate")
-    async def _stage_activate(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = _identity(data)
-            stage_id = _path_int(data, "stage_id")
-            ws_id = await auth.get_stage_workspace_id(session, stage_id)
-            ensure_workspace_permission(user, ws_id, "stage", "update")
-            await record_admin_audit(
-                session,
-                action="stage.activate",
-                actor=user,
-                data=data,
-                workspace_id=ws_id,
-                entity_type="stage",
-                entity_id=stage_id,
-            )
-            # activate_stage commits internally (commit=True default).
-            stage = await stage_service.activate_stage(session, stage_id)
-            return _dump(await tournament_flows.stage_read(session, stage))
-
-        return await _run(logger, op)
-
-    # ── deactivate (revert an accidental activation back to Draft) ────────
-
-    @broker.subscriber("rpc.tournament.stage_deactivate")
-    async def _stage_deactivate(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = _identity(data)
-            stage_id = _path_int(data, "stage_id")
-            ws_id = await auth.get_stage_workspace_id(session, stage_id)
-            ensure_workspace_permission(user, ws_id, "stage", "update")
-            await record_admin_audit(
-                session,
-                action="stage.deactivate",
-                actor=user,
-                data=data,
-                workspace_id=ws_id,
-                entity_type="stage",
-                entity_id=stage_id,
-            )
-            # deactivate_stage commits internally (commit=True default); 409s
-            # if any of the stage's encounters left OPEN.
-            stage = await stage_service.deactivate_stage(session, stage_id)
-            return _dump(await tournament_flows.stage_read(session, stage))
-
-        return await _run(logger, op)
-
     # ── generate (202; enqueues bracket job) ──────────────────────────────
 
     @broker.subscriber("rpc.tournament.stage_generate")
@@ -305,115 +254,6 @@ def register(broker: Any, logger: Any) -> None:
             )
             updated = await stage_service.apply_best_of_to_existing(session, stage_id)
             return {"updated": updated}
-
-        return await _run(logger, op)
-
-    # ── activate-and-generate (202; force flag) ───────────────────────────
-
-    @broker.subscriber("rpc.tournament.stage_activate_and_generate")
-    async def _stage_activate_and_generate(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = _identity(data)
-            stage_id = _path_int(data, "stage_id")
-            ws_id = await auth.get_stage_workspace_id(session, stage_id)
-            ensure_workspace_permission(user, ws_id, "stage", "update")
-            # ``force`` comes from the query string (bool, default False).
-            force_vals = (data.get("query") or {}).get("force")
-            if isinstance(force_vals, list):
-                force_raw = force_vals[0] if force_vals else None
-            else:
-                force_raw = force_vals
-            force = str(force_raw).lower() in ("1", "true", "yes", "on") if force_raw is not None else False
-
-            await record_admin_audit(
-                session,
-                action="stage.activate_and_generate",
-                actor=user,
-                data=data,
-                workspace_id=ws_id,
-                entity_type="stage",
-                entity_id=stage_id,
-                after={"force": force},
-            )
-
-            tournament_id = await stage_service.get_tournament_id(session, stage_id)
-            job = await request_bracket_job(
-                session,
-                tournament_id=tournament_id,
-                stage_id=stage_id,
-                operation="activate_and_generate",
-                payload={"force": force},
-                requested_by_user_id=int(user.id),
-            )
-            await session.commit()
-            return _dump(schemas.TournamentComputationJobRead.model_validate(job, from_attributes=True))
-
-        return await _run(logger, op)
-
-    # ── auto-wire (standalone trigger for the Activate & generate auto-wire) ──
-
-    @broker.subscriber("rpc.tournament.stage_auto_wire")
-    async def _stage_auto_wire(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = _identity(data)
-            stage_id = _path_int(data, "stage_id")
-            ws_id = await auth.get_stage_workspace_id(session, stage_id)
-            ensure_workspace_permission(user, ws_id, "stage", "update")
-            # The optional ``source_stage_id`` query param names which group stage
-            # feeds this bracket, when the earlier phase runs several divisions and
-            # no single one is "the" preceding stage. Not an integer: 422.
-            source_stage_id = q1(data, "source_stage_id", int)
-            await record_admin_audit(
-                session,
-                action="stage.auto_wire",
-                actor=user,
-                data=data,
-                workspace_id=ws_id,
-                entity_type="stage",
-                entity_id=stage_id,
-                after={"source_stage_id": source_stage_id},
-            )
-            # auto_wire_stage commits internally; returns a Stage.
-            stage = await stage_service.auto_wire_stage(session, stage_id, source_stage_id=source_stage_id)
-            return _dump(await tournament_flows.stage_read(session, stage))
-
-        return await _run(logger, op)
-
-    # ── wire from groups ──────────────────────────────────────────────────
-
-    @broker.subscriber("rpc.tournament.stage_wire")
-    async def _stage_wire(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = _identity(data)
-            stage_id = _path_int(data, "stage_id")
-            ws_id = await auth.get_stage_workspace_id(session, stage_id)
-            ensure_workspace_permission(user, ws_id, "stage", "update")
-            body = schemas.WireFromGroupsRequest.model_validate(_payload(data))
-            await record_admin_audit(
-                session,
-                action="stage.wire",
-                actor=user,
-                data=data,
-                workspace_id=ws_id,
-                entity_type="stage",
-                entity_id=stage_id,
-                after={
-                    "source_stage_id": body.source_stage_id,
-                    "top": body.top,
-                    "top_lb": body.top_lb,
-                    "mode": body.mode,
-                },
-            )
-            # wire_from_groups commits internally; returns a Stage.
-            stage = await stage_service.wire_from_groups(
-                session,
-                target_stage_id=stage_id,
-                source_stage_id=body.source_stage_id,
-                top=body.top,
-                top_lb=body.top_lb,
-                mode=body.mode,
-            )
-            return _dump(await tournament_flows.stage_read(session, stage))
 
         return await _run(logger, op)
 

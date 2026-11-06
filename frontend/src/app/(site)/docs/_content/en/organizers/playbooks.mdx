@@ -9,14 +9,14 @@ The admin panel is English-only, so section, tab and button names below are give
 The most common format: players sign up individually and the balancer builds the teams.
 
 1. **Admin → Tournaments → New tournament**. On the **Basics** step enter a name and the dates. From there you can press **Save as draft** — the tournament is created hidden and nobody sees it yet.
-2. **Settings → General**: **Team formation** → **Auto-balance (Balancer)**. Pick a **Division grid version** here too if this tournament needs its own.
+2. **Flow**: the formation box's **Team formation** is **Balancer** from the start. **Settings → General**: pick a **Division grid version** if this tournament needs its own.
 3. **Settings → Roster shape**: leave **Inherit from the workspace** or choose **Overwatch 5v5 · 1/2/2**.
 4. **Settings → Schedule**: set the windows for the **Registration**, **Check-in** and **Live** phases and turn on **Automatic phase transitions**. See [Phases and schedule](/docs/organizers/schedule).
 5. **Settings → Registration**: decide whether you want **Auto-approve**, and build the questionnaire through **Open the form builder**. See [Registration and entries](/docs/organizers/registration).
 6. **Settings → Admission**: switch on the entry requirements you need — see [Subscriptions and admission](/docs/organizers/subscriptions).
 7. **Settings → Preview allowlist**: untick **Hidden (preview) — not visible to the public** so the tournament appears on the public site.
 8. Once entries are in and check-in is done, open **Teams → Roster → Open balancer**. In the balancer: on the **Excluded** filter, change a player's balancer status to bring them into the pool, **Run balance** builds the teams, **Save** keeps the variant and **Export to tournament** writes it into the tournament. See [Balancer and teams](/docs/organizers/team-formation).
-9. **Bracket → Add stage**: create the stage, fill it with teams in the **Items** tab, press **Generate bracket**, check the result and choose **Activate stage**. See [Stages and brackets](/docs/organizers/brackets).
+9. **Bracket → Add stage**: create the stage, fill it with teams in the **Items** tab, press **Generate bracket**, check the result, then **Mark ready** and **Start**. See [Stages and brackets](/docs/organizers/brackets).
 10. Run the matches from the **Matches** tab — see [Running matches](/docs/organizers/matches).
 11. Upload logs through **Matches → Logs → Upload logs** to get statistics and achievements. See [Match logs](/docs/organizers/logs).
 12. Move the tournament to **Completed** when everything has been played.
@@ -25,7 +25,7 @@ The most common format: players sign up individually and the balancer builds the
 
 The same tournament, except captains build the teams live instead of the balancer.
 
-1. Steps 1–7 of the previous scenario, but in **Settings → General** choose **Team formation** → **Captain draft**.
+1. Steps 1–7 of the previous scenario, but on the **Flow** tab select the formation box and set **Team formation** to **Draft**; choose the pick order under **Draft format** there.
 2. **Settings → Schedule**: add a window for the **Team formation** phase — it only appears in the schedule for draft tournaments.
 3. **Settings → Roster shape** decides how many rounds the draft has: one fewer than the players per team. The shape cannot be changed once a draft session exists.
 4. When the pool is ready, open **Teams → Draft** and walk the wizard: **Parameters**, **Pool**, **Captains**, **Order**, **Review**, **Ready**.
@@ -34,7 +34,7 @@ The same tournament, except captains build the teams live instead of the balance
 7. The rest is the usual run: **Bracket**, **Matches**, logs, **Completed**.
 
 <Callout type="warning">
-While a draft session is alive you cannot change the roster shape or the team formation method. Complete or cancel the session first.
+While a draft session is alive you cannot change the roster shape or the draft format. Complete or cancel the session first.
 </Callout>
 
 ## A tournament of pre-made captain teams
@@ -42,7 +42,7 @@ While a draft session is alive you cannot change the roster shape or the team fo
 Captains assemble their rosters in advance; the platform only checks and admits them.
 
 1. **Admin → Tournaments → New tournament**, as in the first scenario.
-2. **Settings → General**: **Team formation** → **Team registration**.
+2. **Flow**: in the registration box set **Who registers** to **Teams (captains register)**, and in the formation box set **Team formation** to **Registered teams**.
 3. **Settings → Roster shape**: set the shape and, if you want a bench, **Substitutes per team**. That field exists only on team-registration tournaments.
 4. **Settings → Admission**, the **Registered teams** group: **Minimum starter rank**, **Maximum starter rank**, **Maximum rank spread**, **Unique Discord identity**, **Require Discord server membership**. The rank rules apply to starters only; substitutes are ignored.
 5. If the tournament is paid, choose **Who pays** in the same area: **Each player** or **The team (captain pays)**.
@@ -64,11 +64,11 @@ A Swiss group phase, then a knockout bracket.
 3. In that stage's **Items** tab create a group and fill it with teams. The **Seed by SR** menu item spreads teams across groups with a snake SR draft.
 4. **Tiebreakers**: choose a **Standings preset**. In **Points** you can also set **Swiss bye points** — what a team scores for a round it sits out.
 5. **Add stage** again: format **Double Elimination**, **Phase** 2 — the next wave.
-6. In the group stage, **Seeding** block of **Settings**: set **Teams advancing to playoff (per group)**, and **Of them to upper bracket (per group)** if some of them should start in the lower bracket. Then, in the playoff stage, link the stages with **Wire seeds from** or the **Auto-wire from groups** menu item — the **Lower bracket** item is created for you.
+6. Open the **Flow** tab and wire the stages through a filter. Add a **Top N per group** filter (**Top N** if the stage is one table), draw the group stage's **ranking** output into it and its **passed** output into the playoff stage's **participants** input, then **Save flow**. Set **Upper bracket per group** on the filter if some of the passed teams should start in the lower bracket — the **Lower bracket** item is created for you. The **Groups → playoff** preset builds this wiring for you. See [The Flow tab](/docs/organizers/flow).
 7. In the playoff stage, **General** block of **Settings**: **Grand final** — **No reset** or **With reset**. With a reset, the extra match is created only if the lower-bracket team wins the grand final.
-8. Generate and activate the Swiss stage: **Generate bracket**, then **Activate stage**.
+8. Start the Swiss stage: **Generate bracket**, then **Mark ready** and **Start**.
 9. Play the first round; the next one appears on its own as soon as every encounter of the round is closed, and so on up to **Swiss max rounds** — or sooner, once the **Qualification & elimination** thresholds have decided every team. You do not add rounds by hand.
-10. When the Swiss phase is over, activate the playoff: **Activate & generate** builds the bracket and switches the stage on in one action.
+10. When the Swiss phase is over, mark the playoff ready and start it: **Start** builds the bracket if it does not exist yet and switches the stage on.
 11. Seeding, points and tiebreakers in detail: [Stages and brackets](/docs/organizers/brackets).
 
 <Callout>

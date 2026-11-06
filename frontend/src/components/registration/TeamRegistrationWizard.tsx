@@ -28,6 +28,7 @@ import { userQueryKeys } from "@/lib/users/query-keys";
 interface TeamRegistrationWizardProps {
   workspaceId: number;
   tournamentId: number;
+  registrationNodeId: number;
   tournamentName?: string;
   form: RegistrationForm;
   /** Slots this tournament's roster actually has, in canonical order, each with
@@ -56,6 +57,7 @@ interface TeamRegistrationWizardProps {
 export default function TeamRegistrationWizard({
   workspaceId,
   tournamentId,
+  registrationNodeId,
   tournamentName,
   form,
   availableSlots,
@@ -114,7 +116,7 @@ export default function TeamRegistrationWizard({
   const mutation = useMutation({
     mutationFn: async (registration: RegistrationSubmitInput) => {
       if (!slot) throw new Error("no slot");
-      const team = await registrationTeamService.create(tournamentId, {
+      const team = await registrationTeamService.create(tournamentId, registrationNodeId, {
         name: name.trim(),
         slot_code: slot,
         registration,
@@ -266,6 +268,7 @@ export default function TeamRegistrationWizard({
       <RegistrationSchemaForm
         mode="public"
         tournamentId={tournamentId}
+        registrationNodeId={registrationNodeId}
         form={form}
         tournamentName={tournamentName}
         // The dialog title already names the task and the tournament; a second

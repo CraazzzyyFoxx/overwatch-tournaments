@@ -1,10 +1,9 @@
-import { reachedAtLeast } from "@/lib/tournament/lifecycle";
-import { pickCurrentStage } from "@/lib/tournament/stages";
+import { hasPlayStarted, pickCurrentStage } from "@/lib/tournament/stages";
 import type { StreamVods, TournamentStreams } from "@/types/stream.types";
-import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
+import type { StageSummary, TournamentDisplayStatus } from "@/types/tournament.types";
 
 export type TournamentSectionId =
-  | "overview" | "rules" | "bracket" | "ranking" | "teams" | "matches" | "maps" | "stats" | "stream" | "participants";
+  | "overview" | "rules" | "bracket" | "ranking" | "table" | "teams" | "matches" | "maps" | "stats" | "stream" | "participants";
 
 type TournamentNavReasonKey =
   | "tournamentDetail.nav.reasons.competitionNotStarted"
@@ -25,7 +24,7 @@ export type TournamentSectionNavItem = {
 
 type BuildTournamentSectionNavInput = {
   tournamentId: string;
-  status: TournamentStatus;
+  status: TournamentDisplayStatus;
   stages: StageSummary[];
   /**
    * Whether any team exists yet. Teams are formed before play starts (balancer
@@ -53,6 +52,11 @@ type BuildTournamentSectionNavInput = {
    * empty Maps tab would promise a pool nobody configured.
    */
   hasMapPool?: boolean;
+  /**
+   * Whether the flow has a leaderboard node. Absent-or-present like Rules, and
+   * never locked: the table shows tentative rows as soon as results exist.
+   */
+  hasLeaderboard?: boolean;
   pathname: string;
 };
 
@@ -79,6 +83,7 @@ const preCompetitionOrder: TournamentSectionId[] = [
   "teams",
   "bracket",
   "ranking",
+  "table",
   "matches",
   "stats"
 ];
@@ -86,6 +91,7 @@ const preCompetitionOrder: TournamentSectionId[] = [
 const competitionOrder: TournamentSectionId[] = [
   "overview",
   "rules",
+  "table",
   "bracket",
   "ranking",
   "teams",
@@ -121,7 +127,7 @@ export function isTournamentOverviewPath(pathname: string, tournamentId?: string
 
 function resolveBracketHref(
   tournamentId: string,
-  status: TournamentStatus,
+  status: TournamentDisplayStatus,
   stages: StageSummary[]
 ): string {
   const primary = pickCurrentStage(stages, status);
@@ -175,9 +181,10 @@ export function buildTournamentSectionNav({
   hasStreams = false,
   hasRules = false,
   hasMapPool = false,
+  hasLeaderboard = false,
   pathname
 }: BuildTournamentSectionNavInput): TournamentSectionNavItem[] {
-  const competitionStarted = reachedAtLeast(status, "live");
+  const competitionStarted = hasPlayStarted(status, stages);
   const currentPath = normalizePathname(pathname);
   // `stream`, `rules` and `maps` are present-or-absent rather than open-or-locked,
   // because a locked tab claims the content exists somewhere. They are filtered
@@ -185,15 +192,15 @@ export function buildTournamentSectionNav({
   // `ranking` is the same for a different reason: only an individual Swiss stage has a personal table.
   const individualStages = stages.filter((stage) => stage.stage_type === "individual_swiss");
   const hasRanking = individualStages.length > 0;
-  // Locking the qualification moves a finished stage's tournament back to `draft`, which
-  // precedes `live`, so a completed personal table keeps its tab open there.
-  const rankingOpen = competitionStarted || individualStages.some((stage) => stage.is_completed);
+  // A completed personal table keeps its tab open whatever the phase shows.
+  const rankingOpen = competitionStarted || individualStages.some((stage) => stage.status === "completed");
   const sections = (competitionStarted ? competitionOrder : preCompetitionOrder).filter(
     (id) =>
       (id !== "stream" || hasStreams) &&
       (id !== "rules" || hasRules) &&
       (id !== "maps" || hasMapPool) &&
       (id !== "ranking" || hasRanking) &&
+      (id !== "table" || hasLeaderboard) &&
       (id !== "teams" || hasTeams || !competitionStarted)
   );
 

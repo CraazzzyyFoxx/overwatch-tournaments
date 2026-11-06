@@ -414,6 +414,10 @@ STEAM_PLAYER_REFRESH_DLQ = RabbitQueue(
 # at their single producer/consumer pair.
 TOURNAMENT_STATE_CHANGED_ROUTING_KEY = "tournament.state.changed"
 
+# Published by tournament-service on every lifecycle node move (registration, formation, stage). Consumers bind their
+# own queues to it (discord-service reloads its registry and re-syncs voice).
+FLOW_NODE_STATE_CHANGED_ROUTING_KEY = "flow.node.state.changed"
+
 # Owner: analytics-worker. A ``completed`` tournament gets its compute job
 # created from here instead of waiting for someone to press "recalculate".
 TOURNAMENT_STATE_CHANGED_QUEUE = RabbitQueue(

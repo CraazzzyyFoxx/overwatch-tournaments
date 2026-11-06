@@ -50,8 +50,7 @@ function input(id: number, overrides: Partial<StageItemInput> = {}): StageItemIn
     slot: 1,
     input_type: "final",
     team_id: 7,
-    source_stage_item_id: null,
-    source_position: null,
+    source_result_id: null,
     ...overrides
   };
 }
@@ -63,7 +62,6 @@ function item(id: number, inputs: StageItemInput[]): StageItem {
     name: `Group ${id}`,
     type: "group",
     order: 0,
-    advance_count: null,
     inputs
   };
 }
@@ -76,12 +74,10 @@ function groupStage(items: StageItem[]): Stage {
     description: null,
     stage_type: "round_robin",
     max_rounds: 3,
-    advance_count: 2,
-    advance_upper_count: null,
     order: 0,
-    is_active: true,
+    node_id: 1,
+    status: "live",
     is_published: true,
-    is_completed: false,
     ranking_preset: null,
     tiebreak_order: null,
     scoring: { win: null, draw: null, loss: null, preset: null, columns: null, placement_points: null, formula: null },
@@ -125,7 +121,6 @@ async function mount(stage: Stage) {
         <QueryClientProvider client={client}>
           <StageItemsSection
           stage={stage}
-          stages={[stage]}
           teams={teams}
           isTeamsLoading={false}
           progress={undefined}

@@ -122,6 +122,7 @@ describe("draft config step", () => {
       ontology={OW_METADATA}
       format={SNAKE}
       tournamentId={5}
+      formationNodeId={9}
     />
   );
 
@@ -163,7 +164,7 @@ describe("draft config step", () => {
     expect(html).toContain("formats.snake.title");
     // The other formats are never offered here: the wizard does not edit it.
     expect(html).not.toContain("formats.linear.title");
-    expect(html).toContain('href="/admin/tournaments/5/settings/draft"');
+    expect(html).toContain('href="/admin/tournaments/5/flow?node=9"');
   });
 });
 

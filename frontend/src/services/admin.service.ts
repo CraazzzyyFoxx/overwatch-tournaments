@@ -8,6 +8,7 @@ import {
   StageItem,
   StageItemInput,
   StageItemType,
+  StageNodeStatus,
   PickBanKind,
   PickBanState,
   PickBanSubmissionItem,
@@ -32,9 +33,7 @@ import {
   TournamentCreateInput,
   TournamentUpdateInput,
   TournamentPreviewAccessEntry,
-  TournamentStatusTransitionInput,
   TournamentReadiness,
-  TournamentPhaseScheduleEntryInput,
   StageCreateInput,
   PlayerStanding,
   PlayerStandingPin,
@@ -137,6 +136,7 @@ import {
   PregameRoomHistoryRead,
 } from "@/types/admin.types";
 import type { AdminDashboard, DashboardTrends } from "@/types/admin-dashboard.types";
+import type { FlowNodeRead, FlowNodeScheduleEntry, FlowNodeStatus } from "@/types/flow.types";
 
 /**
  * Serialise the reports filter set once — the list and its counters must send
@@ -272,17 +272,6 @@ class AdminService {
     }).then(response => response.json());
   }
 
-  async setTournamentSchedule(
-    id: number,
-    schedule: TournamentPhaseScheduleEntryInput[]
-  ): Promise<Tournament> {
-    const response = await apiFetch(`/api/v1/admin/tournaments/${id}/schedule`, {
-      method: "PUT",
-      body: { schedule }
-    });
-    return response.json();
-  }
-
   async deleteTournament(id: number): Promise<void> {
     await apiFetch(`/api/v1/admin/tournaments/${id}`, {
       method: "DELETE"
@@ -293,7 +282,6 @@ class AdminService {
     workspace_id: number;
     discipline: string;
     challonge_slug: string;
-    is_league: boolean;
     start_date: string;
     end_date: string;
     division_grid_version_id?: number | null;
@@ -305,9 +293,11 @@ class AdminService {
     return response.json();
   }
 
-  async toggleTournamentFinished(tournamentId: number): Promise<Tournament> {
-    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/finish`, {
-      method: "POST"
+  /** Archives a `completed` tournament, or returns an archived one to `completed`; the only status an admin sets. */
+  async setArchived(tournamentId: number, archived: boolean): Promise<Tournament> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/archive`, {
+      method: "POST",
+      body: { archived }
     });
     return response.json();
   }
@@ -1431,19 +1421,6 @@ class AdminService {
     return response.json();
   }
 
-  // ─── Tournament Status ──────────────────────────────────────────────────────
-
-  async transitionTournamentStatus(
-    id: number,
-    data: TournamentStatusTransitionInput
-  ): Promise<Tournament> {
-    const response = await apiFetch(`/api/v1/admin/tournaments/${id}/status`, {
-      method: "PATCH",
-      body: data
-    });
-    return response.json();
-  }
-
   // ─── Stage Management ───────────────────────────────────────────────────────
 
   async getStages(tournamentId: number): Promise<Stage[]> {
@@ -1556,8 +1533,6 @@ class AdminService {
       name?: string;
       type?: StageItemType;
       order?: number;
-      advance_count?: number | null;
-      advance_upper_count?: number | null;
     }
   ): Promise<StageItem> {
     const response = await apiFetch(`/api/v1/admin/stages/items/${stageItemId}`, {
@@ -1597,16 +1572,23 @@ class AdminService {
     await apiFetch(`/api/v1/admin/stages/items/inputs/${inputId}`, { method: "DELETE" });
   }
 
-  async activateStage(stageId: number): Promise<Stage> {
-    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/activate`, {
-      method: "POST"
+  /**
+   * Moves a lifecycle node (a stage's `node_id`) to `status`. The server runs the move's side effects: `ready`
+   * seats the stage's inputs, `live` publishes it and generates its matches when it has none.
+   */
+  async transitionNode(nodeId: number, status: FlowNodeStatus): Promise<FlowNodeRead> {
+    const response = await apiFetch(`/api/v1/admin/flow-nodes/${nodeId}/transition`, {
+      method: "POST",
+      body: { status }
     });
     return response.json();
   }
 
-  async deactivateStage(stageId: number): Promise<Stage> {
-    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/deactivate`, {
-      method: "POST"
+  /** Replaces a lifecycle node's schedule: one row per phase (`SCHEDULE_PHASES` of its kind) the scheduler moves it on. */
+  async setNodeSchedule(nodeId: number, schedule: FlowNodeScheduleEntry[]): Promise<FlowNodeRead> {
+    const response = await apiFetch(`/api/v1/admin/flow-nodes/${nodeId}/schedule`, {
+      method: "PUT",
+      body: { schedule }
     });
     return response.json();
   }
@@ -1625,32 +1607,6 @@ class AdminService {
       method: "POST"
     });
     return response.json();
-  }
-
-  /**
-   * Wires the bracket's seeds from a group stage. `sourceStageId` names the
-   * feeding stage — the server cannot infer it when a phase runs several
-   * divisions in parallel, and refuses rather than guessing.
-   */
-  async autoWireStage(stageId: number, sourceStageId?: number): Promise<Stage> {
-    const qs = sourceStageId ? `?source_stage_id=${sourceStageId}` : "";
-    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/auto-wire${qs}`, {
-      method: "POST"
-    });
-    return response.json();
-  }
-
-  async activateAndGenerateStage(
-    stageId: number,
-    opts?: { force?: boolean }
-  ): Promise<{ generated: number }> {
-    const qs = opts?.force ? "?force=true" : "";
-    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/activate-and-generate${qs}`,
-      { method: "POST" }
-    );
-    const job = (await response.json()) as TournamentComputationJob;
-    const completed = await this.waitForTournamentJob(job);
-    return { generated: Number(completed.result_json?.generated ?? 0) };
   }
 
   async seedTeams(
@@ -1700,8 +1656,8 @@ class AdminService {
       stage_id: number;
       name: string;
       stage_type: string;
-      is_active: boolean;
-      is_completed: boolean;
+      node_id: number;
+      status: StageNodeStatus;
       total: number;
       completed: number;
       items: {

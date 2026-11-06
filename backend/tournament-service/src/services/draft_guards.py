@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 __all__ = (
     "assert_no_active_draft_session",
+    "has_unfinished_draft_on_node",
     "has_unfinished_draft_session",
     "unfinished_draft_clause",
     "unfinished_draft_session_status",
@@ -52,6 +53,18 @@ async def has_unfinished_draft_session(session: AsyncSession, tournament_id: int
     return await unfinished_draft_session_status(session, tournament_id) is not None
 
 
+async def has_unfinished_draft_on_node(session: AsyncSession, formation_node_id: int) -> bool:
+    """Whether a draft session of this formation node is in flight, i.e. whether its mode and format are locked."""
+    return (
+        await session.scalar(
+            select(DraftSession.id)
+            .where(DraftSession.formation_node_id == formation_node_id, unfinished_draft_clause())
+            .limit(1)
+        )
+        is not None
+    )
+
+
 async def unfinished_draft_tournament_ids(session: AsyncSession, tournament_ids: Sequence[int]) -> set[int]:
     """Tournament ids in ``tournament_ids`` that currently have an in-flight draft.
 
@@ -68,15 +81,12 @@ async def unfinished_draft_tournament_ids(session: AsyncSession, tournament_ids:
     return set(result.all())
 
 
-async def assert_no_active_draft_session(
-    session: AsyncSession, tournament_id: int, *, change: str = "team formation"
-) -> None:
+async def assert_no_active_draft_session(session: AsyncSession, tournament_id: int, *, change: str) -> None:
     """Raise a business error when the tournament has an in-flight draft session.
 
-    Changing ``team_formation`` -- or the roster shape the draft is picking into
-    -- while a draft is in flight would orphan the session, so callers invoke
-    this before applying such a change. ``change`` names the edit in the error
-    message.
+    Changing the roster shape the draft is picking into while a draft is in
+    flight would orphan the session, so callers invoke this before applying
+    such a change. ``change`` names the edit in the error message.
     """
     active_status = await unfinished_draft_session_status(session, tournament_id)
     if active_status is not None:

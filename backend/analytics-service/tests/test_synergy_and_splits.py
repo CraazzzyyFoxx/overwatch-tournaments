@@ -14,7 +14,9 @@ from __future__ import annotations
 import importlib
 import math
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import TestCase
 
 import pandas as pd
@@ -85,17 +87,43 @@ class SynergyMathTests(TestCase):
         self.assertTrue(math.isnan(row["synergy_winrate"]))
 
 
+def _tournaments(*rows: tuple[int, datetime, datetime | None]) -> list[SimpleNamespace]:
+    return [SimpleNamespace(id=tid, start_date=start, end_date=end, created_at=start) for tid, start, end in rows]
+
+
 class ChronologicalSplitTests(TestCase):
     def test_from_ids_preserves_the_given_chronological_order(self) -> None:
         # 62 (Jul 2025) chronologically precedes 54 (Aug 2025) and 61 (Mar 2026)
         # despite its higher id. Sorting numerically would put 61 into val and
         # 62 AFTER it — training on the future.
-        split = splits.TimeSeriesSplit.from_ids([62, 54, 61, 64], test_id=64)
+        tournaments = _tournaments(
+            (62, datetime(2025, 7, 19, tzinfo=UTC), None),
+            (54, datetime(2025, 8, 2, tzinfo=UTC), None),
+            (61, datetime(2026, 3, 14, tzinfo=UTC), None),
+            (64, datetime(2026, 4, 4, tzinfo=UTC), None),
+        )
+        split = splits.TimeSeriesSplit.from_ids(tournaments, test_id=64)
         self.assertEqual((62, 54), split.train_ids)
         self.assertEqual(61, split.val_id)
         self.assertEqual(64, split.test_id)
 
     def test_from_ids_never_numerically_resorts(self) -> None:
-        split = splits.TimeSeriesSplit.from_ids([10, 2, 7], test_id=7)
+        tournaments = _tournaments(
+            (10, datetime(2026, 1, 1, tzinfo=UTC), None),
+            (2, datetime(2026, 2, 1, tzinfo=UTC), None),
+            (7, datetime(2026, 3, 1, tzinfo=UTC), None),
+        )
+        split = splits.TimeSeriesSplit.from_ids(tournaments, test_id=7)
         self.assertEqual((10,), split.train_ids)
         self.assertEqual(2, split.val_id)
+
+    def test_from_ids_rejects_tournaments_out_of_chronology(self) -> None:
+        # 2 and 3 start together and 3 ends first: 2 before 3 is out of order although the ids ascend.
+        feb = datetime(2026, 2, 1, tzinfo=UTC)
+        tournaments = _tournaments(
+            (2, feb, datetime(2026, 2, 9, tzinfo=UTC)),
+            (3, feb, datetime(2026, 2, 2, tzinfo=UTC)),
+            (1, datetime(2026, 3, 1, tzinfo=UTC), None),
+        )
+        with self.assertRaisesRegex(ValueError, "chronological order"):
+            splits.TimeSeriesSplit.from_ids(tournaments, test_id=1)

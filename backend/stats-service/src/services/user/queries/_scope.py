@@ -365,7 +365,6 @@ def _compare_tournament_scope_exists(
         [
             scoped_tournament.id == scoped_player.tournament_id,
             scoped_tournament.is_finished.is_(True),
-            scoped_tournament.is_league.is_(False),
         ]
     )
     return sa.exists(sa.select(1).select_from(scoped_player).select_from(scoped_tournament).where(*filters))
@@ -399,7 +398,6 @@ def _compare_user_scope_exists(
         [
             scoped_tournament.id == scoped_player.tournament_id,
             scoped_tournament.is_finished.is_(True),
-            scoped_tournament.is_league.is_(False),
         ]
     )
     if workspace_id is not None:

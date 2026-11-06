@@ -1,6 +1,7 @@
 import datetime
 import typing
 from collections import Counter
+from collections.abc import Mapping
 from statistics import mean
 
 import sqlalchemy as sa
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core import enums, errors, pagination
+from shared.core.chrono import chrono_sort_key
 from shared.core.errors import BaseAPIException
 from shared.disciplines import DISCIPLINES
 from shared.division_grid import DivisionGrid
@@ -1159,6 +1161,7 @@ class UserService(DisciplineQueries):
             params=pagination.PaginationSortParams(page=1, per_page=-1, entities=["tournament", "placement"]),
             workspace_id=workspace_id,
         )
+        member_placements = await self.profile.get_placements(session, user.id, workspace_id=workspace_id)
 
         placements: list[int] = []
         placements_playoff: list[int] = []
@@ -1170,20 +1173,15 @@ class UserService(DisciplineQueries):
         # page's "last tournament" is the first card.
         tournaments = [
             _mappers.to_user_tournament_summary(tournament)
-            for tournament in sorted(
-                (team.tournament for team in teams), key=_mappers.tournament_recency_key, reverse=True
-            )
+            for tournament in sorted((team.tournament for team in teams), key=chrono_sort_key, reverse=True)
         ]
 
         for team in teams:
-            if team.tournament.is_league:
-                continue
-
             # Participation, not scoring: a live tournament has no final placement
             # yet, but the player is already in it.
             tournaments_count += 1
 
-            placement = _mappers.resolve_team_placement(team)
+            placement = member_placements.get(team.tournament_id)
             if placement is None:
                 continue
             placements.append(placement)
@@ -1196,7 +1194,7 @@ class UserService(DisciplineQueries):
                     placements_group.append(standing.position)
 
         games = (
-            await self._game_summaries(session, user.id, teams, workspace_id=workspace_id)
+            await self._game_summaries(session, user.id, teams, member_placements, workspace_id=workspace_id)
             if self._discipline is None
             else []
         )
@@ -1259,6 +1257,7 @@ class UserService(DisciplineQueries):
         session: AsyncSession,
         user_id: int,
         teams: typing.Sequence[models.Team],
+        placements: Mapping[int, int],
         *,
         workspace_id: int | None,
     ) -> list[schemas.UserGameSummary]:
@@ -1271,10 +1270,8 @@ class UserService(DisciplineQueries):
         tallies: dict[str, list[int]] = {}
         for team in teams:
             tally = tallies.setdefault(team.tournament.discipline, [0, 0])
-            if team.tournament.is_league:
-                continue
             tally[0] += 1
-            if _mappers.resolve_team_placement(team) == 1:
+            if placements.get(team.tournament_id) == 1:
                 tally[1] += 1
         installed = {code: index for index, code in enumerate(DISCIPLINES)}
         ordered = sorted(tallies, key=lambda code: (-tallies[code][0], installed.get(code, len(installed))))
@@ -1359,17 +1356,16 @@ class UserService(DisciplineQueries):
             params=pagination.PaginationSortParams(page=1, per_page=-1, entities=["tournament", "placement"]),
             workspace_id=workspace_id,
         )
+        member_placements = await self.profile.get_placements(session, user.id, workspace_id=workspace_id)
 
         placements: list[int] = []
         tournaments_count = 0
         tournaments_won = 0
         recent: dict[int, schemas.UserDraftCardTournament] = {}
-        for team in sorted(teams, key=lambda item: _mappers.tournament_recency_key(item.tournament), reverse=True):
+        for team in sorted(teams, key=lambda item: chrono_sort_key(item.tournament), reverse=True):
             tournament = team.tournament
-            if tournament.is_league:
-                continue
             tournaments_count += 1
-            placement = _mappers.resolve_team_placement(team)
+            placement = member_placements.get(team.tournament_id)
             if placement is not None:
                 placements.append(placement)
                 if placement == 1:
@@ -1439,6 +1435,7 @@ class UserService(DisciplineQueries):
         tournaments = await self.profile.get_tournaments_with_stats(session, user.id, workspace_id=workspace_id)
         tournaments_ids = [tournament[0].tournament_id for tournament in tournaments]
         placements = await self.encounters.count_teams_by_tournament_bulk(session, tournaments_ids)
+        member_placements = await self.profile.get_placements(session, user.id, workspace_id=workspace_id)
 
         # Per-roster-player enrichment (avg MVP + signature heroes), scoped to the
         # tournaments this history covers. Gather every teammate's canonical user id
@@ -1476,7 +1473,7 @@ class UserService(DisciplineQueries):
             won: int = 0
             lost: int = 0
             draw: int = 0
-            placement = _mappers.resolve_team_placement(team)
+            placement = member_placements.get(team.tournament_id)
 
             # Each tournament's divisions live on its own effective grid (own pin,
             # else its workspace default, else the system default) — in the
@@ -1526,7 +1523,6 @@ class UserService(DisciplineQueries):
                 name=team.tournament.name,
                 workspace_id=team.tournament.workspace_id,
                 discipline=team.tournament.discipline,
-                is_league=team.tournament.is_league,
                 team_id=team.id,
                 team=team.name,
                 players=players_read,

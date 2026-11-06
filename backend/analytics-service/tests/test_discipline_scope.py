@@ -10,6 +10,7 @@ import asyncio
 import contextlib
 import pickle
 import typing
+from datetime import date
 from unittest.mock import patch
 
 import joblib
@@ -20,6 +21,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from shared import models
+from shared.core.chrono import tournament_chrono_key
 from shared.disciplines import discipline
 from shared.repository import CatalogRoleRepository
 from src.core import config
@@ -39,7 +41,7 @@ from src.services.ml.inference.runner import run_for_tournament, run_performance
 from src.services.ml.models.base import artifact_path, load_artifact, load_artifact_or_none, save_artifact
 from src.services.ml.training.orchestrator import train_all_models
 from src.services.ml.training.registry import registry_service
-from src.services.ml.training.splits import tournament_ids_up_to
+from src.services.ml.training.splits import tournaments_up_to
 from tests.test_ml_prediction_parity import load_fixture_models
 
 OW = "overwatch"
@@ -87,6 +89,13 @@ def _only_reads(statements: list[str]) -> bool:
     return bool(statements) and all(s.lstrip().upper().startswith(("SELECT", "WITH")) for s in statements)
 
 
+async def _day(session: AsyncSession, tournament_id: int) -> date:
+    started, _, _ = (
+        await session.execute(sa.select(*tournament_chrono_key()).where(models.Tournament.id == tournament_id))
+    ).one()
+    return started.date()
+
+
 def test_history_is_cut_by_cutoff_discipline_workspace_and_real_chronology(stats_parity_database) -> None:
     url, ids = stats_parity_database
 
@@ -106,7 +115,12 @@ def test_history_is_cut_by_cutoff_discipline_workspace_and_real_chronology(stats
                 ),
                 {"id": ids["tournament_career_3"]},
             )
-            ow = await tournament_ids_up_to(session, ids["tournament"], discipline=OW, workspace_id=ids["workspace"])
+            ow = [
+                t.id
+                for t in await tournaments_up_to(
+                    session, ids["tournament"], discipline=OW, workspace_id=ids["workspace"]
+                )
+            ]
             # The same-workspace LoL tournament, another workspace's tournament with the same identity-shaped data,
             # and the hidden container never enter the Overwatch history.
             assert ids["tournament_lol"] not in ow
@@ -117,7 +131,7 @@ def test_history_is_cut_by_cutoff_discipline_workspace_and_real_chronology(stats
                 await session.scalars(
                     sa.text(
                         "SELECT id FROM tournament.tournament WHERE id = ANY(:ids) "
-                        "ORDER BY coalesce(start_date, created_at), id"
+                        "ORDER BY coalesce(start_date, created_at), coalesce(end_date, start_date, created_at), id"
                     ).bindparams(sa.bindparam("ids", ow, type_=sa.ARRAY(sa.BigInteger)))
                 )
             ).all()
@@ -126,28 +140,29 @@ def test_history_is_cut_by_cutoff_discipline_workspace_and_real_chronology(stats
 
             # The cross-workspace allowlist is honoured, intersected with the discipline, and an unrestricted read
             # still sees only Overwatch.
-            both = await tournament_ids_up_to(
-                session,
-                ids["tournament_other"],
-                discipline=OW,
-                workspace_ids=[ids["workspace"], ids["workspace_other"]],
-            )
+            both = [
+                t.id
+                for t in await tournaments_up_to(
+                    session,
+                    ids["tournament_other"],
+                    discipline=OW,
+                    workspace_ids=[ids["workspace"], ids["workspace_other"]],
+                )
+            ]
             assert ids["tournament_other"] in both and ids["tournament_lol"] not in both
-            everyone = await tournament_ids_up_to(session, ids["tournament_other"], discipline=OW)
+            everyone = [t.id for t in await tournaments_up_to(session, ids["tournament_other"], discipline=OW)]
             assert ids["tournament_lol"] not in everyone and ids["tournament_other"] in everyone
 
             # Contradictory inputs are rejected, never reinterpreted: another game's cutoff, another tenant's cutoff.
             with pytest.raises(ValueError, match="belongs to 'lol'"):
-                await tournament_ids_up_to(session, ids["tournament_lol"], discipline=OW)
+                await tournaments_up_to(session, ids["tournament_lol"], discipline=OW)
             with pytest.raises(ValueError, match="outside the requested workspace scope"):
-                await tournament_ids_up_to(
+                await tournaments_up_to(
                     session, ids["tournament"], discipline=OW, workspace_ids=[ids["workspace_other"]]
                 )
             with pytest.raises(ValueError, match="outside the requested workspace scope"):
-                await tournament_ids_up_to(
-                    session, ids["tournament"], discipline=OW, workspace_id=ids["workspace_other"]
-                )
-            assert await tournament_ids_up_to(session, 10**9, discipline=OW) == []
+                await tournaments_up_to(session, ids["tournament"], discipline=OW, workspace_id=ids["workspace_other"])
+            assert await tournaments_up_to(session, 10**9, discipline=OW) == []
 
             # The tournament names its game; an explicit value cannot override it.
             assert await tournament_discipline(session, ids["tournament"]) == OW
@@ -168,6 +183,7 @@ def test_a_discipline_without_analytics_reads_only_and_writes_nothing(stats_pari
         async with _session(url, ids, lol=True) as session:
             lol = ids["tournament_lol"]
             algorithms = await session.scalar(sa.select(sa.func.count()).select_from(models.AnalyticsAlgorithm))
+            lol_day = await _day(session, lol)
             seen, stop = _statements(session)
             try:
                 with (
@@ -185,19 +201,15 @@ def test_a_discipline_without_analytics_reads_only_and_writes_nothing(stats_pari
                     assert await run_player_anomalies_for_tournament(session, lol) == 0
                     assert await run_match_quality_for_tournament(session, lol) == 0
                     assert await flows_service.recalculate_analytics(session, lol) == []
-                    assert await backfill_range(session, from_tournament_id=lol, to_tournament_id=lol) == {}
+                    assert await backfill_range(session, from_date=lol_day, to_date=lol_day, discipline="lol") == {}
             finally:
                 stop()
             assert _only_reads(seen), [s for s in seen if not s.lstrip().upper().startswith(("SELECT", "WITH"))]
             assert list(tmp_path.iterdir()) == []
             assert await session.scalar(sa.select(sa.func.count()).select_from(models.AnalyticsAlgorithm)) == algorithms
             # A backfill over the real range visits Overwatch tournaments only and serves each from its own module.
-            visited = await backfill_range(
-                session,
-                from_tournament_id=ids["tournament"],
-                to_tournament_id=lol,
-                model_kinds=["performance"],
-            )
+            first, last = sorted([await _day(session, ids["tournament"]), await _day(session, lol)])
+            visited = await backfill_range(session, from_date=first, to_date=last, model_kinds=["performance"])
             assert lol not in visited and ids["tournament"] in visited and ids["tournament_hidden"] not in visited
             with pytest.raises(UnsupportedAnalytics):
                 analytics_exports("lol")

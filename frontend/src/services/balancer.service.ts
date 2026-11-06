@@ -73,7 +73,7 @@ export default class balancerService {
   }
 
   /**
-   * Runs the tournament's own pool through the solver. The player payload is
+   * Runs the pool of the formation node's input through the solver. The player payload is
    * assembled server-side from the roster engine — the browser sends only the
    * config it wants, never a rebuilt copy of everyone's roles and ranks.
    *
@@ -82,6 +82,7 @@ export default class balancerService {
    */
   static async createTournamentBalanceJob(params: {
     tournament_id: number;
+    formation_node_id: number;
     config_overrides?: BalancerConfig | null;
   }): Promise<BalanceJobCreateResponse> {
     try {
@@ -89,6 +90,7 @@ export default class balancerService {
         `/api/v1/balancer/tournaments/${params.tournament_id}/balance`,
         {
           method: "POST",
+          query: { formation_node_id: params.formation_node_id },
           body: { config_overrides: params.config_overrides ?? null },
           timeout: 20_000
         }

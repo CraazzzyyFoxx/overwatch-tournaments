@@ -44,10 +44,7 @@ describe("TournamentBracketPage", () => {
 
   it.each([
     ["live", 15_000],
-    ["playoffs", 15_000],
-    ["registration", false],
-    ["draft", false],
-    ["check_in", false],
+    ["announcement", false],
     ["completed", false],
     ["archived", false]
   ] as const)("uses the lifecycle polling policy for %s", (status, expected) => {
@@ -81,8 +78,8 @@ describe("TournamentBracketPage", () => {
           tournament_id: 72,
           name: "Playoffs",
           stage_type: "single_elimination",
-          is_active: true,
-          is_completed: false,
+          node_id: 1,
+          status: "live",
           order: 1
         }
       ]
@@ -116,7 +113,7 @@ describe("TournamentBracketPage", () => {
   });
 
   it("lands on the group stage while the playoff has not started", () => {
-    const draft = { is_active: false, is_published: false, is_completed: false };
+    const draft = { status: "draft", is_published: false };
     const tournament = {
       id: 117,
       workspace_id: 9,
@@ -136,12 +133,12 @@ describe("TournamentBracketPage", () => {
       id: 72,
       workspace_id: 9,
       status: "live",
-      stages: [{ id: 301, is_active: true, stage_type: "single_elimination" }]
+      stages: [{ id: 301, status: "live", stage_type: "single_elimination" }]
     } as Tournament;
     const fullStages = [
       {
         id: 302,
-        is_active: true,
+        status: "live",
         stage_type: "double_elimination",
         items: []
       }
@@ -203,17 +200,17 @@ describe("TournamentBracketPage", () => {
 
   describe("isStageReportable", () => {
     it("blocks a report for an un-activated preview stage", () => {
-      const preview = { is_published: false, is_completed: false } as Stage;
+      const preview = { is_published: false, status: "draft" } as Stage;
       expect(isStageReportable(preview)).toBe(false);
     });
 
     it("allows a report once the stage is published", () => {
-      const published = { is_published: true, is_completed: false } as Stage;
+      const published = { is_published: true, status: "live" } as Stage;
       expect(isStageReportable(published)).toBe(true);
     });
 
     it("allows a report for a completed stage", () => {
-      const completed = { is_published: false, is_completed: true } as Stage;
+      const completed = { is_published: false, status: "completed" } as Stage;
       expect(isStageReportable(completed)).toBe(true);
     });
 

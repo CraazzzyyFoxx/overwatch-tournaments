@@ -2,13 +2,12 @@ A tournament entry is a form, a window, a status and an admission decision; a ca
 
 ## The registration window
 
-Whether self-service registration is open is decided by exactly one schedule row — the tournament's `REGISTRATION` phase row — plus one tournament flag. The tournament's current phase plays no part: a window that reaches past the start of `LIVE` keeps registration open by itself.
+Every registration node has its own lifecycle (`draft → open → check_in → closed`) and, optionally, `open` and `check_in` rows in its own schedule. The node status is the organizer's decision; a row only narrows the window inside it. The tournament's status plays no part.
 
-- **No row means closed.** This inverts the usual phase-window contract (where a missing row spans the whole phase), and the inversion applies to registration only: a freshly created tournament must not accept entries before its form is configured.
-- **`COMPLETED` and `ARCHIVED` are always closed**, whatever the dates say. A mis-set `ends_at` cannot reopen a finished tournament.
-- **`allow_late_registration` lifts `ends_at` and nothing else.** It does not open a tournament with no `REGISTRATION` row, and it does not open a window that has not started yet — *late* means after the end, never before the start. The intended closing date stays on the tournament page.
+- **Open needs the `open` status.** A node that is `draft` or `closed` takes no sign-ups. An `open` node with no `open` row is open: the status decides.
+- **`allow_late_registration` (a node setting) lifts `ends_at` and nothing else.** It does not open a window that has not started yet — *late* means after the end, never before the start. It also keeps sign-ups open while the node is in `check_in`. The intended closing date stays on the tournament page.
 
-Check-in is a different window with a different rule: the tournament status must be `CHECK_IN` **and** the current moment must fall inside the `CHECK_IN` row. Here the ordinary phase-window contract applies — a missing row, or `ends_at` set to `null`, spans the whole phase.
+Check-in is possible while the node is `check_in` **and** the current moment falls inside its `check_in` row; a missing row spans the whole status.
 
 ## Form and entry
 
@@ -50,7 +49,7 @@ The builtin question keys are fixed: `roles`, `stream_pov`, `reserve`, `public_n
 
 The `roles` question's flex mode is `optional` (the registrant names the roles they play), `all_roles` (every role is playable, the registrant still names a priority) or `forced` (every role is playable and primary). A form whose schema cannot be read behaves as `optional`.
 
-The rest of what the form configures, and what a client sees: `auto_approve`, `show_ranks`, `hide_registrations` (the public list collapses to an aggregate server-side), `max_participants` (advisory capacity, not a limit — signing up past it succeeds), `max_substitutes` (bench size for team registration), the open-profile requirement with scope `main` or `all`, the subscription toggle with its stage and scope, and the captain-team rules `team_rank_min`, `team_rank_max`, `team_max_rank_spread`, `team_unique_identity`, `team_require_discord_guild`.
+The rest of what the form configures, and what a client sees: `show_ranks`, `hide_registrations` (the public list collapses to an aggregate server-side) and the open-profile requirement with scope `main` or `all`. The intake settings are the registration node's config, not the form's: `auto_approve`, `max_participants` (advisory capacity, not a limit — signing up past it succeeds), `max_substitutes` (bench size for team registration), the subscription toggle with its stage and scope, and the captain-team rules `team_rank_min`, `team_rank_max`, `team_max_rank_spread`, `team_unique_identity`, `team_require_discord_guild`.
 
 ## Statuses
 
@@ -109,7 +108,7 @@ Slot codes are `tank`, `damage`, `support`, `flex`. The built-in shape is `{"tan
 - Team size runs from 1 to 12 slots. A one-slot roster is allowed.
 - `draft_rounds` is `team_size - 1`: the captain already fills one slot. For a one-slot roster that is zero, and a live draft simply cannot be created for such a tournament.
 - Resolution: tournament override → workspace default → built-in 5v5. The client receives the already-resolved shape and does not recompute it, except as a preview of an unconfirmed editor total.
-- Locks: the workspace default cannot change while an inheriting tournament has a draft or formation in flight, and neither `team_formation` nor the roster shape can change while a draft session is active.
+- Locks: the workspace default cannot change while an inheriting tournament has a draft or formation in flight, and neither a draft node's `draft_format` nor the roster shape can change while a draft session is active.
 
 `flex` is a slot, never a rated role: it carries no rank and no role is recorded into it. When every slot in the shape is `flex`, role counters, role filters and role validation are switched off entirely.
 

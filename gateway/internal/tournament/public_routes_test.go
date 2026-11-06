@@ -150,3 +150,31 @@ func TestPickBanV2RouteContracts(t *testing.T) {
 		}
 	}
 }
+
+// Every route that reads or writes one person's participation names its registration node (plan Decision 1);
+// Query is an allow-list, so a route missing the key 422s every call in the worker.
+func TestParticipationRoutesForwardRegistrationNodeID(t *testing.T) {
+	for _, queue := range []string{
+		"rpc.tournament.reg_pub_create",
+		"rpc.tournament.reg_pub_get_me",
+		"rpc.tournament.reg_pub_update_me",
+		"rpc.tournament.reg_pub_withdraw_me",
+		"rpc.tournament.reg_pub_check_in",
+		"rpc.tournament.sub_me",
+		"rpc.tournament.sub_redeem_code",
+	} {
+		found := false
+		for _, r := range PublicWriteRoutes {
+			if r.Queue != queue {
+				continue
+			}
+			found = true
+			if !slices.Contains(r.Query, "registration_node_id") {
+				t.Errorf("%s: Query=%v lacks registration_node_id", queue, r.Query)
+			}
+		}
+		if !found {
+			t.Errorf("route %s not found in PublicWriteRoutes", queue)
+		}
+	}
+}

@@ -144,6 +144,7 @@ def _require_resolved(handle: str) -> None:
 async def materialize_teams(
     session: AsyncSession,
     tournament_id: int,
+    formation_node_id: int,
     teams: Sequence[MaterializationTeam],
     *,
     on_unresolved: OnUnresolved = "skip",
@@ -154,8 +155,9 @@ async def materialize_teams(
     pair, not per player.
 
     Idempotent twice over: a team whose lowercased ``name`` already exists in the
-    tournament is reused rather than duplicated, and a player already placed in
-    the tournament is never given a second row.
+    formation node is reused rather than duplicated, and a player already placed in
+    the node's output (its teams and the tournament-wide ones) is never given a second row. New rows carry
+    ``formation_node_id``; what other formations of the tournament hold is not looked at.
     """
     result = MaterializationResult()
 
@@ -240,7 +242,7 @@ async def materialize_teams(
 
     resolved_user_ids = {user.id for user in users_by_handle.values()} | set(player_id_by_member_id.values())
 
-    # 2. Batch-load existing teams for this tournament by lowercased name.
+    # 2. Batch-load existing teams of this formation node by lowercased name.
     team_names = {team_data.display_name.lower() for team_data in teams}
     existing_teams: dict[str, Team] = {}
     if team_names:
@@ -248,7 +250,7 @@ async def materialize_teams(
             (
                 await session.execute(
                     sa.select(Team).where(
-                        Team.tournament_id == tournament_id,
+                        Team.formation_node_id == formation_node_id,
                         sa.func.lower(Team.name).in_(list(team_names)),
                     )
                 )
@@ -260,8 +262,8 @@ async def materialize_teams(
             existing_teams.setdefault(team.name.lower(), team)
 
     # 3. ``load_prior_participation`` answers the newcomer question separately
-    #    (chronological, scope-aware); one more query finds players already in
-    #    this tournament so a repeat never creates a duplicate row.
+    #    (chronological, scope-aware); one more query finds players already in this formation node's output (its
+    #    teams and the tournament-wide ones, plan Decision 8) so a repeat never creates a duplicate row.
     placed_user_ids: set[int] = set()
     starters_by_name: dict[str, list[tuple[RoleNode, ...]]] = {team.display_name.lower(): [] for team in teams}
     team_name_by_id = {team.id: name for name, team in existing_teams.items()}
@@ -273,8 +275,10 @@ async def materialize_teams(
             await session.execute(
                 sa.select(WorkspaceMember.player_id, Player)
                 .join(Player, Player.workspace_member_id == WorkspaceMember.id)
+                .join(Team, Team.id == Player.team_id)
                 .where(
-                    Player.tournament_id == tournament_id,
+                    Team.tournament_id == tournament_id,
+                    sa.or_(Team.formation_node_id == formation_node_id, Team.formation_node_id.is_(None)),
                     sa.or_(
                         WorkspaceMember.player_id.in_(user_id_list),
                         Player.team_id.in_(team_name_by_id),
@@ -327,7 +331,7 @@ async def materialize_teams(
                 result.advisories.append(f"{team_data.display_name}: skipped {member.name} (not found)")
                 continue
             if player_id in placed_user_ids:
-                logger.info("Player %s already in tournament %s, skipping", member.name, tournament_id)
+                logger.info("Player %s already in formation %s, skipping", member.name, formation_node_id)
                 result.skipped_members += 1
                 result.advisories.append(f"{team_data.display_name}: skipped {member.name} (already in tournament)")
                 continue
@@ -363,6 +367,7 @@ async def materialize_teams(
                 name=name,
                 balancer_name=team_data.balancer_name,
                 tournament_id=tournament_id,
+                formation_node_id=formation_node_id,
                 captain_id=captain_id,
             )
             session.add(team)
@@ -395,6 +400,7 @@ async def materialize_teams(
                     rank=member.rank,
                     assignments=[assignment_of(row) for row in assigned],
                     tournament_id=tournament_id,
+                    formation_node_id=formation_node_id,
                     team_id=team.id,
                     # A registration-time substitute has replaced nobody yet, so
                     # the link is NULL and gets set when a real substitution

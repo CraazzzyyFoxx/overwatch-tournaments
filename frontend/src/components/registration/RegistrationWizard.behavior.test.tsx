@@ -97,7 +97,6 @@ const FORM = {
   id: 1,
   tournament_id: 7,
   workspace_id: 3,
-  is_open: true,
   form_schema: SCHEMA,
   discipline: "overwatch",
   version_id: 42,

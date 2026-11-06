@@ -4,8 +4,6 @@ import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import adminService from "@/services/admin.service";
-import { DEFAULT_WORKSPACE_TIMEZONE } from "@/lib/workspace/timezone";
-import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { TournamentUpdateInput } from "@/types/admin.types";
 import type { Tournament } from "@/types/tournament.types";
 import {
@@ -13,7 +11,6 @@ import {
   type ScopedSettingsForm
 } from "@/components/kit/useScopedSettingsForm";
 import {
-  getPhaseSchedulePayload,
   getTournamentForm,
   getTournamentUpdatePayload,
   type TournamentFormState
@@ -29,21 +26,16 @@ import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-
  * the schedule and the scoring in the audit trail
  * (`TournamentUpdate.model_dump(exclude_unset=True)` records exactly the keys
  * a PATCH sends).
- *
- * `phase_schedule` is not here: it travels through `setTournamentSchedule`,
- * and only the `schedule` section sends it.
  */
 const SETTINGS_SECTION_FIELDS = {
-  // How teams form and which grid seeds them are read on every screen that
-  // describes the tournament, so they sit with its name rather than with the
-  // results flags.
-  general: ["name", "slug", "description", "team_formation", "division_grid_version_id"],
+  // The grid that seeds the tournament is read on every screen that describes it, so it sits with its name
+  // rather than with the results flags.
+  general: ["name", "slug", "description", "division_grid_version_id"],
   // One field, and deliberately alone: the published document is the section.
   // Saving the results flags must not rewrite it in the audit trail, nor the reverse.
   rules: ["rules"],
-  scoring: ["is_league", "is_finished", "logs_official"],
-  schedule: ["start_date", "end_date", "auto_transitions_enabled", "allow_late_registration"],
-  draft: ["draft_format_json"],
+  scoring: ["is_finished", "logs_official"],
+  schedule: ["start_date", "end_date", "auto_transitions_enabled"],
   challonge: ["challonge_slug"],
   // Sits beside the stream links: the delay the rules require of a POV stream.
   links: ["pov_stream_delay_s"],
@@ -58,8 +50,6 @@ export interface TournamentSettingsForm
   /** Never `null`: the tournament is loaded before a section mounts. */
   form: TournamentFormState;
   payload: TournamentUpdateInput;
-  /** Zone the schedule section enters and shows times in; storage stays UTC. */
-  timezone: string;
 }
 
 /**
@@ -74,21 +64,8 @@ export function useTournamentSettingsForm(
   section: SettingsFormSection
 ): TournamentSettingsForm {
   const queryClient = useQueryClient();
-  const workspaces = useWorkspaceStore((state) => state.workspaces);
-  const timezone =
-    workspaces.find((workspace) => workspace.id === tournament.workspace_id)?.timezone ??
-    DEFAULT_WORKSPACE_TIMEZONE;
 
-  const baseline = useMemo(
-    () => getTournamentForm(tournament, timezone),
-    [tournament, timezone]
-  );
-
-  // The schedule travels through its own endpoint, so it is neither in the
-  // PATCH body nor in its key count — but the save bar still has to see it.
-  const scheduleChanged = (form: TournamentFormState, base: TournamentFormState) =>
-    section === "schedule" &&
-    JSON.stringify(form.phase_schedule) !== JSON.stringify(base.phase_schedule);
+  const baseline = useMemo(() => getTournamentForm(tournament), [tournament]);
 
   const settings = useScopedSettingsForm<TournamentFormState, TournamentUpdateInput>({
     baseline,
@@ -102,17 +79,9 @@ export function useTournamentSettingsForm(
       }
       return scoped;
     },
-    countChanges: (payload, form, base) =>
-      Object.keys(payload).length + (scheduleChanged(form, base) ? 1 : 0),
-    submit: async (payload, form, base) => {
+    submit: async (payload) => {
       if (Object.keys(payload).length > 0) {
         await adminService.updateTournament(tournamentId, payload);
-      }
-      if (scheduleChanged(form, base)) {
-        await adminService.setTournamentSchedule(
-          tournamentId,
-          getPhaseSchedulePayload(form.phase_schedule, timezone)
-        );
       }
     },
     onSaved: () => invalidateTournamentWorkspace(queryClient, tournamentId)
@@ -124,7 +93,6 @@ export function useTournamentSettingsForm(
     // tournament is a prop, so the baseline is the value of the very first
     // render.
     form: settings.form ?? baseline,
-    payload: settings.payload ?? {},
-    timezone
+    payload: settings.payload ?? {}
   };
 }

@@ -33,6 +33,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from shared.core.enums import SubscriptionCollectionSource  # noqa: E402
+from shared.domain.flow.config import RegistrationNodeConfig  # noqa: E402
 from shared.services.subscriptions import (  # noqa: E402
     Outcome,
     ProviderRequirement,
@@ -145,18 +146,23 @@ def _reg(reg_id: int, *, tag: str | None = "Player#1", checked_in: bool = False)
     )
 
 
+async def _resolve(session: Any, registrations: list[Any], **kwargs: Any) -> Any:
+    """``resolve_admission`` with each stub as its own entry: the stub carries the lifecycle facts."""
+    return await resolve_admission(session, registrations, entries={r.id: r for r in registrations}, **kwargs)
+
+
+async def _gate(session: Any, registration: Any, **kwargs: Any) -> Any:
+    """``resolve_admission_for_gate`` with the stub as its own entry (``None`` is the sign-up gate: no row, no entry)."""
+    return await resolve_admission_for_gate(session, registration, entry=registration, **kwargs)
+
+
 _RULE = SubscriptionRequirement(mode="all", requirements=(ProviderRequirement(provider="discord", min_tier_rank=1),))
 
 
 def _config(*, profile: bool = False, subscription: bool = False, stage: str = "check_in") -> AdmissionConfig:
     return AdmissionConfig.from_form(
-        SimpleNamespace(
-            workspace_id=7,
-            require_open_profile=profile,
-            open_profile_scope="main",
-            require_subscription=subscription,
-            subscription_stage=stage,
-        ),
+        SimpleNamespace(workspace_id=7, require_open_profile=profile, open_profile_scope="main"),
+        RegistrationNodeConfig(require_subscription=subscription, subscription_stage=stage),
         subscription_rule=_RULE if subscription else None,
     )
 
@@ -175,7 +181,7 @@ class BatchingTests(IsolatedAsyncioTestCase):
         reads apiece.
         """
         session = _Session()
-        result = await resolve_admission(session, [_reg(1), _reg(2)], config=_config())
+        result = await _resolve(session, [_reg(1), _reg(2)], config=_config())
 
         assert session.executes == 0
         assert {reg_id: ev.decision for reg_id, ev in result.items()} == {
@@ -187,7 +193,7 @@ class BatchingTests(IsolatedAsyncioTestCase):
         session = _Session([("player#1", "ok")])
         regs = [_reg(i, tag="Player#1") for i in range(1, 21)]
 
-        await resolve_admission(session, regs, config=_config(profile=True))
+        await _resolve(session, regs, config=_config(profile=True))
 
         assert session.executes == 1
 
@@ -198,7 +204,7 @@ class BatchingTests(IsolatedAsyncioTestCase):
         resolver = _Resolver()
         regs = [_reg(i) for i in range(1, 21)]
 
-        await resolve_admission(session, regs, config=_config(subscription=True), resolver=resolver)
+        await _resolve(session, regs, config=_config(subscription=True), resolver=resolver)
 
         assert session.executes == 1  # the auth-user-id mapping only
         assert len(resolver.calls) == 1
@@ -206,7 +212,7 @@ class BatchingTests(IsolatedAsyncioTestCase):
 
     async def test_an_empty_list_short_circuits(self):
         session = _Session()
-        assert await resolve_admission(session, [], config=_config(profile=True, subscription=True)) == {}
+        assert await _resolve(session, [], config=_config(profile=True, subscription=True)) == {}
         assert session.executes == 0
 
     async def test_a_list_with_no_linked_accounts_skips_the_resolver(self):
@@ -215,7 +221,7 @@ class BatchingTests(IsolatedAsyncioTestCase):
         session = _Session([])  # the auth-user-id mapping finds nothing
         resolver = _Resolver()
 
-        result = await resolve_admission(session, [_reg(1)], config=_config(subscription=True), resolver=resolver)
+        result = await _resolve(session, [_reg(1)], config=_config(subscription=True), resolver=resolver)
 
         assert resolver.calls == []
         verdict = result[1].requirement("subscription")
@@ -237,7 +243,7 @@ class ForcingTests(IsolatedAsyncioTestCase):
         session = _Session([(1, 101)])
         resolver = _Resolver()
 
-        await resolve_admission(session, [_reg(1)], config=_config(subscription=True), resolver=resolver)
+        await _resolve(session, [_reg(1)], config=_config(subscription=True), resolver=resolver)
 
         assert resolver.calls[0]["force_refresh"] is False
         assert resolver.calls[0]["allow_stale"] is True
@@ -252,7 +258,7 @@ class ForcingTests(IsolatedAsyncioTestCase):
                 session = _Session([(1, 101)])
                 resolver = _Resolver()
 
-                await resolve_admission_for_gate(
+                await _gate(
                     session,
                     _reg(1),
                     config=_config(subscription=True, stage=stage.value),
@@ -285,7 +291,7 @@ class DeferralTests(IsolatedAsyncioTestCase):
         session = _Session([(1, 101)])
         resolver = self._refusing()
 
-        evaluation = await resolve_admission_for_gate(
+        evaluation = await _gate(
             session,
             _reg(1),
             config=_config(subscription=True, stage="registration"),
@@ -303,7 +309,7 @@ class DeferralTests(IsolatedAsyncioTestCase):
         session = _Session([(1, 101)])
         resolver = self._refusing()
 
-        evaluation = await resolve_admission_for_gate(
+        evaluation = await _gate(
             session,
             _reg(1),
             config=_config(subscription=True, stage="registration"),
@@ -321,7 +327,7 @@ class DeferralTests(IsolatedAsyncioTestCase):
         session = _Session([(1, 101)])
         resolver = _Resolver(outcome=Outcome.SATISFIED, code_providers={"discord"})
 
-        await resolve_admission_for_gate(
+        await _gate(
             session,
             _reg(1),
             config=_config(subscription=True, stage="registration"),
@@ -336,7 +342,7 @@ class DeferralTests(IsolatedAsyncioTestCase):
         resolver = self._refusing()
         resolver.code_providers = set()
 
-        evaluation = await resolve_admission_for_gate(
+        evaluation = await _gate(
             session,
             _reg(1),
             config=_config(subscription=True, stage="registration"),
@@ -357,7 +363,7 @@ class FailOpenTests(IsolatedAsyncioTestCase):
         """A service wired without a resolver has no opinion on subscriptions. If
         that read as a refusal, one missing dependency would empty a check-in."""
         session = _Session()
-        result = await resolve_admission(session, [_reg(1)], config=_config(subscription=True), resolver=None)
+        result = await _resolve(session, [_reg(1)], config=_config(subscription=True), resolver=None)
 
         verdict = result[1].requirement("subscription")
         assert verdict is not None
@@ -367,11 +373,11 @@ class FailOpenTests(IsolatedAsyncioTestCase):
     async def test_a_closed_profile_blocks_but_a_manual_check_in_still_admits(self):
         """The end-to-end shape of the forced-admission fix, through the real
         registry: the requirement stays visibly blocked, and the player is in."""
-        blocked = await resolve_admission(_Session([("player#1", "private")]), [_reg(1)], config=_config(profile=True))
+        blocked = await _resolve(_Session([("player#1", "private")]), [_reg(1)], config=_config(profile=True))
         assert blocked[1].decision is AdmissionDecision.not_admitted
         assert [v.key for v in blocked[1].blockers] == ["open_profile"]
 
-        forced = await resolve_admission(
+        forced = await _resolve(
             _Session([("player#1", "private")]), [_reg(1, checked_in=True)], config=_config(profile=True)
         )
         assert forced[1].decision is AdmissionDecision.admitted
@@ -402,7 +408,7 @@ class ProspectiveSubjectTests(IsolatedAsyncioTestCase):
             verdicts={"discord": _verdict(SubscriptionState.INACTIVE, reason_code="not_subscribed")},
         )
 
-        evaluation = await resolve_admission_for_gate(
+        evaluation = await _gate(
             session,
             None,
             config=_config(subscription=True, stage="registration"),
@@ -421,7 +427,7 @@ class ProspectiveSubjectTests(IsolatedAsyncioTestCase):
         session = _Session()
         resolver = _Resolver()
 
-        await resolve_admission_for_gate(
+        await _gate(
             session,
             _reg(1),
             config=_config(subscription=True, stage="check_in"),
@@ -437,7 +443,7 @@ class ProspectiveSubjectTests(IsolatedAsyncioTestCase):
         """Not a silent pass: answering ``undetermined`` for a call that named no
         subject is exactly how the regression above hid."""
         with self.assertRaises(ValueError):
-            await resolve_admission_for_gate(
+            await _gate(
                 _Session(),
                 None,
                 config=_config(subscription=True),
@@ -461,7 +467,7 @@ class StageScopedResolveTests(IsolatedAsyncioTestCase):
         session = _Session()
         resolver = _Resolver(outcome=Outcome.REFUSED)
 
-        evaluation = await resolve_admission_for_gate(
+        evaluation = await _gate(
             session,
             None,
             config=_config(subscription=True, stage="check_in"),
@@ -479,7 +485,7 @@ class StageScopedResolveTests(IsolatedAsyncioTestCase):
         session = _Session()
         resolver = _Resolver(outcome=Outcome.REFUSED)
 
-        evaluation = await resolve_admission_for_gate(
+        evaluation = await _gate(
             session,
             _reg(1),
             config=_config(subscription=True, stage="check_in"),
@@ -496,7 +502,7 @@ class StageScopedResolveTests(IsolatedAsyncioTestCase):
         for stage in (AdmissionStage.registration, AdmissionStage.check_in):
             with self.subTest(stage=stage):
                 resolver = _Resolver(outcome=Outcome.SATISFIED)
-                await resolve_admission_for_gate(
+                await _gate(
                     _Session(),
                     _reg(1),
                     config=_config(subscription=True, stage="registration"),

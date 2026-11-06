@@ -221,7 +221,7 @@ async def _seed(session: Any) -> tuple[int, int]:
         workspace_id=workspace.id,
         name=f"Form versions {suffix}",
         slug=f"formver-{suffix}",
-        status=enums.TournamentStatus.REGISTRATION,
+        status=enums.TournamentStatus.LIVE,
     )
     session.add(tournament)
     await session.flush()
@@ -296,19 +296,16 @@ def test_stale_count_counts_live_registrations_on_older_versions(db_session) -> 
                     Registration(
                         tournament_id=tournament_id,
                         display_name="live-a",
-                        status="approved",
                         form_version_id=version_one,
                     ),
                     Registration(
                         tournament_id=tournament_id,
                         display_name="live-b",
-                        status="approved",
                         form_version_id=version_one,
                     ),
                     Registration(
                         tournament_id=tournament_id,
                         display_name="withdrawn",
-                        status="approved",
                         form_version_id=version_one,
                         deleted_at=datetime.now(UTC),
                     ),

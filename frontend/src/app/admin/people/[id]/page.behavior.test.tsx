@@ -141,7 +141,6 @@ const PARTICIPATIONS = [
     name: "MoonRise Mix Vol.4",
     workspace_id: 1,
     discipline: "overwatch",
-    is_league: false,
     team_id: 3,
     team: "nnniik",
     players: [

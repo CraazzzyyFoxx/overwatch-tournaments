@@ -254,20 +254,6 @@ export function ConditionLeafFields({
           )}
         </div>
       )}
-      {/* ── tournament_type: any/league/not league ── */}
-      {conditionType === "tournament_type" && (
-        <Select
-          value={params.is_league === null || params.is_league === undefined ? "any" : String(params.is_league)}
-          onValueChange={(v) => setParam("is_league", v === "any" ? null : v === "true")}
-        >
-          <SelectTrigger aria-label={controlName(t("fields.tournamentType"))}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="any">{t("fields.any")}</SelectItem>
-            <SelectItem value="true">{t("fields.league")}</SelectItem>
-            <SelectItem value="false">{t("fields.notLeague")}</SelectItem>
-          </SelectContent>
-        </Select>
-      )}
       {/* ── encounter_score: round_type + scores + winner ── */}
       {conditionType === "encounter_score" && (
         <>

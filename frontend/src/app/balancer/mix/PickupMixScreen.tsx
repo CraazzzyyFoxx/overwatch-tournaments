@@ -329,8 +329,7 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
         logUpload={logUpload}
         settingNextMap={setNextMap.isPending}
         onNextMapChange={(mapId) => setNextMap.mutate({ lobbyIndex: shownLobby, mapId })}
-        settingLobbyCode={setLobbyCode.isPending}
-        onLobbyCodeChange={(lobbyCode) => setLobbyCode.mutate({ lobbyIndex: shownLobby, lobbyCode })}
+        onLobbyCodeChange={(lobbyCode) => setLobbyCode.mutateAsync({ lobbyIndex: shownLobby, lobbyCode })}
         botLobby={botLobbyOptions(metadataQuery.data, game, canWrite, createBotLobby.isPending, (region) =>
           createBotLobby.mutate({ lobbyIndex: shownLobby, region })
         )}

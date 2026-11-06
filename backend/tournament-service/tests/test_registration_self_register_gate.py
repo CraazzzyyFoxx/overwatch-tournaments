@@ -43,9 +43,10 @@ from shared.domain.forms import FormField, FormSchema, FormSection  # noqa: E402
 from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.identity.rbac import user_roles  # noqa: E402
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: E402
-from shared.models.tournament import Tournament, TournamentPhaseSchedule  # noqa: E402
+from shared.models.tournament import FlowNode, FlowNodeSchedule, Tournament  # noqa: E402
 from shared.rbac import get_workspace_system_role  # noqa: E402
 from shared.testing import real_db_sessionmaker as _db_sessions  # noqa: E402
+from shared.testing.factories import registration_node  # noqa: E402
 from src.services.registration import service as reg_service  # noqa: E402
 from src.services.registration import windows  # noqa: E402
 
@@ -76,7 +77,7 @@ async def _make_tournament(session, *, workspace_id: int) -> Tournament:
         # NOT NULL and globally unique; production writes go through
         # `generate_unique_tournament_slug`, which this factory bypasses.
         slug=f"selfreg-{suffix}",
-        status=enums.TournamentStatus.CHECK_IN,
+        status=enums.TournamentStatus.LIVE,
     )
     session.add(tournament)
     await session.flush()
@@ -125,15 +126,17 @@ def test_first_registration_creates_member_and_player_role() -> None:
                 workspace = await _make_workspace(session)
                 tournament = await _make_tournament(session, workspace_id=workspace.id)
                 auth_user = await _make_auth_user(session, suffix)
+                node_id = await registration_node(session, tournament.id)
                 await session.commit()
                 workspace_id, tournament_id, auth_user_id = workspace.id, tournament.id, auth_user.id
 
             try:
                 async with session_maker() as session:
                     actor = _authed_user(auth_user_id)
-                    registration = await reg_service.registration_service.create_registration(
+                    entry = await reg_service.registration_service.create_registration(
                         session,
                         tournament_id=tournament_id,
+                        registration_node_id=node_id,
                         workspace_id=workspace_id,
                         auth_user_id=auth_user_id,
                         values={"identity_battlenet": [f"SelfReg{suffix}#111"]},
@@ -141,7 +144,7 @@ def test_first_registration_creates_member_and_player_role() -> None:
                         auto_approve=False,
                         auth_user=actor,
                     )
-                    member_id = registration.workspace_member_id
+                    member_id = entry.registration.workspace_member_id
 
                 async with session_maker() as session:
                     # The registration's only identity anchor is workspace_member_id
@@ -186,6 +189,7 @@ def test_workspace_scoped_self_register_deny_returns_403() -> None:
                 workspace = await _make_workspace(session)
                 tournament = await _make_tournament(session, workspace_id=workspace.id)
                 auth_user = await _make_auth_user(session, suffix)
+                node_id = await registration_node(session, tournament.id)
                 await session.commit()
                 workspace_id, tournament_id, auth_user_id = workspace.id, tournament.id, auth_user.id
 
@@ -201,6 +205,7 @@ def test_workspace_scoped_self_register_deny_returns_403() -> None:
                         await reg_service.registration_service.create_registration(
                             session,
                             tournament_id=tournament_id,
+                            registration_node_id=node_id,
                             workspace_id=workspace_id,
                             auth_user_id=auth_user_id,
                             values={"identity_battlenet": [f"Denied{suffix}#222"]},
@@ -239,6 +244,8 @@ def test_second_registration_does_not_duplicate_member() -> None:
                 tournament_a = await _make_tournament(session, workspace_id=workspace.id)
                 tournament_b = await _make_tournament(session, workspace_id=workspace.id)
                 auth_user = await _make_auth_user(session, suffix)
+                node_a_id = await registration_node(session, tournament_a.id)
+                node_b_id = await registration_node(session, tournament_b.id)
                 await session.commit()
                 workspace_id = workspace.id
                 tournament_a_id, tournament_b_id = tournament_a.id, tournament_b.id
@@ -247,9 +254,10 @@ def test_second_registration_does_not_duplicate_member() -> None:
             try:
                 actor = _authed_user(auth_user_id)
                 async with session_maker() as session:
-                    registration_a = await reg_service.registration_service.create_registration(
+                    entry_a = await reg_service.registration_service.create_registration(
                         session,
                         tournament_id=tournament_a_id,
+                        registration_node_id=node_a_id,
                         workspace_id=workspace_id,
                         auth_user_id=auth_user_id,
                         values={"identity_battlenet": [f"Dup{suffix}#333"]},
@@ -257,11 +265,12 @@ def test_second_registration_does_not_duplicate_member() -> None:
                         auto_approve=False,
                         auth_user=actor,
                     )
-                    member_id_a = registration_a.workspace_member_id
+                    member_id_a = entry_a.registration.workspace_member_id
                 async with session_maker() as session:
-                    registration_b = await reg_service.registration_service.create_registration(
+                    entry_b = await reg_service.registration_service.create_registration(
                         session,
                         tournament_id=tournament_b_id,
+                        registration_node_id=node_b_id,
                         workspace_id=workspace_id,
                         auth_user_id=auth_user_id,
                         values={"identity_battlenet": [f"Dup{suffix}#333"]},
@@ -269,7 +278,7 @@ def test_second_registration_does_not_duplicate_member() -> None:
                         auto_approve=False,
                         auth_user=actor,
                     )
-                    member_id_b = registration_b.workspace_member_id
+                    member_id_b = entry_b.registration.workspace_member_id
 
                 async with session_maker() as session:
                     member_a = await session.scalar(sa.select(WorkspaceMember).where(WorkspaceMember.id == member_id_a))
@@ -300,194 +309,61 @@ def test_second_registration_does_not_duplicate_member() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Pure unit tests: status/schedule gating (windows.py) — no DB required.
+# Pure unit tests: the node wiring of the window predicates (windows.py) — no DB required.
+# The predicate rules themselves are pinned in ``test_registration_node_windows.py``.
 # ---------------------------------------------------------------------------
 
 
-def _gate_tournament(
-    status: enums.TournamentStatus,
-    *,
-    allow_late_registration: bool = False,
-    schedule: list[TournamentPhaseSchedule] | None = None,
-) -> Tournament:
-    suffix = uuid.uuid4().hex[:12]
-    tournament = Tournament(
-        workspace_id=1,
-        name="Gate Unit Tournament",
-        slug=f"gate-unit-{suffix}",
-        status=status,
-        allow_late_registration=allow_late_registration,
-    )
-    tournament.phase_schedule = schedule or []
-    return tournament
-
-
-def _open_row(now: datetime) -> TournamentPhaseSchedule:
-    """A REGISTRATION window that is currently open, open-ended."""
-    return TournamentPhaseSchedule(
+def _gate_node(status: str, *, allow_late_registration: bool = False) -> FlowNode:
+    return FlowNode(
         tournament_id=1,
-        status=enums.TournamentStatus.REGISTRATION,
-        starts_at=now - timedelta(hours=1),
-        ends_at=None,
+        kind="registration",
+        name="Registration",
+        status=status,
+        config={"allow_late_registration": allow_late_registration},
     )
 
 
-def _schedule_row(
-    status: enums.TournamentStatus,
-    *,
-    starts_at: datetime,
-    ends_at: datetime | None = None,
-) -> TournamentPhaseSchedule:
-    return TournamentPhaseSchedule(tournament_id=1, status=status, starts_at=starts_at, ends_at=ends_at)
+def _schedule_row(phase: str, *, starts_at: datetime, ends_at: datetime | None = None) -> FlowNodeSchedule:
+    return FlowNodeSchedule(node_id=1, phase=phase, starts_at=starts_at, ends_at=ends_at)
 
 
-def test_registration_needs_a_schedule_row_at_all() -> None:
-    """The inversion. ``is_within_phase_window`` treats a missing row as "spans
-    the whole phase"; registration treats it as CLOSED, because that contract is
-    what keeps the pre-consolidation default (``is_open`` defaulted to false) —
-    a brand-new tournament must not accept sign-ups before anyone opened them."""
-    tournament = _gate_tournament(enums.TournamentStatus.REGISTRATION)
-    assert windows.is_registration_open(tournament) is False
-
-
-def test_registration_open_inside_the_window_regardless_of_phase() -> None:
-    """Phase no longer participates: an open window means open, even at LIVE.
-
-    Distinct from ``allow_late_registration``, which is back but narrower: an
-    ``ends_at`` past the LIVE start keeps registration open with no flag at all,
-    while the flag exists for the organizer who wants to keep the advertised
-    closing date on the page and still admit latecomers.
-    """
+def test_sign_up_open_inside_the_open_row() -> None:
     now = datetime.now(UTC)
-    for status in (
-        enums.TournamentStatus.REGISTRATION,
-        enums.TournamentStatus.CHECK_IN,
-        enums.TournamentStatus.DRAFT,
-        enums.TournamentStatus.LIVE,
-    ):
-        tournament = _gate_tournament(status, schedule=[_open_row(now)])
-        assert windows.is_registration_open(tournament, now=now) is True, status
+    row = _schedule_row("open", starts_at=now - timedelta(hours=1))
+    assert windows.is_sign_up_open_for(_gate_node("open"), [row], now=now) is True
 
 
-def test_registration_closed_before_the_window_starts() -> None:
+def test_sign_up_closed_outside_the_open_row_and_outside_open_status() -> None:
     now = datetime.now(UTC)
-    tournament = _gate_tournament(
-        enums.TournamentStatus.REGISTRATION,
-        schedule=[
-            _schedule_row(
-                enums.TournamentStatus.REGISTRATION,
-                starts_at=now + timedelta(hours=1),
-            )
-        ],
-    )
-    assert windows.is_registration_open(tournament, now=now) is False
+    ended = _schedule_row("open", starts_at=now - timedelta(hours=2), ends_at=now - timedelta(hours=1))
+    assert windows.is_sign_up_open_for(_gate_node("open"), [ended], now=now) is False
+    assert windows.is_sign_up_open_for(_gate_node("closed"), [], now=now) is False
 
 
-def test_registration_closed_outside_registration_row_window() -> None:
+def test_allow_late_registration_is_read_off_the_node_config() -> None:
+    """The flag lives in the node config: it lifts the ended row's ``ends_at`` and nothing more."""
     now = datetime.now(UTC)
-    tournament = _gate_tournament(
-        enums.TournamentStatus.REGISTRATION,
-        schedule=[
-            _schedule_row(
-                enums.TournamentStatus.REGISTRATION,
-                starts_at=now - timedelta(hours=2),
-                ends_at=now - timedelta(hours=1),
-            )
-        ],
-    )
-    assert windows.is_registration_open(tournament, now=now) is False
-
-
-def test_allow_late_registration_reopens_an_ended_window() -> None:
-    """The flag reads off the ``Tournament`` here, not off a projection — this is
-    the wiring ``windows.is_registration_open`` owns, and the reason the shared
-    predicate takes ``allow_late`` as a required argument."""
-    now = datetime.now(UTC)
-    ended = [
-        _schedule_row(
-            enums.TournamentStatus.REGISTRATION,
-            starts_at=now - timedelta(hours=2),
-            ends_at=now - timedelta(hours=1),
-        )
-    ]
-    tournament = _gate_tournament(
-        enums.TournamentStatus.LIVE,
-        schedule=ended,
-        allow_late_registration=True,
-    )
-    assert windows.is_registration_open(tournament, now=now) is True
-
-
-def test_allow_late_registration_does_not_open_a_tournament_with_no_row() -> None:
-    """The override lifts ``ends_at`` only. Opening a row-less tournament would
-    flip the freshly-created default from closed to open."""
-    now = datetime.now(UTC)
-    tournament = _gate_tournament(
-        enums.TournamentStatus.REGISTRATION,
-        allow_late_registration=True,
-    )
-    assert windows.is_registration_open(tournament, now=now) is False
-
-
-def test_registration_ignores_a_check_in_window() -> None:
-    """Only the REGISTRATION row is consulted — a wide-open CHECK_IN window must
-    not leak registration open."""
-    now = datetime.now(UTC)
-    tournament = _gate_tournament(
-        enums.TournamentStatus.CHECK_IN,
-        schedule=[
-            _schedule_row(
-                enums.TournamentStatus.CHECK_IN,
-                starts_at=now - timedelta(hours=1),
-            )
-        ],
-    )
-    assert windows.is_registration_open(tournament, now=now) is False
-
-
-def test_terminal_status_is_a_floor_not_a_knob() -> None:
-    """A mis-set (or open-ended) window can never reopen a finished tournament."""
-    now = datetime.now(UTC)
-    for status in (enums.TournamentStatus.COMPLETED, enums.TournamentStatus.ARCHIVED):
-        tournament = _gate_tournament(status, schedule=[_open_row(now)])
-        assert windows.is_registration_open(tournament, now=now) is False, status
+    ended = _schedule_row("open", starts_at=now - timedelta(hours=2), ends_at=now - timedelta(hours=1))
+    assert windows.is_sign_up_open_for(_gate_node("open", allow_late_registration=True), [ended], now=now) is True
+    assert windows.is_sign_up_open_for(_gate_node("draft", allow_late_registration=True), [], now=now) is False
 
 
 def test_check_in_window_closed_after_row_ends_at() -> None:
-    """A CHECK_IN row whose ``ends_at`` has passed closes check-in while the
-    tournament still sits in CHECK_IN (gap before LIVE starts)."""
+    """A ``check_in`` row whose ``ends_at`` has passed closes check-in while the node still sits in ``check_in``."""
     now = datetime.now(UTC)
-    tournament = _gate_tournament(
-        enums.TournamentStatus.CHECK_IN,
-        schedule=[
-            _schedule_row(
-                enums.TournamentStatus.CHECK_IN,
-                starts_at=now - timedelta(hours=1),
-                ends_at=now - timedelta(minutes=15),
-            )
-        ],
-    )
-    assert windows.is_check_in_window_active(tournament, now=now) is False
+    row = _schedule_row("check_in", starts_at=now - timedelta(hours=1), ends_at=now - timedelta(minutes=15))
+    assert windows.is_check_in_open_for(_gate_node("check_in"), [row], now=now) is False
 
 
 def test_check_in_window_active_inside_row_window() -> None:
     now = datetime.now(UTC)
-    tournament = _gate_tournament(
-        enums.TournamentStatus.CHECK_IN,
-        schedule=[
-            _schedule_row(
-                enums.TournamentStatus.CHECK_IN,
-                starts_at=now - timedelta(minutes=30),
-                ends_at=now + timedelta(minutes=30),
-            )
-        ],
-    )
-    assert windows.is_check_in_window_active(tournament, now=now) is True
+    row = _schedule_row("check_in", starts_at=now - timedelta(minutes=30), ends_at=now + timedelta(minutes=30))
+    assert windows.is_check_in_open_for(_gate_node("check_in"), [row], now=now) is True
 
 
 def test_check_in_window_requires_check_in_status() -> None:
-    tournament = _gate_tournament(enums.TournamentStatus.REGISTRATION)
-    assert windows.is_check_in_window_active(tournament) is False
+    assert windows.is_check_in_open_for(_gate_node("open"), []) is False
 
 
 def test_admin_check_in_ignores_the_check_in_window() -> None:
@@ -500,16 +376,15 @@ def test_admin_check_in_ignores_the_check_in_window() -> None:
 
     from src.services.registration import lifecycle
 
-    registration = SimpleNamespace(
-        id=7,
-        tournament=_gate_tournament(enums.TournamentStatus.LIVE),
+    entry = SimpleNamespace(
+        registration=SimpleNamespace(id=7),
         checked_in=False,
         checked_in_at=None,
         checked_in_by=None,
     )
 
-    async def fake_get(_self, _session, _registration_id):
-        return registration
+    async def fake_get(_self, _session, _node_id, _registration_id):
+        return entry
 
     # The checked-in-by account read finds nothing: only the window rule is under test.
     no_rows = MagicMock(**{"unique.return_value.scalars.return_value.first.return_value": None})
@@ -517,14 +392,14 @@ def test_admin_check_in_ignores_the_check_in_window() -> None:
     service = lifecycle.lifecycle_service
 
     with (
-        patch.object(type(service), "get_registration_by_id", fake_get),
+        patch.object(type(service), "get_entry", fake_get),
         patch.object(service.common, "_register_registration_changed", AsyncMock()),
     ):
-        result = asyncio.run(service.check_in_registration(session, 7, checked_in_by=99))
+        result = asyncio.run(service.check_in_registration(session, 3, 7, checked_in_by=99))
 
-    assert result is registration
-    assert registration.checked_in is True
-    assert registration.checked_in_by == 99
+    assert result is entry
+    assert entry.checked_in is True
+    assert entry.checked_in_by == 99
 
 
 async def _noop() -> None:

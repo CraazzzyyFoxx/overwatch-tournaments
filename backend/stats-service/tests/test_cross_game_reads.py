@@ -76,6 +76,15 @@ def _seed_lol_roster(conn: Connection, ids: dict[str, int]) -> None:
         points=1.0,
         **_DATES,
     )
+    _insert(
+        conn,
+        "tournament.participant_result",
+        tournament_id=ids["tournament_lol"],
+        workspace_member_id=ids["member"],
+        final_team_id=ids["team_lol_home"],
+        placement=1,
+        field_size=2,
+    )
 
 
 def test_leaderboards_without_a_game_rank_every_games_results(

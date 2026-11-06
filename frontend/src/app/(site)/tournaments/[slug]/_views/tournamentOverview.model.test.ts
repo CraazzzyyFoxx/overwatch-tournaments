@@ -7,22 +7,20 @@ import { buildGroupRows } from "./tournamentOverview.model";
 
 const STAGE_ID = 7;
 
-function group(id: number, name: string, advanceCount: number | null): StageItem {
+function group(id: number, name: string): StageItem {
   return {
     id,
     stage_id: STAGE_ID,
     name,
     type: "group",
     order: id,
-    advance_count: advanceCount,
-    advance_upper_count: null,
     inputs: []
   };
 }
 
 /** Group B sorts after Group A by name, though its id comes first. */
-const GROUP_A = group(2, "Group A", 2);
-const GROUP_B = group(1, "Group B", null);
+const GROUP_A = group(2, "Group A");
+const GROUP_B = group(1, "Group B");
 
 function standing(teamId: number, item: StageItem, position: number, points: number): Standings {
   return {
@@ -137,7 +135,7 @@ const ENCOUNTERS = [
 ];
 
 describe("buildGroupRows", () => {
-  const rows = buildGroupRows({ advance_count: 3 }, STANDINGS, ENCOUNTERS);
+  const rows = buildGroupRows(STANDINGS, ENCOUNTERS);
 
   it("orders, places and scores each group by the official standings", () => {
     expect(rows.map(({ teamId, position, points }) => ({ teamId, position, points }))).toEqual([
@@ -148,14 +146,12 @@ describe("buildGroupRows", () => {
     ]);
   });
 
-  it("splits the rows by stage item, the group overriding the stage's advance count", () => {
-    expect(
-      rows.map(({ groupKey, groupName, advance }) => ({ groupKey, groupName, advance }))
-    ).toEqual([
-      { groupKey: "2", groupName: "Group A", advance: 2 },
-      { groupKey: "2", groupName: "Group A", advance: 2 },
-      { groupKey: "2", groupName: "Group A", advance: 2 },
-      { groupKey: "1", groupName: "Group B", advance: 3 }
+  it("splits the rows by stage item", () => {
+    expect(rows.map(({ groupKey, groupName }) => ({ groupKey, groupName }))).toEqual([
+      { groupKey: "2", groupName: "Group A" },
+      { groupKey: "2", groupName: "Group A" },
+      { groupKey: "2", groupName: "Group A" },
+      { groupKey: "1", groupName: "Group B" }
     ]);
   });
 

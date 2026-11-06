@@ -58,7 +58,13 @@ vi.mock("@/services/registration-team.service", () => ({
 
 const MESSAGES = { en, ru } as const;
 
-const TOURNAMENT = { id: 5, workspace_id: 1, discipline: "overwatch", name: "Autumn Cup" } as unknown as Tournament;
+const TOURNAMENT = {
+  id: 5,
+  workspace_id: 1,
+  discipline: "overwatch",
+  name: "Autumn Cup",
+  flow_nodes: [{ id: 21, kind: "registration", name: "Registration", status: "open", config: {}, schedule: [], stage_id: null }]
+} as unknown as Tournament;
 
 const OFFER = {
   invite_id: 42,
@@ -106,7 +112,7 @@ describe("my invite offers", () => {
   it("shows an addressed invite that nothing else could reveal", async () => {
     const container = await mount();
 
-    expect(listMyInvites).toHaveBeenCalledWith(5);
+    expect(listMyInvites).toHaveBeenCalledWith(5, 21);
     expect(container.textContent).toContain("Alpha");
     // The slot reads through the shared translations, not as a raw wire code.
     expect(container.textContent).toContain("Damage");

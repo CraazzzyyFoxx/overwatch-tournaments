@@ -39,12 +39,13 @@ from shared.models.tournament import (  # noqa: E402
     Tournament,
     TournamentComputationJob,
 )
+from shared.models.tournament.flow import FlowEdge, FlowNode, FlowNodeResult  # noqa: E402
 from shared.services.encounter import result  # noqa: E402
 from shared.services.encounter.participants import active_teams  # noqa: E402
 from src import schemas  # noqa: E402
 from src.services.admin.standing import standing_service  # noqa: E402
 from src.services.standings.service import standings_service  # noqa: E402
-from tests._encounter_layer import add_encounter, add_scoring_rule  # noqa: E402
+from tests._encounter_layer import add_encounter, add_scoring_rule, add_stage_node  # noqa: E402
 
 
 async def _game(
@@ -246,15 +247,48 @@ def test_a_started_playoff_freezes_the_places_it_was_seeded_from(db_session) -> 
             bracket = StageItem(stage_id=playoff.id, name="Bracket", type=enums.StageItemType.SINGLE_BRACKET, order=0)
             db_session.add(bracket)
             await db_session.flush()
-            db_session.add(
-                StageItemInput(
-                    stage_item_id=bracket.id,
-                    slot=1,
-                    input_type=enums.StageItemInputType.FINAL,
-                    team_id=seeded.a,
-                    source_stage_item_id=seeded.item_id,
-                    source_position=1,
-                )
+            groups_node = add_stage_node(db_session, await db_session.get_one(Stage, seeded.stage_id), "completed")
+            playoff_node = add_stage_node(db_session, playoff, "live")
+            top = FlowNode(
+                tournament_id=seeded.tournament_id, kind="filter", name="Top", status="final", config={"n": 1}
+            )
+            db_session.add(top)
+            await db_session.flush()
+            first = FlowNodeResult(
+                node_id=top.id,
+                port="passed",
+                rank=1,
+                team_id=seeded.a,
+                stage_item_id=seeded.item_id,
+                item_rank=1,
+                state="final",
+            )
+            db_session.add(first)
+            await db_session.flush()
+            db_session.add_all(
+                [
+                    FlowEdge(
+                        tournament_id=seeded.tournament_id,
+                        source_node_id=groups_node.id,
+                        source_port="ranking",
+                        target_node_id=top.id,
+                        target_port="ranking",
+                    ),
+                    FlowEdge(
+                        tournament_id=seeded.tournament_id,
+                        source_node_id=top.id,
+                        source_port="passed",
+                        target_node_id=playoff_node.id,
+                        target_port="participants",
+                    ),
+                    StageItemInput(
+                        stage_item_id=bracket.id,
+                        slot=1,
+                        input_type=enums.StageItemInputType.FINAL,
+                        team_id=seeded.a,
+                        source_result_id=first.id,
+                    ),
+                ]
             )
             # A started final: a game is already in, so its first seat carries a
             # running tally (open, with no standing yet).

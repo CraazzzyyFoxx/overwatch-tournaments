@@ -71,7 +71,7 @@ def _apply_occupancy_status(team: models.RegistrationTeam, occupancy: RosterOccu
 
 def _occupancy_of(
     shape: RosterShape,
-    members: Sequence[models.Registration],
+    members: Sequence[models.RegistrationEntry],
     invites: Sequence[models.RegistrationTeamInvite],
     *,
     max_substitutes: int,
@@ -79,9 +79,9 @@ def _occupancy_of(
 ) -> RosterOccupancy:
     """Slot occupancy from already-read members and live invites."""
     accepted = [
-        RosterMember(slot_code=m.team_slot_code or "", is_substitute=bool(m.is_substitute))
+        RosterMember(slot_code=m.registration.team_slot_code or "", is_substitute=bool(m.is_substitute))
         for m in members
-        if m.team_slot_code
+        if m.registration.team_slot_code
     ]
     if extra is not None:
         accepted.append(extra)
@@ -174,8 +174,9 @@ def _normalize_invite_token(token: str) -> str:
     return "".join(token.split())
 
 
-def _free_agent_clause(tournament_id: int) -> list[sa.ColumnElement[bool]]:
-    """The one definition of "free agent": a live registration on no team.
+def _free_agent_clause(registration_node_id: int) -> list[sa.ColumnElement[bool]]:
+    """The one definition of "free agent" of a registration node: a live entry whose registration is on no team.
+    The statement selects ``Registration`` joined to ``RegistrationEntry`` on ``registration_id``.
 
     Shared by the count and the list on purpose. Two copies would drift, and the
     failure is silent and specific — an organizer reading "3 players without a
@@ -185,10 +186,11 @@ def _free_agent_clause(tournament_id: int) -> list[sa.ColumnElement[bool]]:
     uses: they released their slot and are not waiting for anything.
     """
     return [
-        models.Registration.tournament_id == tournament_id,
+        models.RegistrationEntry.registration_node_id == registration_node_id,
         models.Registration.registration_team_id.is_(None),
         models.Registration.deleted_at.is_(None),
-        models.Registration.status.notin_(_SLOT_RELEASING_STATUSES),
+        models.RegistrationEntry.deleted_at.is_(None),
+        models.RegistrationEntry.status.notin_(_SLOT_RELEASING_STATUSES),
     ]
 
 

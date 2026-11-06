@@ -47,7 +47,6 @@ class _KillFeedFixture(_scrim._Fixture):
             name="Foreign",
             slug=f"tournament-{tournament_id}",
             is_hidden=False,
-            is_league=False,
             start_date=datetime(2026, 1, 1, tzinfo=UTC),
         )
 

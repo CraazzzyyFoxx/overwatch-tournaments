@@ -61,6 +61,11 @@ APPROVED_DIRECT_WRITE_FILES = {
     "shared/rbac/bootstrap.py",
     "tournament-service/src/services/bracket/advancement.py",
     "tournament-service/src/services/bracket/usability.py",
+    # Flow recompute: one batched delete/update/insert of ``flow_node_result`` rows per node, diffed in place.
+    "tournament-service/src/services/flow/engine.py",
+    # League merge (spec 15.3): set-based re-point of every tournament-keyed table from the day tournaments to the target,
+    # collision deletes, grant overrides and queued runs, all in one operator-run transaction.
+    "tournament-service/src/services/flow/league_merge.py",
     # Append-only event journal, not CRUD: the realtime rail writes one
     # WorkspaceEvent row per staged event from the session's own before_commit
     # hook, which is where the row has to be created for it to ride the
@@ -75,22 +80,15 @@ APPROVED_DIRECT_WRITE_FILES = {
     # ``NotificationRepository.retire``.
     "shared/services/notifications.py",
     "tournament-service/src/services/challonge/stage_refs.py",
-    # Replacing a delete-orphan collection, not CRUD: ``_apply_seeding`` is a
-    # deliberately SYNCHRONOUS helper whose delete half is a collection
-    # ``remove``; the insert half is the matching ``session.add``. An async
-    # repository create would make the whole seeding path async to move one
-    # line.
-    "tournament-service/src/services/admin/stage_common.py",
     "balancer-service/src/services/team_export/materialization.py",
     "balancer-service/src/services/team_export/service.py",
     "tournament-service/src/services/admin/encounter.py",
     "tournament-service/src/services/admin/stage/crud.py",
-    "tournament-service/src/services/admin/stage/lifecycle.py",
     "tournament-service/src/services/admin/stage/merge.py",
-    "tournament-service/src/services/admin/stage/qualification.py",
     "tournament-service/src/services/admin/stage/seeding.py",
     "tournament-service/src/services/admin/team.py",
     "tournament-service/src/services/admin/tournament.py",
+    "tournament-service/src/services/flow/service.py",
     "tournament-service/src/services/registration/service.py",
 }
 

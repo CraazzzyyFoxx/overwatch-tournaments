@@ -1,8 +1,8 @@
 import { poll } from "../support/api";
 import { expect, test } from "../support/fixtures";
-import { battleTag, generateStage, listEncounters, openRegistration, rankRegistration, registerSelf, type FormSchema, type Registration, type Stage, type TournamentJob } from "../support/flows";
+import { battleTag, transitionStage, listEncounters, openRegistration, rankRegistration, registerSelf, type FormSchema, type Registration, type Stage } from "../support/flows";
 import { reportSeries, series } from "../support/results";
-import { createTournament, createWorkspace, setStatus } from "../support/seed";
+import { createTournament, createWorkspace, flowNodes, nodeOf, transitionNode } from "../support/seed";
 import { draftBoard, type DraftBoard, type DraftSession } from "../support/team-formation";
 import type { TestUser } from "../support/users";
 
@@ -65,8 +65,9 @@ test("individual swiss: single-role pool → rounds by captains → personal tab
   const adminReg = (id: number) => `/api/v1/admin/balancer/registrations/${id}`;
 
   let version = 0;
+  let registrationNodeId = 0;
   await test.step("1 — draft tournament, registration form with max_roles 1", async () => {
-    version = await openRegistration(adminApi, tid, { form: SWISS_FORM });
+    ({ versionId: version, registrationNodeId } = await openRegistration(adminApi, tid, { form: SWISS_FORM }));
   });
 
   await test.step("2 — two roles are refused with roles.too_many_roles", async () => {
@@ -92,9 +93,9 @@ test("individual swiss: single-role pool → rounds by captains → personal tab
   const users: TestUser[] = [];
   const regs: Registration[] = [];
   const userOfReg = new Map<number, TestUser>();
-  await test.step("3 — 20 one-role players register, are approved and ranked; tournament goes LIVE", async () => {
-    for (const role of ROLES) users.push(await makeUser("sw"));
-    const made = await Promise.all(users.map((user, i) => registerSelf(user, tid, version, { roles: [ROLES[i]] })));
+  await test.step("3 — 20 one-role players register, are approved and ranked; the tournament is live", async () => {
+    for (const _role of ROLES) users.push(await makeUser("sw"));
+    const made = await Promise.all(users.map((user, i) => registerSelf(user, tid, registrationNodeId, version, { roles: [ROLES[i]] })));
     regs.push(...made);
     made.forEach((reg, i) => userOfReg.set(reg.id, users[i]));
     expect(made.map((r) => r.roles.length)).toEqual(made.map(() => 1));
@@ -105,8 +106,8 @@ test("individual swiss: single-role pool → rounds by captains → personal tab
     for (const [i, reg] of regs.entries()) await rankRegistration(adminApi, reg.id, [{ role: reg.roles[0].role, rank: 1800 + i * 60 }]);
     await adminApi.post(`${adminRegs}/bulk-add-to-balancer`, { registration_ids: regs.map((r) => r.id) });
 
-    await setStatus(adminApi, tid, "check_in");
-    await setStatus(adminApi, tid, "live");
+    await transitionNode(adminApi, registrationNodeId, "check_in");
+    await transitionNode(adminApi, registrationNodeId, "closed");
     expect((await anonApi.get<{ status: string }>(`/api/v1/tournaments/${tid}`)).status).toBe("live");
   });
 
@@ -120,6 +121,23 @@ test("individual swiss: single-role pool → rounds by captains → personal tab
     expect(stage).toMatchObject({ stage_type: "individual_swiss", pairing_mode: "score", playoff_team_count: PLAYOFF_TEAMS, max_rounds: ROUNDS });
   });
 
+  await test.step("4b — flow: the swiss ranking → a top-10 filter → the draft formation", async () => {
+    const formation = await nodeOf(adminApi, tid, "formation");
+    const flow = await adminApi.get<{ edges: { id: number; target_node_id: number }[] }>(`/api/v1/admin/tournaments/${tid}/flow`);
+    // The default `registration → formation` edge would hand the whole pool to the draft; the filter's output replaces it.
+    await adminApi.put(`/api/v1/admin/tournaments/${tid}/flow`, {
+      nodes: [
+        { id: null, ref: "cut", kind: "filter", name: "Qualifiers", config: { mode: "top", n: PLAYOFF_TEAMS * 5 } },
+        { id: formation.id, kind: "formation", name: formation.name, config: { mode: "draft" } },
+      ],
+      edges: [
+        { id: null, source: stage.node_id, source_port: "ranking", target: "cut", target_port: "ranking" },
+        { id: null, source: "cut", source_port: "passed", target: formation.id, target_port: "players" },
+      ],
+      delete_edge_ids: flow.edges.filter((edge) => edge.target_node_id === formation.id).map((edge) => edge.id),
+    });
+  });
+
   const roundsUrl = () => `/api/v1/tournaments/${tid}/stages/${stage.id}/individual-rounds`;
   const readRounds = () => anonApi.get<Round[]>(roundsUrl());
   const readStandings = () => anonApi.get<Standing[]>(`/api/v1/tournaments/${tid}/player-standings`);
@@ -127,16 +145,12 @@ test("individual swiss: single-role pool → rounds by captains → personal tab
   await test.step("5 — an odd pool is refused by the start with role_count_mismatch and writes nothing", async () => {
     const victim = regs[regs.length - 1];
     await adminApi.post(`${adminRegs}/bulk-set-balancer-status`, { registration_ids: [victim.id], balancer_status: "excluded" });
-    const job = await adminApi.post<TournamentJob>(`/api/v1/admin/stages/${stage.id}/activate-and-generate`, undefined, 202);
-    const done = await poll(
-      async () => {
-        const j = await adminApi.get<TournamentJob>(`/api/v1/admin/tournament-jobs/${job.id}`);
-        return j.status === "pending" || j.status === "running" ? undefined : j;
-      },
-      `start job ${job.id}`
-    );
-    expect(done.status, JSON.stringify(done)).toBe("failed");
-    expect(JSON.stringify(done), "the refusal names the pool problem").toContain("role_count_mismatch");
+    await transitionStage(adminApi, stage.id, "ready");
+    const nodeId = (await adminApi.get<Stage>(`/api/v1/admin/stages/${stage.id}`)).node_id;
+    const refused = await adminApi.raw("POST", `/api/v1/admin/flow-nodes/${nodeId}/transition`, { body: { status: "live" } });
+    const refusal = await refused.text();
+    expect(refused.status(), refusal).toBe(409);
+    expect(refusal, "the refusal names the pool problem").toContain("role_count_mismatch");
     expect(await readRounds(), "a refused start writes no round").toEqual([]);
     expect(await readStandings(), "a refused start writes no table").toEqual([]);
     expect((await adminApi.post<Registration>(`${adminReg(victim.id)}/include`)).balancer_status).toBe("ready");
@@ -144,8 +158,9 @@ test("individual swiss: single-role pool → rounds by captains → personal tab
 
   const userOfMember = new Map<number, TestUser>();
   const regOfMember = new Map<number, number>();
-  await test.step("6 — activate and generate: round 1 has 2 encounters of rosterless seats, one captain each", async () => {
-    await generateStage(adminApi, stage.id);
+  await test.step("6 — start the stage: round 1 has 2 encounters of rosterless seats, one captain each", async () => {
+    // Step 5 left the node `ready` (its `live` move was refused): only that move remains.
+    await transitionStage(adminApi, stage.id, "live");
 
     const table = await readStandings();
     expect(table).toHaveLength(20);
@@ -175,7 +190,7 @@ test("individual swiss: single-role pool → rounds by captains → personal tab
     expect(encounters).toHaveLength(2);
     for (const enc of encounters) for (const seat of enc.teams) expect(seat.team_id ?? null, "a round seat has no tournament team (public reads omit nulls)").toBeNull();
     const stages = await anonApi.get<Stage[]>(`/api/v1/tournaments/${tid}/stages`);
-    expect(stages.find((s) => s.id === stage.id)).toMatchObject({ is_active: true, is_published: true });
+    expect(stages.find((s) => s.id === stage.id)).toMatchObject({ status: "live", is_published: true });
   });
 
   const captainOf = (seat: RoundSeat) => userOfMember.get(seat.members.find((m) => m.is_captain)!.workspace_member_id)!;
@@ -210,13 +225,12 @@ test("individual swiss: single-role pool → rounds by captains → personal tab
     await playRound(round1, 2, 0);
   });
 
-  await test.step("7b — round 2 is generated by the standings job; its captains report; the stage completes", async () => {
+  await test.step("7b — round 2 is generated by the standings job and its captains report", async () => {
     const round2 = await poll(async () => (await readRounds()).find((r) => r.round === 2), "round 2 to appear");
     expect(round2.encounters).toHaveLength(2);
     for (const enc of round2.encounters) for (const seat of enc.seats) expect(seat.members).toHaveLength(5);
     await playRound(round2, 2, 1);
 
-    await poll(async () => (await anonApi.get<Stage[]>(`/api/v1/tournaments/${tid}/stages`)).find((s) => s.id === stage.id)?.is_completed, "stage completion");
     expect((await readRounds()).map((r) => r.round), "no round beyond max_rounds").toEqual([1, 2]);
   });
 
@@ -272,7 +286,7 @@ test("individual swiss: single-role pool → rounds by captains → personal tab
   });
 
   let lock: Lock;
-  await test.step("9 — lock qualification: tournament → draft, non-qualified excluded, second lock refused", async () => {
+  await test.step("9 — lock qualification: the stage completes, the tournament stays live, second lock refused", async () => {
     const lockUrl = `/api/v1/admin/tournaments/${tid}/stages/${stage.id}/lock-qualification`;
     lock = await adminApi.post<Lock>(lockUrl);
     expect(lock.qualified).toHaveLength(10);
@@ -280,21 +294,19 @@ test("individual swiss: single-role pool → rounds by captains → personal tab
     for (const [role, shape] of Object.entries(SHAPE)) expect(lock.qualified.filter((r) => r.role === role), role).toHaveLength(PLAYOFF_TEAMS * shape);
     expect(lock.qualified.map((r) => r.workspace_member_id), "the pin is in the frozen list").toContain(pinned.workspace_member_id);
 
-    expect((await anonApi.get<{ status: string }>(`/api/v1/tournaments/${tid}`)).status).toBe("draft");
-    const qualified = new Set(lock.qualified.map((r) => r.registration_id));
-    const rows = await adminApi.get<Registration[]>(adminRegs);
-    expect(rows.filter((r) => qualified.has(r.id)).every((r) => r.balancer_status !== "excluded"), "qualifiers stay in the pool").toBe(true);
-    const out = rows.filter((r) => !qualified.has(r.id));
-    expect(out).toHaveLength(10);
-    expect(out.every((r) => r.balancer_status === "excluded"), "the rest is excluded").toBe(true);
+    const node = (await flowNodes(adminApi, tid)).find((candidate) => candidate.id === stage.node_id);
+    expect(node?.status, "the lock completes the stage node").toBe("completed");
+    expect((await anonApi.get<{ status: string }>(`/api/v1/tournaments/${tid}`)).status, "the lock leaves the tournament status alone").toBe("live");
 
     const again = await adminApi.raw("POST", lockUrl);
     expect(again.status(), "a second lock").toBe(409);
     const pinsAfter = await adminApi.raw("PUT", `/api/v1/admin/tournaments/${tid}/stages/${stage.id}/player-standing-pins`, { body: { pins: [] } });
-    expect(pinsAfter.status(), "the list is frozen at draft").toBe(409);
+    expect(pinsAfter.status(), "the list is frozen after the lock").toBe(409);
   });
 
   await test.step("10 — draft seeded with the 2 captains (weakest first) and exactly the 10 qualifiers", async () => {
+    const formation = await nodeOf(adminApi, tid, "formation");
+    await transitionNode(adminApi, formation.id, "forming");
     const sessions = `/api/v1/balancer/draft/tournaments/${tid}/sessions`;
     const created = await adminApi.post<DraftSession>(sessions, { pool_source: "manual", pick_time_seconds: 300 });
     const captainRegs = [...lock.captains].sort((a, b) => a.rank - b.rank).map((c) => ({ registration_id: c.registration_id! }));

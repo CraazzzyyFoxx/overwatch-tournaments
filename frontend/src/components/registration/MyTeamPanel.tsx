@@ -113,11 +113,12 @@ export default function MyTeamPanel({
   const canCheckIn = isStaff && active && checkInAvailable;
   const canCover = isStaff && active && (registrationOpen || checkInAvailable);
 
-  const refresh = useMyTeamRefresh(workspaceId, tournamentId, team.id);
+  const refresh = useMyTeamRefresh(workspaceId, tournamentId, team.registration_node_id, team.id);
 
   const invite = useMyTeamInvite({
     workspaceId,
     tournamentId,
+    registrationNodeId: team.registration_node_id,
     teamId: team.id,
     canEditRoster,
     offerableSlots,
@@ -129,6 +130,7 @@ export default function MyTeamPanel({
 
   const mutations = useMyTeamMutations({
     teamId: team.id,
+    registrationNodeId: team.registration_node_id,
     invalidate: refresh.invalidate,
     failure: refresh.failure,
     onExtended: (token) => {

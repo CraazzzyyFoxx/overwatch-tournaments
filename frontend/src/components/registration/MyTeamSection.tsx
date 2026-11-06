@@ -5,10 +5,16 @@ import { useTranslations } from "next-intl";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { isPhaseWindowActive, isRegistrationOpen } from "@/lib/tournament/status";
-import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
-import registrationService from "@/services/registration.service";
-import registrationTeamService from "@/services/registration-team.service";
+import { useViewerRegistrationNode } from "@/hooks/useViewerRegistrationNode";
+import {
+  isCheckInOpen,
+  isSignUpOpen,
+  registrationNodeConfig,
+} from "@/lib/tournament/flow-nodes";
+import {
+  tournamentMyRegistrationQueryOptions,
+  tournamentRegistrationTeamsQueryOptions,
+} from "@/lib/tournament/registrations-query";
 import type { Tournament } from "@/types/tournament.types";
 
 import MyTeamPanel from "./MyTeamPanel";
@@ -31,22 +37,16 @@ export default function MyTeamSection({ tournament }: Readonly<{ tournament: Tou
   // a boolean, and `authenticated` alone can still carry an undefined profile.
   const isAuthenticated = authStatus === "authenticated" && user != null;
 
-  const open = isRegistrationOpen(tournament);
+  const registrationNode = useViewerRegistrationNode(tournament);
+  const open = isSignUpOpen(registrationNode);
 
   const myRegQuery = useQuery({
-    queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationService.getMyRegistration(tournament.id),
+    ...tournamentMyRegistrationQueryOptions(tournament, registrationNode),
     enabled: isAuthenticated,
   });
   const teamsQuery = useQuery({
-    queryKey: tournamentQueryKeys.registrationTeams(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationTeamService.listPublic(tournament.id),
+    ...tournamentRegistrationTeamsQueryOptions(tournament, registrationNode),
     enabled: isAuthenticated,
-  });
-  const formQuery = useQuery({
-    queryKey: tournamentQueryKeys.registrationForm(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationService.getForm(tournament.id),
-    enabled: Boolean(isAuthenticated && myRegQuery.data?.team),
   });
 
   if (!isAuthenticated) return null;
@@ -75,9 +75,9 @@ export default function MyTeamSection({ tournament }: Readonly<{ tournament: Tou
         team={myTeam}
         isCaptain={brief?.is_captain ?? false}
         viewerRegistrationId={myRegistration?.id}
-        subscriptionScope={formQuery.data?.subscription_scope === "team" ? "team" : "player"}
+        subscriptionScope={registrationNodeConfig(registrationNode).subscription_scope}
         registrationOpen={open}
-        checkInAvailable={isPhaseWindowActive(tournament, "check_in")}
+        checkInAvailable={isCheckInOpen(registrationNode)}
       />
     );
   }

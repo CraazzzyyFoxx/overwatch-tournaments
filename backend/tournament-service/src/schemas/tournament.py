@@ -12,11 +12,11 @@ from shared.services.workspace_scope import ALL_WORKSPACES
 from src.schemas.admin.tournament_link import TournamentLinkRead
 from src.schemas.base import BaseRead
 from src.schemas.division_grid import DivisionGridVersionRead
+from src.schemas.flow import TournamentFlowNodeRead
 from src.schemas.stage import StageSummaryRead
 
 __all__ = (
     "TournamentRead",
-    "TournamentPhaseScheduleRead",
     "TournamentPaginationSortSearchQueryParams",
     "TournamentPaginationSortSearchParams",
     "TournamentFacets",
@@ -34,14 +34,6 @@ def _every_workspace_is_unfiltered(value: typing.Any) -> typing.Any:
 WorkspaceFilter = typing.Annotated[int | None, BeforeValidator(_every_workspace_is_unfiltered)]
 
 
-class TournamentPhaseScheduleRead(BaseModel):
-    """One phase-schedule row: when phase ``status`` starts (and its action window ends)."""
-
-    status: enums.TournamentStatus
-    starts_at: datetime
-    ends_at: datetime | None = None
-
-
 class TournamentRead(BaseRead):
     workspace_id: int
     discipline: str
@@ -57,7 +49,6 @@ class TournamentRead(BaseRead):
     rules: str | None = None
     challonge_id: int | None
     challonge_slug: str | None
-    is_league: bool
     is_finished: bool
     is_hidden: bool = False
     # Branding uploaded through the dedicated image subjects, never through
@@ -66,18 +57,15 @@ class TournamentRead(BaseRead):
     # gradient fallback.
     cover_image_url: str | None = None
     logo_url: str | None = None
-    team_formation: str = "balancer"
     status: enums.TournamentStatus
     start_date: datetime
     end_date: datetime
     auto_transitions_enabled: bool = True
-    allow_late_registration: bool = False
     discord_broadcasts_enabled: bool = True
     discord_dms_enabled: bool = True
     logs_official: bool = False
     # Seconds participants' POV streams run behind real time; the stream VOD chapter offsets add it.
     pov_stream_delay_s: int = 0
-    phase_schedule: list[TournamentPhaseScheduleRead] = []
 
     stages: list[StageSummaryRead] = []
     participants_count: int | None
@@ -85,9 +73,6 @@ class TournamentRead(BaseRead):
     teams_count: int | None = None
     division_grid_version_id: int | None
     division_grid_version: DivisionGridVersionRead | None = None
-    # The tournament's draft format rule; None = the snake default. Always
-    # exposed: it costs no query.
-    draft_format_json: dict[str, typing.Any] | None = None
     # Opt-in entities: TournamentRead is nested in six other schemas that
     # are built from ORM rows without a session, so neither of these can be
     # required -- filling them unconditionally would cost a query per nested row.
@@ -103,6 +88,8 @@ class TournamentRead(BaseRead):
     # Opt-in too, and for the same reason: the rows live in their own table, so
     # filling them unconditionally would cost a query per nested TournamentRead.
     links: list[TournamentLinkRead] = []
+    # Opt-in (`flow_nodes`): the registration, formation, stage and leaderboard nodes with their status and schedule.
+    flow_nodes: list[TournamentFlowNodeRead] = []
 
     @computed_field
     @property
@@ -116,18 +103,19 @@ class TournamentPaginationSortSearchQueryParams(
         typing.Literal["id", "name", "start_date", "end_date", "similarity:name", "participants_count"]
     ]
 ):
-    is_league: bool | None = None
     workspace_id: WorkspaceFilter = None
     #: Any of these statuses (``?status=live&status=playoffs``); absent or empty is every status.
     status: list[enums.TournamentStatus] = []
+    #: ``true``: only tournaments with a registration node in ``open`` or ``check_in``; ``false`` is no filter.
+    registration_open: bool = False
     discipline: InstalledDisciplineFilter = None
 
 
 @dataclass
 class TournamentPaginationSortSearchParams(pagination.PaginationSortSearchParams):
-    is_league: bool | None = None
     workspace_id: int | None = None
     status: list[enums.TournamentStatus] = field(default_factory=list)
+    registration_open: bool = False
     discipline: str | None = None
 
     # ``per_page=-1`` ("every row") stops here, not at the shared 10,000: each row is ~100 us of serialization on
@@ -161,7 +149,6 @@ class TournamentFacetsQueryParams(BaseModel):
 
     workspace_id: WorkspaceFilter = None
     status: enums.TournamentStatus | None = None
-    is_league: bool | None = None
     discipline: InstalledDisciplineFilter = None
     query: str = ""
 
@@ -170,13 +157,13 @@ class TournamentFacets(BaseModel):
     """Chip counters for the public tournaments page.
 
     ``total``/``live`` are unconditional platform facts (see
-    ``TournamentFlowsService.get_facets``); ``by_status`` and ``league``/
-    ``standard`` each ignore their own filter so a selected chip never zeroes its
+    ``TournamentFlowsService.get_facets``); ``by_status`` ignores its own filter so a selected chip never zeroes its
     siblings.
     """
 
     total: int
     live: int
     by_status: dict[enums.TournamentStatus, int]
-    league: int
-    standard: int
+    #: Tournaments with a registration node in ``open`` or ``check_in`` (the "Registration" chip); like ``by_status``
+    #: it ignores the status filter.
+    registration_open: int

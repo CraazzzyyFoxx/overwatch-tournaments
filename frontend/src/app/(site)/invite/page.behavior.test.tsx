@@ -110,7 +110,7 @@ beforeEach(() => {
   authStatus = "unauthenticated";
   authUser = null;
   previewInvite.mockReset().mockResolvedValue({ ...PREVIEW });
-  getForm.mockReset().mockResolvedValue({ id: 1, tournament_id: 5, is_open: true });
+  getForm.mockReset().mockResolvedValue({ id: 1, tournament_id: 5 });
   push.mockReset();
   openAuthModal.mockReset();
   document.body.innerHTML = "";

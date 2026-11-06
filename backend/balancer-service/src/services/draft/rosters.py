@@ -59,12 +59,10 @@ class DraftRosterService:
             target.add(player.registration_id)
         # ``frozen`` wins over ``available``: a registration seated twice keeps
         # the lenient answer, so its picked seat never loses its roster.
-        pool = await self.engine.pool_ids(session, draft_session.tournament_id, sorted(available - frozen))
-        by_registration = await self.engine.for_tournament(
-            session,
-            draft_session.tournament_id,
-            registration_ids=sorted(frozen | pool),
-            include_deleted=True,
+        pool = await self.engine.pool_ids(session, draft_session.formation_node_id, sorted(available - frozen))
+        # A seat's roster is its registration's deciding entry upstream of the formation (the newest intake's).
+        by_registration = await self.engine.for_node_registrations(
+            session, draft_session.formation_node_id, sorted(frozen | pool), include_deleted=True
         )
         return {
             player.id: by_registration[player.registration_id]
@@ -73,7 +71,7 @@ class DraftRosterService:
         }
 
     async def pool(self, session: AsyncSession, draft_session: DraftSession) -> dict[int, PlayerRoster]:
-        """What a seed may seat, resolved and keyed by ``PoolSeat.key``: the tournament's balancer pool by
+        """What a seed may seat, resolved and keyed by ``PoolSeat.key``: the formation node's balancer pool by
         registration, or the mix's present, non-benched roster by member."""
         if draft_session.custom_game_id is not None:
             game = await self.mixes.games.get(session, draft_session.custom_game_id)
@@ -84,7 +82,7 @@ class DraftRosterService:
             ]
             rosters, _away = await self.mixes.draft_rosters(session, game, [row.workspace_member_id for row in rows])
             return rosters
-        return await self.engine.for_tournament(session, draft_session.tournament_id, pool_only=True)
+        return await self.engine.for_node_input(session, draft_session.formation_node_id, pool_only=True)
 
 
 draft_rosters = DraftRosterService()

@@ -17,7 +17,6 @@ import type {
   SeedRanking,
   Stage,
   StageBestOfConfig,
-  StageItem,
   StageItemInput,
   StageItemType,
   StageType
@@ -65,15 +64,21 @@ export const STAGE_ITEM_TYPE_LABELS: Record<StageItemType, string> = {
 
 export const SEED_RANKING_LABELS: Record<SeedRanking, string> = {
   slot: "Slot order (manual / standings)",
+  source: "Input order",
   avg_sr: "Highest team avg SR first",
   total_sr: "Highest team total SR first",
-  random: "Random (stable per stage)"
+  random: "Random (stable per stage)",
+  cross: "Cross groups (A1–B2)",
+  snake: "Snake groups (A1, B1, A2, B2)"
 };
 export const SEED_RANKING_LABEL_KEYS: Record<SeedRanking, string> = {
   slot: "slot",
+  source: "source",
   avg_sr: "avg_sr",
   total_sr: "total_sr",
-  random: "random"
+  random: "random",
+  cross: "cross",
+  snake: "snake"
 };
 
 const DEFAULT_SWISS_TIEBREAKERS = [
@@ -195,9 +200,9 @@ export function getProgressPercent(completed: number, total: number) {
 export type StageStatus = "Completed" | "Active" | "Preview" | "Draft";
 
 export function getStageStatus(stage: Stage, hasEncounters: boolean): StageStatus {
-  if (stage.is_completed) return "Completed";
-  if (stage.is_active) return "Active";
-  // Bracket generated ahead of activation: visible to organizers, not yet
+  if (stage.status === "completed") return "Completed";
+  if (stage.status === "live") return "Active";
+  // Bracket generated ahead of the start: visible to organizers, not yet
   // usable by captains (`shared.services.bracket.usability.is_encounter_live`).
   if (!stage.is_published && hasEncounters) return "Preview";
   return "Draft";
@@ -211,35 +216,13 @@ export function getStageStatusTone(stage: Stage, hasEncounters: boolean): Tone {
   return "neutral";
 }
 
-export type InputDisplayLabelInfo =
-  | { label: string; key: "team" }
-  | { label: "Empty slot"; key: "emptySlot" }
-  | { label: string; key: "winnerOf"; groupName: string; position: number };
+export type InputDisplayLabelInfo = { label: string; key: "team" } | { label: "Empty slot"; key: "emptySlot" };
 
 export function getInputDisplayLabelInfo(
   input: StageItemInput,
-  stages: Stage[],
   teamById: Map<number, Team>
 ): InputDisplayLabelInfo {
   if (input.team_id != null) return { label: getTeamName(teamById, input.team_id), key: "team" };
-
-  if (
-    input.input_type === "tentative" &&
-    input.source_stage_item_id != null &&
-    input.source_position != null
-  ) {
-    const sourceItem = stages
-      .flatMap((stage) => stage.items)
-      .find((item) => item.id === input.source_stage_item_id);
-    const groupName = sourceItem?.name ?? `Item ${input.source_stage_item_id}`;
-    return {
-      label: `Winner of ${groupName} #${input.source_position}`,
-      key: "winnerOf",
-      groupName,
-      position: input.source_position
-    };
-  }
-
   return { label: "Empty slot", key: "emptySlot" };
 }
 
@@ -264,70 +247,7 @@ export function getDefaultMergedStageName(stage: Stage) {
  * Where a bracket's team count came from, so the preview can say whether it is
  * reading reality or a projection.
  */
-export type BracketTeamCountSource = "seeded" | "slots" | "projected" | "unknown";
-
-/**
- * The group stage that will seed `stage`, mirroring `_preceding_group_stage`:
- * the one Swiss/round-robin/FFA-league stage of the latest EARLIER phase.
- *
- * Stages sharing `order` run in parallel, so a same-phase group stage is a
- * sibling, not a source; several of them in the earlier phase is ambiguous and
- * resolves to nothing, exactly as the server refuses to wire one.
- */
-export function qualifyingSourceStage(stage: Stage, stages: Stage[]): Stage | undefined {
-  const earlier = stages
-    .filter(
-      (candidate) =>
-        candidate.order < stage.order &&
-        // Backend QUALIFYING_SOURCE_STAGE_TYPES.
-        (candidate.stage_type === "swiss" ||
-          candidate.stage_type === "round_robin" ||
-          candidate.stage_type === "ffa_league")
-    )
-    .sort((left, right) => right.order - left.order || right.id - left.id);
-  const phase = earlier.at(0)?.order;
-  const sources = earlier.filter((candidate) => candidate.order === phase);
-  return sources.length === 1 ? sources[0] : undefined;
-}
-
-/**
- * The upper/lower seed counts the preceding group stage feeds into `stage`,
- * mirroring `_projected_bracket_seed_counts`: each group sends on its OWN
- * `advance_count`, falling back to the stage's number where a group sets none,
- * and the first `advance_upper_count` of those start in the upper bracket
- * while the rest are seeded straight into the lower one.
- *
- * `advance_upper_count` is read with `??`, not a falsy fallback: `0` means
- * "this whole group starts a bracket down", which is a different answer from
- * "inherit".
- *
- * Only a double elimination HAS a lower bracket to seed into: the server
- * ignores the split for a single elimination, where every advancing team
- * enters the one bracket there is.
- */
-export function projectedBracketSeedCounts(
-  stage: Stage,
-  stages: Stage[]
-): { upper: number; lower: number } {
-  const source = qualifyingSourceStage(stage, stages);
-  if (!source) return { upper: 0, lower: 0 };
-
-  // A source stage with no items still behaves as one implicit group.
-  const groups: (StageItem | null)[] = source.items.length > 0 ? source.items : [null];
-  const split = stage.stage_type === "double_elimination";
-  let upper = 0;
-  let lower = 0;
-  for (const group of groups) {
-    const advance = group?.advance_count || source.advance_count || 0;
-    const ownUpper = split
-      ? (group?.advance_upper_count ?? source.advance_upper_count ?? advance)
-      : advance;
-    const groupUpper = Math.min(ownUpper, advance);
-    upper += groupUpper;
-    lower += advance - groupUpper;
-  }
-  return { upper, lower };
-}
+export type BracketTeamCountSource = "seeded" | "slots" | "unknown";
 
 /**
  * The team count that fixes a bracket's depth, mirroring `generate_encounters`
@@ -336,15 +256,10 @@ export function projectedBracketSeedCounts(
  * upper bracket.
  *
  * Seeded inputs — then empty slots — are ground truth when present. Before
- * either exists (the common case: a playoff wired only after its groups finish)
- * the count is projected from what the preceding group stage's groups send up,
- * so the best-of editor offers the bracket that WILL be generated rather than a
- * `max_rounds` guess that has no relation to the team count.
+ * either exists (a playoff seated only when it turns `ready`) the count is
+ * `unknown` and callers fall back to `max_rounds`.
  */
-export function resolveBracketTeamCount(
-  stage: Stage,
-  stages: Stage[]
-): { count: number; source: BracketTeamCountSource } {
+export function resolveBracketTeamCount(stage: Stage): { count: number; source: BracketTeamCountSource } {
   const upperItems = stage.items.filter((item) => item.type !== "bracket_lower");
   const assigned = upperItems.reduce(
     (acc, item) => acc + item.inputs.filter((input) => input.team_id != null).length,
@@ -354,9 +269,8 @@ export function resolveBracketTeamCount(
   const slots = upperItems.reduce((acc, item) => acc + item.inputs.length, 0);
   if (slots > 0) return { count: slots, source: "slots" };
 
-  // Nothing wired yet: project from the group stage that will seed this one.
-  const projected = projectedBracketSeedCounts(stage, stages).upper;
-  return { count: projected, source: projected > 0 ? "projected" : "unknown" };
+  // Nothing seated yet: the count is unknown until the stage's flow input has results.
+  return { count: 0, source: "unknown" };
 }
 
 /**
@@ -401,14 +315,8 @@ export interface StageProjection {
   /** Slots with no team yet: the wireframe's "3 unresolved slots". */
   unresolved: number;
   bracketTeams: { count: number; source: BracketTeamCountSource };
-  seeds: { upper: number; lower: number };
-  /** Teams that start in the lower bracket: projected seeds plus wired ones. */
+  /** Teams seated in the lower bracket. */
   lowerBracketTeamCount: number;
-  advanceCount: number | null;
-  /** Every group's own resolved count, in item order — `[3, 5]` reads "top 3 / 5". */
-  advanceCounts: number[];
-  /** Sum of `advanceCounts`: what this stage sends onward. */
-  advancingTotal: number;
   rounds: ProjectedRound[];
 }
 
@@ -421,7 +329,6 @@ export interface StageProjection {
  */
 export function projectStage({
   stage,
-  stages,
   stageType,
   maxRounds,
   bestOf,
@@ -429,7 +336,6 @@ export function projectStage({
   formatRound = bracketRoundLabelEn
 }: {
   stage: Stage;
-  stages: Stage[];
   stageType: StageType;
   maxRounds: number;
   bestOf: StageBestOfConfig;
@@ -442,23 +348,10 @@ export function projectStage({
   const isFfa = FFA_STAGE_TYPES.includes(stageType);
   const slots = getStageTeamSlots(stage);
   const assigned = getStageAssignedTeams(stage);
-  const bracketTeams = resolveBracketTeamCount(stage, stages);
-  const seeds = projectedBracketSeedCounts(stage, stages);
-  // Already-wired lower-bracket slots are the real thing; the projection only
-  // stands in while the stage is still empty, so they never double-count.
-  const lowerItemInputs = stage.items
+  const bracketTeams = resolveBracketTeamCount(stage);
+  const lowerBracketTeamCount = stage.items
     .filter((item) => item.type === "bracket_lower")
     .reduce((acc, item) => acc + item.inputs.length, 0);
-  const lowerBracketTeamCount = lowerItemInputs > 0 ? lowerItemInputs : seeds.lower;
-  // A stage with no items still counts as one implicit group on the default.
-  // An FFA lobby advances a top N the same way a group does.
-  const advanceCounts =
-    isGroups || isFfa
-      ? (stage.items.length > 0 ? stage.items : [null]).map(
-          (item) => item?.advance_count ?? stage.advance_count ?? 0
-        )
-      : [];
-  const advancingTotal = advanceCounts.reduce((acc, count) => acc + count, 0);
 
   const sections = stageBestOfRoundSections({
     stageType,
@@ -518,11 +411,7 @@ export function projectStage({
     assigned,
     unresolved: Math.max(0, slots - assigned),
     bracketTeams,
-    seeds,
     lowerBracketTeamCount,
-    advanceCount: stage.advance_count ?? null,
-    advanceCounts,
-    advancingTotal,
     rounds
   };
 }

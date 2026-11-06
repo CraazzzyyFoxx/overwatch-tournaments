@@ -29,7 +29,7 @@ import type {
   RegistrationForm,
   RegistrationListResponse
 } from "@/types/registration.types";
-import type { Tournament, TournamentStatus } from "@/types/tournament.types";
+import type { Tournament } from "@/types/tournament.types";
 
 import TournamentParticipantsPage from "./TournamentParticipantsPage";
 
@@ -41,6 +41,7 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const TOURNAMENT_ID = 88;
+const REGISTRATION_NODE_ID = 21;
 
 const getMyRegistration = vi.fn();
 const listRegistrations = vi.fn();
@@ -115,7 +116,7 @@ vi.mock("@/hooks/useTournamentClientData", () => ({
  * Every field spelled out rather than cast: `tsconfig.json` excludes test
  * files, so a fixture that lies about its shape type-checks green.
  */
-function makeTournament(status: TournamentStatus, window: { starts_at: string; ends_at: string | null }): Tournament {
+function makeTournament(phase: "check_in" | "registration", window: { starts_at: string; ends_at: string | null }): Tournament {
   return {
     id: TOURNAMENT_ID,
     created_at: new Date(0),
@@ -127,14 +128,22 @@ function makeTournament(status: TournamentStatus, window: { starts_at: string; e
     description: null,
     challonge_id: null,
     challonge_slug: null,
-    is_league: false,
     is_finished: false,
     is_hidden: false,
-    team_formation: "balancer",
-    status,
+    // `live` because the registration node is: the phase reads registration or check-in.
+    status: "live",
     auto_transitions_enabled: true,
-    allow_late_registration: false,
-    phase_schedule: [{ status: "check_in", ...window }],
+    flow_nodes: [
+      {
+        id: REGISTRATION_NODE_ID,
+        kind: "registration",
+        name: "Registration",
+        status: phase === "check_in" ? "check_in" : "open",
+        config: {},
+        schedule: [{ phase: "check_in", ...window }],
+        stage_id: null
+      }
+    ],
     stages: [],
     participants_count: 1,
     registrations_count: 1,
@@ -150,6 +159,8 @@ function makeTournament(status: TournamentStatus, window: { starts_at: string; e
 function makeRegistration(overrides: Partial<Registration> = {}): Registration {
   return {
     id: 401,
+    entry_id: 701,
+    registration_node_id: REGISTRATION_NODE_ID,
     tournament_id: TOURNAMENT_ID,
     workspace_id: 3,
     user_id: 5,
@@ -211,9 +222,7 @@ const FORM: RegistrationForm = {
   id: 9,
   tournament_id: TOURNAMENT_ID,
   workspace_id: 3,
-  is_open: false,
   require_open_profile: false,
-  require_subscription: false,
   form_schema: {
     schema_version: 1,
     sections: [
@@ -266,7 +275,7 @@ const OPEN_WINDOW = {
   starts_at: new Date(Date.now() - 3_600_000).toISOString(),
   ends_at: new Date(Date.now() + 3_600_000).toISOString()
 };
-/** Both bounds in the past: the phase is still `check_in`, the window is not. */
+/** Both bounds in the past: the node is still in `check_in`, the window is not. */
 const CLOSED_WINDOW = {
   starts_at: new Date(Date.now() - 7_200_000).toISOString(),
   ends_at: new Date(Date.now() - 3_600_000).toISOString()
@@ -432,7 +441,7 @@ describe("a first visit's hydration", () => {
     );
     const seeded = () => {
       const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-      client.setQueryData(tournamentQueryKeys.registrationsList(3, TOURNAMENT_ID), regList([makeRegistration()]));
+      client.setQueryData(tournamentQueryKeys.registrationsList(3, TOURNAMENT_ID, REGISTRATION_NODE_ID), regList([makeRegistration()]));
       client.setQueryData(tournamentQueryKeys.registrationForm(3, TOURNAMENT_ID), FORM);
       return client;
     };
@@ -441,7 +450,7 @@ describe("a first visit's hydration", () => {
     // In the browser the shell's Register button reads the viewer's own entry
     // as soon as the profile resolves — before this tab hydrates.
     const browserClient = seeded();
-    browserClient.setQueryData(tournamentQueryKeys.registration(3, TOURNAMENT_ID), makeRegistration());
+    browserClient.setQueryData(tournamentQueryKeys.registration(3, TOURNAMENT_ID, REGISTRATION_NODE_ID), makeRegistration());
     const hydrated = document.createElement("div");
     hydrated.innerHTML = html;
     document.body.appendChild(hydrated);
@@ -637,7 +646,7 @@ describe("re-checking profile and subscriptions", () => {
     await act(async () => recheckButton()?.click());
     await settle();
 
-    expect(recheckMyRegistration).toHaveBeenCalledWith(TOURNAMENT_ID);
+    expect(recheckMyRegistration).toHaveBeenCalledWith(TOURNAMENT_ID, REGISTRATION_NODE_ID);
     expect(recheckButton()?.disabled).toBe(true);
     expect(recheckButton()?.textContent).toContain("60s");
   });
@@ -899,7 +908,7 @@ describe("editing your own registration", () => {
     await act(async () => submit?.click());
     await settle();
 
-    expect(updateMyRegistration).toHaveBeenCalledWith(TOURNAMENT_ID, {
+    expect(updateMyRegistration).toHaveBeenCalledWith(TOURNAMENT_ID, REGISTRATION_NODE_ID, {
       form_version_id: FORM.version_id,
       answers: { public_notes: "before" }
     });

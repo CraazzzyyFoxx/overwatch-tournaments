@@ -31,24 +31,20 @@ def _tournament() -> models.Tournament:
         name="Tournament 10",
         slug="tournament-10",
         description=None,
-        is_league=False,
         is_finished=False,
         is_hidden=False,
         status=enums.TournamentStatus.LIVE,
         start_date=datetime.now(UTC),
         end_date=datetime.now(UTC),
         auto_transitions_enabled=True,
-        allow_late_registration=False,
         discord_broadcasts_enabled=True,
         discord_dms_enabled=True,
         logs_official=False,
         pov_stream_delay_s=0,
-        team_formation="balancer",
         division_grid_version_id=5,
         # Serialized as plain columns: an unset attribute on a detached
         # instance would trigger a refresh instead of reading NULL.
         discipline="overwatch",
-        draft_format_json=None,
         rules=None,
         cover_image_url=None,
         logo_url=None,
@@ -85,37 +81,13 @@ class TournamentSerializationTests(IsolatedAsyncioTestCase):
 
         self.assertEqual("## Format\n\nBest of 3.\n", read.rules)
 
-    async def test_to_pydantic_round_trips_flags_and_phase_schedule(self) -> None:
+    async def test_to_pydantic_round_trips_flags(self) -> None:
         tournament = _tournament()
-        starts_at = datetime(2026, 7, 1, 18, 0, tzinfo=UTC)
-        ends_at = datetime(2026, 7, 1, 18, 45, tzinfo=UTC)
-        tournament.phase_schedule = [
-            models.TournamentPhaseSchedule(
-                id=1,
-                created_at=datetime.now(UTC),
-                updated_at=None,
-                tournament_id=tournament.id,
-                status=enums.TournamentStatus.CHECK_IN,
-                starts_at=starts_at,
-                ends_at=ends_at,
-            )
-        ]
         make_transient_to_detached(tournament)
 
         read = await flows.flows_service.to_pydantic(cast(AsyncSession, object()), tournament, [])
 
         self.assertTrue(read.auto_transitions_enabled)
-        self.assertFalse(read.allow_late_registration)
-        self.assertEqual(
-            [
-                schemas.TournamentPhaseScheduleRead(
-                    status=enums.TournamentStatus.CHECK_IN,
-                    starts_at=starts_at,
-                    ends_at=ends_at,
-                )
-            ],
-            read.phase_schedule,
-        )
 
     async def test_to_pydantic_resolves_requested_teams_count(self) -> None:
         tournament = _tournament()

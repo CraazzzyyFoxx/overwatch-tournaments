@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { Eyebrow } from "@/components/ui/eyebrow";
-import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { getTournamentStatusMeta, displayStatus } from "@/lib/tournament/status";
 import { pickCurrentStage } from "@/lib/tournament/stages";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -26,7 +26,7 @@ export function HeroPhaseFact({
   counts
 }: Readonly<{ tournament: Tournament; counts: string | null }>) {
   const t = useTranslations();
-  const isLive = getTournamentStatusMeta(tournament.status).variant === "live";
+  const isLive = getTournamentStatusMeta(displayStatus(tournament)).variant === "live";
   const next = useNextPhase(tournament);
   const played = useTournamentPlayedCount(tournament, isLive);
   const stage = isLive ? pickCurrentStage(tournament.stages, tournament.status) : null;

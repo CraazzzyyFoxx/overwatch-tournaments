@@ -2,7 +2,12 @@
 
 import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
-import { tabFallback } from "../../hubQueries";
+
+import { FlowNodeSelect } from "@/components/kit/FlowNodeSelect";
+import { FLOW_NODE_PARAM, useFlowNodeParam } from "@/hooks/useFlowNodeParam";
+import { useQueryParams } from "@/hooks/useQueryParams";
+
+import { tabFallback, useHubTournamentQuery } from "../../hubQueries";
 
 // D25: the Google Sheets feed builder lives in a neutral place and is rendered
 // by both this hub sub-route (tournament from the path) and the legacy balancer
@@ -14,10 +19,23 @@ const SheetsFeedPage = dynamic(() => import("@/components/balancer/feed/SheetsFe
 export default function RegistrationFeedSubRoutePage() {
   const params = useParams<{ id: string }>();
   const tournamentId = Number(params.id);
+  // The feed writes its rows into one registration node.
+  const tournament = useHubTournamentQuery(tournamentId).data;
+  const registrationNodeId = useFlowNodeParam(tournament, "registration");
+  const { setParams } = useQueryParams();
 
   return (
-    <SheetsFeedPage
-      tournamentId={Number.isFinite(tournamentId) && tournamentId > 0 ? tournamentId : null}
-    />
+    <div className="space-y-4">
+      <FlowNodeSelect
+        tournament={tournament}
+        kind="registration"
+        value={registrationNodeId}
+        onChange={(nodeId) => setParams({ [FLOW_NODE_PARAM]: nodeId })}
+      />
+      <SheetsFeedPage
+        tournamentId={Number.isFinite(tournamentId) && tournamentId > 0 ? tournamentId : null}
+        registrationNodeId={registrationNodeId}
+      />
+    </div>
   );
 }

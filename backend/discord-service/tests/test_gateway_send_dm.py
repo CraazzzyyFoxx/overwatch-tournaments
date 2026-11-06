@@ -146,7 +146,7 @@ class SendDmCommandTests(IsolatedAsyncioTestCase):
                 "details": "**Closes:** <t:0:F>",
                 "thumbnail_url": "https://cdn.example/logo.png",
                 "answers": [
-                    {"type": "action", "label": "Check in", "action": "check_in", "target": "3", "style": "success"}
+                    {"type": "action", "label": "Check in", "action": "check_in", "target": "3-7", "style": "success"}
                 ],
                 "rows": [[{"type": "link", "label": "Open tournament", "url": "https://owt.example/tournaments/3"}]],
             }
@@ -166,7 +166,7 @@ class SendDmCommandTests(IsolatedAsyncioTestCase):
         self.assertEqual(section["accessory"]["media"]["url"], "https://cdn.example/logo.png")
         self.assertEqual(details["content"], "**Closes:** <t:0:F>")
         (check_in,) = actions["components"]
-        self.assertEqual((check_in["label"], check_in["custom_id"]), ("Check in", "owt:check_in:3"))
+        self.assertEqual((check_in["label"], check_in["custom_id"]), ("Check in", "owt:check_in:3-7"))
         (link,) = links["components"]
         self.assertEqual((link["label"], link["url"]), ("Open tournament", "https://owt.example/tournaments/3"))
         msg.ack.assert_awaited_once()

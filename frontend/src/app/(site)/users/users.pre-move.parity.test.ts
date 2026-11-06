@@ -197,7 +197,7 @@ describe("users/components/shared/encounter-perspective.ts", () => {
 });
 
 describe("users/components/tournaments/tournaments-history.helpers.ts", () => {
-  it("reproduces every captured grouping, aggregate, medal and stage record from the real native wire", () => {
+  it("reproduces every captured medal, winrate and stage record from the real native wire", () => {
     const fixture = read(PRE, "tournaments-history-helpers.json");
     const selfIds: Record<string, { self_user_id: number }> = fixture.input_old_wire;
     const perResponse: Record<string, unknown> = {};
@@ -214,21 +214,10 @@ describe("users/components/tournaments/tournaments-history.helpers.ts", () => {
             return { ...t, encounters: found?.[1].body ?? [] };
           });
           perResponse[label] = {
-            groups: history.groupTournamentsByLeague(tournaments).map((group) => ({
-              is_league: history.isLeagueGroup(group),
-              entries: history.groupEntries(group).map((t) => t.id),
-              rep_id: history.groupRepId(group),
-              tournament_ids: history.groupTournamentIds(group),
-              display_name: history.groupDisplayName(group),
-              best_placement: history.groupBestPlacement(group),
-              aggregate: history.groupAggregate(group)
-            })),
             tournaments: tournaments.map((t) => {
               const pct = history.mapsWinratePct(t.maps_won, t.maps_lost);
               return {
                 id: t.id,
-                league_key: history.leagueKey(t),
-                division_label: history.divisionLabel(t),
                 medal: history.placementMedal(t.placement),
                 maps_winrate_pct: pct,
                 winrate_color: history.winrateColor(pct),

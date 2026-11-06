@@ -40,7 +40,7 @@ from src import schemas
 from src.clients.challonge import challonge_client
 from src.core import config
 from src.services.challonge.sync._types import _ImportSource, _MatchLookup, _TeamLookup
-from src.services.challonge.sync.auto_sync import ACTIVE_TOURNAMENT_STATUSES, AutoSyncMixin
+from src.services.challonge.sync.auto_sync import AutoSyncMixin
 from src.services.challonge.sync.export import ExportMixin
 from src.services.challonge.sync.helpers import _import_invalidated_resources, _stage_for_challonge_group
 from src.services.challonge.sync.importer import ImportMixin
@@ -101,7 +101,6 @@ sync_service = ChallongeSyncService()
 
 
 __all__ = (
-    "ACTIVE_TOURNAMENT_STATUSES",
     "ADMIN_LOCK_WAIT_SECONDS",
     "SYNC_LOCK_TTL_SECONDS",
     "ChallongeMappingService",

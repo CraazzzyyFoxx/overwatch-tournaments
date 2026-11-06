@@ -23,6 +23,14 @@ export interface Release {
 
 export const RELEASES: readonly Release[] = [
   {
+    version: "2.10.0",
+    date: "2026-11-07",
+    title: {
+      ru: "Схема турнира, лиги одним турниром и таблица сезона",
+      en: "Tournament flow, leagues as one tournament and the season table"
+    }
+  },
+  {
     version: "2.9.0",
     date: "2026-11-04",
     title: {

@@ -1,7 +1,7 @@
 import { poll } from "../support/api";
 import { expect, test } from "../support/fixtures";
-import { listTeams, seedPlayers, type BalancerJob } from "../support/flows";
-import { createTournament, createWorkspace, type Tournament } from "../support/seed";
+import { listTeams, openRegistration, seedPlayers, type BalancerJob } from "../support/flows";
+import { createTournament, createWorkspace, nodeOf, transitionNode, type Tournament } from "../support/seed";
 
 // Tournament balancer (schemasplit01: registration pool → balancer job → saved
 // balance → tournament teams), the workspace roster and its rank layers.
@@ -11,6 +11,19 @@ type Variant = { teams: { id: number; name: string; roster: Record<string, Playe
 type CreateJob = BalancerJob & { status_url: string; result_url: string };
 
 const SHAPE = { tank: 1, damage: 2, support: 2 };
+
+/**
+ * A registered pool of `n` players with the registration closed and the formation `forming`: the state the balancer
+ * works in. `formation` is the query every balancer route of the tournament takes.
+ */
+async function formingPool(api: Parameters<typeof openRegistration>[0], tournamentId: number, n: number) {
+  const { registrationNodeId } = await openRegistration(api, tournamentId);
+  const players = n > 0 ? await seedPlayers(api, tournamentId, n, { registrationNodeId }) : [];
+  const formationNode = await nodeOf(api, tournamentId, "formation");
+  await transitionNode(api, registrationNodeId, "closed");
+  await transitionNode(api, formationNode.id, "forming");
+  return { players, formation: { formation_node_id: formationNode.id } };
+}
 
 test("public balancer config answers for every installed game, 404 for an unknown one", async ({ anonApi }) => {
   for (const discipline of ["overwatch", "lol", "deadlock", "valorant"]) {
@@ -28,7 +41,7 @@ test("public balancer config answers for every installed game, 404 for an unknow
 test("tournament balance: config → async job → save → export creates teams → rank-only re-export", async ({ adminApi, makeUser }) => {
   const ws = await createWorkspace(adminApi);
   const t = await createTournament(adminApi, ws.id);
-  const pool = await seedPlayers(adminApi, t.id, 11);
+  const { players: pool, formation } = await formingPool(adminApi, t.id, 11);
   const tagById = new Map(pool.map((reg) => [String(reg.id), reg.primary_handle]));
 
   expect(await adminApi.get(`/api/v1/balancer/tournaments/${t.id}/config`), "no config before the first save").toBeNull();
@@ -37,7 +50,11 @@ test("tournament balance: config → async job → save → export creates teams
   expect(config.config_json).toMatchObject({ generation_count: 80, population_size: 40 });
   expect(await adminApi.get(`/api/v1/balancer/tournaments/${t.id}/summary`)).toMatchObject({ id: t.id, workspace_id: ws.id });
 
-  const job = await adminApi.post<CreateJob>(`/api/v1/balancer/tournaments/${t.id}/balance`, { config_overrides: config.config_json }, 202);
+  const job = await adminApi.call<CreateJob>("POST", `/api/v1/balancer/tournaments/${t.id}/balance`, {
+    body: { config_overrides: config.config_json },
+    query: formation,
+    expectStatus: 202,
+  });
   // Poll the status URL the 202 advertises, as a client would.
   const status = await poll(
     async () => {
@@ -66,8 +83,11 @@ test("tournament balance: config → async job → save → export creates teams
     new Set(tagById.keys())
   );
 
-  const saved = await adminApi.put<{ id: number }>(`/api/v1/balancer/tournaments/${t.id}/balance`, { config_json: config.config_json, result_json: variant });
-  expect(await adminApi.get<{ id: number }>(`/api/v1/balancer/tournaments/${t.id}/balance`)).toMatchObject({ id: saved.id });
+  const saved = await adminApi.call<{ id: number }>("PUT", `/api/v1/balancer/tournaments/${t.id}/balance`, {
+    body: { config_json: config.config_json, result_json: variant },
+    query: formation,
+  });
+  expect(await adminApi.get<{ id: number }>(`/api/v1/balancer/tournaments/${t.id}/balance`, formation)).toMatchObject({ id: saved.id });
 
   const exported = await adminApi.post<{ imported_teams: number; advisories: string[] }>(`/api/v1/balancer/balances/${saved.id}/export`, {});
   expect(exported.imported_teams).toBe(2);
@@ -85,7 +105,10 @@ test("tournament balance: config → async job → save → export creates teams
   // Rank-only re-export: a corrected rating reaches the exported player, the teams stay.
   const moved = variant.teams[0].roster.support[0];
   moved.assigned_rating += 111;
-  const resaved = await adminApi.put<{ id: number }>(`/api/v1/balancer/tournaments/${t.id}/balance`, { config_json: config.config_json, result_json: variant });
+  const resaved = await adminApi.call<{ id: number }>("PUT", `/api/v1/balancer/tournaments/${t.id}/balance`, {
+    body: { config_json: config.config_json, result_json: variant },
+    query: formation,
+  });
   const ranks = await adminApi.post<{ updated_players: number }>(`/api/v1/balancer/balances/${resaved.id}/export-ranks`, {});
   expect(ranks.updated_players).toBe(1);
   // The gateway cache is invalidated after commit; a ≤1 s tournament-service gap is accepted,
@@ -99,9 +122,10 @@ test("tournament balance: config → async job → save → export creates teams
   expect((await listTeams(adminApi, t.id)).map((x) => x.id).sort(), "rank-only export keeps the teams").toEqual(teams.map((x) => x.id).sort());
 
   // No registered (captain-formed) teams: the registered-teams export imports nothing and leaves the balancer's teams alone.
-  const registered = await adminApi.post<{ imported_teams: number; removed_teams: number }>(
+  const registered = await adminApi.call<{ imported_teams: number; removed_teams: number }>(
+    "POST",
     `/api/v1/balancer/tournaments/${t.id}/registered-teams/export`,
-    {}
+    { body: {}, query: formation }
   );
   expect(registered).toMatchObject({ imported_teams: 0, removed_teams: 0 });
   expect((await listTeams(adminApi, t.id)).map((x) => x.id).sort()).toEqual(teams.map((x) => x.id).sort());
@@ -110,8 +134,12 @@ test("tournament balance: config → async job → save → export creates teams
 test("balance job response advertises only the /api/v1 status and result URLs, and both resolve", async ({ adminApi }) => {
   const ws = await createWorkspace(adminApi);
   const t = await createTournament(adminApi, ws.id);
-  await seedPlayers(adminApi, t.id, 10);
-  const job = await adminApi.post<CreateJob & Record<string, unknown>>(`/api/v1/balancer/tournaments/${t.id}/balance`, {}, 202);
+  const { formation } = await formingPool(adminApi, t.id, 10);
+  const job = await adminApi.call<CreateJob & Record<string, unknown>>("POST", `/api/v1/balancer/tournaments/${t.id}/balance`, {
+    body: {},
+    query: formation,
+    expectStatus: 202,
+  });
   expect(job, "no stream URL: progress is on the realtime topic, the SSE route does not exist").not.toHaveProperty("stream_url");
   expect(job.status_url).toBe(`/api/v1/balancer/jobs/${job.job_id}`);
   expect(job.result_url).toBe(`/api/v1/balancer/jobs/${job.job_id}/result`);
@@ -131,7 +159,8 @@ test("balance job response advertises only the /api/v1 status and result URLs, a
 test("empty pool: the balance job is refused with 422", async ({ adminApi }) => {
   const ws = await createWorkspace(adminApi);
   const t = await createTournament(adminApi, ws.id);
-  const res = await adminApi.raw("POST", `/api/v1/balancer/tournaments/${t.id}/balance`, { body: {} });
+  const { formation } = await formingPool(adminApi, t.id, 0);
+  const res = await adminApi.raw("POST", `/api/v1/balancer/tournaments/${t.id}/balance`, { body: {}, query: formation });
   expect(res.status()).toBe(422);
 });
 
@@ -189,7 +218,8 @@ test("workspace roster: registrations become members; canon and author layers st
   const ws = await createWorkspace(adminApi);
   type Tier = { number: number; rank_min: number; rank_max: number | null };
   const t = (await createTournament(adminApi, ws.id)) as Tournament & { division_grid_version: { tiers: Tier[] } };
-  const [first, second] = await seedPlayers(adminApi, t.id, 2);
+  const { registrationNodeId } = await openRegistration(adminApi, t.id);
+  const [first, second] = await seedPlayers(adminApi, t.id, 2, { registrationNodeId });
   const base = `/api/v1/balancer/workspaces/${ws.id}`;
   type Row = { member_id: number; identity: { handle: string } | null; ranks: Record<string, number>; author_ranks: Record<string, number> };
   const find = async (handle: string, query: Record<string, string | number> = {}) => {

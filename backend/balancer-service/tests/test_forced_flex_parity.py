@@ -94,6 +94,15 @@ def _resolve(case: dict[str, Any], mode: str) -> PlayerRoster:
             grid=DEFAULT_GRID,
             role_codes=("tank", "damage", "support"),
             discipline="overwatch",
+            entries={
+                1: SimpleNamespace(
+                    status="approved",
+                    balancer_status="ready",
+                    exclude_reason=None,
+                    checked_in=False,
+                    is_substitute=False,
+                )
+            },
         )
     )
     return rosters[1]

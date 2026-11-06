@@ -21,6 +21,7 @@ from shared.testing import create_test_async_engine  # noqa: E402
 from shared.testing.db import ensure_test_postgres  # noqa: E402
 from src.schemas.team import InternalBalancerTeamsPayload  # noqa: E402
 from src.services.admin.balancer_variant import BalancerVariantService  # noqa: E402
+from tests.factories import formation_node  # noqa: E402
 
 
 class BalancerSlotRoleTests(IsolatedAsyncioTestCase):
@@ -42,7 +43,11 @@ class BalancerSlotRoleTests(IsolatedAsyncioTestCase):
                     )
                     session.add(tournament)
                     await session.flush()
-                    balance = models.BalancerBalance(tournament_id=tournament.id, result_json={})
+                    balance = models.BalancerBalance(
+                        tournament_id=tournament.id,
+                        formation_node_id=await formation_node(session, tournament.id),
+                        result_json={},
+                    )
                     session.add(balance)
                     await session.flush()
                     team = models.BalancerTeam(

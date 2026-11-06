@@ -17,55 +17,62 @@ const registrationService = {
 
   /** The whole answer document, against the version it was written for. A
    *  schema change since then comes back as a 409 `form_version_stale`. */
-  async register(tournamentId: number, input: RegistrationSubmitInput): Promise<Registration> {
+  async register(
+    tournamentId: number,
+    registrationNodeId: number,
+    input: RegistrationSubmitInput,
+  ): Promise<Registration> {
     const response = await apiFetch(`/api/v1/tournaments/${tournamentId}/registration`,
-      { method: "POST", body: input },
+      { method: "POST", query: { registration_node_id: registrationNodeId }, body: input },
     );
     return response.json();
   },
 
-  async getMyRegistration(tournamentId: number): Promise<Registration | null> {
+  async getMyRegistration(tournamentId: number, registrationNodeId: number): Promise<Registration | null> {
     const response = await apiFetch(`/api/v1/tournaments/${tournamentId}/registration/me`,
+      { query: { registration_node_id: registrationNodeId } },
     );
     return response.json();
   },
 
   async updateMyRegistration(
     tournamentId: number,
+    registrationNodeId: number,
     input: RegistrationSubmitInput,
   ): Promise<Registration> {
     const response = await apiFetch(`/api/v1/tournaments/${tournamentId}/registration/me`,
-      { method: "PATCH", body: input },
+      { method: "PATCH", query: { registration_node_id: registrationNodeId }, body: input },
     );
     return response.json();
   },
 
-  async withdrawMyRegistration(tournamentId: number): Promise<void> {
+  async withdrawMyRegistration(tournamentId: number, registrationNodeId: number): Promise<void> {
     await apiFetch(`/api/v1/tournaments/${tournamentId}/registration/me`,
-      { method: "DELETE" },
+      { method: "DELETE", query: { registration_node_id: registrationNodeId } },
     );
   },
 
-  async checkInMyRegistration(tournamentId: number): Promise<Registration> {
+  async checkInMyRegistration(tournamentId: number, registrationNodeId: number): Promise<Registration> {
     const response = await apiFetch(`/api/v1/tournaments/${tournamentId}/registration/me/check-in`,
-      { method: "POST" },
+      { method: "POST", query: { registration_node_id: registrationNodeId } },
     );
     return response.json();
   },
 
   /** Re-check profile and subscriptions now. Server-side cooldown: a repeat
    *  within it answers 429 with `retry_after`. Refetch the registration after. */
-  async recheckMyRegistration(tournamentId: number): Promise<void> {
+  async recheckMyRegistration(tournamentId: number, registrationNodeId: number): Promise<void> {
     await apiFetch(`/api/v1/tournaments/${tournamentId}/registration/me/recheck`,
-      { method: "POST" },
+      { method: "POST", query: { registration_node_id: registrationNodeId } },
     );
   },
 
   /** The caller's own subscription standing. Never forces a provider refresh, so
    *  the registration form can poll it on render. */
-  async getMySubscriptionStatus(tournamentId: number): Promise<SubscriptionStatus> {
+  async getMySubscriptionStatus(tournamentId: number, registrationNodeId: number): Promise<SubscriptionStatus> {
     const response = await apiFetch(
       `/api/v1/tournaments/${tournamentId}/subscription/me`,
+      { query: { registration_node_id: registrationNodeId } },
     );
     return response.json();
   },
@@ -74,12 +81,13 @@ const registrationService = {
    *  status so the caller does not need a second round-trip. */
   async redeemSubscriptionCode(
     tournamentId: number,
+    registrationNodeId: number,
     code: string,
     provider = "boosty",
   ): Promise<SubscriptionStatus> {
     const response = await apiFetch(
       `/api/v1/tournaments/${tournamentId}/subscription/redeem-code`,
-      { method: "POST", body: { code, provider } },
+      { method: "POST", query: { registration_node_id: registrationNodeId }, body: { code, provider } },
     );
     return response.json();
   },
@@ -87,8 +95,9 @@ const registrationService = {
   /** The whole envelope, not just the rows: `hidden`, `total`, `role_counts` and
    *  `max_participants` travel with it, and under `hidden` they ARE the payload —
    *  the server sends no rows at all. */
-  async listRegistrations(tournamentId: number): Promise<RegistrationListResponse> {
+  async listRegistrations(tournamentId: number, registrationNodeId: number): Promise<RegistrationListResponse> {
     const response = await apiFetch(`/api/v1/tournaments/${tournamentId}/registration/list`,
+      { query: { registration_node_id: registrationNodeId } },
     );
     const data: RegistrationListResponse = await response.json();
     return { ...data, registrations: rehydrateRegistrationList(data) };

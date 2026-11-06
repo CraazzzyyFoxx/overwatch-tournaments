@@ -182,7 +182,6 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
                 slug="compare-division-subject-cohort",
                 workspace_id=ids["workspace"],
                 is_finished=True,
-                is_league=False,
             ),
             models.Tournament(
                 id=ids["subject_other_tournament"],
@@ -190,7 +189,6 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
                 slug="compare-division-subject-other",
                 workspace_id=ids["workspace"],
                 is_finished=True,
-                is_league=False,
             ),
             models.Tournament(
                 id=ids["baseline_cohort_tournament"],
@@ -198,7 +196,6 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
                 slug="compare-division-baseline-cohort",
                 workspace_id=ids["workspace"],
                 is_finished=True,
-                is_league=False,
             ),
             models.Team(
                 id=ids["subject_cohort_team"],
@@ -307,6 +304,33 @@ def _ensure_compare_division_fixture(db: Session) -> dict[str, int | str]:
                 points=3,
                 buchholz=None,
                 tb=None,
+            ),
+        ]
+    )
+    # ParticipantResult has no relationship(), so the unit of work does not order it after its FK parents.
+    db.flush()
+    db.add_all(
+        [
+            models.ParticipantResult(
+                tournament_id=ids["subject_cohort_tournament"],
+                workspace_member_id=ids["subject_member"],
+                final_team_id=ids["subject_cohort_team"],
+                placement=1,
+                field_size=2,
+            ),
+            models.ParticipantResult(
+                tournament_id=ids["subject_other_tournament"],
+                workspace_member_id=ids["subject_member"],
+                final_team_id=ids["subject_other_team"],
+                placement=10,
+                field_size=2,
+            ),
+            models.ParticipantResult(
+                tournament_id=ids["baseline_cohort_tournament"],
+                workspace_member_id=ids["baseline_member"],
+                final_team_id=ids["baseline_cohort_team"],
+                placement=4,
+                field_size=2,
             ),
         ]
     )

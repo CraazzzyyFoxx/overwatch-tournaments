@@ -16,6 +16,7 @@ import {
   Map as MapIcon,
   Radio,
   Scale,
+  Table as TableIcon,
   Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ import { StatusDot } from "@/components/ui/status-dot";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { cn } from "@/lib/utils";
-import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
+import type { StageSummary, TournamentDisplayStatus } from "@/types/tournament.types";
 
 import {
   buildTournamentSectionNav,
@@ -37,6 +38,7 @@ const icons: Record<TournamentSectionId, React.ComponentType<{ className?: strin
   overview: LayoutDashboard,
   bracket: LayoutGrid,
   ranking: ListOrdered,
+  table: TableIcon,
   teams: Users,
   matches: Calendar,
   maps: MapIcon,
@@ -65,12 +67,13 @@ const EDGE_FADE = "pointer-events-none absolute inset-y-0 z-2 w-6 to-transparent
 
 type TournamentSectionNavProps = {
   tournamentId: string;
-  status: TournamentStatus;
+  status: TournamentDisplayStatus;
   stages?: StageSummary[];
   hasTeams?: boolean;
   hasStreams?: boolean;
   hasRules?: boolean;
   hasMapPool?: boolean;
+  hasLeaderboard?: boolean;
   /**
    * Rendered in the rail's leading slot only while the page's big title is out
    * of view, so the viewer never loses the tournament's name without the rail
@@ -92,6 +95,7 @@ export default function TournamentSectionNav({
   hasStreams,
   hasRules,
   hasMapPool,
+  hasLeaderboard,
   collapsedTitle,
   collapsedActions,
   collapsed = false,
@@ -115,9 +119,10 @@ export default function TournamentSectionNav({
         hasStreams,
         hasRules,
         hasMapPool,
+        hasLeaderboard,
         pathname
       }),
-    [hasMapPool, hasRules, hasTeams, hasStreams, pathname, stages, status, tournamentId]
+    [hasLeaderboard, hasMapPool, hasRules, hasTeams, hasStreams, pathname, stages, status, tournamentId]
   );
   const setActiveRef = (node: HTMLElement | null) => {
     activeRef.current = node;
@@ -231,7 +236,7 @@ export default function TournamentSectionNav({
                     <>
                       <Icon className="shrink-0" aria-hidden="true" />
                       <span className={cn(condensed && "md:sr-only")}>{label}</span>
-                      {item.id === "bracket" && (status === "live" || status === "playoffs") ? (
+                      {item.id === "bracket" && status === "live" ? (
                         <StatusDot pulse className="text-[color:var(--aqt-status-live)]" />
                       ) : null}
                     </>

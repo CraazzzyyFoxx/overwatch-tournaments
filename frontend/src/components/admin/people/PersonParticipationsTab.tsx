@@ -155,7 +155,7 @@ export function PersonParticipationsTab({
 
   const tournamentsQuery = useQuery({
     queryKey: tournamentQueryKeys.list(),
-    queryFn: () => tournamentService.getAll(null),
+    queryFn: () => tournamentService.getAll(),
     enabled: canCreate
   });
 

@@ -31,7 +31,7 @@ const VISIBLE_CARDS = 3;
 /** Open checklist items a card lists before pointing at the hub's full checklist. */
 const MAX_CHECKLIST_ITEMS = 3;
 /** The card phases in lifecycle order: the strip under a card's title marks where it stands. */
-const PHASES = ["preparation", "registration", "formation", "live", "wrap_up"] as const;
+const PHASES = ["preparation", "live", "wrap_up"] as const;
 
 /** As many columns as fit at 20rem: a lone card takes the whole column, three share it. */
 const GRID_CLASS = "grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-4";
@@ -83,25 +83,19 @@ export function PhaseCardsSkeleton() {
  */
 function PhaseCard({ card }: Readonly<{ card: DashboardTournamentCard }>) {
   const t = useTranslations("adminShell.dashboard");
-  const tStatus = useTranslations("common.statusBadge");
   const format = useFormatter();
   const base = `/admin/tournaments/${card.id}`;
-  const status = tStatus(card.status as TournamentStatus);
-  const phaseName = t(`phase.${card.phase}`);
-  // Formation and live each span two statuses; the status says which one,
-  // unless its label already is the phase's own name.
-  const phaseLine =
-    (card.phase === "formation" || card.phase === "live") && status !== phaseName
-      ? `${phaseName} · ${status}`
-      : phaseName;
+  // A live tournament with no encounter yet is still signing up or forming its teams.
+  const playing = card.play != null && card.play.encounters_total > 0;
+  const phaseName = t(card.phase === "live" && !playing ? "phase.registration" : `phase.${card.phase}`);
   // The one way in: the existing screen where this phase's work is done.
+  const action = card.phase === "live" && !playing ? "registration" : card.phase;
   const actionHref = {
     preparation: `${base}/settings/general`,
     registration: `${base}/registration/entries`,
-    formation: card.team_formation === "draft" ? `${base}/teams/draft` : `${base}/teams/roster`,
     live: `${base}/matches/encounters`,
     wrap_up: `${base}/overview`
-  }[card.phase];
+  }[action];
   const current = PHASES.findIndex((phase) => phase === card.phase);
 
   return (
@@ -137,7 +131,7 @@ function PhaseCard({ card }: Readonly<{ card: DashboardTournamentCard }>) {
               />
             ) : null}
             <div className="min-w-0 flex-1 space-y-1">
-              <p className={eyebrowClass("muted")}>{phaseLine}</p>
+              <p className={eyebrowClass("muted")}>{phaseName}</p>
               {/* `items-start`: a two-line title keeps its game mark and pill on its first line. */}
               <div className="flex min-w-0 items-start gap-2">
                 <span className="mt-1 flex shrink-0">
@@ -177,17 +171,19 @@ function PhaseCard({ card }: Readonly<{ card: DashboardTournamentCard }>) {
           ) : null}
           <Button asChild variant="outline" size="sm" className="mt-auto w-fit">
             <HoverPrefetchLink href={actionHref}>
-              {t(`action.${card.phase}`)}
+              {t(`action.${action}`)}
               <ArrowRight className="size-3.5" aria-hidden />
             </HoverPrefetchLink>
           </Button>
         </div>
         {/* Its own container: the facts inside fit their columns to this zone, not to the card. */}
         <div className="@container min-w-0 border-t border-border/50 p-6 @3xl:border-l @3xl:border-t-0">
-          {card.phase === "registration" ? (
-            <RegistrationBody card={card} />
-          ) : card.phase === "live" ? (
-            <PlayBody card={card} />
+          {card.phase === "live" ? (
+            playing ? (
+              <PlayBody card={card} />
+            ) : (
+              <RegistrationBody card={card} />
+            )
           ) : card.phase === "wrap_up" ? (
             <WrapUpBody card={card} />
           ) : (
@@ -210,9 +206,8 @@ function NoAccess() {
 }
 
 /**
- * Preparation and formation: the hub's own living checklist, open items only.
- * `buildChecklist` already drops what the card's status no longer needs, so a
- * formation card never nags "registration form" after registration closed.
+ * Preparation: the hub's own living checklist, open items only. `buildChecklist` already
+ * drops what the card's status no longer needs.
  */
 function ChecklistBody({ card }: Readonly<{ card: DashboardTournamentCard }>) {
   const t = useTranslations("adminShell.dashboard");

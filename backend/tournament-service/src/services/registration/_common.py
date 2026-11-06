@@ -15,16 +15,19 @@ engine never touches it.
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core import http_status as status
+from shared.core.enums import FlowNodeKind
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.domain.roster import FlexRoleMode, PlayerRoster
 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog, build_hero_entries
 from shared.registration_statuses import get_builtin_status_values, is_balancer_status_excluded
 from shared.repository import RegistrationFormRepository, TournamentRepository
+from shared.repository.flow_node import FlowNodeRepository
 from shared.schemas.role import RoleRef
 from shared.services.division_grid.access import (
     get_effective_division_grid_version,
@@ -235,23 +238,43 @@ def replace_registration_roles(
 
 async def resolve_roster(
     session: AsyncSession,
+    registration_node_id: int,
     registration: models.Registration | Any,
 ) -> PlayerRoster | None:
-    """The resolved roster of ONE registration, straight from the engine.
+    """The resolved roster of ONE registration (its entry in the node), straight from the engine.
 
     Write paths mutate roles and then want the ``ready``/``incomplete`` verdict.
     They hold a row loaded for their own reasons, which need not carry
     ``registration_load_options()``, so the roster is re-read through the engine's
     own query instead: autoflush publishes the pending role writes first, which
-    is also what makes the verdict reflect the edit that just happened.
+    is also what makes the verdict reflect the edit that just happened. The row
+    needs an entry in the node (flushed) to be read at all.
     """
-    rosters = await roster_engine.for_tournament(
+    rosters = await roster_engine.for_registration_node(
         session,
-        registration.tournament_id,
+        registration_node_id,
         registration_ids=[registration.id],
         include_deleted=True,
     )
     return rosters.get(registration.id)
+
+
+async def entries_of(
+    session: AsyncSession,
+    registration_node_id: int,
+    registrations: Sequence[models.Registration | Any],
+) -> dict[int, models.RegistrationEntry]:
+    """The live entries of ``registrations`` in the node, by registration id; a registration with none is absent."""
+    if not registrations:
+        return {}
+    rows = await session.scalars(
+        sa.select(models.RegistrationEntry).where(
+            models.RegistrationEntry.registration_node_id == registration_node_id,
+            models.RegistrationEntry.registration_id.in_([registration.id for registration in registrations]),
+            models.RegistrationEntry.deleted_at.is_(None),
+        )
+    )
+    return {entry.registration_id: entry for entry in rows}
 
 
 def included_balancer_status(roster: PlayerRoster | None) -> str:
@@ -264,7 +287,7 @@ def included_balancer_status(roster: PlayerRoster | None) -> str:
 
 
 def sync_included_balancer_status(
-    registration: models.Registration | Any,
+    entry: models.RegistrationEntry | Any,
     roster: PlayerRoster | None,
 ) -> None:
     """Recompute `ready`/`incomplete` from the resolved roster -- the only two
@@ -273,19 +296,16 @@ def sync_included_balancer_status(
     (`set_balancer_status` rejects ready/incomplete), so a role-driven resync
     never overrides them.
     """
-    current_balancer_status = getattr(registration, "balancer_status", None)
-    if (
-        getattr(registration, "status", None) == "approved"
-        and current_balancer_status in AUTO_MANAGED_BALANCER_STATUSES
-    ):
-        registration.balancer_status = included_balancer_status(roster)
+    current_balancer_status = getattr(entry, "balancer_status", None)
+    if getattr(entry, "status", None) == "approved" and current_balancer_status in AUTO_MANAGED_BALANCER_STATUSES:
+        entry.balancer_status = included_balancer_status(roster)
 
 
 def is_included_in_balancer(
-    registration: models.Registration | Any,
+    entry: models.RegistrationEntry | Any,
     status_meta_map: dict[str, dict[str, Any]] | None = None,
 ) -> bool:
-    """Whether `registration` currently counts as part of the balancer pool.
+    """Whether the registration entry currently counts as part of the balancer pool.
 
     Single source of truth: the *current status's* `excludes_from_balancer`
     flag -- true for the builtin `not_in_balancer`/`excluded` statuses, false
@@ -294,9 +314,9 @@ def is_included_in_balancer(
     is already in hand -- callers without it (no custom-status catalog
     loaded) still get the correct answer for every builtin status.
     """
-    if getattr(registration, "deleted_at", None) is not None:
+    if getattr(entry, "deleted_at", None) is not None:
         return False
-    balancer_status = getattr(registration, "balancer_status", None)
+    balancer_status = getattr(entry, "balancer_status", None)
     if status_meta_map is not None:
         meta = status_meta_map.get("balancer", {}).get(balancer_status)
         if meta is not None:
@@ -312,15 +332,18 @@ class RegistrationCommonService:
         *,
         form_repo: RegistrationFormRepository = RegistrationFormRepository(),
         tournament_repo: TournamentRepository = TournamentRepository(),
+        flow_node_repo: FlowNodeRepository = FlowNodeRepository(),
     ) -> None:
         self.form_repo = form_repo
         self.tournament_repo = tournament_repo
+        self.flow_node_repo = flow_node_repo
 
     async def _register_registration_changed(
         self,
         session: AsyncSession,
         registration: models.Registration,
     ) -> None:
+        """Invalidate the tournament's registration reads (profile- or entry-level change)."""
         await emit(
             session,
             scope=Scope.tournament(registration.tournament_id),
@@ -329,6 +352,24 @@ class RegistrationCommonService:
             # entity_ids is optional precision, so no id just means no narrowing.
             entity_ids={"registration_ids": [registration.id]} if registration.id is not None else None,
         )
+
+    async def ensure_registration_node(
+        self, session: AsyncSession, tournament_id: int, registration_node_id: int
+    ) -> models.FlowNode:
+        """The registration node ``registration_node_id`` of this tournament; 404 for any other id (plan Decision 1)."""
+        node = await self.flow_node_repo.get(session, registration_node_id)
+        if node is None or node.tournament_id != tournament_id or node.kind != FlowNodeKind.REGISTRATION:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flow node not found")
+        return node
+
+    async def tournament_id_of_node(self, session: AsyncSession, registration_node_id: int) -> int:
+        """The tournament a flow node belongs to; 404 when there is no such node."""
+        tournament_id = await session.scalar(
+            sa.select(models.FlowNode.tournament_id).where(models.FlowNode.id == registration_node_id)
+        )
+        if tournament_id is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flow node not found")
+        return tournament_id
 
     async def get_tournament_grid(self, session: AsyncSession, tournament_id: int) -> DivisionGrid:
         """Use the scoped full model so sheets and autofill retain native ranges."""

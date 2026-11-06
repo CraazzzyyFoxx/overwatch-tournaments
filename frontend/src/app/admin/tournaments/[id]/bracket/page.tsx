@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
 import { useParams } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { MasterDetail } from "@/components/kit/MasterDetail";
@@ -11,13 +10,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { useIsMobile } from "@/hooks/useMobile";
 import { usePermissions } from "@/hooks/usePermissions";
-import adminService from "@/services/admin.service";
-import teamService from "@/services/team.service";
 
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import { StageEditor } from "./components/StageEditor";
 import { StageList } from "./components/StageList";
-import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { useBracketTabData } from "./useBracketTabData";
 
 /**
  * Bracket (T4, F7): the stage list on the left, one stage's editor on the right.
@@ -40,43 +37,17 @@ export default function BracketTabPage() {
   const { searchParams, setParams } = useQueryParams({ mode: "push" });
   const isMobile = useIsMobile();
 
-  const stagesQuery = useQuery({
-    queryKey: adminQueryKeys.stages(tournamentId),
-    queryFn: () => adminService.getStages(tournamentId)
-  });
-
-  const tournamentQuery = useQuery({
-    queryKey: adminQueryKeys.tournament(tournamentId),
-    queryFn: () => adminService.getTournament(tournamentId)
-  });
+  const {
+    stagesQuery,
+    tournamentQuery,
+    orderedStages,
+    progressByStageId,
+    teams,
+    isTeamsLoading,
+    failedQuery
+  } = useBracketTabData(tournamentId);
   const tournament = tournamentQuery.data;
 
-  const teamsQuery = useQuery({
-    queryKey: adminQueryKeys.tournamentTeamCatalog(tournamentId),
-    queryFn: () => teamService.getAll({ tournamentId, sort: "name", order: "asc" })
-  });
-  const teamsData = teamsQuery.data;
-  const isTeamsLoading = teamsQuery.isLoading;
-
-  const stages = stagesQuery.data ?? [];
-
-  const progressQuery = useQuery({
-    queryKey: adminQueryKeys.stagesProgress(tournamentId),
-    queryFn: () => adminService.getStagesProgress(tournamentId),
-    enabled: stages.length > 0
-  });
-  const stageProgress = useMemo(() => progressQuery.data ?? [], [progressQuery.data]);
-
-  const orderedStages = useMemo(
-    () => [...stages].sort((left, right) => left.order - right.order),
-    [stages]
-  );
-  const progressByStageId = useMemo(
-    () => new Map(stageProgress.map((progress) => [progress.stage_id, progress])),
-    [stageProgress]
-  );
-
-  const teams = teamsData?.results ?? [];
   const stageParam = Number(searchParams?.get("stage"));
   // No `?stage=` on a wide viewport opens the LAST stage — the one still being
   // worked on, since seeding flows top to bottom. Below `md` the list is the
@@ -86,11 +57,6 @@ export default function BracketTabPage() {
     orderedStages.find((stage) => stage.id === stageParam) ??
     (isMobile ? null : (orderedStages.at(-1) ?? null));
 
-  // The editor reads all four: a failed team catalogue would draw "0 teams"
-  // and empty pickers, which is a lie, not a state.
-  const failedQuery = [stagesQuery, tournamentQuery, teamsQuery, progressQuery].find(
-    (query) => query.isError
-  );
   if (failedQuery) {
     return (
       <PageStateCard

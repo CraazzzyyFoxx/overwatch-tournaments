@@ -13,13 +13,19 @@ import {
 } from "@/types/tournament.types";
 import { apiFetch } from "@/lib/api/fetch";
 import { normalizePaginatedResponse } from "@/lib/api/normalize-paginated-response";
-import { isTournamentStatusActive, TOURNAMENT_STATUS_ORDER } from "@/lib/tournament/status";
+import { TOURNAMENT_PHASES } from "@/lib/tournament/lifecycle";
+import { isTournamentStatusActive } from "@/lib/tournament/status";
 
 /** What the header and the home blocks call running: the list asks the server for these only. */
-const ACTIVE_STATUSES = TOURNAMENT_STATUS_ORDER.filter(isTournamentStatusActive);
+const ACTIVE_STATUSES = TOURNAMENT_PHASES.filter(isTournamentStatusActive);
 
 /** What a tournament list row can carry besides its columns; each costs the read a query. */
-type TournamentListEntity = "stages" | "participants_count" | "registrations_count" | "teams_count";
+type TournamentListEntity =
+  | "stages"
+  | "participants_count"
+  | "registrations_count"
+  | "teams_count"
+  | "flow_nodes";
 
 type GetStandingsOptions = {
   workspaceId?: number | null;
@@ -30,7 +36,6 @@ type GetStandingsOptions = {
 /** The filter dimensions the list and its facet counts share. `discipline` null/absent is every game. */
 type TournamentFilterParams = {
   status?: TournamentStatus | null;
-  isLeague?: boolean | null;
   query?: string;
   discipline?: string | null;
 };
@@ -43,7 +48,6 @@ type TournamentFilterParams = {
 function tournamentFilterQuery(params: TournamentFilterParams): Record<string, unknown> {
   return {
     status: params.status ?? undefined,
-    is_league: params.isLeague ?? undefined,
     query: params.query?.trim() ? params.query.trim() : undefined,
     discipline: params.discipline ?? undefined
   };
@@ -70,14 +74,12 @@ export default class tournamentService {
    * lists every game's. Pickers need no stages: only a caller that draws them asks for them.
    */
   static async getAll(
-    isLeague: boolean | null = null,
     workspaceId?: number | "all" | null,
     discipline?: string | null,
     entities: TournamentListEntity[] = ["participants_count"]
   ): Promise<PaginatedResponse<Tournament>> {
     return apiFetch(`/api/v1/tournaments`, {
       query: {
-        is_league: isLeague,
         workspace_id: workspaceId,
         discipline,
         page: 1,
@@ -103,6 +105,8 @@ export default class tournamentService {
   static async listTournaments(
     params: TournamentFilterParams & {
       workspaceId?: number | "all" | null;
+      /** Only tournaments with a registration node `open` or in `check_in`: the "Registration" chip. */
+      registrationOpen?: boolean;
       sort?: "start_date" | "participants_count";
       order?: "asc" | "desc";
       page?: number;
@@ -118,7 +122,9 @@ export default class tournamentService {
         sort: params.sort ?? "start_date",
         order: params.order ?? "desc",
         workspace_id: params.workspaceId,
-        entities: ["stages", "participants_count", "teams_count"],
+        registration_open: params.registrationOpen ? true : undefined,
+        // `flow_nodes` lets a card say "Registration" or "Check-in" (`displayStatus`) for a tournament that is `live`.
+        entities: ["stages", "participants_count", "teams_count", "flow_nodes"],
         ...tournamentFilterQuery(params)
       }
     })
@@ -154,7 +160,7 @@ export default class tournamentService {
         // The home "now on the platform" block reads all of these off one list:
         // a running tournament shows its stage, teams and participants, an
         // open one its registrations.
-        entities: ["stages", "registrations_count", "participants_count", "teams_count"]
+        entities: ["stages", "registrations_count", "participants_count", "teams_count", "flow_nodes"]
       }
     })
       .then((response) => response.json())
@@ -218,7 +224,10 @@ export default class tournamentService {
           // schemas that nest TournamentRead must not carry a copy each. Read
           // here because this one payload is the whole page shell — the Rules
           // tab's presence AND its content both come off it.
-          "rules"
+          "rules",
+          // The registration and formation nodes: the draft room and the balancer name the formation they
+          // follow, and the section nav asks whether the tournament has a table.
+          "flow_nodes"
         ]
       }
     }).then((response) => response.json());

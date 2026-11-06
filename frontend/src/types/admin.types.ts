@@ -272,7 +272,6 @@ export interface StreamPollTick {
 
 // ─── Tournament ──────────────────────────────────────────────────────────────
 
-import type { DraftFormatSettings } from "@/types/draft.types";
 import type {
   StageItemType,
   StageRegulation,
@@ -295,13 +294,10 @@ export interface TournamentCreateInput {
   discipline: string;
   name: string;
   description?: string;
-  is_league: boolean;
   /** Public-URL slug; left blank, one is generated from `name`. */
   slug?: string;
   /** "Create tournament" creates it Unpublished; it is published from the hub. */
   is_hidden?: boolean;
-  team_formation?: string;
-  status?: TournamentStatus;
   start_date: string;
   end_date: string;
   auto_transitions_enabled?: boolean;
@@ -316,27 +312,16 @@ export interface TournamentUpdateInput {
   challonge_slug?: string | null;
   /** Renames the public-URL slug; the retired value keeps resolving via a redirect. */
   slug?: string | null;
-  is_league?: boolean;
   is_finished?: boolean;
   is_hidden?: boolean;
-  team_formation?: string;
   start_date?: string;
   end_date?: string;
   auto_transitions_enabled?: boolean;
-  allow_late_registration?: boolean;
   discord_broadcasts_enabled?: boolean;
   discord_dms_enabled?: boolean;
   logs_official?: boolean;
   pov_stream_delay_s?: number;
   division_grid_version_id?: number | null;
-  /** Draft format rule; `null` clears it back to snake. */
-  draft_format_json?: DraftFormatSettings | null;
-}
-
-export interface TournamentPhaseScheduleEntryInput {
-  status: TournamentStatus;
-  starts_at: string;
-  ends_at?: string | null;
 }
 
 interface TournamentPreviewAccessUser {
@@ -353,11 +338,6 @@ export interface TournamentPreviewAccessEntry {
   user?: TournamentPreviewAccessUser | null;
 }
 
-export interface TournamentStatusTransitionInput {
-  status: TournamentStatus;
-  force?: boolean;
-}
-
 /**
  * Readiness aggregate for the hub living checklist (D13, §7.1).
  * Mirrors backend/tournament-service/src/services/dashboard/readiness.py. Field
@@ -370,7 +350,8 @@ export interface TournamentStatusTransitionInput {
 export interface TournamentReadiness {
   tournament_id: number;
   status: TournamentStatus;
-  team_formation: string;
+  /** Distinct modes of the tournament's formation nodes (`balancer` | `draft` | `registered` | `manual`), sorted. */
+  formation_modes: string[];
   // visible with tournament.read:
   schedule_configured: boolean | null;
   grid_selected: boolean | null;
@@ -409,8 +390,6 @@ export interface StageCreateInput extends Partial<StageRegulation> {
   description?: string | null;
   stage_type: StageType;
   max_rounds?: number;
-  advance_count?: number | null;
-  advance_upper_count?: number | null;
   /** `individual_swiss` only. */
   pairing_mode?: StagePairingMode | null;
   playoff_team_count?: number | null;
@@ -422,8 +401,6 @@ export interface StageUpdateInput extends Partial<StageRegulation> {
   description?: string | null;
   stage_type?: StageType;
   max_rounds?: number;
-  advance_count?: number | null;
-  advance_upper_count?: number | null;
   /** `individual_swiss` only. */
   pairing_mode?: StagePairingMode | null;
   playoff_team_count?: number | null;
@@ -434,23 +411,17 @@ export interface StageItemCreateInput {
   name: string;
   type: StageItemType;
   order?: number;
-  advance_count?: number | null;
-  advance_upper_count?: number | null;
 }
 
 export interface StageItemInputCreateInput {
   slot: number;
   input_type?: StageItemInputType;
   team_id?: number | null;
-  source_stage_item_id?: number | null;
-  source_position?: number | null;
 }
 
 export interface StageItemInputUpdateInput {
   input_type?: StageItemInputType;
   team_id?: number | null;
-  source_stage_item_id?: number | null;
-  source_position?: number | null;
   /** Moves the input into this item of the same stage. */
   stage_item_id?: number;
   /** Seed to insert at; the seeds it passes shift by one, both items stay 1..N. */

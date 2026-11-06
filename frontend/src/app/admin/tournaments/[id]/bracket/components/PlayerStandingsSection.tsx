@@ -1,24 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import type { ColumnDef, Row } from "@tanstack/react-table";
 import { Crown, Lock } from "lucide-react";
 
+import { DataTable, columnMeta, readColumnMeta, type DataTableGroup } from "@/components/data-table";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { SettingGroup } from "@/components/kit/SettingRow";
+import { FilterBar } from "@/components/kit/FilterBar";
+import { useFilters, type FilterDef } from "@/components/kit/useFilters";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
@@ -31,21 +26,21 @@ import type { Stage, Tournament } from "@/types/tournament.types";
 
 import { tabError, tabFallback } from "../../hubQueries";
 import {
-  cutIndex,
-  pinOf,
   pinsDirty,
   pinsPayload,
-  tablesByRole,
-  type PinEdits
+  standingRows,
+  type PinEdits,
+  type PlayerStandingRow
 } from "./playerStandings.model";
 
 /** Same cadence as the public standings of a live tournament. */
 const REFRESH_MS = 15_000;
 
 /**
- * The personal table of an `individual_swiss` stage, one table per role: pin a
- * player's place, and — once the stage is completed — lock the qualification,
- * which excludes everyone below the cut and moves the tournament to its draft.
+ * The personal table of an `individual_swiss` stage, one table grouped by role:
+ * pin a player's place, and — once the stage is completed — lock the
+ * qualification, which excludes everyone below the cut and moves the
+ * tournament to its draft.
  */
 export function PlayerStandingsSection({
   stage,
@@ -69,9 +64,121 @@ export function PlayerStandingsSection({
     refetchInterval: REFRESH_MS
   });
 
-  const stageRows = (standingsQuery.data ?? []).filter((row) => row.stage_id === stage.id);
-  const tables = tablesByRole(stageRows, stage.id);
+  const stageRows = useMemo(
+    () => (standingsQuery.data ?? []).filter((row) => row.stage_id === stage.id),
+    [standingsQuery.data, stage.id]
+  );
   const dirty = pinsDirty(stageRows, edits);
+
+  const filterDefs: FilterDef[] = [
+    {
+      key: "role",
+      label: t("role"),
+      kind: "multi",
+      options: [...new Set(stageRows.map((row) => row.role))].map((role) => ({
+        value: role,
+        label: slotLabel(role)
+      }))
+    }
+  ];
+  const filters = useFilters(filterDefs);
+  // `values` is rebuilt every render; its joined form changes only with the filter.
+  const roleKey = (filters.values.role as string[]).join(",");
+  // A new array repaints every row, so it changes only with the data, a pin draft or the filter.
+  const rows = useMemo(() => {
+    const shown = roleKey ? roleKey.split(",") : [];
+    const all = standingRows(stageRows, edits);
+    return shown.length > 0 ? all.filter((row) => shown.includes(row.role)) : all;
+  }, [stageRows, edits, roleKey]);
+
+  // Stable: a cell function that changed identity would remount the pin input mid-typing. The draft
+  // reaches the input through the row's `pin`.
+  const columns = useMemo<ColumnDef<PlayerStandingRow>[]>(() => {
+    const numeric = columnMeta<PlayerStandingRow>({ align: "right", numeric: true });
+    const defs: ColumnDef<PlayerStandingRow>[] = [
+      {
+        accessorKey: "position",
+        header: t("place"),
+        cell: ({ row }) => row.original.position ?? "–",
+        meta: columnMeta<PlayerStandingRow>({ numeric: true })
+      },
+      {
+        accessorKey: "display_name",
+        header: t("player"),
+        cell: ({ row }) => (
+          <span className="inline-flex items-center gap-1.5">
+            {row.original.display_name}
+            {row.original.is_captain ? (
+              <Crown aria-label={t("captain")} className="size-3.5 text-[color:var(--aqt-warm)]" />
+            ) : null}
+          </span>
+        ),
+        meta: columnMeta<PlayerStandingRow>({ searchValue: (row) => row.display_name })
+      },
+      { accessorKey: "role", header: t("role"), cell: ({ row }) => slotLabel(row.original.role) },
+      { accessorKey: "points", header: t("points"), meta: numeric },
+      {
+        id: "record",
+        header: t("record"),
+        accessorFn: (row) => `${row.wins}–${row.draws}–${row.losses}`,
+        meta: numeric
+      },
+      {
+        accessorKey: "map_diff",
+        header: t("mapDiff"),
+        cell: ({ row }) => (row.original.map_diff > 0 ? `+${row.original.map_diff}` : row.original.map_diff),
+        meta: numeric
+      },
+      {
+        accessorKey: "buchholz",
+        header: t("buchholz"),
+        cell: ({ row }) => row.original.buchholz.toFixed(1),
+        meta: numeric
+      },
+      {
+        accessorKey: "pin",
+        header: t("pin"),
+        // As wide as its input: an even share would leave a blank band at the table's right edge.
+        size: 128,
+        cell: ({ row }) => (
+          <NumberInput
+            integer
+            min={1}
+            max={row.original.roleSize}
+            size="sm"
+            className="w-24"
+            aria-label={t("pinLabel", { name: row.original.display_name })}
+            placeholder="–"
+            value={row.original.pin}
+            onValueChange={(next) =>
+              setEdits((current) => ({ ...current, [row.original.workspace_member_id]: next }))
+            }
+          />
+        )
+      }
+    ];
+    // Places and the cut read only in the server's order, so nothing sorts; the cut and the
+    // players below it are drawn across the whole row.
+    return defs.map((column) => ({
+      ...column,
+      enableSorting: false,
+      meta: columnMeta<PlayerStandingRow>({
+        ...readColumnMeta<PlayerStandingRow>(column.meta),
+        onCell: (row) => ({
+          className: cn(
+            row.atCut && "border-b-2 border-b-[color:var(--aqt-border-3)]",
+            !row.is_qualified && "text-[color:var(--aqt-fg-dim)]"
+          )
+        })
+      })
+    }));
+  }, [t, slotLabel]);
+
+  const groupByRole = (pageRows: Row<PlayerStandingRow>[]): DataTableGroup<PlayerStandingRow>[] => {
+    const groups = new Map<string, Row<PlayerStandingRow>[]>();
+    for (const row of pageRows) groups.set(row.original.role, [...(groups.get(row.original.role) ?? []), row]);
+    return [...groups].map(([role, roleRows]) => ({ key: role, label: slotLabel(role), rows: roleRows }));
+  };
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -118,7 +225,8 @@ export function PlayerStandingsSection({
   if (standingsQuery.isPending) return tabFallback;
   if (standingsQuery.isError) return tabError(() => standingsQuery.refetch());
 
-  const canLock = stage.is_completed && tournament?.status === "live";
+  // The server refuses a lock while rounds are still open and says why; the worker never completes this stage.
+  const canLock = stage.status === "live" && tournament?.status === "live";
 
   return (
     <div className="flex flex-col gap-4">
@@ -130,82 +238,17 @@ export function PlayerStandingsSection({
         </Alert>
       ) : null}
 
-      {tables.length === 0 ? <p className="text-caption text-muted-foreground">{t("empty")}</p> : null}
-
-      {tables.map((table) => {
-        const cut = cutIndex(table.rows);
-        return (
-          <SettingGroup
-            key={table.role}
-            id={`stage-players-${table.role}`}
-            title={slotLabel(table.role)}
-            summary={table.rows.length}
-            flush
-          >
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">{t("place")}</TableHead>
-                  <TableHead>{t("player")}</TableHead>
-                  <TableHead className="text-right">{t("points")}</TableHead>
-                  <TableHead className="text-right">{t("record")}</TableHead>
-                  <TableHead className="text-right">{t("mapDiff")}</TableHead>
-                  <TableHead className="text-right">{t("buchholz")}</TableHead>
-                  <TableHead className="w-28">{t("pin")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {table.rows.map((row, index) => (
-                  <TableRow
-                    key={row.workspace_member_id}
-                    // The cut: everyone up to this row qualifies, the rest does not.
-                    className={cn(
-                      "aqt-tnum",
-                      index === cut && index < table.rows.length - 1 && "border-b-2 border-b-[color:var(--aqt-border-3)]",
-                      !row.is_qualified && "text-[color:var(--aqt-fg-dim)]"
-                    )}
-                  >
-                    <TableCell>{row.position ?? "–"}</TableCell>
-                    <TableCell>
-                      <span className="inline-flex items-center gap-1.5">
-                        {row.display_name}
-                        {row.is_captain ? (
-                          <Crown
-                            aria-label={t("captain")}
-                            className="size-3.5 text-[color:var(--aqt-warm)]"
-                          />
-                        ) : null}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">{row.points}</TableCell>
-                    <TableCell className="text-right">
-                      {row.wins}–{row.draws}–{row.losses}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {row.map_diff > 0 ? `+${row.map_diff}` : row.map_diff}
-                    </TableCell>
-                    <TableCell className="text-right">{row.buchholz.toFixed(1)}</TableCell>
-                    <TableCell>
-                      <NumberInput
-                        integer
-                        min={1}
-                        max={table.rows.length}
-                        size="sm"
-                        aria-label={t("pinLabel", { name: row.display_name })}
-                        placeholder="–"
-                        value={pinOf(row, edits)}
-                        onValueChange={(next) =>
-                          setEdits((current) => ({ ...current, [row.workspace_member_id]: next }))
-                        }
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </SettingGroup>
-        );
-      })}
+      <DataTable<PlayerStandingRow>
+        rows={rows}
+        columns={columns}
+        getRowId={(row) => String(row.workspace_member_id)}
+        paging="all"
+        groupRows={groupByRole}
+        filterKey={filters.filterKey}
+        toolbar={<FilterBar defs={filterDefs} filters={filters} />}
+        searchPlaceholder={t("search")}
+        emptyMessage={t("empty")}
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Button

@@ -15,8 +15,10 @@ from shared import models
 from shared.core import enums
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.tournament_state import FINISHED_STATUSES
 from shared.repository import WorkspaceMemberRepository
 from shared.schemas.voice import VoicePlan, VoicePlanChannel, VoicePlanWarning
+from shared.services.flow_queries import stage_node_status
 from src.domain.voice import Encounter, assign_round_slots
 
 __all__ = ("build_voice_plan",)
@@ -24,25 +26,29 @@ __all__ = ("build_voice_plan",)
 _members = WorkspaceMemberRepository()
 
 #: ``Tournament.status`` after which nothing may exist.
-_FINISHED = (enums.TournamentStatus.COMPLETED, enums.TournamentStatus.ARCHIVED)
+_FINISHED = FINISHED_STATUSES
+_LIVE = enums.FlowNodeStatus.LIVE
+_COMPLETED = enums.FlowNodeStatus.COMPLETED
 _NO_DISCORD = "player_without_discord"
 #: Discord's channel name limit.
 _NAME_LIMIT = 100
 
 
 def _is_complete(stages: list[sa.Row]) -> bool:
-    """The last stage (highest ``order``; parallel divisions share one) is completed."""
-    if not stages:
+    """The last stage (highest ``order``; parallel divisions share one) is completed and no stage is still live."""
+    if not stages or any(stage.status == _LIVE for stage in stages):
         return False
     last = max(stage.order for stage in stages)
-    return all(stage.is_completed for stage in stages if stage.order == last)
+    return all(stage.status == _COMPLETED for stage in stages if stage.order == last)
 
 
 async def _team_rosters(session: AsyncSession, tournament_id: int, stages: list[sa.Row], early_teams: bool):
     """``(team id, name)`` and each team's ``Player`` rows, for the teams that get a voice now."""
-    playing = [stage.id for stage in stages if stage.is_active and stage.stage_type != enums.StageType.INDIVIDUAL_SWISS]
+    playing = [
+        stage.id for stage in stages if stage.status == _LIVE and stage.stage_type != enums.StageType.INDIVIDUAL_SWISS
+    ]
     if playing:
-        # ``activate_stage`` turns every tentative input into a FINAL team: the seats of a live stage.
+        # ``seat_inputs`` turns every tentative input into a FINAL team: the seats of a live stage.
         seated = (
             sa.select(models.StageItemInput.team_id)
             .join(models.StageItem, models.StageItem.id == models.StageItemInput.stage_item_id)
@@ -149,9 +155,8 @@ async def build_voice_plan(session: AsyncSession, tournament_id: int) -> VoicePl
                 models.Stage.id,
                 models.Stage.stage_type,
                 models.Stage.order,
-                models.Stage.is_active,
                 models.Stage.is_published,
-                models.Stage.is_completed,
+                stage_node_status(models.Stage.id).label("status"),
             )
             .where(models.Stage.tournament_id == tournament_id)
             .order_by(models.Stage.order, models.Stage.id)
@@ -166,7 +171,7 @@ async def build_voice_plan(session: AsyncSession, tournament_id: int) -> VoicePl
     slots: list[tuple[int, dict[int, int], int]] = []  # (stage id, member -> slot index, slot count)
     seat_names: dict[int, str] = {}
     for stage in stages:
-        if stage.stage_type != enums.StageType.INDIVIDUAL_SWISS or not stage.is_active or stage.is_completed:
+        if stage.stage_type != enums.StageType.INDIVIDUAL_SWISS or stage.status != _LIVE:
             continue
         rounds, names = await _round_encounters(session, stage.id)
         if not rounds:

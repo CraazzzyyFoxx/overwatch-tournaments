@@ -8,7 +8,7 @@ handing out more rounds than the configured maximum.
 
 Re-seeding only ever added or overwrote the slots it was given: shrinking the
 advance from top-2 to top-1 left the second-place inputs behind, and a preserved
-TENTATIVE input was collided with rather than skipped, because the free slot was
+placeholder input was collided with rather than skipped, because the free slot was
 found once and then counted up from.
 
 Creating a stage input checked none of the invariants editing one checks, so an
@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase, TestCase
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 import pydantic
 
@@ -38,8 +38,6 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 stage_service = importlib.import_module("src.services.admin.stage")
 stage_crud = importlib.import_module("src.services.admin.stage.crud")
 stage_generation = importlib.import_module("src.services.admin.stage.generation")
-stage_seeding = importlib.import_module("src.services.admin.stage.seeding")
-stage_common = importlib.import_module("src.services.admin.stage_common")
 schemas = importlib.import_module("src.schemas")
 enums = importlib.import_module("shared.core.enums")
 
@@ -49,15 +47,7 @@ service = stage_service.stage_service
 
 
 def _input(*, slot: int, input_type, team_id: int | None = None) -> SimpleNamespace:
-    return SimpleNamespace(
-        id=slot,
-        slot=slot,
-        stage_item_id=200,
-        input_type=input_type,
-        team_id=team_id,
-        source_stage_item_id=100 if input_type == enums.StageItemInputType.TENTATIVE else None,
-        source_position=slot if input_type == enums.StageItemInputType.TENTATIVE else None,
-    )
+    return SimpleNamespace(id=slot, slot=slot, stage_item_id=200, input_type=input_type, team_id=team_id)
 
 
 class SwissRoundRobinShortcutTests(IsolatedAsyncioTestCase):
@@ -127,77 +117,6 @@ class SwissRoundRobinShortcutTests(IsolatedAsyncioTestCase):
             await service._generate_stage_skeleton(self.session, stage, [1, 2, 3, 4, 5], 200)
 
         self.recorded.assert_awaited_once_with(self.session, 1, 200, 5, round_number=3)
-
-
-class ApplySeedingTests(TestCase):
-    """Item 14, first half: re-seeding replaces, it does not accumulate."""
-
-    def test_shrinking_the_seeding_drops_the_tail(self) -> None:
-        target_item = SimpleNamespace(
-            id=200,
-            inputs=[
-                _input(slot=1, input_type=enums.StageItemInputType.TENTATIVE),
-                _input(slot=2, input_type=enums.StageItemInputType.TENTATIVE),
-                _input(slot=3, input_type=enums.StageItemInputType.TENTATIVE),
-            ],
-        )
-        session = SimpleNamespace(add=Mock())
-
-        stage_common._apply_seeding(session, [(100, 1), (101, 1)], target_item)
-
-        self.assertEqual([1, 2], [inp.slot for inp in target_item.inputs])
-
-    def test_manually_assigned_inputs_survive_the_tail_cut(self) -> None:
-        target_item = SimpleNamespace(
-            id=200,
-            inputs=[
-                _input(slot=1, input_type=enums.StageItemInputType.TENTATIVE),
-                _input(slot=2, input_type=enums.StageItemInputType.FINAL, team_id=777),
-            ],
-        )
-        session = SimpleNamespace(add=Mock())
-
-        stage_common._apply_seeding(session, [(100, 1)], target_item)
-
-        self.assertEqual([1, 2], [inp.slot for inp in target_item.inputs])
-        self.assertEqual(777, target_item.inputs[1].team_id)
-
-
-class SeedTeamsSlotTests(IsolatedAsyncioTestCase):
-    """Item 14, second half: every assigned slot is checked for occupancy."""
-
-    async def test_preserved_tentative_slot_is_skipped_not_collided_with(self) -> None:
-        preserved = _input(slot=2, input_type=enums.StageItemInputType.TENTATIVE)
-        stage = SimpleNamespace(
-            id=1,
-            tournament_id=99,
-            stage_type=enums.StageType.ROUND_ROBIN,
-            items=[SimpleNamespace(id=200, name="A", order=0, inputs=[preserved])],
-        )
-        teams = [
-            SimpleNamespace(id=11, tournament_id=99, avg_sr=3000, total_sr=15000),
-            SimpleNamespace(id=12, tournament_id=99, avg_sr=2000, total_sr=10000),
-        ]
-        added: list = []
-        session = SimpleNamespace(
-            add=Mock(side_effect=added.append),
-            delete=AsyncMock(),
-            flush=AsyncMock(),
-            commit=AsyncMock(),
-            execute=AsyncMock(),  # the stage lock
-            scalar=AsyncMock(return_value=0),  # no encounters generated yet
-        )
-
-        with (
-            patch.object(service, "get_stage", AsyncMock(side_effect=[stage, stage])),
-            patch.object(service.team_repo, "bulk_get", AsyncMock(return_value=teams)),
-            patch.object(service, "_publish_structure_changed", AsyncMock()),
-            patch.object(stage_seeding, "enqueue_tournament_recalculation", AsyncMock()),
-        ):
-            await service.seed_teams(session, 1, [11, 12])
-
-        self.assertEqual([1, 3], sorted(inp.slot for inp in added))
-        self.assertNotIn(2, [inp.slot for inp in added])
 
 
 class CreateStageItemInputTests(IsolatedAsyncioTestCase):
@@ -331,9 +250,8 @@ class UpdateStageTests(IsolatedAsyncioTestCase):
             id=1,
             tournament_id=99,
             stage_type=enums.StageType.SWISS,
-            # ``_assert_scoring_editable`` asks every group of the stage whether
-            # a playoff seeded off it has started.
             items=[],
+            node=SimpleNamespace(name=""),
         )
         # ``Stage.scoring`` is a property on the real model; the double spells
         # it out, levels 1-2 read off the rule row the stage points at (D51).
@@ -359,6 +277,8 @@ class UpdateStageTests(IsolatedAsyncioTestCase):
             patch.object(service, "get_stage", AsyncMock(side_effect=[stage, stage])),
             patch.object(service, "_publish_structure_changed", AsyncMock()),
             patch.object(stage_crud, "enqueue_tournament_recalculation", AsyncMock()),
+            # ``_assert_scoring_editable`` asks the flow whether a node fed by the stage has started.
+            patch.object(stage_crud, "assert_stage_correction_allowed", AsyncMock()),
         ):
             await service.update_stage(session, 1, data)
 

@@ -28,8 +28,11 @@ sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "tournament-service"))
 
 from shared.core import enums  # noqa: E402
+from shared.models.encounter import ScoringRule  # noqa: E402
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
 from shared.models.tournament import Tournament  # noqa: E402
+from shared.models.tournament.flow import FlowNode  # noqa: E402
+from shared.models.tournament.stage import Stage  # noqa: E402
 from shared.rpc.query import build_query_model  # noqa: E402
 from shared.testing import real_db_sessionmaker as _db_sessions  # noqa: E402
 from src import schemas  # noqa: E402
@@ -104,11 +107,29 @@ async def _make_tournament(session, *, workspace_id: int, discipline: str) -> To
         discipline=discipline,
         status=enums.TournamentStatus.LIVE,
         is_hidden=False,
-        is_league=False,
         start_date=now,
         end_date=now + timedelta(days=1),
     )
     session.add(tournament)
+    await session.flush()
+    # "Live" in the facets means a stage node is live (TOURNAMENT_IN_PLAY), not just the stored status.
+    rule = ScoringRule(workspace_id=workspace_id, preset="wins", game_formula="win", end_formula="games >= best_of")
+    session.add(rule)
+    await session.flush()
+    stage = Stage(
+        tournament_id=tournament.id, scoring_rule_id=rule.id, name="S", stage_type=enums.StageType.ROUND_ROBIN
+    )
+    session.add(stage)
+    await session.flush()
+    session.add(
+        FlowNode(
+            tournament_id=tournament.id,
+            kind=enums.FlowNodeKind.STAGE,
+            name="S",
+            status=enums.FlowNodeStatus.LIVE,
+            stage_id=stage.id,
+        )
+    )
     await session.flush()
     return tournament
 

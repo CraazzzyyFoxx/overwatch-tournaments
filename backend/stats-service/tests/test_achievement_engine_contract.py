@@ -110,7 +110,6 @@ class EvaluatorGrainTests(_EngineTestCase):
                 name=f"T{tournament_id}",
                 slug=f"tournament-{tournament_id}",
                 is_hidden=False,
-                is_league=False,
                 start_date=None,
                 discipline=discipline,
             )

@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => ({
   getTournamentBoard: vi.fn(),
   dashboardMounts: [] as number[],
   pathname: "/admin/tournaments/64/teams/draft",
-  teamFormation: "draft" as "balancer" | "draft"
+  formationMode: "draft" as "balancer" | "draft"
 }));
 
 vi.mock("next/navigation", () => ({
@@ -55,7 +55,23 @@ vi.mock("@/hooks/usePermissions", () => ({
 vi.mock("../../hubQueries", () => ({
   tabFallback: null,
   useHubTournamentQuery: () => ({
-    data: { id: 64, workspace_id: 1, team_formation: mocks.teamFormation },
+    data: {
+      id: 64,
+      workspace_id: 1,
+      flow_nodes: [
+        {
+          id: 9,
+          kind: "formation",
+          name: "Teams",
+          status: "forming",
+          config: { mode: mocks.formationMode },
+          schedule: [],
+          stage_id: null,
+          pool_registration_node_ids: [4]
+        },
+        { id: 4, kind: "registration", name: "Registration", status: "closed", config: {}, schedule: [], stage_id: null }
+      ]
+    },
     isLoading: false
   })
 }));
@@ -108,7 +124,7 @@ beforeEach(() => {
   mocks.getTournamentBoard.mockReset().mockResolvedValue(null);
   mocks.dashboardMounts.length = 0;
   mocks.pathname = "/admin/tournaments/64/teams/draft";
-  mocks.teamFormation = "draft";
+  mocks.formationMode = "draft";
 });
 
 afterEach(() => {
@@ -127,7 +143,7 @@ describe("teams sub-tab bar", () => {
   });
 
   it("hides Draft for a balancer tournament and bounces the route to Roster", async () => {
-    mocks.teamFormation = "balancer";
+    mocks.formationMode = "balancer";
 
     await render(<TeamsLayout>{<div data-testid="body" />}</TeamsLayout>);
 
@@ -140,7 +156,7 @@ describe("teams sub-tab bar", () => {
   });
 
   it("leaves the roster segment alone for a balancer tournament", async () => {
-    mocks.teamFormation = "balancer";
+    mocks.formationMode = "balancer";
     mocks.pathname = "/admin/tournaments/64/teams/roster";
 
     await render(<TeamsLayout>{<div data-testid="body" />}</TeamsLayout>);

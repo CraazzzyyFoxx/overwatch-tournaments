@@ -35,9 +35,10 @@ class InvitesMixin(TeamServiceBase):
         session: AsyncSession,
         *,
         tournament_id: int,
+        registration_node_id: int,
         registration_id: int,
     ) -> int:
-        """The account behind a targeted invite's registration.
+        """The account behind a targeted invite's registration (its entry in the team's node).
 
         An invite binds to an IDENTITY, not to a registration row: the invitee may
         withdraw and resubmit before answering, and `accept_invite` attaches whatever
@@ -58,11 +59,16 @@ class InvitesMixin(TeamServiceBase):
             )
             .options(selectinload(models.Registration.workspace_member))
         )
-        if registration is None or registration.tournament_id != tournament_id:
+        entry = (
+            await self.entry_repo.get_for(session, registration_node_id, registration_id)
+            if registration is not None
+            else None
+        )
+        if registration is None or registration.tournament_id != tournament_id or entry is None:
             # Deliberately 404 rather than 403: confirming that a registration exists
             # elsewhere would answer a question the caller has no business asking.
             raise _fail(404, "registration_not_found", "That registration is not in this tournament")
-        if registration.registration_team_id is not None or registration.status in _SLOT_RELEASING_STATUSES:
+        if registration.registration_team_id is not None or entry.status in _SLOT_RELEASING_STATUSES:
             # The free-agent list is a snapshot; someone can be recruited between the
             # captain opening the picker and pressing invite.
             raise _fail(409, "player_not_free", "That player is no longer available")
@@ -109,7 +115,7 @@ class InvitesMixin(TeamServiceBase):
 
         team = await self._lock_team(session, team_id)
         await self._assert_staff_editable(session, team, auth_user)
-        tournament = await self._assert_registration_open(session, team.tournament_id)
+        tournament = await self._assert_registration_open(session, team.tournament_id, team.registration_node_id)
 
         # The slot reservation caps *concurrent* pending invites, but an
         # invite -> revoke -> invite loop stays inside every slot rule. This cumulative
@@ -124,7 +130,7 @@ class InvitesMixin(TeamServiceBase):
 
         shape = await self._resolve_shape(session, tournament)
         occupancy = await self._occupancy(
-            session, team, shape, max_substitutes=await self._max_substitutes(session, team.tournament_id)
+            session, team, shape, max_substitutes=await self._max_substitutes(session, team.registration_node_id)
         )
         # ``offering=True``: a pending invite reserves its slot, so a captain cannot
         # hold ten open offers for one place.
@@ -141,7 +147,10 @@ class InvitesMixin(TeamServiceBase):
             # same lock that the write commits under, or a concurrent acceptance can
             # invalidate one of them between check and insert.
             target_auth_user_id = await self._resolve_invite_target(
-                session, tournament_id=team.tournament_id, registration_id=target_registration_id
+                session,
+                tournament_id=team.tournament_id,
+                registration_node_id=team.registration_node_id,
+                registration_id=target_registration_id,
             )
 
         invite = await self.invite_repo.create(

@@ -49,6 +49,7 @@ from src.services.draft.journal import JOURNAL_LIMIT_DEFAULT, journal_service
 from src.services.draft.lifecycle import lifecycle_service
 from src.services.draft.queue import queue_service
 from src.services.draft.role_edit import role_edit_service
+from src.services.formation_node import require_formation_node
 
 _SF = db.async_session_maker
 
@@ -82,7 +83,9 @@ def register(broker: Any, logger: Any) -> None:
     async def _tournament_board(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             tournament_id = c.require_id(data)
-            draft = await board_service.get_active_session(session, tournament_id)
+            node_id = c.formation_node_id(data)
+            await require_formation_node(session, tournament_id, node_id)
+            draft = await board_service.get_active_session(session, node_id)
             if draft is None:
                 return None
             return await board_service.build_board(session, draft)
@@ -376,7 +379,9 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = c.require_id(data)
             ws_id = await _get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "team", "read")
-            return await board_service.list_sessions(session, tournament_id)
+            node_id = c.formation_node_id(data)
+            await require_formation_node(session, tournament_id, node_id)
+            return await board_service.list_sessions(session, node_id)
 
         return await c.envelope(logger, "draft.session_list", op, session_factory=_SF)
 

@@ -192,6 +192,16 @@ class LoaderTests(_EvaluationDatabaseTestCase):
         self.assertEqual([True, False, False], list(stored[ratings.LINEAR]))
         self.assertEqual([False, False, False], list(stored[ratings.OPENSKILL]))
 
+    async def test_a_scope_without_ranked_players_loads_an_empty_frame(self) -> None:
+        self.start(2, 3)
+        self.db.player(2, self.db.team(2, "unranked"), self.db.member(100), name="a", rank=None)  # type: ignore[arg-type]
+
+        frame = await evaluate.load_evaluation_frame(self.db.shim, discipline="overwatch", from_tournament_id=2)
+
+        self.assertEqual((2,), frame.tournament_ids)
+        self.assertTrue(frame.levels.empty)
+        self.assertTrue(frame.encounters.empty)
+
     async def test_evaluate_issues_only_selects_and_reports_every_method(self) -> None:
         self.world()
         seen: list[str] = []

@@ -3,7 +3,7 @@
   "provenance": {
     "capture": "condition-operands-1.frozen.json",
     "capture_sha256": "1c6a4d54e2da8a3fc90ea8e41617555b6aa6155940a886d1d6057d1179223944",
-    "golden_sha256": "eeb470343be6737ba1fece18e4cad30ee2ece23a202ab51e88532badf5861da7",
+    "golden_sha256": "4369badf2bcdfa3eeea2bb9a032ac4d49a092e816909bc87b4423bd11c89eb75",
     "rank_source_sha256": "e4d518ecf2d23ae94283f31ac6b41fe6b8693749256291c5acf6155aba63d8d2",
     "fixture_sha256": "0ebe4417fd15db9c9266317362f6aee470c127720aa780949bef3a8119a649a7",
     "membership_source": "Frozen workspace_member query by the actual condition workspace and global player; no active-roster filter",

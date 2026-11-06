@@ -31,11 +31,17 @@ vi.mock("@/hooks/useDisciplineMetadata", () => ({
 vi.mock("@/app/(site)/users/components/tournaments/TournamentsPlacementTimeline", () => ({ default: () => null }));
 // The dossier as what it is handed: the selected event, its grid and its run, or the loading state.
 vi.mock("@/app/(site)/users/components/tournaments/TournamentDossier", () => ({
-  default: ({ group, loadingEncounters }: { group: UserTournamentEntry | null; loadingEncounters: boolean }) => (
+  default: ({
+    tournament,
+    loadingEncounters
+  }: {
+    tournament: UserTournamentEntry | null;
+    loadingEncounters: boolean;
+  }) => (
     <output>
       {loadingEncounters
         ? "loading"
-        : `${group?.name}: ${group?.encounters.length} encounters on ${group?.division_grid_version?.label ?? "no grid"}`}
+        : `${tournament?.name}: ${tournament?.encounters.length} encounters on ${tournament?.division_grid_version?.label ?? "no grid"}`}
     </output>
   )
 }));
@@ -49,7 +55,6 @@ const tournaments = {
         name: `Cup ${id}`,
         workspace_id: 1,
         discipline: "overwatch",
-        is_league: false,
         team: "T",
         placement: 1,
         count_teams: 8,
@@ -119,4 +124,25 @@ it("reads each event's run once, so going back to an event reads nothing, and dr
     [7, 3],
     [7, 2]
   ]);
+});
+
+it("lists every day of a season as its own event, never grouped", async () => {
+  const days = {
+    results: [2, 1].map((id) => ({ ...tournaments.results[0], id, name: `Weekly | Day ${id}` }) as UserTournament),
+    division_grid_versions: []
+  } as unknown as UserTournamentList;
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  await act(async () => {
+    root.render(
+      <QueryClientProvider client={client}>
+        <NextIntlClientProvider locale="en" messages={en} timeZone="UTC">
+          <TournamentsHistory tournaments={days} selfUserId={7} tournamentsWon={0} />
+        </NextIntlClientProvider>
+      </QueryClientProvider>
+    );
+  });
+  await settle();
+  const rows = [...container.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")].map((n) => n.textContent ?? "");
+  expect(rows.filter((text) => text.includes("Weekly | Day"))).toHaveLength(2);
+  expect(dossier()).toBe("Weekly | Day 2: 2 encounters on no grid");
 });

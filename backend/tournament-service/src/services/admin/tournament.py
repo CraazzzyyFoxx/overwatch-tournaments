@@ -9,14 +9,13 @@ from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.core import http_status as status
-from shared.core import tournament_state
-from shared.core.enums import StageType, TournamentStatus
+from shared.core.enums import FlowNodeKind, FlowNodeStatus, TournamentStatus
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.flow.legacy import X_STEP
 from shared.domain.tournament_slug import slugify
 from shared.repository import (
     ChallongeSourceRepository,
-    RegistrationFormRepository,
     StandingRepository,
     TournamentRepository,
     WorkspaceRepository,
@@ -28,29 +27,21 @@ from shared.services.ontology import assert_discipline_enabled
 from shared.services.realtime import Resource, Scope, emit
 from shared.services.stats_owner_delete import capture_owner_delete, stage_owner_delete
 from shared.services.team_format import copy_for_tournament, save_tournament_format
-from shared.services.tournament.computation import request_bracket_job
 from shared.services.tournament.slug import generate_unique_tournament_slug
 from src import schemas
 from src.clients.challonge import challonge_client
-from src.services.admin.stage import stage_service
 from src.services.draft_guards import assert_no_active_draft_session
+from src.services.flow.lifecycle import flow_node_service
 
 # ``src.services.challonge.sync`` is loaded inside ``create_tournament_from_challonge``:
 # importing a remote bracket is one path out of this whole service, and at
 # module scope it would make every tournament write depend on the exporter.
-from src.services.notifications.lifecycle import lifecycle_notifier
 from src.services.registration_team_guards import assert_no_registered_teams
 from src.services.tournament.events import (
     STRUCTURE_RESOURCES,
     enqueue_tournament_state_changed,
     publish_tournament_invalidation,
 )
-
-GROUP_STAGE_TYPES = {StageType.ROUND_ROBIN, StageType.SWISS, StageType.FFA_LEAGUE}
-
-
-def _status_value(value: TournamentStatus | str) -> str:
-    return value.value if isinstance(value, TournamentStatus) else str(value)
 
 
 def _normalize_challonge_slug(value: str) -> str:
@@ -71,18 +62,6 @@ def _normalize_challonge_slug(value: str) -> str:
     return slug.strip("/").split("/")[-1]
 
 
-def _stage_has_ready_inputs(stage: models.Stage) -> bool:
-    stage_items = list(getattr(stage, "items", []) or [])
-    if not stage_items:
-        return False
-
-    for item in stage_items:
-        team_count = sum(1 for stage_input in getattr(item, "inputs", []) if stage_input.team_id is not None)
-        if team_count < 2:
-            return False
-    return True
-
-
 class AdminTournamentService:
     def __init__(
         self,
@@ -90,12 +69,10 @@ class AdminTournamentService:
         tournament_repo: TournamentRepository = TournamentRepository(),
         challonge_source_repo: ChallongeSourceRepository = ChallongeSourceRepository(),
         standing_repo: StandingRepository = StandingRepository(),
-        registration_form_repo: RegistrationFormRepository = RegistrationFormRepository(),
     ) -> None:
         self.tournament_repo = tournament_repo
         self.challonge_source_repo = challonge_source_repo
         self.standing_repo = standing_repo
-        self.registration_form_repo = registration_form_repo
 
     async def _link_tournament_challonge_source(
         self,
@@ -223,32 +200,11 @@ class AdminTournamentService:
         return await self.get_tournament(session, tournament_id)
 
     async def create_tournament(self, session: AsyncSession, data: schemas.TournamentCreate) -> models.Tournament:
-        """Create a new tournament.
-
-        REGISTRATION is refused outright here, with no ``force`` counterpart: the
-        registration form belongs to a tournament that does not exist yet, so a
-        tournament created straight into REGISTRATION cannot possibly have one.
-        Create it (announced, the default) and transition once the form is saved.
-        """
-        if data.status == TournamentStatus.REGISTRATION:
-            raise ApiHTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=[
-                    ApiExc(
-                        code="registration_form_missing",
-                        msg=(
-                            "A tournament cannot be created with registration already open — it has "
-                            "no registration form yet. Create it, save the form, then open registration."
-                        ),
-                    )
-                ],
-            )
-
+        """Create a new tournament, announced until a node of its flow starts."""
         existing_tournament = await self.tournament_repo.get_by(
             session,
             workspace_id=data.workspace_id,
             name=data.name,
-            is_league=data.is_league,
         )
 
         if existing_tournament:
@@ -286,6 +242,32 @@ class AdminTournamentService:
 
         tournament = await self.tournament_repo.create(session, models.Tournament(**payload))
         await copy_for_tournament(session, tournament)
+        registration = models.FlowNode(
+            tournament_id=tournament.id,
+            kind=FlowNodeKind.REGISTRATION,
+            name="Registration",
+            status=FlowNodeStatus.DRAFT,
+            config={"check_in": False, "intake": "solo"},
+        )
+        formation = models.FlowNode(
+            tournament_id=tournament.id,
+            kind=FlowNodeKind.FORMATION,
+            name="Teams",
+            status=FlowNodeStatus.DRAFT,
+            config={"mode": "balancer"},
+            position_x=X_STEP,
+        )
+        session.add_all([registration, formation])
+        await session.flush()
+        session.add(
+            models.FlowEdge(
+                tournament_id=tournament.id,
+                source_node_id=registration.id,
+                source_port="participants",
+                target_node_id=formation.id,
+                target_port="players",
+            )
+        )
         await publish_tournament_invalidation(session, tournament.id, STRUCTURE_RESOURCES)
         await session.commit()
         await division_grid_cache.invalidate_tournament(tournament.id)
@@ -349,16 +331,6 @@ class AdminTournamentService:
         if not tournament:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
 
-        if "team_formation" in update_data and update_data["team_formation"] != tournament.team_formation:
-            await assert_no_active_draft_session(session, tournament_id)
-
-        # Same lock, one level down: the session snapshots the format at create
-        # time, so an edit mid-draft would promise a change the running board
-        # will never honour. Both sides are normalized (DraftFormatField in,
-        # this same path out), so a Settings-tab resend is not a change.
-        if "draft_format_json" in update_data and update_data["draft_format_json"] != tournament.draft_format_json:
-            await assert_no_active_draft_session(session, tournament_id, change="the draft format")
-
         if "challonge_slug" in update_data:
             update_data.pop("challonge_slug")
             if challonge_tournament is not None:
@@ -414,7 +386,6 @@ class AdminTournamentService:
         *,
         workspace_id: int,
         discipline: str,
-        is_league: bool,
         start_date: date,
         end_date: date,
         challonge_slug: str,
@@ -435,7 +406,6 @@ class AdminTournamentService:
                 discipline=discipline,
                 name=challonge_tournament.name,
                 description=challonge_tournament.description,
-                is_league=is_league,
                 start_date=start_date,
                 end_date=end_date,
                 logs_official=False,  # an imported bracket never starts accepting ingest evidence
@@ -451,6 +421,34 @@ class AdminTournamentService:
         await sync_service.import_tournament(session, tournament.id)
         return await self.get_tournament(session, tournament.id)
 
+    @staticmethod
+    async def _release_flow_node_references(session: AsyncSession, tournament_id: int) -> None:
+        """Clear every row that points at the tournament's flow nodes with ``ON DELETE RESTRICT``.
+
+        Deleting the tournament cascades to its nodes and to those rows as siblings, and Postgres fires sibling
+        cascades in an order that depends on object ids: a node cascade that fires first sees the entries, the
+        sheet feed and the registration teams still there and fails the whole delete. So they go first, here.
+        Teams and players only lose their formation node (they are deleted by the tournament cascade itself).
+        """
+        node_ids = sa.select(models.FlowNode.id).where(models.FlowNode.tournament_id == tournament_id)
+        await session.execute(
+            sa.delete(models.RegistrationEntry).where(models.RegistrationEntry.registration_node_id.in_(node_ids))
+        )
+        await session.execute(
+            sa.delete(models.RegistrationGoogleSheetFeed).where(
+                models.RegistrationGoogleSheetFeed.tournament_id == tournament_id
+            )
+        )
+        await session.execute(
+            sa.delete(models.RegistrationTeam).where(models.RegistrationTeam.tournament_id == tournament_id)
+        )
+        await session.execute(
+            sa.update(models.Player).where(models.Player.tournament_id == tournament_id).values(formation_node_id=None)
+        )
+        await session.execute(
+            sa.update(models.Team).where(models.Team.tournament_id == tournament_id).values(formation_node_id=None)
+        )
+
     async def delete_tournament(self, session: AsyncSession, tournament_id: int) -> None:
         """Delete tournament (cascade deletes groups, teams, etc.)"""
         tournament = await self.tournament_repo.get(session, tournament_id)
@@ -460,6 +458,7 @@ class AdminTournamentService:
 
         workspace_id = tournament.workspace_id
         evidence = await capture_owner_delete(session, tournament_id=tournament_id)
+        await self._release_flow_node_references(session, tournament_id)
         await self.standing_repo.delete_for_tournament(session, tournament_id)
         await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
         await self.tournament_repo.delete(session, tournament)
@@ -474,181 +473,29 @@ class AdminTournamentService:
         await division_grid_cache.invalidate_tournament(tournament_id)
         await division_grid_cache.invalidate_workspace(workspace_id)
 
-    async def _stage_has_encounters(self, session: AsyncSession, stage_id: int) -> bool:
-        # Analytical: grouped count, not a CRUD row read. An encounter's stage is
-        # its bracket POSITION, so the count is over that table.
-        count = await session.scalar(
-            sa.select(sa.func.count(models.BracketEncounter.encounter_id)).where(
-                models.BracketEncounter.stage_id == stage_id
-            )
+    async def set_archived(self, session: AsyncSession, tournament_id: int, archived: bool) -> models.Tournament:
+        """The only writer of ``archived`` (spec §9): archiving needs ``completed``, unarchiving returns to it.
+
+        ``is_finished`` is untouched: both statuses are finished. Commits.
+        """
+        tournament = await flow_node_service.lock_tournament(session, tournament_id)
+        required, target = (
+            (TournamentStatus.COMPLETED, TournamentStatus.ARCHIVED)
+            if archived
+            else (TournamentStatus.ARCHIVED, TournamentStatus.COMPLETED)
         )
-        return bool(count)
-
-    async def _maybe_auto_start_group_stage(
-        self,
-        session: AsyncSession,
-        tournament: models.Tournament,
-        *,
-        target_status: TournamentStatus,
-    ) -> None:
-        if target_status != TournamentStatus.LIVE:
-            return
-
-        group_stages = [
-            stage
-            for stage in getattr(tournament, "stages", []) or []
-            if stage.stage_type in GROUP_STAGE_TYPES and not getattr(stage, "is_completed", False)
-        ]
-        if not group_stages:
-            return
-
-        # Stages sharing an ``order`` are one phase and run in parallel (Low /
-        # High divisions), so the whole wave starts, not just its first stage.
-        phase = min(stage.order for stage in group_stages)
-        wave = [stage for stage in group_stages if stage.order == phase]
-        active = [stage for stage in wave if getattr(stage, "is_active", False)]
-        for stage in active or wave:
-            await self._auto_start_stage(session, tournament, stage)
-
-    async def _auto_start_stage(
-        self,
-        session: AsyncSession,
-        tournament: models.Tournament,
-        stage: models.Stage,
-    ) -> None:
-        has_encounters = await self._stage_has_encounters(session, stage.id)
-
-        if not getattr(stage, "is_active", False):
-            if not has_encounters and not _stage_has_ready_inputs(stage):
-                return
-            if has_encounters:
-                await stage_service.activate_stage(session, stage.id, commit=False)
-            else:
-                await request_bracket_job(
-                    session,
-                    tournament_id=tournament.id,
-                    stage_id=stage.id,
-                    operation="activate_and_generate",
-                )
-                return
-
-        if not has_encounters and _stage_has_ready_inputs(stage):
-            await request_bracket_job(
-                session,
-                tournament_id=tournament.id,
-                stage_id=stage.id,
-                operation="generate_stage",
-            )
-
-    async def toggle_finished(self, session: AsyncSession, tournament_id: int) -> models.Tournament:
-        """The hub's "mark finished / reopen" button, as a two-way COMPLETED move.
-
-        Delegates to ``transition_status`` so the lifecycle state machine has
-        exactly one writer.
-
-        ``force=True`` because reopening walks COMPLETED -> LIVE, an edge the matrix
-        deliberately omits: this button is the only sanctioned way back, and the
-        RPC subject behind it already carries its own permission check.
-        """
-        tournament = await self.tournament_repo.get(session, tournament_id)
-
-        if not tournament:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
-
-        target = TournamentStatus.LIVE if tournament.is_finished else TournamentStatus.COMPLETED
-        return await self.transition_status(session, tournament_id, target, force=True)
-
-    async def has_registration_form(self, session: AsyncSession, tournament_id: int) -> bool:
-        """Whether the tournament has a saved registration form.
-
-        "Saved" is row-existence, the same thing the admin dashboard reports as
-        ``registration_form_configured``: the upsert writes one row per
-        tournament and there is no half-saved state below it.
-
-        Public because the worker tick asks the same question with a different
-        answer in mind — it skips the tournament, where an admin gets a 409.
-        """
-        return await self.registration_form_repo.get_by_tournament(session, tournament_id) is not None
-
-    async def transition_status(
-        self,
-        session: AsyncSession,
-        tournament_id: int,
-        target_status: TournamentStatus,
-        *,
-        force: bool = False,
-        automated: bool = False,
-    ) -> models.Tournament:
-        """Transition tournament to a new status with state machine validation.
-
-        Manual transitions (``automated=False``) pause time-driven automation by
-        setting ``auto_transitions_enabled = False`` in the same transaction, so
-        the tick never fights an admin decision.
-
-        REGISTRATION additionally requires a saved registration form. The status
-        is what the public page announces and what the register button reads, so
-        entering it without a form advertises a sign-up that cannot be completed.
-        ``force`` bypasses this the same way it bypasses the transition matrix: it
-        is the superuser-only "I know what I am doing" switch, and a
-        Challonge-sourced tournament that never takes its own registrations is the
-        case that needs it.
-        """
-        tournament = await self.tournament_repo.get(
-            session,
-            tournament_id,
-            options=[
-                selectinload(models.Tournament.stages)
-                .selectinload(models.Stage.items)
-                .selectinload(models.StageItem.inputs)
-            ],
-        )
-
-        if not tournament:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
-
-        if not force:
-            tournament_state.validate_transition(tournament.status, target_status)
-
-        if (
-            not force
-            and target_status == TournamentStatus.REGISTRATION
-            and not await self.has_registration_form(session, tournament_id)
-        ):
-            # ``ApiExc`` list, not a bare dict: that is the shape the frontend's
-            # `parseApiError` reads, so the organizer sees the sentence below
-            # instead of a generic "An error occurred".
+        if tournament.status != required:
+            code = "tournament_not_completed" if archived else "tournament_not_archived"
             raise ApiHTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=[
-                    ApiExc(
-                        code="registration_form_missing",
-                        msg=("This tournament has no registration form yet. Save one before opening registration."),
-                    )
-                ],
+                detail=[ApiExc(code=code, msg=f"Only a {required.value} tournament can be made {target.value}")],
             )
-
-        old_status = _status_value(tournament.status)
-        tournament.status = target_status
-        tournament.is_finished = tournament_state.is_finished_for_status(target_status)
-        if not automated:
-            tournament.auto_transitions_enabled = False
-
+        old_status = tournament.status
+        tournament.status = target
         await enqueue_tournament_state_changed(
-            session,
-            tournament,
-            old_status=old_status,
-            new_status=_status_value(tournament.status),
+            session, tournament, old_status=old_status.value, new_status=target.value
         )
-        await lifecycle_notifier.on_status_entered(session, tournament)
         await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
-        # Before the commit: the bracket job it requests is a row in this
-        # session, and neither caller (the RPC envelope, the worker tick)
-        # commits after us.
-        await self._maybe_auto_start_group_stage(
-            session,
-            tournament,
-            target_status=target_status,
-        )
         await session.commit()
         return await self.get_tournament(session, tournament_id)
 

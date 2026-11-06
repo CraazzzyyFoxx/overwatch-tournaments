@@ -69,6 +69,7 @@ def _row(
     return {
         "tournament_id": tid,
         "started_at": started,
+        "ended_at": started,
         "team_id": tid * 10 + user,
         "player_name": f"p{user}",
         "player_id": tid * 100 + user,

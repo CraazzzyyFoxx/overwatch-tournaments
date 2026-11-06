@@ -62,23 +62,24 @@ function makeTournament(status: TournamentStatus): Tournament {
     rules: null,
     challonge_id: null,
     challonge_slug: null,
-    is_league: false,
     is_finished: false,
     is_hidden: false,
-    team_formation: "balancer",
     status,
     auto_transitions_enabled: true,
-    allow_late_registration: false,
     discord_broadcasts_enabled: false,
     discord_dms_enabled: false,
     logs_official: false,
     pov_stream_delay_s: 0,
-    // Registration closed long ago, whatever the status says.
-    phase_schedule: [
+    // The node is open but its sign-up window closed long ago, whatever the status says.
+    flow_nodes: [
       {
-        status: "registration",
-        starts_at: "2024-08-01T10:00:00.000Z",
-        ends_at: "2024-08-10T10:00:00.000Z"
+        id: 21,
+        kind: "registration",
+        name: "Registration",
+        status: "open",
+        config: {},
+        schedule: [{ phase: "open", starts_at: "2024-08-01T10:00:00.000Z", ends_at: "2024-08-10T10:00:00.000Z" }],
+        stage_id: null
       }
     ],
     stages: [],
@@ -89,7 +90,6 @@ function makeTournament(status: TournamentStatus): Tournament {
     division_grid_version: null,
     discipline: "overwatch",
     identity_provider: "battlenet",
-    draft_format_json: null,
     roster_shape: null,
     roster_locked_by_draft: null,
     links: [],
@@ -137,15 +137,48 @@ async function mount(tournament: Tournament) {
   }
 }
 
+describe("the register button of an open registration node", () => {
+  const openNode = (id: number, name: string) => ({
+    id,
+    kind: "registration" as const,
+    name,
+    status: "open" as const,
+    config: {},
+    schedule: [],
+    stage_id: null
+  });
+
+  it("offers a plain label with one registration node", async () => {
+    auth = { status: "authenticated", user: { id: 1 } };
+    await mount({ ...makeTournament("live"), flow_nodes: [openNode(21, "Registration")] });
+
+    expect(container.textContent).toBe(en.registration.button.register);
+  });
+
+  it("names the node when the tournament has several", async () => {
+    auth = { status: "authenticated", user: { id: 1 } };
+    await mount({ ...makeTournament("live"), flow_nodes: [openNode(21, "Day 1"), openNode(22, "Day 3")] });
+
+    expect(container.textContent).toBe(en.registration.button.registerFor.replace("{node}", "Day 1"));
+  });
+});
+
+/** The node closed and nothing started: the tournament is `live`, the phase reads live. */
+const closedRegistration = (tournament: Tournament): Tournament => ({
+  ...tournament,
+  flow_nodes: tournament.flow_nodes?.map((node) => ({ ...node, status: "closed" }))
+});
+
 describe("the action slot once registration has closed", () => {
   it("says so while a latecomer could still be looking for the sign-up", async () => {
-    await mount(makeTournament("check_in"));
+    // Live because a registration node is open (its sign-up window long over): the phase reads registration.
+    await mount(makeTournament("live"));
 
     expect(container.textContent).toBe(en.registration.button.closed);
   });
 
   it("says nothing once the teams are being formed", async () => {
-    await mount(makeTournament("draft"));
+    await mount(closedRegistration(makeTournament("live")));
 
     expect(container.textContent).toBe("");
   });
@@ -154,12 +187,13 @@ describe("the action slot once registration has closed", () => {
     auth = { status: "authenticated", user: { id: 1 } };
     getMyRegistration.mockResolvedValue({ status: "approved" });
 
-    await mount(makeTournament("draft"));
+    // Registration closed, no stage live yet: the teams are being formed.
+    await mount(closedRegistration(makeTournament("live")));
     const link = container.querySelector("a");
     expect(link?.textContent).toBe(en.common.approved);
     expect(link?.getAttribute("href")).toBe("/tournaments/anak-cup/participants");
 
-    await mount(makeTournament("live"));
+    await mount({ ...closedRegistration(makeTournament("live")), stages: [{ status: "live" } as Tournament["stages"][number]] });
     expect(container.textContent).toBe("");
   });
 });

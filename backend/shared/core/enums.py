@@ -134,7 +134,7 @@ class SubscriptionEnforcementStage(StrEnum):
     subscription to sign up while admitting an unsubscribed player at check-in
     would be incoherent, so there is no "registration only" value to pick wrongly.
 
-    Off is not a member -- that is ``registration_form.require_subscription``
+    Off is not a member -- that is the registration node's ``require_subscription``
     being false. Same shape as ``require_open_profile`` + ``open_profile_scope``
     in the same table: one flag for whether, one value for how.
     """
@@ -249,16 +249,47 @@ def is_ascending_stat(stat: LogStatsName) -> bool:
 
 
 class TournamentStatus(StrEnum):
-    # First phase: the tournament exists and is public, but nothing can be done
-    # with it yet. It ends when the REGISTRATION schedule row comes due.
+    # Derived from the flow nodes (shared.core.flow_state): ANNOUNCEMENT while every lifecycle node is draft, LIVE once
+    # any has started, COMPLETED when every sink is done. ARCHIVED is the one manual status (set_archived).
     ANNOUNCEMENT = "announcement"
-    REGISTRATION = "registration"
-    DRAFT = "draft"
-    CHECK_IN = "check_in"
     LIVE = "live"
-    PLAYOFFS = "playoffs"
     COMPLETED = "completed"
     ARCHIVED = "archived"
+
+
+class FlowNodeKind(StrEnum):
+    REGISTRATION = "registration"
+    FORMATION = "formation"
+    STAGE = "stage"
+    FILTER = "filter"
+    MERGE = "merge"
+    SPLIT = "split"
+    AGGREGATE = "aggregate"
+    LEADERBOARD = "leaderboard"
+
+
+class FlowNodeStatus(StrEnum):
+    DRAFT = "draft"
+    OPEN = "open"
+    CHECK_IN = "check_in"
+    CLOSED = "closed"
+    FORMING = "forming"
+    COMPLETED = "completed"
+    READY = "ready"
+    LIVE = "live"
+    PENDING = "pending"
+    TENTATIVE = "tentative"
+    FINAL = "final"
+
+
+class FlowResultState(StrEnum):
+    TENTATIVE = "tentative"
+    FINAL = "final"
+
+
+class FlowUnit(StrEnum):
+    PLAYERS = "players"
+    TEAMS = "teams"
 
 
 class MixStatus(StrEnum):
@@ -415,7 +446,6 @@ class StageItemType(StrEnum):
 
 class StageItemInputType(StrEnum):
     FINAL = "final"
-    TENTATIVE = "tentative"
     EMPTY = "empty"
 
 

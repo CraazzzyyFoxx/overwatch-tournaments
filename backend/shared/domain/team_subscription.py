@@ -1,6 +1,6 @@
 """Team-scoped subscription coverage.
 
-When ``RegistrationForm.subscription_scope`` is ``team``, the
+When a registration node's ``subscription_scope`` is ``team``, the
 workspace rule still decides *what* counts, but *who* is covered is the
 registered team rather than each player. Coverage is a stamp on
 ``registration.team`` (who redeemed, which provider, which tier, when

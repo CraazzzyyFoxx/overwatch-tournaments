@@ -11,6 +11,7 @@ from sqlalchemy.orm import aliased
 
 from shared import models
 from shared.core import enums, pagination
+from shared.core.chrono import tournament_chrono_key
 from shared.disciplines import DISCIPLINES, discipline, rated_role_codes
 from shared.division_grid import DivisionGrid, division_case_expr, ladder_grid
 from shared.schemas.role import RoleRef
@@ -64,7 +65,7 @@ class UserOverviewQueries(DisciplineQueries):
     ) -> list[typing.Any]:
         """WHERE list shared by every correlated overview aggregate.
 
-        ``extra`` slots in between the finished/league predicates and the
+        ``extra`` slots in between the finished predicate and the
         optional tournament pin. Every caller joins ``Tournament``, so
         ``workspace_id`` scopes the aggregate to the same workspace as the value
         the row displays.
@@ -82,7 +83,6 @@ class UserOverviewQueries(DisciplineQueries):
                 workspace_id=workspace_id,
             ),
             models.Tournament.is_finished.is_(True),
-            models.Tournament.is_league.is_(False),
             *extra,
         ]
         if workspace_id is not None:
@@ -91,8 +91,11 @@ class UserOverviewQueries(DisciplineQueries):
             where_conditions.append(models.Tournament.id == tournament_id)
         return where_conditions
 
-    def _overview_standing_select(self, *columns: typing.Any) -> sa.Select:
-        """Player -> Team -> Tournament -> Standing chain (placement aggregates) of this game's tournaments."""
+    def _overview_placement_select(self, *columns: typing.Any) -> sa.Select:
+        """Player -> Team -> Tournament -> the member's ``participant_result`` (placement aggregates, this game).
+
+        Only the player's final-team row joins, so a member counts once per tournament.
+        """
         return (
             sa.select(*columns)
             .select_from(models.Player)
@@ -100,10 +103,11 @@ class UserOverviewQueries(DisciplineQueries):
             .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
             .where(*self.discipline_filter(models.Tournament.discipline))
             .join(
-                models.Standing,
+                models.ParticipantResult,
                 sa.and_(
-                    models.Standing.team_id == models.Player.team_id,
-                    models.Standing.tournament_id == models.Player.tournament_id,
+                    models.ParticipantResult.tournament_id == models.Player.tournament_id,
+                    models.ParticipantResult.workspace_member_id == models.Player.workspace_member_id,
+                    models.ParticipantResult.final_team_id == models.Player.team_id,
                 ),
             )
         )
@@ -243,19 +247,9 @@ class UserOverviewQueries(DisciplineQueries):
             grid=grid,
             workspace_id=workspace_id,
         )
-        team_placement_subquery = (
-            self._overview_standing_select(
-                models.Player.team_id.label("team_id"),
-                sa.func.min(models.Standing.overall_position).label("overall_position"),
-            )
-            .where(*where_conditions)
-            .group_by(models.Player.team_id)
-            .subquery()
-        )
-
         return (
-            sa.select(sa.func.avg(team_placement_subquery.c.overall_position))
-            .select_from(team_placement_subquery)
+            self._overview_placement_select(sa.func.avg(models.ParticipantResult.placement))
+            .where(*where_conditions)
             .scalar_subquery()
         )
 
@@ -270,7 +264,7 @@ class UserOverviewQueries(DisciplineQueries):
         grid: DivisionGrid,
         workspace_id: int | None = None,
     ) -> sa.ScalarSelect:
-        """Best (lowest, positive) overall position — NULL when never placed."""
+        """Best (lowest) member placement — NULL when never placed."""
         where_conditions = self._overview_scope_where(
             user_id_column,
             role=role,
@@ -279,10 +273,9 @@ class UserOverviewQueries(DisciplineQueries):
             tournament_id=tournament_id,
             grid=grid,
             workspace_id=workspace_id,
-            extra=(models.Standing.overall_position > 0,),
         )
         return (
-            self._overview_standing_select(sa.func.min(models.Standing.overall_position))
+            self._overview_placement_select(sa.func.min(models.ParticipantResult.placement))
             .where(*where_conditions)
             .scalar_subquery()
         )
@@ -311,7 +304,6 @@ class UserOverviewQueries(DisciplineQueries):
             .where(
                 *self.discipline_filter(models.Tournament.discipline),
                 models.Tournament.is_finished.is_(True),
-                models.Tournament.is_league.is_(False),
                 *([models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []),
             )
             .cte("overview_winrate_seat_maps")
@@ -550,12 +542,11 @@ class UserOverviewQueries(DisciplineQueries):
                 sa.func.row_number()
                 .over(
                     partition_by=[models.WorkspaceMember.player_id, models.Tournament.discipline, models.Player.role],
-                    # The newest ranked event first, by start date (undated last), not id: ids follow creation, not
+                    # The newest ranked event first, by the tournament chronology, not id: ids follow creation, not
                     # play, so across workspaces an older event can carry the higher id.
                     order_by=[
                         models.Player.rank.is_(None),
-                        models.Tournament.start_date.desc().nulls_last(),
-                        models.Player.tournament_id.desc(),
+                        *(c.desc() for c in tournament_chrono_key()),
                         models.Player.id.desc(),
                     ],
                 )
@@ -633,7 +624,6 @@ class UserOverviewQueries(DisciplineQueries):
                 models.WorkspaceMember.player_id.in_(user_ids),
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_finished.is_(True),
-                models.Tournament.is_league.is_(False),
             )
             .group_by(models.WorkspaceMember.player_id)
         )
@@ -678,44 +668,23 @@ class UserOverviewQueries(DisciplineQueries):
 
         ws_filter = [models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []
 
-        team_overall_subquery = (
+        placement_query = (
             sa.select(
                 models.WorkspaceMember.player_id.label("user_id"),
-                models.Player.team_id.label("team_id"),
-                sa.func.min(models.Standing.overall_position).label("overall_position"),
-                # Best placement ignores 0 ("no placement"), like resolve_team_placement.
-                sa.func.min(sa.case((models.Standing.overall_position > 0, models.Standing.overall_position))).label(
-                    "positive_overall_position"
-                ),
+                sa.func.avg(models.ParticipantResult.placement).label("avg_placement"),
+                sa.func.min(models.ParticipantResult.placement).label("best_placement"),
             )
-            .select_from(models.Player)
-            .join(models.Team, models.Team.id == models.Player.team_id)
-            .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
-            .where(*self.discipline_filter(models.Tournament.discipline))
-            .join(
-                models.Standing,
-                sa.and_(
-                    models.Standing.team_id == models.Player.team_id,
-                    models.Standing.tournament_id == models.Player.tournament_id,
-                ),
-            )
-            .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
+            .select_from(models.ParticipantResult)
+            .join(models.WorkspaceMember, models.WorkspaceMember.id == models.ParticipantResult.workspace_member_id)
+            .join(models.Tournament, models.Tournament.id == models.ParticipantResult.tournament_id)
             .where(
+                *self.discipline_filter(models.Tournament.discipline),
                 models.WorkspaceMember.player_id.in_(user_ids),
-                models.Player.is_substitution.is_(False),
                 models.Tournament.is_finished.is_(True),
-                models.Tournament.is_league.is_(False),
                 *ws_filter,
             )
-            .group_by(models.WorkspaceMember.player_id, models.Player.team_id)
-            .cte("overview_team_overall")
+            .group_by(models.WorkspaceMember.player_id)
         )
-
-        placement_query = sa.select(
-            team_overall_subquery.c.user_id,
-            sa.func.avg(team_overall_subquery.c.overall_position).label("avg_placement"),
-            sa.func.min(team_overall_subquery.c.positive_overall_position).label("best_placement"),
-        ).group_by(team_overall_subquery.c.user_id)
 
         placement_stage_query = (
             sa.select(
@@ -743,7 +712,6 @@ class UserOverviewQueries(DisciplineQueries):
                 models.WorkspaceMember.player_id.in_(user_ids),
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_finished.is_(True),
-                models.Tournament.is_league.is_(False),
                 *ws_filter,
             )
             .group_by(models.WorkspaceMember.player_id)
@@ -767,7 +735,6 @@ class UserOverviewQueries(DisciplineQueries):
                 models.WorkspaceMember.player_id.in_(user_ids),
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_finished.is_(True),
-                models.Tournament.is_league.is_(False),
                 models.Encounter.closeness.isnot(None),
                 *ws_filter,
             )
@@ -882,7 +849,7 @@ class UserOverviewQueries(DisciplineQueries):
         """``(maps_won, maps_lost, encounters_played)`` per user for the page.
 
         Same scope as the other overview aggregates (not substitution, finished
-        non-league tournaments, optional workspace), read through the team's seat
+        tournaments, optional workspace), read through the team's seat
         in each two-seat encounter. "Played" is an encounter with a result (non-zero
         score sum); the DISTINCT stops a user rostered twice on one
         team from counting that encounter's maps twice.
@@ -912,7 +879,6 @@ class UserOverviewQueries(DisciplineQueries):
                 models.WorkspaceMember.player_id.in_(user_ids),
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_finished.is_(True),
-                models.Tournament.is_league.is_(False),
                 *ws_filter,
             )
             .distinct()
@@ -937,7 +903,7 @@ class UserOverviewQueries(DisciplineQueries):
     ) -> dict[int, datetime.datetime | None]:
         """Latest tournament date per user: ``MAX(COALESCE(end_date, start_date))``.
 
-        Non-league and optionally workspace-scoped, exactly like the
+        Optionally workspace-scoped, exactly like the
         ``active_last_30d`` KPI — the row's "last active" has to agree with it,
         so an unfinished tournament counts: being in one right now is activity.
         """
@@ -958,7 +924,6 @@ class UserOverviewQueries(DisciplineQueries):
             .where(
                 models.WorkspaceMember.player_id.in_(user_ids),
                 models.Player.is_substitution.is_(False),
-                models.Tournament.is_league.is_(False),
                 *ws_filter,
             )
             .group_by(models.WorkspaceMember.player_id)
@@ -1110,7 +1075,6 @@ class UserOverviewQueries(DisciplineQueries):
                 models.WorkspaceMember.player_id.in_(candidate_ids),
                 models.Player.is_substitution.is_(False),
                 models.Tournament.is_finished.is_(True),
-                models.Tournament.is_league.is_(False),
                 *ws_filter,
             )
             .group_by(models.WorkspaceMember.player_id)
@@ -1139,7 +1103,6 @@ class UserOverviewQueries(DisciplineQueries):
             .where(
                 models.WorkspaceMember.player_id.in_(candidate_ids),
                 models.Player.is_substitution.is_(False),
-                models.Tournament.is_league.is_(False),
                 sa.or_(
                     sa.and_(models.Tournament.end_date.isnot(None), models.Tournament.end_date >= cutoff),
                     sa.and_(models.Tournament.start_date.isnot(None), models.Tournament.start_date >= cutoff),

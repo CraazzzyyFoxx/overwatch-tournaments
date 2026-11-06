@@ -96,9 +96,8 @@ def _tournament_read(*, cover_image_url: str | None, logo_url: str | None) -> ob
         description=None,
         challonge_id=None,
         challonge_slug=None,
-        is_league=False,
         is_finished=False,
-        status="registration",
+        status="live",
         start_date=now,
         end_date=now,
         cover_image_url=cover_image_url,
@@ -241,7 +240,7 @@ class TournamentImageSubjects(IsolatedAsyncioTestCase):
         async def fake_tournament_read(_session, tournament, entities):
             # Same entity set registry._ser_tournament hydrates, so the admin form
             # reads this reply exactly as it reads a PATCH reply.
-            self.assertEqual(["stages", "roster_shape", "division_grid_version", "rules"], entities)
+            self.assertEqual(["stages", "roster_shape", "division_grid_version", "rules", "flow_nodes"], entities)
             return _tournament_read(cover_image_url=tournament.cover_image_url, logo_url=tournament.logo_url)
 
         with (

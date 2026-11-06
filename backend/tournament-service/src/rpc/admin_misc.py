@@ -7,8 +7,8 @@ Responses are plain ``model_dump(mode="json")`` (nulls kept); the custom
 dict-returning handlers return their dicts verbatim.
 
 Commit semantics: every write service called here commits internally
-(update_match, swap_slots, set_encounter_result, toggle_finished,
-transition_status, recalculate_standings, upsert_report_form), so the handlers
+(update_match, swap_slots, set_encounter_result, set_archived,
+recalculate_standings, upsert_report_form), so the handlers
 add no extra commit. job_get/job_list, report_form_get and the encounter-reports /
 parsed-matches reads are read-only.
 """
@@ -53,8 +53,8 @@ from src.services.bracket.usability import assert_encounter_live
 from src.services.computation import jobs as computation_jobs
 from src.services.encounter.captain import ReportResultIn, captain_service
 from src.services.encounter.report_form import report_form_service
+from src.services.flow.corrections import assert_encounter_correction_allowed
 from src.services.tournament import flows as tournament_flows
-from src.services.tournament.schedule import schedule_service
 
 
 async def _serialize_result(session: Any, encounter: models.Encounter) -> dict:
@@ -83,14 +83,13 @@ async def _serialize_result(session: Any, encounter: models.Encounter) -> dict:
 async def _assert_source_correction_allowed(session: Any, encounter_id: int) -> None:
     """Refuse a result correction whose downstream qualification is already live.
 
-    Both result endpoints rewrite a result that a later stage may have been
-    seeded from; the stage service owns that rule (it is the one that would have
-    to re-resolve the frozen seeds). A missing encounter is left to the service
-    below to 404 on.
+    Both result endpoints rewrite a result that a later node may have been
+    seeded from; ``flow.corrections`` owns that rule. A missing encounter is left
+    to the service below to 404 on.
     """
     encounter = await enc_service.encounter_service.get_encounter(session, encounter_id)
     if encounter is not None:
-        await admin_stage_service.assert_source_correction_allowed(session, encounter)
+        await assert_encounter_correction_allowed(session, encounter)
 
 
 async def _assert_bracket_live(session: Any, encounter_id: int) -> None:
@@ -299,86 +298,26 @@ def register(broker: Any, logger: Any) -> None:
 
     # ── tournaments ───────────────────────────────────────────────────────
 
-    @broker.subscriber("rpc.tournament.tournament_finish")
-    async def _tournament_finish(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = _identity(data)
-            if not user.is_superuser:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Superuser privileges required",
-                )
-            tournament_id = _require_id(data)
-            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
-            await record_admin_audit(
-                session,
-                action="tournament.finish",
-                actor=user,
-                data=data,
-                workspace_id=ws_id,
-                entity_type="tournament",
-                entity_id=tournament_id,
-            )
-            # toggle_finished commits internally.
-            tournament = await tournament_service.toggle_finished(session, tournament_id)
-            return _dump(await tournament_flows.flows_service.to_pydantic(session, tournament, ["stages"]))
-
-        return await _run(logger, op)
-
-    @broker.subscriber("rpc.tournament.tournament_status")
-    async def _tournament_status(data: dict, msg: RabbitMessage) -> dict:
+    @broker.subscriber("rpc.tournament.tournament_archive")
+    async def _tournament_archive(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _require_id(data)
             ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
             ensure_workspace_permission(user, ws_id, "tournament", "update")
-            body = schemas.TournamentStatusTransition.model_validate(_payload(data))
-            if body.force and not user.is_superuser:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Only superusers can bypass tournament status transitions",
-                )
+            body = schemas.TournamentArchiveSet.model_validate(_payload(data))
             await record_admin_audit(
                 session,
-                action="tournament.status",
+                action="tournament.archive",
                 actor=user,
                 data=data,
                 workspace_id=ws_id,
                 entity_type="tournament",
                 entity_id=tournament_id,
-                after={"status": body.status.value, "force": body.force},
+                after={"archived": body.archived},
             )
-            # transition_status commits internally.
-            tournament = await tournament_service.transition_status(
-                session,
-                tournament_id,
-                body.status,
-                force=body.force,
-            )
-            return _dump(await tournament_flows.flows_service.to_pydantic(session, tournament, ["stages"]))
-
-        return await _run(logger, op)
-
-    @broker.subscriber("rpc.tournament.tournament_schedule_set")
-    async def _tournament_schedule_set(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = _identity(data)
-            tournament_id = _require_id(data)
-            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
-            ensure_workspace_permission(user, ws_id, "tournament", "update")
-            body = schemas.TournamentScheduleSet.model_validate(_payload(data))
-            await record_admin_audit(
-                session,
-                action="tournament.schedule",
-                actor=user,
-                data=data,
-                workspace_id=ws_id,
-                entity_type="tournament",
-                entity_id=tournament_id,
-                after={"count": len(body.schedule)},
-            )
-            # set_schedule commits internally (full replace of the phase rows).
-            tournament = await schedule_service.set_schedule(session, tournament_id, body.schedule)
+            # set_archived commits internally.
+            tournament = await tournament_service.set_archived(session, tournament_id, body.archived)
             return _dump(await tournament_flows.flows_service.to_pydantic(session, tournament, ["stages"]))
 
         return await _run(logger, op)

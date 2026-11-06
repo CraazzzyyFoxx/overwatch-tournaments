@@ -19,13 +19,13 @@ import {
   SectionHead
 } from "@/components/site/open-layout";
 import { owtButton } from "@/components/site/owt-button";
-import { Badge } from "@/components/ui/badge";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getFormatter } from "@/lib/datetime/server";
 import { getPlayerSlug } from "@/lib/player";
+import { playStartsAt, registrationClosesAt, registrationIntake } from "@/lib/tournament/flow-nodes";
 import { getFinishedTournaments, type FinishedTournament } from "@/lib/tournament/finished";
-import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { displayStatus, getTournamentStatusMeta } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import type { Formatter } from "@/lib/datetime";
 import type { Tournament } from "@/types/tournament.types";
@@ -180,13 +180,13 @@ export async function NowInCommunity({ workspace }: Readonly<{ workspace: Worksp
 
 /** The tournament being played, or the one taking entries. */
 async function LeadActive({ tournament }: Readonly<{ tournament: Tournament }>) {
-  const [t, tCommon, tSite, format] = await Promise.all([
+  const [t, tSite, format] = await Promise.all([
     getTranslations("workspace"),
-    getTranslations("common"),
     getTranslations("site"),
     getFormatter()
   ]);
-  const live = getTournamentStatusMeta(tournament.status).variant === "live";
+  const live = getTournamentStatusMeta(displayStatus(tournament)).variant === "live";
+  const liveStage = tournament.stages?.find((stage) => stage.status === "live");
 
   if (live) {
     return (
@@ -205,9 +205,7 @@ async function LeadActive({ tournament }: Readonly<{ tournament: Tournament }>) 
         }
       >
         <Facts>
-          {tournament.status === "playoffs" ? (
-            <Fact value={tCommon("statusBadge.playoffs")} label={t("now.stage")} />
-          ) : null}
+          {liveStage ? <Fact value={liveStage.name} label={t("now.stage")} /> : null}
           {typeof tournament.teams_count === "number" ? (
             <Fact
               value={format.number(tournament.teams_count)}
@@ -242,11 +240,8 @@ async function LeadActive({ tournament }: Readonly<{ tournament: Tournament }>) 
     );
   }
 
-  const registrationEnd =
-    tournament.phase_schedule.find((phase) => phase.status === "registration")?.ends_at ?? null;
-  const liveStart =
-    tournament.phase_schedule.find((phase) => phase.status === "live")?.starts_at ??
-    String(tournament.start_date);
+  const registrationEnd = registrationClosesAt(tournament);
+  const liveStart = playStartsAt(tournament) ?? String(tournament.start_date);
   const time = (value: string) =>
     format.dateTime(new Date(value), {
       day: "numeric",
@@ -269,10 +264,9 @@ async function LeadActive({ tournament }: Readonly<{ tournament: Tournament }>) 
           <Link href={tournamentHref(tournament)} prefetch={false} className={FEAT_NAME_CLASS}>
             {tournament.name}
           </Link>
-          {/* Mock wording: a team registration takes team entries, every other
-              formation (balancer, draft, solo) takes players one by one. */}
+          {/* A team intake takes team entries, a solo one takes players one by one. */}
           <div className={FEAT_META_CLASS}>
-            {tSite(tournament.team_formation === "registration" ? "entry.team" : "entry.solo")}
+            {tSite(registrationIntake(tournament) === "team" ? "entry.team" : "entry.solo")}
           </div>
         </>
       }
@@ -361,7 +355,6 @@ async function ChronicleRow({
   last
 }: Readonly<{ row: FinishedTournament; last: boolean }>) {
   const [t, format] = await Promise.all([getTranslations("workspace"), getFormatter()]);
-  const tSite = await getTranslations("site");
   const { tournament, winner } = row;
   const start = new Date(tournament.start_date);
 
@@ -387,11 +380,6 @@ async function ChronicleRow({
           >
             {tournament.name}
           </Link>
-          {tournament.is_league ? (
-            <Badge tone="neutral" voice="label">
-              {tSite("league")}
-            </Badge>
-          ) : null}
         </div>
         {winner ? (
           <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3.5 gap-y-1 text-caption text-[color:var(--aqt-fg-muted)]">

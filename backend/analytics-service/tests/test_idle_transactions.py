@@ -8,6 +8,7 @@ quadratic in its teams. The reads around them are stubs that each run a real sta
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -65,7 +66,21 @@ def test_every_fit_runs_outside_a_transaction(tmp_path) -> None:
         with (
             patch.object(config.settings, "analytics_models_dir", str(tmp_path)),
             patch.object(orchestrator, "tournament_discipline", touching("overwatch")),
-            patch.object(orchestrator, "tournament_ids_up_to", touching([1, 2, 3])),
+            patch.object(
+                orchestrator,
+                "tournaments_up_to",
+                touching(
+                    [
+                        SimpleNamespace(
+                            id=i,
+                            start_date=datetime(2026, 1, i, tzinfo=UTC),
+                            end_date=None,
+                            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                        )
+                        for i in (1, 2, 3)
+                    ]
+                ),
+            ),
             patch.object(orchestrator, "_build_training_frame", touching(frame)),
             patch.object(orchestrator, "build_shift_feature_frame", touching(frame)),
             patch.object(orchestrator, "build_standings_training_frame", touching(frame)),

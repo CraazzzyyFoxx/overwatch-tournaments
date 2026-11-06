@@ -37,9 +37,10 @@ import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { roleAccent } from "@/lib/registration/role-accent";
 import { findRole, roleColor, rolePresentation, showsRoles, type RoleOntology } from "@/lib/roster/ontology";
-import { reachedAtLeast } from "@/lib/tournament/lifecycle";
+import { hasPlayStarted } from "@/lib/tournament/stages";
 import { answerFlag, answerList, answerText } from "@/lib/forms/answers";
 import { IDENTITY_PROVIDERS, identityKey, identityProvider } from "@/lib/forms/builtin-keys";
+import { nodesOfKind, registrationIntake } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import registrationTeamService from "@/services/registration-team.service";
 import registrationService from "@/services/registration.service";
@@ -290,14 +291,18 @@ function MyRegistrationCard({
     return () => window.clearTimeout(id);
   }, [recheckLeft]);
   const recheckMutation = useMutation({
-    mutationFn: () => registrationService.recheckMyRegistration(tournament.id),
+    mutationFn: () => registrationService.recheckMyRegistration(tournament.id, registration.registration_node_id),
     onSuccess: () => {
       setRecheckLeft(RECHECK_COOLDOWN_SECONDS);
       void queryClient.invalidateQueries({
-        queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id)
+        queryKey: tournamentQueryKeys.registration(
+          tournament.workspace_id,
+          tournament.id,
+          registration.registration_node_id
+        )
       });
       void queryClient.invalidateQueries({
-        queryKey: tournamentQueryKeys.subscriptionStatus(tournament.id)
+        queryKey: tournamentQueryKeys.subscriptionStatus(tournament.id, registration.registration_node_id)
       });
     },
     onError: (error) => {
@@ -314,8 +319,12 @@ function MyRegistrationCard({
   // player who actually is on a team — solo tournaments send no request.
   const teamBrief = registration.team ?? null;
   const teamsQuery = useQuery({
-    queryKey: tournamentQueryKeys.registrationTeams(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationTeamService.listPublic(tournament.id),
+    queryKey: tournamentQueryKeys.registrationTeams(
+      tournament.workspace_id,
+      tournament.id,
+      registration.registration_node_id
+    ),
+    queryFn: () => registrationTeamService.listPublic(tournament.id, registration.registration_node_id),
     enabled: teamBrief !== null
   });
   const myTeam = teamBrief
@@ -381,7 +390,7 @@ function MyRegistrationCard({
   const isApproved = registration.status === "approved";
   const isTerminal = TERMINAL_REGISTRATION_STATUSES.has(registration.status);
   const checkInPhaseOver =
-    !isCheckedIn && !canCheckIn && reachedAtLeast(tournament.status, "live");
+    !isCheckedIn && !canCheckIn && hasPlayStarted(tournament.status, tournament.stages);
   // Withdrawal closes at check-in: past that point the roster is balanced and
   // drafted against a confirmed attendee list (backend returns 409 too).
   const canWithdraw =
@@ -498,7 +507,14 @@ function MyRegistrationCard({
     ...requirementSteps,
     {
       key: "balancing",
-      label: t(tournament.team_formation === "registration" ? "registrationTeams.myCard.playerEligibility" : "registration.myCard.steps.balancing"),
+      label: t(
+        registrationIntake(
+          tournament,
+          nodesOfKind(tournament, "registration").find((node) => node.id === registration.registration_node_id)
+        ) === "team"
+          ? "registrationTeams.myCard.playerEligibility"
+          : "registration.myCard.steps.balancing"
+      ),
       tone: balancerReady
         ? "done"
         : isTerminal

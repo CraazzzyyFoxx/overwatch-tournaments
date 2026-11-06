@@ -43,6 +43,7 @@ __all__ = (
     "actor",
     "require_member",
     "require_active",
+    "formation_node_id",
     "active_actor",
     "require_admin_panel",
     "require_id",
@@ -51,6 +52,14 @@ __all__ = (
     "envelope",
     "call",
 )
+
+
+def formation_node_id(data: dict[str, Any]) -> int:
+    """``?formation_node_id=`` of a route keyed by the tournament alone: required, no default (plan Decision 1)."""
+    value = q1(data, "formation_node_id", int)
+    if value is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="formation_node_id is required")
+    return value
 
 
 def active_actor(data: dict[str, Any]) -> AuthUser:

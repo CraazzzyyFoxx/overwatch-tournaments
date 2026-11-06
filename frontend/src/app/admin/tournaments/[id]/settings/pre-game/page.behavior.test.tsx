@@ -168,11 +168,9 @@ const STAGES = [
     description: null,
     stage_type: "round_robin",
     max_rounds: 3,
-    advance_count: null,
-    advance_upper_count: null,
     order: 1,
-    is_active: true,
-    is_completed: false,
+    node_id: 1,
+    status: "live",
     best_of: { default: 3, by_round: {}, final: null, swiss_qualify: null, swiss_eliminate: null },
     challonge_id: null,
     challonge_slug: null,
@@ -185,11 +183,9 @@ const STAGES = [
     description: null,
     stage_type: "single_elimination",
     max_rounds: 2,
-    advance_count: null,
-    advance_upper_count: null,
     order: 2,
-    is_active: false,
-    is_completed: false,
+    node_id: 1,
+    status: "draft",
     best_of: { default: 5, by_round: {}, final: null, swiss_qualify: null, swiss_eliminate: null },
     challonge_id: null,
     challonge_slug: null,
@@ -444,7 +440,7 @@ async function mount({
   getHeroes.mockResolvedValue({ results: HEROES });
   getMaps.mockResolvedValue({ results: maps });
   getStages.mockResolvedValue(stages);
-  getTournament.mockResolvedValue({ id: 84, workspace_id: 3, team_formation: "balancer", discipline });
+  getTournament.mockResolvedValue({ id: 84, workspace_id: 3, discipline });
   getEncounters.mockResolvedValue({ results: encounters });
 
   search = new URL(url, "http://localhost").search;
@@ -1475,8 +1471,7 @@ describe("Settings › Pre-game phase authors every round of a stage at once", (
             slot: index + 1,
             input_type: "final",
             team_id: index + 1,
-            source_stage_item_id: null,
-            source_position: null
+            source_result_id: null
           }))
         }
       ]

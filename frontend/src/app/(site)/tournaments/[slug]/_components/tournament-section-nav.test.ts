@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { StreamEntry, StreamVod } from "@/types/stream.types";
-import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
+import type { StageSummary, TournamentDisplayStatus } from "@/types/tournament.types";
 
 import {
   buildTournamentSectionNav,
@@ -24,11 +24,9 @@ function stage(overrides: Partial<StageSummary> = {}): StageSummary {
     description: null,
     stage_type: "single_elimination",
     max_rounds: 3,
-    advance_count: null,
-    advance_upper_count: null,
     order: 1,
-    is_active: true,
-    is_completed: false,
+    node_id: 1,
+    status: "live",
     ranking_preset: null,
     tiebreak_order: null,
     scoring: {
@@ -55,10 +53,13 @@ function stage(overrides: Partial<StageSummary> = {}): StageSummary {
   };
 }
 
+/** Before play no stage is live (`displayStatus` only says registration or check-in while none is). */
+const PRE_PLAY: readonly TournamentDisplayStatus[] = ["announcement", "registration", "check_in"];
+
 function model(
-  status: TournamentStatus,
+  status: TournamentDisplayStatus,
   pathname = `/tournaments/${tournamentId}/participants`,
-  stages: StageSummary[] = [stage()]
+  stages: StageSummary[] = [stage({ status: PRE_PLAY.includes(status) ? "draft" : "live" })]
 ) {
   return buildTournamentSectionNav({
     tournamentId,
@@ -71,7 +72,7 @@ function model(
 }
 
 describe("buildTournamentSectionNav", () => {
-  it.each<TournamentStatus>(["registration", "draft", "check_in"])(
+  it.each<TournamentDisplayStatus>(["announcement", "registration", "check_in"])(
     "keeps competition sections discoverable but locked during %s",
     (status) => {
       const items = model(status);
@@ -84,12 +85,19 @@ describe("buildTournamentSectionNav", () => {
     }
   );
 
-  it.each<TournamentStatus>(["live", "playoffs", "completed", "archived"])(
+  it.each<TournamentDisplayStatus>(["live", "completed", "archived"])(
     "unlocks competition sections during %s when a stage exists",
     (status) => {
       expect(model(status).every((item) => item.available)).toBe(true);
     }
   );
+
+  it("keeps competition locked while the tournament is live but no stage has started", () => {
+    // Registration closed, teams forming: the phase reads `live`, play has not begun.
+    const locked = model("live", undefined, [stage({ status: "draft" })]).filter((item) => !item.available);
+
+    expect(locked.map((item) => item.id)).toEqual(["bracket", "matches", "stats"]);
+  });
 
   it("orders the rail by phase: participants second before play, last after", () => {
     expect(model("registration").map((item) => item.id)).toEqual([
@@ -113,7 +121,7 @@ describe("buildTournamentSectionNav", () => {
   });
 
   it("adds the player standings tab only for a tournament with an individual Swiss stage", () => {
-    const ids = (status: TournamentStatus, stages: StageSummary[]) =>
+    const ids = (status: TournamentDisplayStatus, stages: StageSummary[]) =>
       model(status, `/tournaments/${tournamentId}/participants`, stages).map((item) => item.id);
     const individual = stage({ stage_type: "individual_swiss", pairing_mode: "score" });
 
@@ -129,7 +137,7 @@ describe("buildTournamentSectionNav", () => {
       "participants"
     ]);
     expect(
-      model("registration", `/tournaments/${tournamentId}/ranking`, [individual]).find(
+      model("registration", `/tournaments/${tournamentId}/ranking`, [{ ...individual, status: "draft" }]).find(
         (item) => item.id === "ranking"
       )
     ).toMatchObject({
@@ -143,16 +151,16 @@ describe("buildTournamentSectionNav", () => {
         (item) => item.id === "ranking"
       )
     ).toMatchObject({ available: true, active: true });
-    // The qualification lock moves the tournament back to draft: a finished table stays open.
+    // A finished table stays open before play.
     expect(
-      model("draft", `/tournaments/${tournamentId}/ranking`, [
-        stage({ stage_type: "individual_swiss", is_completed: true })
+      model("registration", `/tournaments/${tournamentId}/ranking`, [
+        stage({ stage_type: "individual_swiss", status: "completed" })
       ]).find((item) => item.id === "ranking")
     ).toMatchObject({ available: true });
   });
 
-  it("locks only the bracket for missing stage structure after competition starts", () => {
-    const items = model("live", `/tournaments/${tournamentId}/bracket`, []);
+  it("locks only the bracket for missing stage structure once the tournament is over", () => {
+    const items = model("completed", `/tournaments/${tournamentId}/bracket`, []);
     const bracket = items.find((item) => item.id === "bracket");
 
     expect(bracket).toMatchObject({
@@ -171,7 +179,7 @@ describe("buildTournamentSectionNav", () => {
       buildTournamentSectionNav({
         tournamentId,
         status: "registration",
-        stages: [stage()],
+        stages: [stage({ status: "draft" })],
         hasTeams,
         pathname: `/tournaments/${tournamentId}/teams`
       }).find((item) => item.id === "teams");
@@ -201,8 +209,8 @@ describe("buildTournamentSectionNav", () => {
 
   it("links the bracket to the current stage, not to an unstarted playoff", () => {
     const stages = [
-      stage({ id: 1, stage_type: "swiss", order: 0, is_active: false, is_published: false }),
-      stage({ id: 2, stage_type: "double_elimination", order: 1, is_active: false, is_published: false })
+      stage({ id: 1, stage_type: "swiss", order: 0, status: "draft", is_published: false }),
+      stage({ id: 2, stage_type: "double_elimination", order: 1, status: "draft", is_published: false })
     ];
 
     expect(model("live", undefined, stages).find((item) => item.id === "bracket")?.href).toBe(
@@ -305,6 +313,20 @@ describe("buildTournamentSectionNav", () => {
     expect(model("live").some((item) => item.id === "rules")).toBe(false);
   });
 
+  it("shows the Table only for a tournament with a leaderboard, right after Rules during play", () => {
+    const ids = (input: { status: TournamentDisplayStatus; hasLeaderboard?: boolean }) =>
+      buildTournamentSectionNav({
+        tournamentId,
+        stages: [stage()],
+        hasRules: true,
+        pathname: `/tournaments/${tournamentId}`,
+        ...input
+      }).map((item) => item.id);
+
+    expect(ids({ status: "live" })).not.toContain("table");
+    expect(ids({ status: "live", hasLeaderboard: true }).slice(0, 3)).toEqual(["overview", "rules", "table"]);
+  });
+
   it("keeps Rules directly under Overview in both phase orders", () => {
     // The one section whose place does not move with the phase: before play it
     // decides whether a player signs up, during play it settles a dispute.
@@ -322,11 +344,11 @@ describe("buildTournamentSectionNav", () => {
   });
 
   it("links Overview to the tournament root and marks exactly the canonical route active", () => {
-    const root = model("playoffs", `/tournaments/${tournamentId}/`);
+    const root = model("live", `/tournaments/${tournamentId}/`);
     expect(root.filter((item) => item.active).map((item) => item.id)).toEqual(["overview"]);
     expect(root.find((item) => item.id === "overview")?.href).toBe(`/tournaments/${tournamentId}`);
 
-    const nested = model("playoffs", `/tournaments/${tournamentId}/matches/`);
+    const nested = model("live", `/tournaments/${tournamentId}/matches/`);
     expect(nested.filter((item) => item.active).map((item) => item.id)).toEqual(["matches"]);
   });
 });
@@ -341,7 +363,7 @@ describe("isTournamentOverviewPath", () => {
       `/tournaments/${tournamentId}/bracket`
     ]) {
       const overviewIsActive =
-        model("playoffs", pathname).find((item) => item.id === "overview")?.active === true;
+        model("live", pathname).find((item) => item.id === "overview")?.active === true;
       expect(isTournamentOverviewPath(pathname, tournamentId)).toBe(overviewIsActive);
     }
 

@@ -9,8 +9,8 @@ from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.repository import StandingPinRepository, StandingRepository, TournamentRepository
 from src import schemas
-from src.services.admin.stage import stage_service as admin_stage_service
 from src.services.computation.jobs import jobs_service
+from src.services.flow.corrections import started_cut
 from src.services.tournament.events import RESULT_RESOURCES, publish_tournament_invalidation
 
 
@@ -119,8 +119,8 @@ class AdminStandingService:
         places it has. Once a playoff seeded from this group is under way, only
         places below its qualification cut may change: anything that could move
         a team across the cut would leave the playoff playing a team that no
-        longer qualified (the same rule ``assert_source_correction_allowed``
-        applies to result corrections). Unpinning is refused there outright --
+        longer qualified (the same rule ``flow.corrections`` applies to
+        result corrections). Unpinning is refused there outright --
         where the team falls back to is only known after the recalculation.
         Commits.
         """
@@ -161,7 +161,7 @@ class AdminStandingService:
             if team_id in position_by_team
         }
         if data.stage_item_id is not None and wanted != current:
-            cut = await admin_stage_service.started_qualification_cut(session, data.stage_item_id)
+            cut = await started_cut(session, data.stage_item_id)
             if cut is not None:
                 changed = {
                     team_id for team_id in current.keys() | wanted.keys() if current.get(team_id) != wanted.get(team_id)

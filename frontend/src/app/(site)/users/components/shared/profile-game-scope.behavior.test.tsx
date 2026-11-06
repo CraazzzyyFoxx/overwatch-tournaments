@@ -129,8 +129,8 @@ it("widens a never-played game back to every game", async () => {
 
 it("marks every tournament of the cross-game history with its game", async () => {
   const entry = (id: number, discipline: string) =>
-    ({ id, name: `Cup ${id}`, discipline, is_league: false, team: "T", placement: 1, won: 1, lost: 0, draw: 0, maps_won: 2, maps_lost: 0, role: null, encounters: [] }) as unknown as UserTournament;
-  await render(<TournamentList groups={[entry(1, "lol"), entry(2, "overwatch")]} selectedKey={null} onSelect={vi.fn()} showGames />);
+    ({ id, name: `Cup ${id}`, discipline, team: "T", placement: 1, won: 1, lost: 0, draw: 0, maps_won: 2, maps_lost: 0, role: null, encounters: [] }) as unknown as UserTournament;
+  await render(<TournamentList tournaments={[entry(1, "lol"), entry(2, "overwatch")]} selectedId={null} onSelect={vi.fn()} showGames />);
 
   const rows = [...container.querySelectorAll("button[aria-pressed]")].map((node) => node.textContent ?? "");
   expect(rows.find((text) => text.includes("Cup 1"))).toContain("League of Legends");

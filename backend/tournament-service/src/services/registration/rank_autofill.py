@@ -17,6 +17,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.chrono import chrono_sort_key, tournament_chrono_key
 from shared.core.social import SocialProvider
 from shared.disciplines import discipline
 from shared.domain.roster import PlayerRoster
@@ -26,6 +27,7 @@ from shared.services.roster import roster_engine
 from src.services.registration._common import (
     RegistrationCommonService,
     _common_service,
+    entries_of,
     included_balancer_status,
     sync_included_balancer_status,
 )
@@ -243,7 +245,7 @@ def _roles_ranked_after_updates(
 
 
 def _rank_autofill_balancer_addition(
-    registration: models.Registration | Any,
+    entry: models.RegistrationEntry | Any,
     updates: list[tuple[Any, Any]],
     *,
     add_to_balancer: bool,
@@ -251,9 +253,9 @@ def _rank_autofill_balancer_addition(
 ) -> tuple[bool, str | None]:
     if not add_to_balancer:
         return False, None
-    if getattr(registration, "status", None) != "approved":
+    if getattr(entry, "status", None) != "approved":
         return False, "Registration must be approved before it can be added to balancer."
-    if not is_balancer_status_excluded(getattr(registration, "balancer_status", None)):
+    if not is_balancer_status_excluded(getattr(entry, "balancer_status", None)):
         return False, "Registration is already in balancer."
     if not _roles_ranked_after_updates(roster, updates):
         return False, "Registration will still be missing active role ranks."
@@ -319,22 +321,16 @@ class RankAutofillService:
     ) -> set[int] | None:
         """Ids of the N workspace tournaments immediately preceding ``target``, or None when unrestricted.
 
-        "Preceding" is chronological by ``(start_date, id)`` with NULL start dates sorting last; the N
-        most recent of those (``start_date DESC NULLS LAST, id DESC``) form the lookback window.
+        "Preceding" is the tournament chronology (`shared.core.chrono`); the N most recent of those form the
+        lookback window.
         """
         if lookback_tournaments is None:
             return None
-        if target.start_date is not None:
-            before = sa.or_(
-                models.Tournament.start_date < target.start_date,
-                sa.and_(models.Tournament.start_date == target.start_date, models.Tournament.id < target.id),
-            )
-        else:
-            before = sa.or_(models.Tournament.start_date.is_not(None), models.Tournament.id < target.id)
+        before = sa.tuple_(*tournament_chrono_key()) < sa.tuple_(*chrono_sort_key(target))
         stmt = (
             sa.select(models.Tournament.id)
             .where(models.Tournament.workspace_id == target.workspace_id, before)
-            .order_by(models.Tournament.start_date.desc().nulls_last(), models.Tournament.id.desc())
+            .order_by(*(c.desc() for c in tournament_chrono_key()))
             .limit(lookback_tournaments)
         )
         return set((await session.execute(stmt)).scalars().all())
@@ -343,6 +339,7 @@ class RankAutofillService:
         self,
         session: AsyncSession,
         tournament_id: int,
+        registration_node_id: int,
         *,
         registration_ids: list[int] | None = None,
         overwrite_existing: bool = False,
@@ -376,8 +373,10 @@ class RankAutofillService:
         workspace_id = getattr(tournament, "workspace_id", None)
 
         registrations = await self.rank_sources._load_rank_autofill_registrations(
-            session, tournament_id, registration_ids
+            session, tournament_id, registration_node_id, registration_ids
         )
+        # The balancer pool state these rows are filled into is the entry's, in the node being filled.
+        entries = await entries_of(session, registration_node_id, registrations)
         accounts_by_key = await self.rank_sources._load_primary_accounts_by_key(
             session, registrations, provider=provider
         )
@@ -394,7 +393,12 @@ class RankAutofillService:
         # One resolve for the whole run: the role SET the plan fills, and the
         # "would this be complete" verdict, both come from these rosters.
         rosters = await roster_engine.resolve(
-            session, registrations, workspace_id=workspace_id, tournament_id=tournament_id, grid=grid
+            session,
+            registrations,
+            workspace_id=workspace_id,
+            tournament_id=tournament_id,
+            grid=grid,
+            entries=entries,
         )
 
         # Only load a source when its stage is enabled (skips its DB query otherwise). A disabled
@@ -451,7 +455,7 @@ class RankAutofillService:
         balancer_additions = 0
         # Applied rows whose verdict is recomputed once, after the loop: ``True`` when the row joins the pool
         # (status set outright), ``False`` when only a ready/incomplete row is re-derived.
-        resync: dict[int, tuple[models.Registration, bool]] = {}
+        resync: dict[int, tuple[models.RegistrationEntry, bool]] = {}
 
         for registration in registrations:
             tag_key = primary_identity_key(registration, provider=provider)
@@ -494,7 +498,7 @@ class RankAutofillService:
                 applied=apply,
             )
             will_add_to_balancer, balancer_reason = _rank_autofill_balancer_addition(
-                registration,
+                entries[registration.id],
                 updates,
                 add_to_balancer=add_to_balancer,
                 roster=roster,
@@ -524,14 +528,14 @@ class RankAutofillService:
                 role_updates += len(updates)
 
             if apply and will_add_to_balancer:
-                registration.exclude_reason = None
+                entries[registration.id].exclude_reason = None
                 balancer_additions += 1
                 changed = True
             elif not apply and will_add_to_balancer:
                 balancer_additions += 1
 
             if apply and changed:
-                resync[registration.id] = (registration, will_add_to_balancer)
+                resync[registration.id] = (entries[registration.id], will_add_to_balancer)
                 await self.common._register_registration_changed(session, registration)
 
             players.append(row)
@@ -539,14 +543,14 @@ class RankAutofillService:
         if resync:
             # One resolve for every applied row, AFTER the writes above: autoflush
             # publishes them, so each verdict is the one the pool will actually see.
-            resolved = await roster_engine.for_tournament(
-                session, tournament_id, registration_ids=list(resync), include_deleted=True
+            resolved = await roster_engine.for_registration_node(
+                session, registration_node_id, registration_ids=list(resync), include_deleted=True
             )
-            for registration_id, (registration, joins_pool) in resync.items():
+            for registration_id, (entry, joins_pool) in resync.items():
                 if joins_pool:
-                    registration.balancer_status = included_balancer_status(resolved.get(registration_id))
+                    entry.balancer_status = included_balancer_status(resolved.get(registration_id))
                 else:
-                    sync_included_balancer_status(registration, resolved.get(registration_id))
+                    sync_included_balancer_status(entry, resolved.get(registration_id))
 
         if apply and (applied_registrations > 0 or balancer_additions > 0):
             await session.commit()

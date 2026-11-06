@@ -19,6 +19,7 @@ from shared.core.errors import ApiExc, ApiHTTPException
 from src.core.clients import subscription_resolver
 from src.services.registration._common import _common_service
 from src.services.registration.subscription_status import _client as _redis_client
+from src.services.registration.windows import node_config
 from src.services.tournament.events import enqueue_registration_rank_check
 
 __all__ = ("RECHECK_COOLDOWN_SECONDS", "assert_recheck_allowed", "recheck_registration")
@@ -51,7 +52,9 @@ async def assert_recheck_allowed(*, auth_user_id: int, redis: aioredis.Redis | N
     )
 
 
-async def recheck_registration(session: AsyncSession, registration: Any, *, auth_user_id: int) -> None:
+async def recheck_registration(
+    session: AsyncSession, registration: Any, *, registration_node_id: int, auth_user_id: int
+) -> None:
     """Re-check whatever this tournament requires. The caller commits.
 
     Subscriptions are resolved live right here (``force_refresh``), so the next
@@ -63,7 +66,8 @@ async def recheck_registration(session: AsyncSession, registration: Any, *, auth
     form = await _common_service.get_registration_form(session, registration.tournament_id)
     if form is None:
         return
-    if form.require_subscription:
+    node = await _common_service.ensure_registration_node(session, registration.tournament_id, registration_node_id)
+    if node_config(node).require_subscription:
         resolver = subscription_resolver(session, release=session.commit)
         rule = await resolver.load_requirement(workspace_id=form.workspace_id)
         if rule is not None:

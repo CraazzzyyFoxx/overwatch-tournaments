@@ -50,8 +50,8 @@ type PlayerEditModalProps = {
   discipline: string | undefined;
   /** The owner game's metadata (role names, glyphs, tints, capabilities); `null` while it loads. */
   ontology?: DisciplineMetadata | null;
-  divisionGridVersionId: number | null | undefined;
-  divisionGridVersion?: DivisionGridVersion | null;
+  /** The tournament's grid (pin, else workspace default) the page resolves every rank in; `null` while unresolved. */
+  divisionGridVersion: DivisionGridVersion | null;
   statusOptions?: {
     registration: {
       system: Array<{ value: string; name: string }>;
@@ -73,7 +73,6 @@ export function PlayerEditModal({
   registration = null,
   discipline,
   ontology = null,
-  divisionGridVersionId,
   divisionGridVersion,
   statusOptions,
   open,
@@ -88,7 +87,6 @@ export function PlayerEditModal({
     registration,
     discipline,
     ontology,
-    divisionGridVersionId,
     divisionGridVersion,
     open: open && discipline !== undefined,
     onSave
@@ -219,9 +217,9 @@ export function PlayerEditModal({
               <PlayerEditHistoryPanel
                 history={history}
                 roleEntries={roleEntries}
-                workspaceGrid={form.workspaceGrid}
+                grid={form.divisionGrid}
                 ontology={ontology}
-                getDivisionName={form.getHistoryDivisionName}
+                getDivisionName={form.getDivisionName}
                 getOriginalDivisionName={form.getOriginalDivisionName}
               />
             ) : null}

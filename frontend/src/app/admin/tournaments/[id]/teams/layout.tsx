@@ -36,7 +36,7 @@ export default function TeamsLayout({ children }: Readonly<{ children: ReactNode
   const access = useTabAccess(tournamentQuery.data);
   const activeAllowed = allowedTeamsSubTab(active, access);
 
-  // Decided only once the tournament is in: `team_formation` is unknown while
+  // Decided only once the tournament is in: its formation nodes are unknown while
   // it loads, and bouncing on that first paint would kick a legitimate draft
   // admin off their own tab.
   useEffect(() => {

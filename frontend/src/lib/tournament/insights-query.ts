@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { draftFormationNode } from "@/lib/tournament/flow-nodes";
 import draftService from "@/services/draft.service";
 import tournamentService from "@/services/tournament.service";
 import type { DraftBoard } from "@/types/draft.types";
@@ -186,7 +187,7 @@ function freshness(status: TournamentStatus, live: readonly TournamentStatus[]) 
 // A view without these numbers shows its empty state; an error toast would only repeat it.
 const QUIET = { suppressErrorToast: true };
 
-const PLAYING: readonly TournamentStatus[] = ["draft", "live", "playoffs"];
+const PLAYING: readonly TournamentStatus[] = ["live"];
 
 export function tournamentPlayerStatsQueryOptions(tournament: Pick<Tournament, "id" | "status">) {
   return queryOptions({
@@ -211,12 +212,17 @@ export function tournamentPickBanOutcomesQueryOptions(
 }
 
 /** The draft board under the draft room's own key, refetched while the captains draft. */
-export function tournamentDraftQueryOptions(tournament: Pick<Tournament, "id" | "status">) {
+export function tournamentDraftQueryOptions(
+  tournament: Pick<Tournament, "id" | "status" | "flow_nodes">
+) {
+  // The draft formation node's board; a tournament with none has no draft to read.
+  const nodeId = draftFormationNode(tournament)?.id ?? null;
   return queryOptions({
-    queryKey: tournamentQueryKeys.draftBoard(tournament.id),
-    queryFn: () => draftService.getTournamentBoard(tournament.id),
+    queryKey: tournamentQueryKeys.draftBoard(tournament.id, nodeId ?? 0),
+    queryFn: () => draftService.getTournamentBoard(tournament.id, nodeId as number),
+    enabled: nodeId !== null,
     select: mapDraftBoard,
     meta: QUIET,
-    ...freshness(tournament.status, ["draft"])
+    ...freshness(tournament.status, ["live"])
   });
 }

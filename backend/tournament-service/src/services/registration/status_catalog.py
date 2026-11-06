@@ -253,17 +253,20 @@ class RegistrationStatusCatalogService:
         status_id: int,
     ) -> None:
         status_row = await self.get_custom_status_by_id(session, workspace_id, status_id)
-        registration_column = (
-            models.Registration.status if status_row.scope == "registration" else models.Registration.balancer_status
+        entry_column = (
+            models.RegistrationEntry.status
+            if status_row.scope == "registration"
+            else models.RegistrationEntry.balancer_status
         )
         # Analytical: Registration has no denormalized workspace_id column —
         # scope via the owning tournament (registrations are always tournament-scoped).
         in_use = await session.scalar(
-            sa.select(sa.func.count(models.Registration.id))
+            sa.select(sa.func.count(models.RegistrationEntry.id))
+            .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
             .join(models.Tournament, models.Tournament.id == models.Registration.tournament_id)
             .where(
                 models.Tournament.workspace_id == workspace_id,
-                registration_column == status_row.slug,
+                entry_column == status_row.slug,
             )
         )
         if in_use:

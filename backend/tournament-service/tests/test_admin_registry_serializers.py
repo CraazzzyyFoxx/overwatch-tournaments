@@ -110,24 +110,20 @@ def _tournament(tournament_id: int = 91_001) -> models.Tournament:
         name="Linked Tournament",
         slug="linked-tournament",
         description=None,
-        is_league=False,
         is_finished=False,
         is_hidden=False,
         status=enums.TournamentStatus.LIVE,
         start_date=datetime.now(UTC),
         end_date=datetime.now(UTC),
         auto_transitions_enabled=True,
-        allow_late_registration=False,
         discord_broadcasts_enabled=True,
         discord_dms_enabled=True,
         logs_official=False,
         pov_stream_delay_s=0,
-        team_formation="balancer",
         division_grid_version_id=5,
         # Plain columns the serializer reads: unset on a detached instance means
         # a refresh attempt, not NULL.
         discipline="overwatch",
-        draft_format_json=None,
         rules=None,
         cover_image_url=None,
         logo_url=None,
@@ -143,6 +139,15 @@ class _NullSession:
 
     async def scalar(self, statement: object) -> object:
         return None
+
+    async def scalars(self, _statement: object) -> list:
+        """The ``flow_nodes`` entity's reads: this tournament has no nodes."""
+
+        class _Rows(list):
+            def all(self) -> list:
+                return list(self)
+
+        return _Rows()
 
 
 class SerTournamentChallongeTests(IsolatedAsyncioTestCase):

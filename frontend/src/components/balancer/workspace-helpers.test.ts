@@ -872,13 +872,14 @@ describe("convertBalanceResponseToInternalPayload", () => {
     Object.assign(generated.teams[0], findings);
     vi.mocked(apiFetch).mockResolvedValueOnce(new Response("{}"));
 
-    await balancerAdminService.saveBalance(17, {
+    await balancerAdminService.saveBalance(17, 9, {
       config_json: null,
       result_json: convertBalanceResponseToInternalPayload(generated),
     });
 
     expect(apiFetch).toHaveBeenLastCalledWith("/api/v1/balancer/tournaments/17/balance", {
       method: "PUT",
+      query: { formation_node_id: 9 },
       body: {
         config_json: null,
         result_json: expect.objectContaining({

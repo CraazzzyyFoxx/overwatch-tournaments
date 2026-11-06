@@ -381,7 +381,10 @@ function UrgentRow({
   const format = useFormatter();
   const slotLabel = useOfferedSlotLabel(item);
   const [Icon, tone] = KIND_VISUAL[item.kind] ?? KIND_FALLBACK;
-  const tournament = String(item.payload.tournament_name ?? "");
+  // A check-in belongs to one registration node; its name tells the intakes of one tournament apart.
+  const nodeName = item.payload.node_name;
+  const tournament =
+    String(item.payload.tournament_name ?? "") + (typeof nodeName === "string" ? ` (${nodeName})` : "");
   const closesAt = item.payload.closes_at;
   const slotCode = item.payload.slot_code;
 

@@ -56,7 +56,7 @@ def _trees(hero: models.CatalogEntity, support: models.CatalogEntity, map_: mode
         "aggregate/stat_sum": _leaf("global_stat_sum", stat="hero_damage_dealt", op=">=", value=18000),
         "aggregate/stat_sum_high": _leaf("global_stat_sum", stat="HeroDamageDealt", op=">", value=600000),
         "aggregate/winrate": _leaf("global_winrate", op=">=", value=0.5),
-        "aggregate/won_maps": _leaf("global_winrate", metric="won_maps", order="asc", include_league=True),
+        "aggregate/won_maps": _leaf("global_winrate", metric="won_maps", order="asc"),
         "hero/stat": _leaf("hero_stat", hero_slug=hero.slug, stat="HeroDamageDealt", op=">=", value=13500),
         "hero/stat_strict": _leaf("hero_stat", hero_slug=hero.slug, stat="HeroDamageDealt", op=">", value=13500),
         "hero/kd": _leaf("hero_kd_best", hero_slug=hero.slug, min_matches=2, min_time=600, min_match_time=60),

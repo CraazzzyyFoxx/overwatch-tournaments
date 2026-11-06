@@ -14,7 +14,7 @@ The population is now a subquery. The only thing that must not change is WHICH
 users it covers, so that is what these tests pin, against a real (SQLite) database
 and through ``compare_hero_candidates_select`` itself rather than a re-stated
 predicate. Each exclusion below is a clause someone added on purpose:
-substitutions, unfinished tournaments and leagues are all out.
+substitutions and unfinished tournaments are out.
 """
 
 from __future__ import annotations
@@ -69,7 +69,6 @@ TOURNAMENT = 84
 OTHER_TOURNAMENT = 85
 OTHER_WORKSPACE_TOURNAMENT = 86
 UNFINISHED = 90
-LEAGUE = 91
 WORKSPACE = 1
 OTHER_WORKSPACE = 2
 ROLE = RoleRef(dimension="player_role", role="damage")
@@ -80,7 +79,6 @@ QUALIFIES = 10
 WRONG_ROLE = 11
 IS_SUBSTITUTE = 12
 IN_UNFINISHED = 13
-IN_LEAGUE = 14
 OTHER_TOURNAMENT_ONLY = 15
 NEVER_PLAYED = 16
 OTHER_WORKSPACE_ONLY = 17
@@ -90,7 +88,6 @@ _ROSTER = (
     (WRONG_ROLE, TOURNAMENT, OTHER_ROLE, False),
     (IS_SUBSTITUTE, TOURNAMENT, ROLE, True),
     (IN_UNFINISHED, UNFINISHED, ROLE, False),
-    (IN_LEAGUE, LEAGUE, ROLE, False),
     (OTHER_TOURNAMENT_ONLY, OTHER_TOURNAMENT, ROLE, False),
     (OTHER_WORKSPACE_ONLY, OTHER_WORKSPACE_TOURNAMENT, OTHER_ROLE, False),
 )
@@ -139,12 +136,11 @@ class HeroCompareBaselineScopeTests(TestCase):
                 )
             )
 
-        for tournament_id, workspace_id, finished, league in (
-            (TOURNAMENT, WORKSPACE, True, False),
-            (OTHER_TOURNAMENT, WORKSPACE, True, False),
-            (UNFINISHED, WORKSPACE, False, False),
-            (LEAGUE, WORKSPACE, True, True),
-            (OTHER_WORKSPACE_TOURNAMENT, OTHER_WORKSPACE, True, False),
+        for tournament_id, workspace_id, finished in (
+            (TOURNAMENT, WORKSPACE, True),
+            (OTHER_TOURNAMENT, WORKSPACE, True),
+            (UNFINISHED, WORKSPACE, False),
+            (OTHER_WORKSPACE_TOURNAMENT, OTHER_WORKSPACE, True),
         ):
             self.session.execute(
                 sa.insert(models.Tournament.__table__).values(
@@ -153,7 +149,6 @@ class HeroCompareBaselineScopeTests(TestCase):
                     name=f"T{tournament_id}",
                     slug=f"t{tournament_id}",
                     is_finished=finished,
-                    is_league=league,
                 )
             )
         for user_id in (*(row[0] for row in _ROSTER), NEVER_PLAYED):
@@ -204,7 +199,7 @@ class HeroCompareBaselineScopeTests(TestCase):
     def test_the_cohort_excludes_every_row_it_is_meant_to(self) -> None:
         self.assertEqual({QUALIFIES}, self._candidates(**_FILTER_SETS[0]))
 
-    def test_a_role_only_cohort_spans_tournaments_but_not_leagues_or_unfinished(self) -> None:
+    def test_a_role_only_cohort_spans_tournaments_but_not_unfinished(self) -> None:
         self.assertEqual({QUALIFIES, OTHER_TOURNAMENT_ONLY}, self._candidates(**_FILTER_SETS[2]))
 
     def test_no_filters_means_every_user_including_one_who_never_played(self) -> None:

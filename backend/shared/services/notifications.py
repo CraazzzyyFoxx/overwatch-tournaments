@@ -139,6 +139,10 @@ class RegistrationDecisionPayload(_Payload):
     tournament_id: int
     tournament_name: str
     registration_id: int
+    #: The intake the decision is about; ``node_name`` only when the tournament has several (see
+    #: ``TournamentPhaseOpenedPayload``). Absent on rows written before P3.
+    registration_node_id: int | None = None
+    node_name: str | None = None
 
 
 class EncounterReportDisputedPayload(_Payload):
@@ -195,10 +199,14 @@ class TeamRejectedPayload(TeamRosterEventPayload):
 class TournamentPhaseOpenedPayload(_Payload):
     """Shared by ``registration.opened`` and ``check_in.opened`` -- the kind is
     the phase. ``closes_at`` is the phase row's ``ends_at``; absent when the
-    window has no end (or late registration lifts it)."""
+    window has no end (or late registration lifts it). ``node_name`` and
+    ``registration_node_id`` name the registration node whose phase opened
+    ("Day 3"); the check-in button needs the id to find the entry."""
 
     tournament_id: int
     tournament_name: str
+    node_name: str | None = None
+    registration_node_id: int | None = None
     closes_at: datetime | None = None
 
 

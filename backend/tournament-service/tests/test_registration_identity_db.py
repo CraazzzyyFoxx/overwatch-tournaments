@@ -21,6 +21,7 @@ from shared.services.ontology import project_disciplines
 from shared.services.roster import roster_engine
 from shared.services.team_format import save_tournament_format
 from shared.testing import create_test_async_engine
+from shared.testing.factories import add_entry, registration_node
 from src.services.registration.lifecycle import lifecycle_service
 from src.services.registration.serializers import serialize_registration
 from src.services.registration.service import registration_service
@@ -72,6 +73,8 @@ class RegistrationIdentityTests(IsolatedAsyncioTestCase):
                 end_date=datetime.now(UTC),
             )
             s.add(tournament)
+            await s.flush()
+            self.node_id = await registration_node(s, tournament.id)
             await s.commit()
             self.workspace_id, self.tournament_id = workspace.id, tournament.id
             self.auth_id, self.user_id = auth.id, user.id
@@ -98,9 +101,9 @@ class RegistrationIdentityTests(IsolatedAsyncioTestCase):
 
     async def test_manual_optional_identity_keeps_owned_player_and_unlinked_rows(self) -> None:
         async with self.Session() as s:
-            linked = await lifecycle_service.create_manual_registration(
+            linked_entry = await lifecycle_service.create_manual_registration(
                 s,
-                tournament_id=self.tournament_id,
+                self.node_id,
                 display_name="LoL Support",
                 admin_notes=None,
                 auth_user_id=self.auth_id,
@@ -114,19 +117,20 @@ class RegistrationIdentityTests(IsolatedAsyncioTestCase):
                     }
                 ],
             )
-            anonymous = await lifecycle_service.create_manual_registration(
+            anonymous_entry = await lifecycle_service.create_manual_registration(
                 s,
-                tournament_id=self.tournament_id,
+                self.node_id,
                 display_name="Anonymous",
                 admin_notes=None,
                 roles=[],
             )
+            linked, anonymous = linked_entry.registration, anonymous_entry.registration
             assert linked.identities == anonymous.identities == []
             assert linked.workspace_member.player_id == self.user_id
             assert anonymous.workspace_member_id is None
             ids = linked.id, anonymous.id
         async with self.Session() as s:
-            rosters = await roster_engine.for_tournament(s, self.tournament_id)
+            rosters = await roster_engine.for_registration_node(s, self.node_id)
         assert set(rosters) == set(ids)
         assert rosters[ids[0]].player_id == self.user_id
         assert rosters[ids[0]].rank_on("support") == 100
@@ -134,15 +138,16 @@ class RegistrationIdentityTests(IsolatedAsyncioTestCase):
 
     async def test_self_service_without_an_identity_question_keeps_owned_player(self) -> None:
         async with self.Session() as s:
-            registration = await registration_service.create_registration(
+            entry = await registration_service.create_registration(
                 s,
                 tournament_id=self.tournament_id,
+                registration_node_id=self.node_id,
                 workspace_id=self.workspace_id,
                 auth_user_id=self.auth_id,
                 values={},
                 schema=FormSchema(sections=[FormSection(key="details")]),
             )
-            registration_id = registration.id
+            registration_id = entry.registration_id
         async with self.Session() as s:
             loaded = await lifecycle_service.get_registration_by_id(s, registration_id)
             assert loaded.identities == []
@@ -155,13 +160,21 @@ class RegistrationIdentityTests(IsolatedAsyncioTestCase):
             username = await s.scalar(sa.select(models.AuthUser.username).where(models.AuthUser.id == self.auth_id))
         async with self.Session() as s:
             created = await lifecycle_service.create_manual_registration(
-                s, tournament_id=self.tournament_id, display_name="Walk-in", admin_notes=None, roles=[]
+                s, self.node_id, display_name="Walk-in", admin_notes=None, roles=[]
             )
-            approved = await lifecycle_service.approve_registration(s, created.id, reviewed_by=self.auth_id)
-            read = serialize_registration(approved, workspace_id=self.workspace_id, provider="riot")
+            approved = await lifecycle_service.approve_registration(
+                s, self.node_id, created.registration_id, reviewed_by=self.auth_id
+            )
+            read = serialize_registration(
+                approved.registration, approved, workspace_id=self.workspace_id, provider="riot"
+            )
             assert read.reviewed_by_username == username
-            checked = await lifecycle_service.check_in_registration(s, created.id, checked_in_by=self.auth_id)
-            read = serialize_registration(checked, workspace_id=self.workspace_id, provider="riot")
+            checked = await lifecycle_service.check_in_registration(
+                s, self.node_id, created.registration_id, checked_in_by=self.auth_id
+            )
+            read = serialize_registration(
+                checked.registration, checked, workspace_id=self.workspace_id, provider="riot"
+            )
             assert read.checked_in_by_username == username
 
     async def test_sheet_without_game_identity_persists_and_reloads(self) -> None:
@@ -169,6 +182,7 @@ class RegistrationIdentityTests(IsolatedAsyncioTestCase):
             s.add(
                 models.RegistrationGoogleSheetFeed(
                     tournament_id=self.tournament_id,
+                    registration_node_id=self.node_id,
                     source_url="http://sheet.example/optional",
                     sheet_id="optional",
                     mapping_config_json={
@@ -188,7 +202,7 @@ class RegistrationIdentityTests(IsolatedAsyncioTestCase):
                 result = await sheet_sync_service.sync_google_sheet_feed(s, self.tournament_id)
             assert result.created == 1 and result.errors == []
         async with self.Session() as s:
-            rosters = await roster_engine.for_tournament(s, self.tournament_id)
+            rosters = await roster_engine.for_registration_node(s, self.node_id)
         assert len(rosters) == 1
         roster = next(iter(rosters.values()))
         assert roster.display_name == "Optional Sheet Player"
@@ -211,6 +225,7 @@ class RegistrationIdentityTests(IsolatedAsyncioTestCase):
                 feed = await sheet_sync_service.upsert_google_sheet_feed(
                     s,
                     self.tournament_id,
+                    registration_node_id=self.node_id,
                     source_url="https://docs.google.com/spreadsheets/d/riot-identity/edit",
                     title=None,
                     auto_sync_enabled=False,
@@ -236,7 +251,7 @@ class RegistrationIdentityTests(IsolatedAsyncioTestCase):
                 assert keys == expected_keys
 
         async with self.Session() as s:
-            rosters = await roster_engine.for_tournament(s, self.tournament_id)
+            rosters = await roster_engine.for_registration_node(s, self.node_id)
             assert {row.identity.handle for row in rosters.values()} == set(handles)
             assert len({row.player_id for row in rosters.values()}) == 4
             for row in rosters.values():
@@ -272,6 +287,7 @@ class RegistrationIdentityTests(IsolatedAsyncioTestCase):
             )
             team = models.RegistrationTeam(
                 tournament_id=tournament.id,
+                registration_node_id=self.node_id,
                 workspace_id=self.workspace_id,
                 name="Identity",
                 name_normalized="identity",
@@ -280,7 +296,6 @@ class RegistrationIdentityTests(IsolatedAsyncioTestCase):
             wrong_provider = models.Registration(
                 tournament_id=tournament.id,
                 display_name=handle,
-                status="approved",
                 identities=[
                     models.RegistrationIdentity(
                         provider=other_provider,
@@ -291,6 +306,8 @@ class RegistrationIdentityTests(IsolatedAsyncioTestCase):
                 ],
             )
             s.add_all([team, wrong_provider])
+            await s.flush()
+            await add_entry(s, self.node_id, wrong_provider.id, status="approved")
             await s.commit()
             team_id, wrong_id = team.id, wrong_provider.id
             for candidate in (handle, handle.lower(), second_handle):
@@ -302,7 +319,7 @@ class RegistrationIdentityTests(IsolatedAsyncioTestCase):
                     slot_code="flex",
                 )
         async with self.Session() as s:
-            rosters = await roster_engine.for_tournament(s, self.tournament_id)
+            rosters = await roster_engine.for_registration_node(s, self.node_id)
             assert rosters[wrong_id].registration_team_id is None
             assert rosters[wrong_id].identity is None
             attached = [row for row in rosters.values() if row.registration_team_id == team_id]

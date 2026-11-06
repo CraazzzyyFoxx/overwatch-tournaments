@@ -381,10 +381,9 @@ class StageGenerationMixin(StageServiceBase):
     ) -> list[models.Encounter] | None:
         """Seed real teams into a bracket that was generated before it had any.
 
-        ``generate_encounters`` can build a bracket off the preceding group stage's
-        ``advance_count`` alone, which leaves every slot TBD. Once the groups finish
-        and the TENTATIVE inputs resolve, the shape is already right and only the
-        seeds are missing — so they are written into the existing encounters rather
+        ``generate_encounters`` can build a bracket before its stage is seated, which
+        leaves every slot TBD. Once the stage is seated, the shape is already right
+        and only the seeds are missing — so they are written into the existing encounters rather
         than throwing the bracket away, which would take its ids, schedule and
         advancement links with it.
 
@@ -478,7 +477,7 @@ class StageGenerationMixin(StageServiceBase):
         regenerate.
 
         A bracket stage with no seeds is the one exception. Rather than refuse, it
-        is built from the preceding group stage's ``advance_count`` × groups (see
+        is built from the row counts of its flow input (see
         ``_bracket_seed_counts``) with every slot left TBD, so the playoff can be
         laid out, scheduled and configured while the groups are still running;
         ``_fill_bracket_seeds`` writes the teams into it once they resolve.

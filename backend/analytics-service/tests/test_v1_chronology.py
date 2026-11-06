@@ -41,6 +41,12 @@ shift_features = ow_module("features.shift_features")
 player_profile = ow_module("features.player_profile")
 
 JAN, FEB, MAR, MAY = (datetime(2026, month, 1, tzinfo=UTC) for month in (1, 2, 3, 5))
+JAN_3, JAN_9 = datetime(2026, 1, 3, tzinfo=UTC), datetime(2026, 1, 9, tzinfo=UTC)
+FEB_2, FEB_9 = datetime(2026, 2, 2, tzinfo=UTC), datetime(2026, 2, 9, tzinfo=UTC)
+# Each history entry is (started, ended, rank, wins, losses).
+HISTORY = ((JAN, JAN, 1500, 3, 0), (FEB, FEB, 2500, 0, 3), (MAR, MAR, 2500, 2, 1))
+# The first two start together; the first ends first.
+TIED = ((JAN, JAN_3, 1500, 3, 0), (JAN, JAN_9, 2500, 0, 3), (MAR, MAR, 2500, 2, 1))
 
 
 @compiles(JSONB, "sqlite")
@@ -53,13 +59,13 @@ def _compile_array_sqlite(type_, compiler, **kw):  # noqa: ANN001, ANN003, ANN20
     return "JSON"
 
 
-def _analytics_rows(ids: tuple[int, int, int]) -> list[dict]:
+def _analytics_rows(ids: tuple[int, int, int], history=HISTORY) -> list[dict]:  # noqa: ANN001
     """One tank's January, February and March tournaments, under the given ids, in the query's id order."""
-    history = ((JAN, 1500, 3, 0), (FEB, 2500, 0, 3), (MAR, 2500, 2, 1))
     rows = [
         {
             "tournament_id": tid,
             "started_at": started,
+            "ended_at": ended,
             "team_id": tid,
             "player_name": "p",
             "player_id": 1000 + tid,
@@ -73,23 +79,25 @@ def _analytics_rows(ids: tuple[int, int, int]) -> list[dict]:
             "team_count": None,
             "impact_points": None,
         }
-        for tid, (started, rank, wins, losses) in zip(ids, history, strict=True)
+        for tid, (started, ended, rank, wins, losses) in zip(ids, history, strict=True)
     ]
     return sorted(rows, key=lambda row: row["tournament_id"])
 
 
-async def _frame(ids: tuple[int, int, int]) -> pd.DataFrame:
+async def _frame(ids: tuple[int, int, int], history=HISTORY) -> pd.DataFrame:  # noqa: ANN001
     with (
-        patch.object(analytics_flows.analytics_service, "get_analytics", AsyncMock(return_value=_analytics_rows(ids))),
+        patch.object(
+            analytics_flows.analytics_service, "get_analytics", AsyncMock(return_value=_analytics_rows(ids, history))
+        ),
         patch.object(analytics_flows.analytics_service, "get_tournament_version_ids", AsyncMock(return_value={})),
         patch.object(analytics_flows, "load_source_grids", AsyncMock(return_value={})),
     ):
         return await analytics_flows.flows_service.get_data_frame(SimpleNamespace(), discipline="overwatch")
 
 
-async def _scored_by_date(ids: tuple[int, int, int]) -> pd.DataFrame:
+async def _scored_by_date(ids: tuple[int, int, int], history=HISTORY) -> pd.DataFrame:  # noqa: ANN001
     """The scored frame's January, February and March rows, in that order."""
-    df = await _frame(ids)
+    df = await _frame(ids, history)
     df = ratings.compute_points_shifts(df)
     df = ratings.compute_linear_metrics(df)
     return df.set_index("tournament_id").loc[list(ids)].reset_index()
@@ -127,6 +135,14 @@ class PointsLinearChronologyTests(IsolatedAsyncioTestCase):
         self.assertTrue(february["is_changed"])
         self.assertEqual(2500, march["previous_cost"])
         self.assertFalse(march["is_changed"])
+
+    async def test_equal_starts_score_in_end_date_order(self) -> None:
+        in_order = await _scored_by_date((1, 2, 3), TIED)
+        reversed_tie = await _scored_by_date((2, 1, 3), TIED)
+
+        for column in ("previous_cost", "previous_div", "is_changed", "points_shift", "linear_stable_shift"):
+            with self.subTest(column=column):
+                pd.testing.assert_series_equal(in_order[column], reversed_tie[column])
 
 
 class AtomicRecalculationTests(IsolatedAsyncioTestCase):
@@ -195,10 +211,14 @@ class _Database:
     TABLES = (
         models.Tournament.__table__,
         models.Player.__table__,
+        # Joined by the member's-tournament-row predicate (``is_member_tournament_row``).
+        models.Team.__table__,
         PlayerRole.__table__,
         CatalogRole.__table__,
         RoleDimension.__table__,
         models.WorkspaceMember.__table__,
+        models.ParticipantResult.__table__,
+        models.FlowNode.__table__,
         models.AnalyticsAlgorithm.__table__,
         models.AnalyticsPerformance.__table__,
         # Read (empty) by the profile's match-log stats query.
@@ -220,6 +240,7 @@ class _Database:
         self.shim = _AsyncSessionShim(self.session)
         self._next_id = 1
         self._members: dict[int, int] = {}
+        self._teams: set[int] = set()
         self.insert(
             RoleDimension.__table__,
             id=1,
@@ -243,7 +264,7 @@ class _Database:
         self._next_id += 1
         return self._next_id
 
-    def tournament(self, tournament_id: int, started: datetime) -> None:
+    def tournament(self, tournament_id: int, started: datetime, ended: datetime | None = None) -> None:
         self.insert(
             models.Tournament.__table__,
             id=tournament_id,
@@ -252,12 +273,22 @@ class _Database:
             slug=f"tournament-{tournament_id}",
             is_hidden=False,
             start_date=started,
+            end_date=ended,
         )
 
     def player(self, tournament_id: int, *, user_id: int, rank: int) -> int:
         if user_id not in self._members:
             self._members[user_id] = self._id()
             self.insert(models.WorkspaceMember.__table__, id=self._members[user_id], workspace_id=1, player_id=user_id)
+        if tournament_id not in self._teams:
+            self._teams.add(tournament_id)
+            self.insert(
+                models.Team.__table__,
+                id=tournament_id,
+                tournament_id=tournament_id,
+                name=f"Team {tournament_id}",
+                balancer_name=f"Team {tournament_id}",
+            )
         player_id = self._id()
         self.insert(
             models.Player.__table__,
@@ -321,6 +352,16 @@ class RankHistoryChronologyTests(_DatabaseTestCase):
         history = await self._history([61])
 
         # 62 started before 61 (in the history); 63 started after it (beyond the horizon).
+        self.assertEqual([62, 61], history["tournament_id"].tolist())
+
+    async def test_equal_starts_follow_end_date(self) -> None:
+        for tid, ended, rank in ((61, FEB_9, 2500), (62, FEB_2, 1500)):
+            self.db.tournament(tid, FEB, ended)
+            self.db.player(tid, user_id=10, rank=rank)
+
+        history = await self._history([61])
+
+        # 62 has the higher id but ended first: it is 61's history, not its future.
         self.assertEqual([62, 61], history["tournament_id"].tolist())
 
 

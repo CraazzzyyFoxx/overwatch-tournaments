@@ -44,7 +44,18 @@ from shared.services.division_grid.access import (
 from src import schemas
 from src.clients.challonge import challonge_client
 from src.core import auth
-from src.rpc._helpers import _bool, _dump, _identity, _path_int, _payload, _q1, _require_id, _require_q1, _run
+from src.rpc._helpers import (
+    _bool,
+    _dump,
+    _identity,
+    _path_int,
+    _payload,
+    _q1,
+    _registration_node_id,
+    _require_id,
+    _require_q1,
+    _run,
+)
 from src.rpc._s3 import get_s3
 from src.services.admin import tournament as tournament_admin_service
 from src.services.challonge import sync as challonge_sync
@@ -291,7 +302,6 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             workspace_id = _require_q1(data, "workspace_id", int)
             ensure_workspace_permission(user, workspace_id, "tournament", "create")
-            is_league = _q1(data, "is_league", _bool, default=False)
             start_date = _require_q1(data, "start_date", date.fromisoformat)
             end_date = _require_q1(data, "end_date", date.fromisoformat)
             challonge_slug = _require_q1(data, "challonge_slug")
@@ -311,7 +321,6 @@ def register(broker: Any, logger: Any) -> None:
                 after={
                     "challonge_slug": challonge_slug,
                     "discipline": discipline,
-                    "is_league": is_league,
                     "start_date": start_date,
                     "end_date": end_date,
                     "division_grid_version_id": division_grid_version_id,
@@ -322,7 +331,6 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 workspace_id=workspace_id,
                 discipline=discipline,
-                is_league=is_league,
                 start_date=start_date,
                 end_date=end_date,
                 challonge_slug=challonge_slug,
@@ -409,6 +417,7 @@ def register(broker: Any, logger: Any) -> None:
                 entity_type="tournament",
                 entity_id=tournament_id,
                 after={
+                    "registration_node_id": body.registration_node_id,
                     "source_url": body.source_url,
                     "title": body.title,
                     "auto_sync_enabled": body.auto_sync_enabled,
@@ -418,6 +427,7 @@ def register(broker: Any, logger: Any) -> None:
             feed = await sheet_sync.sheet_sync_service.upsert_google_sheet_feed(
                 session,
                 tournament_id,
+                registration_node_id=body.registration_node_id,
                 source_url=body.source_url,
                 title=body.title,
                 auto_sync_enabled=body.auto_sync_enabled,
@@ -539,6 +549,7 @@ def register(broker: Any, logger: Any) -> None:
             await auth.require_tournament_id_permission(
                 session, user, tournament_id=tournament_id, resource="player", action="read"
             )
+            registration_node_id = await _registration_node_id(session, data, tournament_id)
             export_format = _q1(data, "format") or PLAYER_EXPORT_DEFAULT_FORMAT
             if export_format not in PLAYER_EXPORT_FORMATS:
                 raise HTTPException(
@@ -555,6 +566,7 @@ def register(broker: Any, logger: Any) -> None:
             payload = await player_export_service.export(
                 session,
                 tournament_id,
+                registration_node_id,
                 export_format=export_format,
                 include_private=bool(_q1(data, "include_private", _bool, default=False)),
             )

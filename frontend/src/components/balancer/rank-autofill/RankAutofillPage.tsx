@@ -45,9 +45,11 @@ function useDebouncedValue<T>(value: T, delay: number): T {
 
 // D25: rendered by both the hub sub-route (tournament from the path) and the
 // legacy balancer route (tournament from the ?tournament query) until T14.
+// The registration node (`?node=`) names whose entries are filled.
 export default function RankAutofillPage({
-  tournamentId
-}: Readonly<{ tournamentId: number | null }>) {
+  tournamentId,
+  registrationNodeId
+}: Readonly<{ tournamentId: number | null; registrationNodeId: number | null }>) {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const tournamentQuery = useQuery({
@@ -78,13 +80,14 @@ export default function RankAutofillPage({
   const debouncedRequest = useDebouncedValue(previewRequest, 300);
 
   const previewQuery = useQuery({
-    queryKey: balancerQueryKeys.rankAutofillPreview(tournamentId, debouncedRequest),
+    queryKey: balancerQueryKeys.rankAutofillPreview(tournamentId, registrationNodeId, debouncedRequest),
     queryFn: () =>
       balancerAdminService.previewRegistrationRankAutofill(
         tournamentId as number,
+        registrationNodeId as number,
         debouncedRequest
       ),
-    enabled: tournamentId !== null,
+    enabled: tournamentId !== null && registrationNodeId !== null,
     placeholderData: keepPreviousData
   });
 
@@ -105,17 +108,17 @@ export default function RankAutofillPage({
 
   const applyMutation = useMutation({
     mutationFn: () => {
-      if (!tournamentId) {
+      if (!tournamentId || registrationNodeId === null) {
         throw new Error(t("rankAutofill.noTournamentTitle"));
       }
-      return balancerAdminService.applyRegistrationRankAutofill(tournamentId, {
+      return balancerAdminService.applyRegistrationRankAutofill(tournamentId, registrationNodeId, {
         ...previewRequest,
         registration_ids: Array.from(selectedIds)
       });
     },
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({
-        queryKey: balancerQueryKeys.registrations(tournamentId)
+        queryKey: balancerQueryKeys.registrations(tournamentId, registrationNodeId)
       });
       await previewQuery.refetch();
       notify.success(t("rankAutofill.successTitle"), {

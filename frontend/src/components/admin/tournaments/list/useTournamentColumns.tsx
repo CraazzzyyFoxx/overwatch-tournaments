@@ -11,20 +11,13 @@ import { TOURNAMENT_STATUS_TONE } from "@/app/admin/tournaments/[id]/components/
 import { formatDateRange } from "@/lib/datetime";
 import { useFormatter } from "@/lib/datetime/client";
 import { formatTournamentStages } from "@/lib/tournament/stages";
+import { displayStatus } from "@/lib/tournament/status";
 import type { DisciplineDescriptor } from "@/types/discipline.types";
 import type { Tournament } from "@/types/tournament.types";
 
-/** The tournament's name, a league marked as one. */
+/** The tournament's name. */
 function TournamentName({ tournament }: Readonly<{ tournament: Tournament }>) {
-  const t = useTranslations("adminTournaments.list");
-  return (
-    <span className="font-medium">
-      {tournament.name}
-      {tournament.is_league ? (
-        <span className="ml-2 text-caption font-normal text-muted-foreground">{t("type.league")}</span>
-      ) : null}
-    </span>
-  );
+  return <span className="font-medium">{tournament.name}</span>;
 }
 
 /**
@@ -42,7 +35,8 @@ function TournamentStatus({ tournament }: Readonly<{ tournament: Tournament }>) 
       </span>
     );
   }
-  return <StatusPill tone={TOURNAMENT_STATUS_TONE[tournament.status]}>{tStatus(tournament.status)}</StatusPill>;
+  const shown = displayStatus(tournament);
+  return <StatusPill tone={TOURNAMENT_STATUS_TONE[shown]}>{tStatus(shown)}</StatusPill>;
 }
 
 /**

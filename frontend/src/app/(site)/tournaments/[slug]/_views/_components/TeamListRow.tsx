@@ -76,7 +76,7 @@ export const TeamListRow = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const variant = overviewVariant(tournament.status);
+  const variant = overviewVariant(tournament);
   // A live leader is not on the podium yet: `placement` moves with every result.
   const medal = variant === "completed";
   // Columns with nothing to say are not drawn. Before the first match no team

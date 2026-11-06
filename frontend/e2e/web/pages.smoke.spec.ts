@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 import { Api, assertStatus, poll } from "../support/api";
 import { AUTH_DIR, BASE_URL } from "../support/env";
 import { expect, openPage, test as base } from "../support/fixtures";
-import { createStage, generateStage, listEncounters, openRegistration, seedTeams, setResult } from "../support/flows";
+import { completeStages, createStage, formTeams, startStage, listEncounters, openRegistration, seedTeams, setResult } from "../support/flows";
 import {
   ROUTES,
   TOURNAMENT_CASES,
@@ -15,7 +15,7 @@ import {
   type TournamentCase,
   type ViewerKind,
 } from "../support/routes";
-import { createTournament, createWorkspace, setStatus, uniq } from "../support/seed";
+import { createTournament, createWorkspace, nodeOf, transitionNode, uniq } from "../support/seed";
 import { createUser, type TestUser } from "../support/users";
 
 const APP_DIR = path.join(import.meta.dirname, "..", "..", "src", "app");
@@ -25,8 +25,9 @@ const NOT_FOUND_TITLE = "That route is off the board.";
 /** Two full-roster teams in a generated single-elimination stage: one open encounter. */
 async function seedBracket(api: Api, tournamentId: number) {
   const teams = await seedTeams(api, tournamentId, 2);
+  await formTeams(api, tournamentId);
   const stage = await createStage(api, tournamentId, teams.map((team) => team.id), { stageType: "single_elimination" });
-  await generateStage(api, stage.id);
+  await startStage(api, stage);
   const [encounter] = await listEncounters(api, tournamentId, stage.id);
   return { teams, encounter };
 }
@@ -51,7 +52,6 @@ async function seedSmoke(api: Api, owner: TestUser): Promise<SmokeData> {
   await openRegistration(api, registration.id);
 
   const liveBracket = await seedBracket(api, live.id);
-  await setStatus(api, live.id, "live");
   // A BattleTag-shaped name exercises the `Name#1234` ↔ `/users/Name-1234` slug round trip.
   const profile = await api.post<{ id: number; name: string }>("/api/v1/admin/users", { name: `${uniq("SmokePlayer")}#1234` });
   await api.post(
@@ -68,11 +68,18 @@ async function seedSmoke(api: Api, owner: TestUser): Promise<SmokeData> {
   );
 
   const finished = await seedBracket(api, completed.id);
-  await setStatus(api, completed.id, "live");
   await setResult(api, finished.encounter, [2, 0], "smoke seed");
-  await setStatus(api, completed.id, "completed");
+  // The standings usually close the stage after the result; a stage still live is completed here, and the tournament derives `completed`.
+  await completeStages(api, completed.id);
 
-  await setStatus(api, draft.id, "draft");
+  // The draft room works on a forming formation, whose input (the intake) must be closed first.
+  const { registrationNodeId } = await openRegistration(api, draft.id);
+  await transitionNode(api, registrationNodeId, "closed");
+  const formation = await nodeOf(api, draft.id, "formation");
+  await api.put(`/api/v1/admin/tournaments/${draft.id}/flow`, {
+    nodes: [{ id: formation.id, kind: formation.kind, name: formation.name, config: { ...formation.config, mode: "draft" } }],
+  });
+  await transitionNode(api, formation.id, "forming");
   await api.post(`/api/v1/balancer/draft/tournaments/${draft.id}/sessions`, {});
 
   await api.post(`/api/v1/admin/ws/${workspace.id}/achievements/rules/seed?discipline=overwatch`);
@@ -151,7 +158,7 @@ async function seedSmoke(api: Api, owner: TestUser): Promise<SmokeData> {
   };
 }
 
-type Viewer = Pick<TestUser, "accessToken" | "refreshToken">;
+type Viewer = Pick<TestUser, "email">;
 
 const test = base.extend<object, { smoke: SmokeData; viewer: Viewer }>({
   smoke: [

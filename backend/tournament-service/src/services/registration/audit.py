@@ -41,6 +41,10 @@ ENTITY = "registration"
 _ADMIN_FIELDS: dict[str, str] = {
     "display_name": "display_name",
     "admin_notes": "admin_notes",
+}
+
+# The same, for the fields that live on the registration ENTRY (the node being edited).
+_ENTRY_FIELDS: dict[str, str] = {
     "status": "status",
     "balancer_status": "balancer_status",
     "exclude_reason": "exclude_reason",
@@ -51,10 +55,12 @@ _ADMIN_FIELDS: dict[str, str] = {
 # ``identity_*`` are rows, handled below.
 _ANSWER_FIELDS: dict[str, str] = {
     "stream_pov": "stream_pov",
-    "reserve": "is_reserve",
     "public_notes": "public_notes",
     "organizer_notes": "organizer_notes",
 }
+
+# Answer key -> ``RegistrationEntry`` attribute.
+_ENTRY_ANSWER_FIELDS: dict[str, str] = {"reserve": "is_reserve"}
 
 # Columns the service persists as NULL when handed an empty container, so an
 # empty request value and a stored NULL are the same state -- not a change.
@@ -142,6 +148,7 @@ def _requested_value(attr: str, value: Any) -> Any:
 def profile_changes(
     registration: models.Registration,
     requested: dict[str, Any],
+    entry: models.RegistrationEntry | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Before/after images narrowed to the fields this request really changes.
 
@@ -149,6 +156,9 @@ def profile_changes(
     fields ``None`` means "left alone"; inside ``answers`` ABSENCE means that,
     because an explicit blank there is how the editor CLEARS an answer and the
     feed has to show it.
+
+    ``entry`` is the registration's participation in the node being edited; the fields that live there (status,
+    balancer status, ``reserve``) are compared only when there is one.
     """
     before: dict[str, Any] = {}
     after: dict[str, Any] = {}
@@ -170,6 +180,15 @@ def profile_changes(
         if key not in answers:
             continue
         record(key, getattr(registration, attr), _requested_value(attr, answers[key]))
+
+    if entry is not None:
+        for field, attr in _ENTRY_FIELDS.items():
+            new = requested.get(field)
+            if new is not None:
+                record(field, getattr(entry, attr), new)
+        for key, attr in _ENTRY_ANSWER_FIELDS.items():
+            if key in answers:
+                record(key, getattr(entry, attr), answers[key])
 
     # Identity answers are LISTS (primary first), so the two images are lists too:
     # adding a smurf is a change, and so is promoting one to primary. The

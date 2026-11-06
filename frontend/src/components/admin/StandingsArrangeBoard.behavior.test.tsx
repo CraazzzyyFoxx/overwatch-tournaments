@@ -94,7 +94,7 @@ function standing(team_id: number, position: number, is_pinned = false): Standin
     team: { id: team_id, name: `Team ${team_id}`, image_url: null } as unknown as Team,
     tournament: null,
     stage: null,
-    stage_item: { id: 9, stage_id: 5, name: "Group A", type: "round_robin", order: 1, advance_count: null, inputs: [] },
+    stage_item: { id: 9, stage_id: 5, name: "Group A", type: "round_robin", order: 1, inputs: [] },
     matches_history: []
   };
 }

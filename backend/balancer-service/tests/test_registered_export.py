@@ -84,17 +84,24 @@ class _FakeSession:
     """Serves the export's three reads; the engine itself is patched out."""
 
     def __init__(self, *, teams: list[object], registrations: list[object]) -> None:
-        self._queued: list[list[object]] = [teams, registrations]
+        self._teams = teams
+        #: ``(registration, entry)`` rows, as the one member read returns them; later executes find nothing.
+        self._rows: list[list[object]] = [
+            [
+                (registration, SimpleNamespace(is_substitute=registration.is_substitute))
+                for registration in registrations
+            ]
+        ]
 
     async def scalars(self, statement: object) -> list[object]:
-        return self._queued.pop(0)
+        return self._teams
 
     async def scalar(self, statement: object) -> int:
         return 42  # workspace_id
 
     async def execute(self, statement: object) -> Mock:
         result = Mock()
-        result.all.return_value = []
+        result.all.return_value = self._rows.pop(0) if self._rows else []
         return result
 
 
@@ -117,7 +124,7 @@ async def _export(shape, roster: PlayerRoster, *, slot_code: str | None = "tank"
         "resolve",
         AsyncMock(return_value={roster.registration_id: roster}),
     ):
-        payload = await build_registered_export(session, 1, shape)
+        payload = await build_registered_export(session, 1, shape, [5])
     assert len(payload.teams) == 1
     return payload.teams[0].members[0]
 
@@ -272,7 +279,7 @@ class NonRatedAssignmentTests(IsolatedAsyncioTestCase):
         session = _FakeSession(teams=[_team()], registrations=[registration])
         roster = _roster(roles=(_role(HeroClass.tank, 3000),))
         with patch.object(registered.roster_engine, "resolve", AsyncMock(return_value={1: roster})):
-            payload = await build_registered_export(session, 1, ROLE_SHAPE)
+            payload = await build_registered_export(session, 1, ROLE_SHAPE, [5])
         member = payload.teams[0].members[0]
         assert member.non_rated_roles == (shotcaller,)
         assert member.slot_code == "tank"

@@ -6,11 +6,7 @@ import { describe, expect, it } from "vitest";
 import en from "@/i18n/messages/en.json";
 import ru from "@/i18n/messages/ru.json";
 
-import {
-  SCHEDULABLE_PHASES,
-  TOURNAMENT_PHASES,
-  VALID_TRANSITIONS
-} from "./lifecycle";
+import { NODE_TRANSITIONS, SCHEDULE_PHASES, TOURNAMENT_PHASES } from "./lifecycle";
 
 /**
  * The lifecycle machine exists twice — once in Python, once in TypeScript —
@@ -26,7 +22,7 @@ import {
  */
 const BACKEND_CORE = join(import.meta.dirname, "..", "..", "..", "..", "backend", "shared", "core");
 const ENUMS_PY = readFileSync(join(BACKEND_CORE, "enums.py"), "utf8");
-const MACHINE_PY = readFileSync(join(BACKEND_CORE, "tournament_state.py"), "utf8");
+const FLOW_STATE_PY = readFileSync(join(BACKEND_CORE, "flow_state.py"), "utf8");
 
 /**
  * One top-level Python construct: its opening line plus everything indented
@@ -55,50 +51,62 @@ const WIRE_VALUE: Record<string, string> = Object.fromEntries(
 
 const ALL_STATUSES = Object.values(WIRE_VALUE).sort();
 
-function wire(member: string): string {
-  const value = WIRE_VALUE[member];
-  if (value === undefined) throw new Error(`TournamentStatus.${member} is not in the enum`);
-  return value;
-}
-
-function members(block: string): string[] {
-  return [...block.matchAll(/TournamentStatus\.(\w+)/g)].map((entry) => wire(entry[1]));
-}
-
-describe("tournament lifecycle parity with backend/shared/core", () => {
-  it("carries every status the enum defines, and no invented one", () => {
-    expect([...TOURNAMENT_PHASES].sort()).toEqual(ALL_STATUSES);
+describe("tournament status parity with backend/shared/core/enums.py", () => {
+  it("carries every status the enum defines, in enum order, and no invented one", () => {
+    expect([...TOURNAMENT_PHASES]).toEqual(Object.values(WIRE_VALUE));
     // Every surface names a status through `common.statusBadge.<status>`.
     for (const messages of [en, ru]) {
       expect(ALL_STATUSES.filter((status) => !(status in messages.common.statusBadge))).toEqual([]);
     }
   });
+});
 
-  it("orders the phases exactly as PHASE_ORDER does", () => {
-    const ordered = [
-      ...section(MACHINE_PY, /^PHASE_ORDER: dict/m).matchAll(/TournamentStatus\.(\w+): (\d+)/g)
-    ]
-      .sort((a, b) => Number(a[2]) - Number(b[2]))
-      .map((entry) => wire(entry[1]));
+/** Member name -> wire value of one Python `StrEnum`. */
+function enumWire(className: string): Record<string, string> {
+  return Object.fromEntries(
+    [...section(ENUMS_PY, new RegExp(`class ${className}\\(StrEnum\\):`)).matchAll(/(\w+) = "([a-z_]+)"/g)].map(
+      (entry) => [entry[1], entry[2]]
+    )
+  );
+}
 
-    expect([...TOURNAMENT_PHASES]).toEqual(ordered);
-  });
-
-  it("schedules exactly the phases SCHEDULABLE_STATUSES allows", () => {
-    const python = members(section(MACHINE_PY, /^SCHEDULABLE_STATUSES/m));
-
-    expect([...SCHEDULABLE_PHASES].sort()).toEqual(python.sort());
-  });
-
-  it("allows exactly the transitions _VALID_TRANSITIONS allows", () => {
-    const block = section(MACHINE_PY, /^_VALID_TRANSITIONS/m);
-    const python: Record<string, string[]> = {};
-    for (const entry of block.matchAll(/TournamentStatus\.(\w+): frozenset\(\s*\{([^}]*)\}/g)) {
-      python[wire(entry[1])] = members(entry[2]).sort();
+describe("node lifecycle parity with backend/shared/core/flow_state.py", () => {
+  it("allows exactly the node transitions _VALID_TRANSITIONS allows", () => {
+    const kinds = enumWire("FlowNodeKind");
+    const statuses = enumWire("FlowNodeStatus");
+    const block = section(FLOW_STATE_PY, /^_VALID_TRANSITIONS/m);
+    const python: Record<string, Record<string, string[]>> = {};
+    for (const kind of block.matchAll(/_K\.(\w+): \{([\s\S]*?)\n    \},/g)) {
+      const moves: Record<string, string[]> = {};
+      for (const move of kind[2].matchAll(/_S\.(\w+): frozenset\(\{([^}]*)\}\)/g)) {
+        moves[statuses[move[1]]] = [...move[2].matchAll(/_S\.(\w+)/g)]
+          .map((target) => statuses[target[1]])
+          .sort();
+      }
+      python[kinds[kind[1]]] = moves;
     }
 
     const typescript = Object.fromEntries(
-      Object.entries(VALID_TRANSITIONS).map(([from, to]) => [from, [...to].sort()])
+      Object.entries(NODE_TRANSITIONS).map(([kind, moves]) => [
+        kind,
+        Object.fromEntries(Object.entries(moves).map(([from, to]) => [from, [...to].sort()]))
+      ])
+    );
+
+    expect(typescript).toEqual(python);
+  });
+
+  it("schedules exactly the phases SCHEDULE_PHASES allows", () => {
+    const kinds = enumWire("FlowNodeKind");
+    const block = section(FLOW_STATE_PY, /^SCHEDULE_PHASES/m);
+    const python = Object.fromEntries(
+      [...block.matchAll(/_K\.(\w+): frozenset\(\{([^}]*)\}\)/g)].map((entry) => [
+        kinds[entry[1]],
+        [...entry[2].matchAll(/"(\w+)"/g)].map((phase) => phase[1]).sort()
+      ])
+    );
+    const typescript = Object.fromEntries(
+      Object.entries(SCHEDULE_PHASES).map(([kind, phases]) => [kind, [...phases].sort()])
     );
 
     expect(typescript).toEqual(python);

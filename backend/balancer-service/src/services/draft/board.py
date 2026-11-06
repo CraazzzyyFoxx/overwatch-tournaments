@@ -206,12 +206,12 @@ class DraftBoardService:
         self.form_versions_repo = form_versions_repo
         self.feasibility = feasibility
 
-    async def get_active_session(self, session: AsyncSession, tournament_id: int) -> DraftSession | None:
-        active = await self.sessions_repo.get_active_for_tournament(session, tournament_id)
+    async def get_active_session(self, session: AsyncSession, formation_node_id: int) -> DraftSession | None:
+        active = await self.sessions_repo.get_active_for_formation_node(session, formation_node_id)
         if active is not None:
             return active
         # Fall back to the most recent (e.g. COMPLETED) session for read-only views.
-        return await self.sessions_repo.get_latest_for_tournament(session, tournament_id)
+        return await self.sessions_repo.get_latest_for_formation_node(session, formation_node_id)
 
     async def visible_custom_fields(self, session: AsyncSession, tournament_id: int) -> list[VisibleCustomField]:
         """The tournament's PUBLIC custom questions, in schema order.
@@ -266,9 +266,9 @@ class DraftBoardService:
         shape = await self.feasibility.resolve_shape(session, draft_session)
         return schemas.DraftSessionRead.from_session(draft_session, shape=shape, discipline=draft_session.discipline)
 
-    async def list_sessions(self, session: AsyncSession, tournament_id: int) -> list[schemas.DraftSessionRead]:
-        """Every session of a tournament, newest first."""
-        rows = await self.sessions_repo.list_by_tournament(session, tournament_id)
+    async def list_sessions(self, session: AsyncSession, formation_node_id: int) -> list[schemas.DraftSessionRead]:
+        """Every session of a formation node, newest first."""
+        rows = await self.sessions_repo.list_by_formation_node(session, formation_node_id)
         # The shape lookup behind session_read is cache-backed at both
         # levels, so one call per row costs a dict hit, not a query.
         return [await self.session_read(session, row) for row in rows]

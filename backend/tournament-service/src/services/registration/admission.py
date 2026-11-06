@@ -33,11 +33,13 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.repository import RegistrationEntryRepository
 from src.core.clients import subscription_resolver
 from src.services.admission import AdmissionConfig, AdmissionEvaluation, AdmissionStage
 from src.services.admission.gates import assert_admitted
 from src.services.admission.resolve import resolve_admission, resolve_admission_for_gate
-from src.services.registration._common import _common_service
+from src.services.registration._common import _common_service, entries_of
+from src.services.registration.windows import node_config
 
 __all__ = ("assert_admitted_at", "assert_roster_admitted", "load_admission_config")
 
@@ -45,14 +47,15 @@ __all__ = ("assert_admitted_at", "assert_roster_admitted", "load_admission_confi
 async def load_admission_config(
     session: AsyncSession,
     tournament_id: int,
+    registration_node_id: int,
     *,
     resolver: Any | None = None,
     form: models.RegistrationForm | None = None,
 ) -> AdmissionConfig:
-    """Assemble the tournament's toggles and its workspace's rule into one value.
+    """Assemble the intake's toggles and its workspace's rule into one value.
 
-    The two owners stay separate on purpose and are folded only here: the form
-    holds whether this tournament requires the thing, the workspace holds the rule
+    The two owners stay separate on purpose and are folded only here: the registration node holds whether this
+    intake requires the thing, the workspace holds the rule
     itself, so a new tournament does not re-declare which providers count.
 
     The rule is fetched only when the toggle is on. That ordering is the whole
@@ -68,16 +71,19 @@ async def load_admission_config(
     already read, if any.
     """
     form = form or await _common_service.get_registration_form(session, tournament_id)
+    node = await _common_service.ensure_registration_node(session, tournament_id, registration_node_id)
+    config = node_config(node)
     rule = None
-    if form is not None and form.require_subscription:
+    if form is not None and config.require_subscription:
         rule = await (resolver or subscription_resolver(session)).load_requirement(workspace_id=form.workspace_id)
-    return AdmissionConfig.from_form(form, subscription_rule=rule)
+    return AdmissionConfig.from_form(form, config, subscription_rule=rule)
 
 
 async def assert_admitted_at(
     session: AsyncSession,
     registration: Any | None,
     *,
+    registration_node_id: int,
     tournament_id: int,
     auth_user_id: int,
     stage: AdmissionStage,
@@ -90,6 +96,9 @@ async def assert_admitted_at(
     The evaluation comes back so a caller can read the same answer the gate
     decided on.
 
+    ``registration_node_id`` is the intake being gated: the lifecycle facts the evaluation reads (approved, pool
+    state, checked in) are the registration's entry in that node.
+
     ``registration`` is ``None`` at sign-up, where the row does not exist yet, and
     ``auth_user_id`` is what identifies the subject in that case (see
     ``resolve_admission_for_gate``). One consequence matters: with no row every
@@ -100,13 +109,19 @@ async def assert_admitted_at(
     in the balancer pool), not a requirement, and it is not this gate's business.
     """
     resolver = subscription_resolver(session, release=session.commit)
-    config = await load_admission_config(session, tournament_id, resolver=resolver, form=form)
+    config = await load_admission_config(session, tournament_id, registration_node_id, resolver=resolver, form=form)
+    entry = (
+        await RegistrationEntryRepository().get_for(session, registration_node_id, registration.id)
+        if registration is not None
+        else None
+    )
     evaluation = await resolve_admission_for_gate(
         session,
         registration,
         config=config,
         resolver=resolver,
         stage=stage,
+        entry=entry,
         auth_user_id=auth_user_id,
     )
     await session.commit()
@@ -118,6 +133,7 @@ async def assert_roster_admitted(
     session: AsyncSession,
     registrations: Sequence[models.Registration],
     *,
+    registration_node_id: int,
     tournament_id: int,
 ) -> None:
     """The check-in gate for a whole roster: one config read, one provider batch.
@@ -127,10 +143,12 @@ async def assert_roster_admitted(
     ``registration_team`` (team-scoped subscription coverage reads it).
     """
     resolver = subscription_resolver(session, release=session.commit)
-    config = await load_admission_config(session, tournament_id, resolver=resolver)
+    config = await load_admission_config(session, tournament_id, registration_node_id, resolver=resolver)
+    entries = await entries_of(session, registration_node_id, registrations)
     evaluations = await resolve_admission(
         session,
         registrations,
+        entries=entries,
         config=config,
         resolver=resolver,
         stage=AdmissionStage.check_in,

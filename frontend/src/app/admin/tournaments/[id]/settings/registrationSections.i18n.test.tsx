@@ -70,6 +70,17 @@ vi.mock("@/lib/notify", () => ({
 
 const MESSAGES = { en, ru } as const;
 
+// The intake settings are the registration node's config, not the form's.
+const REGISTRATION_NODE = {
+  id: 21,
+  kind: "registration",
+  name: "Registration",
+  status: "open",
+  config: { require_subscription: true, max_participants: 60, max_substitutes: 2 },
+  schedule: [],
+  stage_id: null
+};
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -104,17 +115,14 @@ beforeEach(() => {
     workspace_id: 3,
     discipline: "overwatch",
     identity_provider: "battlenet",
-    team_formation: "registration"
+    flow_nodes: [{ ...REGISTRATION_NODE, config: { ...REGISTRATION_NODE.config, intake: "team" } }]
   });
   getRegistrationForm.mockReset().mockResolvedValue({
     id: 9,
     tournament_id: 1,
     workspace_id: 3,
-    is_open: true,
-    auto_approve: false,
     require_open_profile: true,
     open_profile_scope: "all",
-    require_subscription: true,
     subscription_requirement_json: {
       mode: "any",
       requirements: [
@@ -124,8 +132,6 @@ beforeEach(() => {
     },
     show_ranks: false,
     hide_registrations: true,
-    max_participants: 60,
-    max_substitutes: 2,
     form_schema: { schema_version: 1, sections: [] },
     version_id: 1,
     version_number: 1
@@ -173,7 +179,7 @@ describe("registration settings sections i18n", () => {
       workspace_id: 3,
       discipline: "overwatch",
       identity_provider: "battlenet",
-      team_formation: "balancer"
+      flow_nodes: [REGISTRATION_NODE]
     } as never);
 
     await renderSection(() => <AdmissionSettingsPage />, "en");

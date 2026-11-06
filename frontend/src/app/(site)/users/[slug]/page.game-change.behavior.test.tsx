@@ -25,8 +25,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const { profile, dossier } = vi.hoisted(() => {
   const tournaments = [
-    { id: 1, name: "Overwatch Open", discipline: "overwatch", is_league: false },
-    { id: 2, name: "Rift Clash", discipline: "lol", is_league: false }
+    { id: 1, name: "Overwatch Open", discipline: "overwatch" },
+    { id: 2, name: "Rift Clash", discipline: "lol" }
   ];
   const games = [
     { discipline: "overwatch", roles: [], tournaments_count: 1, tournaments_won: 0 },

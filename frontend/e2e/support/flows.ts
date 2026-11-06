@@ -1,6 +1,6 @@
 import { expect } from "@playwright/test";
-import { type Api, poll } from "./api";
-import { createTournament, createWorkspace, setStatus, uniq, type Discipline, type Tournament, type Workspace } from "./seed";
+import { type Api, poll, rememberNodes } from "./api";
+import { createTournament, createWorkspace, flowNodes, nodeOf, transitionNode, uniq, type Discipline, type Tournament, type Workspace } from "./seed";
 import type { TestUser } from "./users";
 
 /**
@@ -40,40 +40,44 @@ export const OW_FORM: FormSchema = {
   ],
 };
 
-export type RegistrationForm = { id: number; version_id: number; is_open: boolean; form_schema: FormSchema };
+export type RegistrationForm = { id: number; version_id: number; form_schema: FormSchema };
 
-export type ScheduleEntry = { status: string; starts_at: string; ends_at?: string | null };
+export type FlowNodeScheduleEntry = { phase: string; starts_at: string; ends_at?: string | null };
 
 const HOUR = 3_600_000;
 const at = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
 
-/** Registration and check-in windows both open right now (phase starts must ascend), LIVE two days out. */
-export function openWindows(): ScheduleEntry[] {
+/** Sign-up and check-in windows both open right now (check-in starts after sign-up). */
+export function openWindows(): FlowNodeScheduleEntry[] {
   return [
-    { status: "registration", starts_at: at(-2 * HOUR), ends_at: at(24 * HOUR) },
-    { status: "check_in", starts_at: at(-HOUR), ends_at: at(36 * HOUR) },
-    { status: "live", starts_at: at(48 * HOUR) },
+    { phase: "open", starts_at: at(-2 * HOUR), ends_at: at(24 * HOUR) },
+    { phase: "check_in", starts_at: at(-HOUR), ends_at: at(36 * HOUR) },
   ];
 }
 
 /**
- * Saves the form, opens the registration (and check-in) window and moves the
- * tournament to REGISTRATION. Returns the form version registrants submit against.
+ * Saves the form, writes the registration node's `auto_approve` and sign-up windows, and moves the node `draft → open`.
+ * `registrationNodeId` picks a node of a tournament with several; without it, the first one.
+ * Returns the form version registrants submit against and the node they register into.
  */
 export async function openRegistration(
   api: Api,
   tournamentId: number,
-  opts: { form?: FormSchema; autoApprove?: boolean; schedule?: ScheduleEntry[] } = {}
-): Promise<number> {
-  await api.put(`/api/v1/admin/balancer/tournaments/${tournamentId}/registration-form`, {
-    form_schema: opts.form ?? OW_FORM,
-    auto_approve: opts.autoApprove ?? false,
+  opts: { form?: FormSchema; autoApprove?: boolean; schedule?: FlowNodeScheduleEntry[]; registrationNodeId?: number } = {}
+): Promise<{ versionId: number; registrationNodeId: number }> {
+  await api.put(`/api/v1/admin/balancer/tournaments/${tournamentId}/registration-form`, { form_schema: opts.form ?? OW_FORM });
+  const node =
+    opts.registrationNodeId === undefined
+      ? await nodeOf(api, tournamentId, "registration")
+      : (await flowNodes(api, tournamentId)).find((candidate) => candidate.id === opts.registrationNodeId)!;
+  await api.put(`/api/v1/admin/tournaments/${tournamentId}/flow`, {
+    nodes: [{ id: node.id, kind: node.kind, name: node.name, config: { ...node.config, auto_approve: opts.autoApprove ?? false } }],
   });
-  await api.put(`/api/v1/admin/tournaments/${tournamentId}/schedule`, { schedule: opts.schedule ?? openWindows() });
-  await setStatus(api, tournamentId, "registration");
+  await api.put(`/api/v1/admin/flow-nodes/${node.id}/schedule`, { schedule: opts.schedule ?? openWindows() });
+  rememberNodes(tournamentId, { registration: node.id });
+  await transitionNode(api, node.id, "open");
   const form = await api.get<RegistrationForm>(`/api/v1/tournaments/${tournamentId}/registration/form`);
-  expect(form.is_open, "registration form is open after openRegistration").toBe(true);
-  return form.version_id;
+  return { versionId: form.version_id, registrationNodeId: node.id };
 }
 
 export type RegistrationRole = { role: RoleRef; is_primary: boolean; priority: number; rank_value: number | null };
@@ -96,12 +100,13 @@ export type Registration = {
 export async function registerSelf(
   user: Pick<TestUser, "api" | "username">,
   tournamentId: number,
+  registrationNodeId: number,
   versionId: number,
   opts: { roles: string[]; handle?: string; answers?: Record<string, unknown> }
 ): Promise<Registration> {
-  return user.api.post<Registration>(
-    `/api/v1/tournaments/${tournamentId}/registration`,
-    {
+  return user.api.call<Registration>("POST", `/api/v1/tournaments/${tournamentId}/registration`, {
+    query: { registration_node_id: registrationNodeId },
+    body: {
       form_version_id: versionId,
       answers: {
         identity_battlenet: [opts.handle ?? battleTag(user.username)],
@@ -109,8 +114,8 @@ export async function registerSelf(
         ...opts.answers,
       },
     },
-    201
-  );
+    expectStatus: 201,
+  });
 }
 
 /** A BattleTag the server's pattern accepts (2–12 chars before `#`, 4+ digits after). */
@@ -154,30 +159,35 @@ export async function seedPlayers(
   api: Api,
   tournamentId: number,
   n: number,
-  opts: { pending?: boolean; rankBase?: number } = {}
+  opts: { registrationNodeId: number; pending?: boolean; rankBase?: number }
 ): Promise<SeededRegistration[]> {
+  const query = { registration_node_id: opts.registrationNodeId };
   const slots = await rosterSlots(api, tournamentId);
   const made: SeededRegistration[] = [];
   for (let i = 0; i < n; i++) {
     const role = slots[i % slots.length];
     const rank = (opts.rankBase ?? 2000) + ((i * 137) % 1500);
     const name = `Seed${uniq("p").slice(2, 8)}${i}`;
-    const reg = await api.post<Registration>(
-      `/api/v1/admin/balancer/tournaments/${tournamentId}/registrations`,
-      {
+    const reg = await api.call<Registration>("POST", `/api/v1/admin/balancer/tournaments/${tournamentId}/registrations`, {
+      query,
+      body: {
         display_name: name,
         answers: { identity_battlenet: [battleTag(name)] },
         roles: role ? [{ role, is_primary: true, priority: 0, rank_value: rank }] : [],
       },
-      201
-    );
+      expectStatus: 201,
+    });
     made.push({ ...reg, role, rank });
   }
   if (!opts.pending) {
     const ids = made.map((r) => r.id);
-    await api.post(`/api/v1/admin/balancer/tournaments/${tournamentId}/registrations/bulk-approve`, { registration_ids: ids });
-    await api.post(`/api/v1/admin/balancer/tournaments/${tournamentId}/registrations/bulk-add-to-balancer`, {
-      registration_ids: ids,
+    await api.call("POST", `/api/v1/admin/balancer/tournaments/${tournamentId}/registrations/bulk-approve`, {
+      query,
+      body: { registration_ids: ids },
+    });
+    await api.call("POST", `/api/v1/admin/balancer/tournaments/${tournamentId}/registrations/bulk-add-to-balancer`, {
+      query,
+      body: { registration_ids: ids },
     });
   }
   return made;
@@ -193,9 +203,19 @@ export type BalanceVariant = {
 };
 export type BalanceExport = { job: BalancerJob; variant: BalanceVariant; balanceId: number; teams: Team[] };
 
-/** Async balance (202 + job poll), first variant saved and exported into tournament teams. */
-export async function balanceAndExport(api: Api, tournamentId: number): Promise<BalanceExport> {
-  const queued = await api.post<BalancerJob>(`/api/v1/balancer/tournaments/${tournamentId}/balance`, {}, 202);
+/**
+ * Async balance (202 + job poll), first variant saved and exported into tournament teams. A `draft` formation node
+ * moves to `forming` here (so the caller must have closed its input first); once the teams exist it moves to `completed`.
+ */
+export async function balanceAndExport(api: Api, tournamentId: number, formationNodeId: number): Promise<BalanceExport> {
+  const query = { formation_node_id: formationNodeId };
+  const node = (await flowNodes(api, tournamentId)).find((candidate) => candidate.id === formationNodeId);
+  if (node?.status === "draft") await transitionNode(api, formationNodeId, "forming");
+  const queued = await api.call<BalancerJob>("POST", `/api/v1/balancer/tournaments/${tournamentId}/balance`, {
+    body: {},
+    query,
+    expectStatus: 202,
+  });
   const job = await poll(
     async () => {
       const j = await api.get<BalancerJob>(`/api/v1/balancer/jobs/${queued.job_id}`);
@@ -207,13 +227,28 @@ export async function balanceAndExport(api: Api, tournamentId: number): Promise<
   expect(job.status, `balance job failed: ${job.error}`).toBe("succeeded");
   const { variants } = await api.get<{ variants: BalanceVariant[] }>(`/api/v1/balancer/jobs/${job.job_id}/result`);
   expect(variants.length, "balance job produced at least one variant").toBeGreaterThan(0);
-  const saved = await api.put<{ id: number }>(`/api/v1/balancer/tournaments/${tournamentId}/balance`, {
-    config_json: null,
-    result_json: variants[0],
+  const saved = await api.call<{ id: number }>("PUT", `/api/v1/balancer/tournaments/${tournamentId}/balance`, {
+    query,
+    body: { config_json: null, result_json: variants[0] },
   });
   const exported = await api.post<{ success: boolean; imported_teams: number }>(`/api/v1/balancer/balances/${saved.id}/export`, {});
   expect(exported.imported_teams, "exported team count").toBe(variants[0].teams.length);
+  await transitionNode(api, formationNodeId, "completed");
   return { job, variant: variants[0], balanceId: saved.id, teams: await listTeams(api, tournamentId) };
+}
+
+/**
+ * For teams made by `seedTeams`: the registration node `draft → open → closed` (saving `OW_FORM` first when the
+ * tournament has no form) and the formation node `draft → forming → completed`.
+ */
+export async function formTeams(api: Api, tournamentId: number): Promise<void> {
+  const registration = await nodeOf(api, tournamentId, "registration");
+  const formation = await nodeOf(api, tournamentId, "formation");
+  if (!(await api.raw("GET", `/api/v1/tournaments/${tournamentId}/registration/form`)).ok()) {
+    await api.put(`/api/v1/admin/balancer/tournaments/${tournamentId}/registration-form`, { form_schema: OW_FORM });
+  }
+  for (const status of ["open", "closed"]) await transitionNode(api, registration.id, status);
+  for (const status of ["forming", "completed"]) await transitionNode(api, formation.id, status);
 }
 
 // ---------------------------------------------------------------- teams
@@ -282,9 +317,9 @@ export type Stage = {
   tournament_id: number;
   name: string;
   stage_type: StageType;
-  is_active: boolean;
+  node_id: number;
+  status: "draft" | "ready" | "live" | "completed";
   is_published: boolean;
-  is_completed: boolean;
   items: StageItem[];
 };
 export type TournamentJob = {
@@ -352,9 +387,22 @@ export async function waitForJob(api: Api, job: Pick<TournamentJob, "id">, timeo
   return done;
 }
 
-/** activate-and-generate (202) + poll: the stage goes live/published with its encounters. */
-export async function generateStage(api: Api, stageId: number): Promise<TournamentJob> {
-  return waitForJob(api, await api.post<TournamentJob>(`/api/v1/admin/stages/${stageId}/activate-and-generate`, undefined, 202));
+/** Moves a stage's node one step (`POST /admin/flow-nodes/{id}/transition`); `ready → live` generates the matches when there are none. */
+export async function transitionStage(api: Api, stageId: number, status: "draft" | "ready" | "live" | "completed"): Promise<unknown> {
+  const stage = await api.get<Stage>(`/api/v1/admin/stages/${stageId}`);
+  return api.post(`/api/v1/admin/flow-nodes/${stage.node_id}/transition`, { status });
+}
+
+/** `draft → ready → live`: the stage goes live/published with its encounters. */
+export async function startStage(api: Api, stage: Pick<Stage, "node_id">): Promise<void> {
+  for (const status of ["ready", "live"]) await transitionNode(api, stage.node_id, status);
+}
+
+/** Completes the stage nodes still `live` (the standings job closes most on its own); the tournament then derives `completed`. */
+export async function completeStages(api: Api, tournamentId: number): Promise<void> {
+  for (const node of await flowNodes(api, tournamentId)) {
+    if (node.kind === "stage" && node.status === "live") await transitionNode(api, node.id, "completed");
+  }
 }
 
 /** Duels by default; the list answers `slot_count = 2` only, so an FFA lobby needs its seat count. */
@@ -409,10 +457,8 @@ export type BracketSeed = {
 };
 
 /**
- * A LIVE tournament in a fresh workspace with a generated, published stage.
- * `captains` (real users) become the team captains and fix the team count.
- * Generation runs before the status moves, so LIVE's own stage autostart
- * finds the stage already generated. `status` overrides the final status.
+ * A tournament in a fresh workspace with a generated, published stage: the teams are formed (`formTeams`) and the
+ * stage started, so the tournament derives `live`. `captains` (real users) become the team captains and fix the team count.
  */
 export async function seedBracket(
   api: Api,
@@ -423,8 +469,7 @@ export async function seedBracket(
     captains?: TestUser[];
     bestOf?: number;
     players?: boolean;
-    status?: string;
-    tournament?: Partial<{ name: string; is_league: boolean; team_formation: string; is_hidden: boolean }>;
+    tournament?: Partial<{ name: string; team_formation: string; is_hidden: boolean }>;
     stage?: Record<string, unknown>;
   } = {}
 ): Promise<BracketSeed> {
@@ -437,15 +482,14 @@ export async function seedBracket(
   }
   const tournament = await createTournament(api, workspace.id, { discipline, ...opts.tournament });
   const teams = await seedTeams(api, tournament.id, count, { captains: opts.captains, players: opts.players });
+  await formTeams(api, tournament.id);
   const created = await createStage(
     api,
     tournament.id,
     teams.map((t) => t.id),
     { stageType, bestOf: opts.bestOf, extra: opts.stage }
   );
-  await generateStage(api, created.id);
-  const status = opts.status ?? "live";
-  if (status !== "announcement") await setStatus(api, tournament.id, status, true);
+  await startStage(api, created);
   const stage = await api.get<Stage>(`/api/v1/admin/stages/${created.id}`);
   const encounters = await listEncounters(api, tournament.id, stage.id, stageType === "ffa_league" ? count : undefined);
   expect(encounters.length, `${stageType} generated encounters`).toBeGreaterThan(0);

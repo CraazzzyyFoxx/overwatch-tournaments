@@ -11,7 +11,7 @@ from shared.models.tournament.computation import TournamentComputationJob
 from shared.repository import TournamentComputationJobRepository
 
 JobKind = Literal["bracket", "standings"]
-BracketOperation = Literal["generate_stage", "activate_and_generate", "generate_next_swiss_round"]
+BracketOperation = Literal["generate_stage", "generate_next_swiss_round"]
 
 ACTIVE_STATUSES = ("pending", "running")
 

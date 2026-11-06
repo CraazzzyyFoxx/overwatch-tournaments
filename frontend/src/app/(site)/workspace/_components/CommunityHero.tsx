@@ -12,6 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TrustedBadge } from "@/components/workspace/TrustedBadge";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import { getFormatter } from "@/lib/datetime/server";
+import { registrationClosesAt } from "@/lib/tournament/flow-nodes";
+import { displayStatus } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import type { Workspace } from "@/types/workspace.types";
 
@@ -184,9 +186,8 @@ async function HeroCta({ workspace }: Readonly<{ workspace: Workspace }>) {
   } catch {
     // Fall through to the browse actions: a failed read must not hide the page.
   }
-  const registration = tournament?.status === "registration" ? tournament : null;
-  const registrationEnd =
-    registration?.phase_schedule.find((phase) => phase.status === "registration")?.ends_at ?? null;
+  const registration = tournament && displayStatus(tournament) === "registration" ? tournament : null;
+  const registrationEnd = registrationClosesAt(registration);
 
   return (
     <>

@@ -18,9 +18,11 @@ from typing import Any
 from pydantic import ValidationError
 
 from shared.core import http_status as status
+from shared.core.enums import FlowNodeKind
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.disciplines import DISCIPLINES
+from shared.repository.flow_node import FlowNodeRepository
 from shared.rpc.common import (
     actor as _identity,
 )
@@ -53,6 +55,8 @@ from shared.schemas.rpc import rpc_error, rpc_ok, status_to_code
 from src.core import db
 from src.services.user.flows import actor_player_id as _actor_player_id
 
+_flow_nodes = FlowNodeRepository()
+
 __all__ = (
     "_actor_player_id",
     "_bool",
@@ -64,6 +68,7 @@ __all__ = (
     "_q",
     "_q1",
     "_read",
+    "_registration_node_id",
     "_require_id",
     "_require_q1",
     "_run",
@@ -75,6 +80,16 @@ def _require_q1(data: dict[str, Any], key: str, cast: Callable[[str], Any] = str
     if val is None:
         raise HTTPException(status_code=422, detail=f"{key} is required")
     return val
+
+
+async def _registration_node_id(session: Any, data: dict[str, Any], tournament_id: int) -> int:
+    """``?registration_node_id=`` of a participation route: required, no default (plan Decision 1), and a
+    registration node of ``tournament_id`` (404 for any other id)."""
+    node_id = _require_q1(data, "registration_node_id", int)
+    node = await _flow_nodes.get(session, node_id)
+    if node is None or node.tournament_id != tournament_id or node.kind != FlowNodeKind.REGISTRATION:
+        raise HTTPException(status_code=404, detail="Flow node not found")
+    return node_id
 
 
 def _optional_discipline(data: dict[str, Any]) -> str | None:

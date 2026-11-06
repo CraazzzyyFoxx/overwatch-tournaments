@@ -229,6 +229,14 @@ export const GUIDES: Record<GuideId, GuideGroup[]> = {
           },
         },
         {
+          slug: "flow",
+          title: { ru: "Схема турнира", en: "Tournament flow" },
+          keywords: {
+            ru: "схема узлы регистрация формирование стадия фильтр подсчёт очков таблица лига шаблон",
+            en: "flow nodes registration formation stage filter aggregate leaderboard league preset",
+          },
+        },
+        {
           slug: "schedule",
           title: { ru: "Фазы и расписание", en: "Phases and schedule" },
           keywords: {
@@ -468,6 +476,14 @@ export const GUIDES: Record<GuideId, GuideGroup[]> = {
           keywords: {
             ru: "фазы стадии сетка встречи таблица",
             en: "phases stages bracket encounters standings",
+          },
+        },
+        {
+          slug: "flow",
+          title: { ru: "Схема турнира (flow)", en: "Tournament flow" },
+          keywords: {
+            ru: "flow_node flow_edge порты валидация apply_changes validate результаты",
+            en: "flow_node flow_edge ports validation apply_changes validate results",
           },
         },
         {

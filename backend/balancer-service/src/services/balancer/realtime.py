@@ -84,6 +84,7 @@ async def emit_job_lifecycle(
     tournament_id: int,
     event_type: str,
     *,
+    formation_node_id: int | None,
     job_id: str,
     status: str,
     progress: dict[str, Any] | None = None,
@@ -102,6 +103,7 @@ async def emit_job_lifecycle(
             domain=_DOMAIN,
             event_type=event_type,
             payload={
+                "formation_node_id": formation_node_id,
                 "job_id": job_id,
                 "status": status,
                 "progress": progress or {},
@@ -116,6 +118,7 @@ async def emit_job_progress(
     session: Any,
     tournament_id: int,
     *,
+    formation_node_id: int | None,
     job_id: str,
     status: str,
     progress: dict[str, Any] | None,
@@ -134,6 +137,7 @@ async def emit_job_progress(
             event_type=BALANCER_JOB_PROGRESS,
             payload={
                 "tournament_id": int(tournament_id),
+                "formation_node_id": formation_node_id,
                 "job_id": job_id,
                 "status": status,
                 "progress": progress or {},

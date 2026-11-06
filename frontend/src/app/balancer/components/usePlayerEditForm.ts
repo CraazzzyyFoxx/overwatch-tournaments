@@ -11,20 +11,14 @@ import {
   type PlayerRankHistoryPreviewEntry
 } from "@/components/balancer/workspace-helpers";
 import { ratedDimension, registrationRoles, showsRoles, type RoleOntology } from "@/lib/roster/ontology";
-import {
-  useCurrentWorkspaceId,
-  useDivisionGrid,
-  useDivisionGridVersion
-} from "@/hooks/useCurrentWorkspace";
+import { useCurrentWorkspaceId } from "@/hooks/useCurrentWorkspace";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import {
   getDivisionLabel,
   resolveDivisionFromRank as resolveDivisionFromRankInGrid,
   resolveRankFromDivision as resolveRankFromDivisionInGrid
 } from "@/lib/divisions/grid";
-import { divisionGridQueryKeys } from "@/lib/divisions/query-keys";
 import adminService from "@/services/admin.service";
-import workspaceService from "@/services/workspace.service";
 import type {
   AdminRegistration,
   BalancerPlayerRecord,
@@ -39,6 +33,9 @@ import {
   applyHistoryPreviewToRoleEntries,
   normalizeRoleEntries
 } from "./playerEditSheet.model";
+
+/** Until the tournament's grid resolves: the sheet stays closed on an empty grid. */
+const EMPTY_GRID: DivisionGrid = { tiers: [] };
 
 /** The "Load from history" preview and the controls that drive it. */
 export interface PlayerRankHistoryState {
@@ -62,9 +59,8 @@ interface UsePlayerEditFormInput {
   discipline: string | undefined;
   /** The owner game's role dictionary: the roles a player may be given. `null` while it loads. */
   ontology: RoleOntology | null;
-  /** Undefined is unresolved owner metadata; null explicitly means no pin. */
-  divisionGridVersionId: number | null | undefined;
-  divisionGridVersion?: DivisionGridVersion | null;
+  /** The tournament's grid — its pin, else the workspace default — the page resolves every rank in; `null` while unresolved. */
+  divisionGridVersion: DivisionGridVersion | null;
   /** Sub-roles are only worth fetching while the sheet is on screen. */
   open: boolean;
   onSave: (playerId: number, payload: BalancerPlayerUpdateInput) => void;
@@ -79,36 +75,12 @@ export function usePlayerEditForm({
   registration,
   discipline,
   ontology,
-  divisionGridVersionId,
   divisionGridVersion,
   open,
   onSave
 }: UsePlayerEditFormInput) {
   const t = useTranslations("balancerTool.playerEdit.history");
-  const workspaceGrid = useDivisionGrid(discipline);
-  const workspaceGridVersion = useDivisionGridVersion(discipline);
-  const suppliedPin =
-    divisionGridVersionId != null && divisionGridVersion?.id === divisionGridVersionId
-      ? divisionGridVersion
-      : null;
-  const pinnedVersionQuery = useQuery({
-    queryKey: divisionGridQueryKeys.version(divisionGridVersionId ?? null),
-    queryFn: () => workspaceService.getDivisionGridVersion(divisionGridVersionId!),
-    enabled:
-      open && discipline !== undefined && divisionGridVersionId != null && suppliedPin === null
-  });
-  const divisionGrid = useMemo<DivisionGrid>(() => {
-    if (discipline === undefined || divisionGridVersionId === undefined) return { tiers: [] };
-    if (divisionGridVersionId === null) return workspaceGrid;
-    return suppliedPin ?? (pinnedVersionQuery.isSuccess ? pinnedVersionQuery.data : { tiers: [] });
-  }, [
-    discipline,
-    divisionGridVersionId,
-    workspaceGrid,
-    suppliedPin,
-    pinnedVersionQuery.isSuccess,
-    pinnedVersionQuery.data
-  ]);
+  const divisionGrid: DivisionGrid = divisionGridVersion ?? EMPTY_GRID;
   const workspaceId = useCurrentWorkspaceId();
 
   const { data: subRoles } = useQuery({
@@ -127,17 +99,13 @@ export function usePlayerEditForm({
 
   const resolveDivision = (rankValue: number | null) =>
     resolveDivisionFromRankInGrid(divisionGrid, rankValue);
-  const resolveWorkspaceRankFromDivision = (divisionNumber: number | null) =>
-    resolveRankFromDivisionInGrid(workspaceGrid, divisionNumber);
+  const resolveRankFromDivision = (divisionNumber: number | null) =>
+    resolveRankFromDivisionInGrid(divisionGrid, divisionNumber);
   const getDivisionName = (divisionNumber: number | null) =>
     getDivisionLabel(divisionGrid, divisionNumber);
 
-  // Normalised division name: always look up in the workspace (target) grid.
-  const getHistoryDivisionName = (divisionNumber: number | null) =>
-    getDivisionLabel(workspaceGrid, divisionNumber);
-
   // Original division name: look up in the source tournament's own grid first,
-  // then fall back to the workspace grid.
+  // then fall back to this tournament's grid.
   const getOriginalDivisionName = (
     divisionNumber: number | null,
     entry: PlayerRankHistoryPreviewEntry
@@ -147,7 +115,7 @@ export function usePlayerEditForm({
       const tierName = getDivisionLabel(entry.tournament_grid_version, divisionNumber);
       if (tierName) return tierName;
     }
-    return getDivisionLabel(workspaceGrid, divisionNumber);
+    return getDivisionLabel(divisionGrid, divisionNumber);
   };
 
   const [editedEntries, setRoleEntries] = useState<BalancerPlayerRoleEntry[]>(
@@ -234,8 +202,8 @@ export function usePlayerEditForm({
     try {
       const preview = await fetchPlayerRankHistoryPreview(
         player.identity,
-        workspaceGridVersion,
-        workspaceGrid,
+        divisionGridVersion,
+        divisionGrid,
         getHistoryWorkspaceIdParam(workspaceValue),
         workspaceId,
         discipline,
@@ -280,7 +248,7 @@ export function usePlayerEditForm({
         applyHistoryPreviewToRoleEntries(
           roleEntries,
           historyPreview,
-          resolveWorkspaceRankFromDivision
+          resolveRankFromDivision
         ).map((entry) => ({ ...entry, division_number: resolveDivision(entry.rank_value) }))
       );
       dismissHistoryPreview();
@@ -376,7 +344,6 @@ export function usePlayerEditForm({
 
   return {
     divisionGrid,
-    workspaceGrid,
     roleEntries,
     /** A one-role game's only role: the one entry the sheet shows. `null` when the game names roles (or is loading). */
     soleRole,
@@ -393,7 +360,6 @@ export function usePlayerEditForm({
     subtypeOptions,
     resolveDivision,
     getDivisionName,
-    getHistoryDivisionName,
     getOriginalDivisionName,
     history,
     addRole,

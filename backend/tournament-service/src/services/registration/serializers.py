@@ -18,7 +18,6 @@ from src.schemas.admission import AdmissionRead
 from src.schemas.registration_form import RegistrationFormRead, RegistrationFormTemplateRead
 from src.services.registration.answers import answer_service
 from src.services.registration.roles_rules import is_flex_submission
-from src.services.registration.self_edit import submitted_late
 
 
 def loaded_relationship_or_none(instance: object, attribute: str):
@@ -69,6 +68,7 @@ def serialize_registration_role(
 
 def serialize_registration(
     registration: models.Registration,
+    entry: models.RegistrationEntry,
     *,
     workspace_id: int,
     provider: str,
@@ -78,38 +78,41 @@ def serialize_registration(
     profiles_open: bool | None = None,
     subscription_outcome: str | None = None,
     roster: PlayerRoster | None = None,
+    submitted_late: bool = False,
 ) -> schemas.BalancerRegistrationRead:
     binding = loaded_relationship_or_none(registration, "google_sheet_binding")
     roles = loaded_relationship_or_none(registration, "roles") or []
-    reviewer = loaded_relationship_or_none(registration, "reviewer")
-    checked_in_by_user = loaded_relationship_or_none(registration, "checked_in_by_user")
+    reviewer = loaded_relationship_or_none(entry, "reviewer")
+    checked_in_by_user = loaded_relationship_or_none(entry, "checked_in_by_user")
     # API shape: ``user_id`` (the frontend depends on it) is derived from the
     # member anchor — callers must eager-load workspace_member
     # (loaded_relationship_or_none never lazy-loads).
     workspace_member = loaded_relationship_or_none(registration, "workspace_member")
-    tournament = loaded_relationship_or_none(registration, "tournament")
     sorted_roles = sorted(roles, key=lambda item: (item.priority, item.role))
     # Every role row is reported (the editor toggles the ones the engine left
     # out of the roster); the roster is what rates them.
-    entry_by_role = {entry.role: entry for entry in roster.roles} if roster is not None else {}
+    roster_role_by_code = {role.role: role for role in roster.roles} if roster is not None else {}
     resolved_status_meta = (
-        status_meta_map["registration"].get(registration.status) if status_meta_map is not None else None
-    ) or build_unknown_status_meta("registration", registration.status)
+        status_meta_map["registration"].get(entry.status) if status_meta_map is not None else None
+    ) or build_unknown_status_meta("registration", entry.status)
     resolved_balancer_status_meta = (
-        status_meta_map["balancer"].get(registration.balancer_status) if status_meta_map is not None else None
-    ) or build_unknown_status_meta("balancer", registration.balancer_status)
+        status_meta_map["balancer"].get(entry.balancer_status) if status_meta_map is not None else None
+    ) or build_unknown_status_meta("balancer", entry.balancer_status)
     return schemas.BalancerRegistrationRead(
         id=registration.id,
+        entry_id=entry.id,
+        registration_node_id=entry.registration_node_id,
         tournament_id=registration.tournament_id,
         workspace_id=workspace_id,
         user_id=workspace_member.player_id if workspace_member is not None else None,
+        workspace_member_id=registration.workspace_member_id,
         display_name=registration.display_name,
         primary_handle=(
             identity.handle if (identity := registration.primary_game_identity(provider=provider)) else None
         ),
         source="google_sheets" if binding is not None else "manual",
         source_record_key=binding.source_record_key if binding is not None else None,
-        answers=answer_service.answers_of(registration),
+        answers=answer_service.answers_of(registration, entry),
         admin_notes=registration.admin_notes,
         # The roster is the one flex predicate (``PlayerRoster.is_full_flex``,
         # computed over playable declared roles). Without a roster there is no
@@ -120,18 +123,18 @@ def serialize_registration(
             if roster is not None
             else is_flex_submission([role for role in sorted_roles if role.is_active])
         ),
-        status=registration.status,
-        balancer_status=registration.balancer_status,
+        status=entry.status,
+        balancer_status=entry.balancer_status,
         status_meta=schemas.StatusMetaRead(**resolved_status_meta),
         balancer_status_meta=schemas.StatusMetaRead(**resolved_balancer_status_meta),
-        exclude_reason=registration.exclude_reason,
-        checked_in=registration.checked_in,
-        checked_in_at=registration.checked_in_at,
+        exclude_reason=entry.exclude_reason,
+        checked_in=entry.checked_in,
+        checked_in_at=entry.checked_in_at,
         checked_in_by_username=checked_in_by_user.username if checked_in_by_user is not None else None,
-        deleted_at=registration.deleted_at,
+        deleted_at=entry.deleted_at,
         submitted_at=registration.submitted_at,
-        submitted_late=tournament is not None and submitted_late(registration, tournament),
-        reviewed_at=registration.reviewed_at,
+        submitted_late=submitted_late,
+        reviewed_at=entry.reviewed_at,
         reviewed_by_username=reviewer.username if reviewer is not None else None,
         balancer_profile_overridden_at=registration.balancer_profile_overridden_at,
         admission=admission if admission is not None else AdmissionRead.unknown(),
@@ -142,7 +145,7 @@ def serialize_registration(
             serialize_registration_role(
                 role,
                 (ow_ranks_for_user or {}).get(role.role),
-                entry_by_role.get(role.role),
+                roster_role_by_code.get(role.role),
             )
             for role in sorted_roles
         ],
@@ -153,8 +156,6 @@ def serialize_registration_form(
     form: models.RegistrationForm,
     *,
     discipline: str,
-    is_open: bool,
-    registration_late: bool = False,
     subscription_requirement: dict[str, Any] | None = None,
     subrole_catalog: dict[str, list[dict[str, str]]] | None = None,
     stale_registrations: int | None = None,
@@ -166,12 +167,7 @@ def serialize_registration_form(
     call; the async RPC handler fetches it once via
     ``subscription_config.load_workspace_requirement_blob``.
 
-    ``is_open`` is passed in for the same reason; it is derived from the
-    tournament's REGISTRATION schedule window, not from the form.
-
-    ``registration_late`` says the window's ``ends_at`` has passed and only
-    ``allow_late_registration`` keeps the form open: everyone signing up now is
-    written as a reserve, and the form has to say so before they submit.
+    Intake settings and whether sign-up is open are the registration node's, not the form's.
 
     ``stale_registrations`` is the organizer-only count of registrations still on
     an older version; the public read leaves it ``None`` rather than paying for it.
@@ -185,23 +181,10 @@ def serialize_registration_form(
         tournament_id=form.tournament_id,
         workspace_id=form.workspace_id,
         discipline=discipline,
-        is_open=is_open,
-        registration_late=registration_late,
-        auto_approve=form.auto_approve,
         require_open_profile=form.require_open_profile,
         open_profile_scope=form.open_profile_scope,
         show_ranks=form.show_ranks,
         hide_registrations=form.hide_registrations,
-        max_participants=form.max_participants,
-        max_substitutes=form.max_substitutes,
-        require_subscription=form.require_subscription,
-        subscription_stage=form.subscription_stage,
-        subscription_scope=getattr(form, "subscription_scope", None) or "player",
-        team_rank_min=getattr(form, "team_rank_min", None),
-        team_rank_max=getattr(form, "team_rank_max", None),
-        team_max_rank_spread=getattr(form, "team_max_rank_spread", None),
-        team_unique_identity=bool(getattr(form, "team_unique_identity", False)),
-        team_require_discord_guild=bool(getattr(form, "team_require_discord_guild", False)),
         subscription_requirement_json=subscription_requirement or {},
         form_schema=schema,
         version_id=version.id,
@@ -265,6 +248,7 @@ def serialize_feed(
     return schemas.BalancerGoogleSheetFeedRead(
         id=feed.id,
         tournament_id=feed.tournament_id,
+        registration_node_id=feed.registration_node_id,
         source_url=feed.source_url,
         sheet_id=feed.sheet_id,
         gid=feed.gid,

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
+import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";
 import { notify } from "@/lib/notify";
 import { translateRegistrationTeamError } from "@/lib/registration/team-errors";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
@@ -28,19 +29,22 @@ import type {
 function invalidateRegistrationTeams(
   queryClient: QueryClient,
   workspaceId: number,
-  tournamentId: number
+  tournamentId: number,
+  registrationNodeIds: readonly number[]
 ) {
-  for (const flag of [false, true]) {
+  for (const registrationNodeId of registrationNodeIds) {
+    for (const flag of [false, true]) {
+      void queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.registrationTeamsAdmin(workspaceId, tournamentId, registrationNodeId, flag)
+      });
+    }
     void queryClient.invalidateQueries({
-      queryKey: tournamentQueryKeys.registrationTeamsAdmin(workspaceId, tournamentId, flag)
+      queryKey: tournamentQueryKeys.registrationsList(workspaceId, tournamentId, registrationNodeId)
+    });
+    void queryClient.invalidateQueries({
+      queryKey: tournamentQueryKeys.registrationTeams(workspaceId, tournamentId, registrationNodeId)
     });
   }
-  void queryClient.invalidateQueries({
-    queryKey: tournamentQueryKeys.registrationsList(workspaceId, tournamentId)
-  });
-  void queryClient.invalidateQueries({
-    queryKey: tournamentQueryKeys.registrationTeams(workspaceId, tournamentId)
-  });
 }
 
 export interface RegistrationTeamActions {
@@ -96,12 +100,18 @@ export interface RegistrationTeamActions {
 export function useRegistrationTeamActions({
   tournamentId,
   workspaceId,
+  registrationNodeIds,
+  formationNodeId,
   closeConfirm,
   closeRename,
   closePlace
 }: Readonly<{
   tournamentId: number;
   workspaceId: number;
+  /** Every registration node whose teams the screen lists. */
+  registrationNodeIds: readonly number[];
+  /** The formation node the export writes into. */
+  formationNodeId: number | null;
   /** A confirmed action that succeeded has nothing left to ask. */
   closeConfirm: () => void;
   closeRename: () => void;
@@ -117,18 +127,30 @@ export function useRegistrationTeamActions({
   const [exportResult, setExportResult] = useState<RegistrationTeamExportResult | null>(null);
   const [notesDraft, setNotesDraft] = useState<Record<number, string>>({});
 
-  const teamsQuery = useQuery({
-    queryKey: tournamentQueryKeys.registrationTeamsAdmin(workspaceId, tournamentId, true),
-    queryFn: () => registrationTeamService.listAdmin(tournamentId, { includeTerminal: true })
+  // One list per feeding registration node, merged; a team's writes name the team, so only the reads fan out.
+  const teamsQuery = useQueries({
+    queries: registrationNodeIds.map((nodeId) => ({
+      queryKey: tournamentQueryKeys.registrationTeamsAdmin(workspaceId, tournamentId, nodeId, true),
+      queryFn: () => registrationTeamService.listAdmin(tournamentId, nodeId, { includeTerminal: true })
+    })),
+    combine: (results) => ({
+      teams: results.flatMap((result) => result.data?.items ?? []),
+      unassigned: results.reduce((sum, result) => sum + (result.data?.unassigned_players ?? 0), 0),
+      isError: results.some((result) => result.isError),
+      isFetching: results.some((result) => result.isFetching),
+      error: results.find((result) => result.error)?.error ?? null,
+      refetch: () => results.forEach((result) => void result.refetch())
+    })
   });
 
   const invalidateTeams = () => {
     setActionError(null);
-    invalidateRegistrationTeams(queryClient, workspaceId, tournamentId);
+    invalidateRegistrationTeams(queryClient, workspaceId, tournamentId, registrationNodeIds);
   };
 
+  const flowMessage = useFlowErrorMessage();
   const reportError = (error: unknown) =>
-    setActionError(translateRegistrationTeamError(tErr, error, t("admin.actionFailed")));
+    setActionError(flowMessage(error) ?? translateRegistrationTeamError(tErr, error, t("admin.actionFailed")));
 
   const rejectMutation = useMutation({
     mutationFn: (input: { teamId: number; withdrawMembers: boolean; reason: string }) =>
@@ -145,8 +167,10 @@ export function useRegistrationTeamActions({
   });
 
   const exportMutation = useMutation({
-    mutationFn: (teamIds: number[]) =>
-      registrationTeamService.exportRegistered(tournamentId, teamIds),
+    mutationFn: (teamIds: number[]) => {
+      if (formationNodeId === null) throw new Error("no formation node");
+      return registrationTeamService.exportRegistered(tournamentId, formationNodeId, teamIds);
+    },
     onSuccess: (result) => {
       invalidateTeams();
       // The export writes `tournament.team` rows, which the bracket and the
@@ -240,9 +264,11 @@ export function useRegistrationTeamActions({
   /** The placed player is not a free agent any more. */
   const invalidatePlaced = () => {
     invalidateTeams();
-    void queryClient.invalidateQueries({
-      queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId)
-    });
+    for (const nodeId of registrationNodeIds) {
+      void queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId, nodeId)
+      });
+    }
     closePlace();
     notify.success(t("admin.placeSuccess"));
   };
@@ -281,12 +307,12 @@ export function useRegistrationTeamActions({
   });
 
   return {
-    teams: teamsQuery.data?.items ?? [],
-    unassignedPlayers: teamsQuery.data?.unassigned_players ?? 0,
+    teams: teamsQuery.teams,
+    unassignedPlayers: teamsQuery.unassigned,
     isError: teamsQuery.isError,
     isFetching: teamsQuery.isFetching,
     error: teamsQuery.error,
-    refetch: () => void teamsQuery.refetch(),
+    refetch: teamsQuery.refetch,
     actionError,
     setActionError,
     reportError,

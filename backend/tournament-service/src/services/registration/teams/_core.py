@@ -12,9 +12,11 @@ from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.disciplines import identity_provider
+from shared.domain.flow.config import RegistrationNodeConfig
 from shared.domain.roster_shape import RosterShape
 from shared.domain.team_roster import RosterMember, RosterOccupancy
 from shared.repository import (
+    RegistrationEntryRepository,
     RegistrationRepository,
     RegistrationTeamInviteRepository,
     RegistrationTeamRepository,
@@ -33,12 +35,13 @@ from src.services.registration.teams._shared import (
     _fail,
     _occupancy_of,
 )
-from src.services.registration.windows import is_registration_open
+from src.services.registration.windows import node_config, windows_service
 
 
-async def _form(session: AsyncSession, tournament_id: int) -> models.RegistrationForm | None:
-    return await session.scalar(
-        sa.select(models.RegistrationForm).where(models.RegistrationForm.tournament_id == tournament_id)
+async def _node_config(session: AsyncSession, registration_node_id: int) -> RegistrationNodeConfig:
+    """The intake settings of a registration node (a team names its node)."""
+    return node_config(
+        await session.scalar(sa.select(models.FlowNode).where(models.FlowNode.id == registration_node_id))
     )
 
 
@@ -67,12 +70,14 @@ class TeamServiceBase:
         team_repo: RegistrationTeamRepository = RegistrationTeamRepository(),
         invite_repo: RegistrationTeamInviteRepository = RegistrationTeamInviteRepository(),
         registration_repo: RegistrationRepository = RegistrationRepository(),
+        entry_repo: RegistrationEntryRepository = RegistrationEntryRepository(),
         tournament_repo: TournamentRepository = TournamentRepository(),
         registrations: RegistrationService = registration_service,
     ) -> None:
         self.team_repo = team_repo
         self.invite_repo = invite_repo
         self.registration_repo = registration_repo
+        self.entry_repo = entry_repo
         self.tournament_repo = tournament_repo
         self.registrations = registrations
 
@@ -90,11 +95,13 @@ class TeamServiceBase:
             raise _fail(404, "team_not_found", "Team not found")
         return team
 
-    async def _assert_registration_open(self, session: AsyncSession, tournament_id: int) -> models.Tournament:
+    async def _assert_registration_open(
+        self, session: AsyncSession, tournament_id: int, registration_node_id: int
+    ) -> models.Tournament:
         tournament = await self.tournament_repo.get(session, tournament_id)
         if tournament is None:
             raise _fail(404, "tournament_not_found", "Tournament not found")
-        if not is_registration_open(tournament):
+        if not await windows_service.load_sign_up_open(session, registration_node_id):
             raise _fail(400, "registration_closed", "Registration is not open for this tournament")
         return tournament
 
@@ -102,47 +109,52 @@ class TeamServiceBase:
         """The slots projected from the tournament's own team format."""
         return await tournament_slot_shape(session, tournament.id)
 
-    async def _max_substitutes(self, session: AsyncSession, tournament_id: int) -> int:
-        # Single-column scalar projection off the form, not a row fetch.
-        return (
-            await session.scalar(
-                sa.select(models.RegistrationForm.max_substitutes).where(
-                    models.RegistrationForm.tournament_id == tournament_id
-                )
-            )
-            or 0
-        )
+    async def _max_substitutes(self, session: AsyncSession, registration_node_id: int) -> int:
+        return (await _node_config(session, registration_node_id)).max_substitutes
 
     async def _roster_members(
-        self, session: AsyncSession, team_id: int, *, fresh: bool = False
-    ) -> list[models.Registration]:
-        """The team's live members.
+        self, session: AsyncSession, team: models.RegistrationTeam | int, *, fresh: bool = False
+    ) -> list[models.RegistrationEntry]:
+        """The team's live members: the entries, in the team's registration node, of the registrations seated on it
+        (each with its registration loaded).
 
         ``fresh`` re-reads rows this session already holds (``populate_existing``):
         for a flow that read the roster before taking the team lock, what another
         transaction committed in between must win over the identity map.
         """
+        team_id = team if isinstance(team, int) else team.id
         result = await session.scalars(
-            self.registration_repo.select()
+            self.entry_repo.select()
+            .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
+            .join(
+                models.RegistrationTeam,
+                sa.and_(
+                    models.RegistrationTeam.id == models.Registration.registration_team_id,
+                    models.RegistrationTeam.registration_node_id == models.RegistrationEntry.registration_node_id,
+                ),
+            )
             .where(
                 models.Registration.registration_team_id == team_id,
                 models.Registration.deleted_at.is_(None),
-                models.Registration.status.notin_(_SLOT_RELEASING_STATUSES),
+                models.RegistrationEntry.deleted_at.is_(None),
+                models.RegistrationEntry.status.notin_(_SLOT_RELEASING_STATUSES),
             )
             # The team eligibility rules read each member's Discord handle off
             # the identity rows, never lazy-loadable in async code.
-            .options(selectinload(models.Registration.identities))
+            .options(selectinload(models.RegistrationEntry.registration).selectinload(models.Registration.identities))
             .execution_options(populate_existing=fresh)
         )
         return list(result)
 
-    async def _has_registration(self, session: AsyncSession, tournament_id: int, auth_user_id: int) -> bool:
-        """Does the account hold a live registration here? One indexed id probe."""
+    async def _has_entry(self, session: AsyncSession, registration_node_id: int, auth_user_id: int) -> bool:
+        """Does the account hold a live entry in this registration node? One indexed id probe."""
         return (
             await session.scalar(
-                sa.select(models.Registration.id)
+                sa.select(models.RegistrationEntry.id)
+                .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
                 .where(
-                    models.Registration.tournament_id == tournament_id,
+                    models.RegistrationEntry.registration_node_id == registration_node_id,
+                    models.RegistrationEntry.deleted_at.is_(None),
                     models.Registration.deleted_at.is_(None),
                     _owned_by(auth_user_id),
                 )
@@ -167,6 +179,26 @@ class TeamServiceBase:
                 _owned_by(auth_user_id),
             )
             .options(selectinload(models.Registration.identities))
+            .execution_options(populate_existing=True)
+        )
+
+    async def _own_entry(
+        self, session: AsyncSession, registration_node_id: int, auth_user_id: int
+    ) -> models.RegistrationEntry | None:
+        """The account's live entry in the node, with its registration (identities loaded).
+
+        ``populate_existing`` for the same reason as :meth:`_own_registration`.
+        """
+        return await session.scalar(
+            self.entry_repo.select()
+            .join(models.Registration, models.Registration.id == models.RegistrationEntry.registration_id)
+            .where(
+                models.RegistrationEntry.registration_node_id == registration_node_id,
+                models.RegistrationEntry.deleted_at.is_(None),
+                models.Registration.deleted_at.is_(None),
+                _owned_by(auth_user_id),
+            )
+            .options(selectinload(models.RegistrationEntry.registration).selectinload(models.Registration.identities))
             .execution_options(populate_existing=True)
         )
 
@@ -242,11 +274,20 @@ class TeamServiceBase:
         if await self.is_team_captain(session, team, auth_user_id):
             return True
         found = await session.scalar(
-            sa.select(models.Registration.id).where(
+            sa.select(models.Registration.id)
+            .join(
+                models.RegistrationEntry,
+                sa.and_(
+                    models.RegistrationEntry.registration_id == models.Registration.id,
+                    models.RegistrationEntry.registration_node_id == team.registration_node_id,
+                ),
+            )
+            .where(
                 models.Registration.registration_team_id == team.id,
                 models.Registration.is_team_manager.is_(True),
                 models.Registration.deleted_at.is_(None),
-                models.Registration.status.notin_(("withdrawn", "rejected")),
+                models.RegistrationEntry.deleted_at.is_(None),
+                models.RegistrationEntry.status.notin_(("withdrawn", "rejected")),
                 _owned_by(auth_user_id),
             )
         )
@@ -294,16 +335,16 @@ class TeamServiceBase:
         kind: str,
         payload: dict[str, Any],
         skip_registration_id: int | None = None,
-        members: list[models.Registration] | None = None,
+        members: list[models.RegistrationEntry] | None = None,
     ) -> None:
         # Callers that have already withdrawn or unlinked the roster must pass
         # the members they loaded *before* that write: `_roster_members`
         # hides withdrawn rows, so a second query would notify nobody.
         roster = members if members is not None else await self._roster_members(session, team.id)
-        for registration in roster:
-            if skip_registration_id is not None and registration.id == skip_registration_id:
+        for member in roster:
+            if skip_registration_id is not None and member.registration_id == skip_registration_id:
                 continue
-            auth_user_id = await _member_auth_user_id(session, registration.id)
+            auth_user_id = await _member_auth_user_id(session, member.registration_id)
             if auth_user_id is None:
                 continue
             await notify(
@@ -318,7 +359,7 @@ class TeamServiceBase:
         self,
         session: AsyncSession,
         team: models.RegistrationTeam,
-        members: list[models.Registration],
+        members: list[models.RegistrationEntry],
         shape: Any,
     ) -> list[Any]:
         """Refuse a roster that breaks a blocking team rule; otherwise return every issue found.
@@ -326,13 +367,13 @@ class TeamServiceBase:
         The issues come back so the flow's own team read can reuse them instead of
         evaluating (and asking Discord) a second time.
         """
-        form = await _form(session, team.tournament_id)
+        config = await _node_config(session, team.registration_node_id)
         workspace = await _workspace(session, team.workspace_id)
         issues = await team_eligibility.evaluate(
             session,
             team,
             members,
-            form=form,
+            config=config,
             shape=shape,
             workspace=workspace,
             discord=discord_client(),

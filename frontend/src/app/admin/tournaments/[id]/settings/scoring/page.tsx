@@ -43,14 +43,6 @@ function ScoringForm({
     <>
       <div className="flex flex-col gap-4">
         <SettingGroup id="results" title={t("results")}>
-          <SettingRow htmlFor="settings-is-league" label={t("league")}>
-            <Switch
-              id="settings-is-league"
-              checked={form.is_league}
-              disabled={disabled}
-              onCheckedChange={(checked) => patch({ is_league: checked })}
-            />
-          </SettingRow>
           <SettingRow htmlFor="settings-is-finished" label={t("finished")}>
             <Switch
               id="settings-is-finished"

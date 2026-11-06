@@ -34,8 +34,6 @@ def _stage(*, id: int, order: int) -> models.Stage:
         stage_type=enums.StageType.ROUND_ROBIN,
         max_rounds=5,
         order=order,
-        is_active=True,
-        is_completed=False,
     )
 
 

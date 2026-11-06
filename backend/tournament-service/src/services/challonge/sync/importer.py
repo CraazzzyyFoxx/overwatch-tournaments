@@ -1,22 +1,29 @@
 """``import_tournament``: the full Challonge -> local import."""
 
+import sqlalchemy as sa
 from loguru import logger
 from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.core import enums
+from shared.core.enums import FlowNodeKind, FlowNodeStatus
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.repository.flow_node import FlowNodeRepository
 from shared.services.encounter.events import enqueue_encounter_completed
 from src import schemas
 from src.services.challonge.sync._types import _ImportSource, _source_lookup_key, _SourceFetch, _UpsertResult
 from src.services.challonge.sync.helpers import _fetch_all_sources, _import_invalidated_resources
 from src.services.challonge.sync.locking import _sync_job_lock
+from src.services.flow.lifecycle import flow_node_service
 from src.services.tournament.events import (
     enqueue_tournament_recalculation,
     publish_tournament_invalidation,
 )
+
+_flow_nodes = FlowNodeRepository()
 
 
 class ImportMixin:
@@ -286,6 +293,9 @@ class ImportMixin:
                         match_lookup=match_lookup,
                     )
 
+                await self._complete_imported_formation(session, tournament_id)
+                await self._start_challonge_stage_nodes(session, tournament_id)
+
                 if stats["matches_synced"] > 0:
                     await enqueue_tournament_recalculation(session, tournament_id)
 
@@ -299,3 +309,121 @@ class ImportMixin:
                 await session.commit()
             logger.info(f"Challonge import for tournament {tournament_id}: {stats}")
             return stats
+
+    @staticmethod
+    async def _complete_imported_formation(session: AsyncSession, tournament_id: int) -> None:
+        """A Challonge tournament's teams come from Challonge: once they exist, its formation node is complete.
+
+        Moves the first formation node, only while it is still a ``draft`` with no team of its own and the tournament
+        has teams mapped from Challonge, to ``completed`` (mode ``manual``) through ``flow_node_service``, which is what
+        lets the first stage leave ``draft``. A formation an organizer started, or one whose teams the balancer or the
+        draft made, is never touched. Quiet when there is nothing to do. An intake that is still a ``draft`` with
+        nothing attached is dropped, since an import has no registration to wait for (opening it needs a form); an
+        intake in use leaves the formation as it is.
+        """
+        formation = await session.scalar(
+            sa.select(models.FlowNode)
+            .where(models.FlowNode.tournament_id == tournament_id, models.FlowNode.kind == FlowNodeKind.FORMATION)
+            .order_by(models.FlowNode.id)
+            .limit(1)
+        )
+        if formation is None or formation.status != FlowNodeStatus.DRAFT:
+            return
+        own_teams = sa.exists().where(
+            models.Team.tournament_id == tournament_id, models.Team.formation_node_id == formation.id
+        )
+        mapped_teams = sa.exists().where(
+            models.ChallongeParticipantMapping.team_id == models.Team.id, models.Team.tournament_id == tournament_id
+        )
+        if await session.scalar(sa.select(own_teams)) or not await session.scalar(sa.select(mapped_teams)):
+            return
+
+        # Lock order is tournament, then node; the node is re-read under the lock, a move may have raced the reads above.
+        await flow_node_service.lock_tournament(session, tournament_id)
+        await session.refresh(formation)
+        if formation.status != FlowNodeStatus.DRAFT:
+            return
+        inputs = (
+            await session.scalars(
+                sa.select(models.FlowNode).where(
+                    models.FlowNode.id.in_(
+                        sa.select(models.FlowEdge.source_node_id).where(models.FlowEdge.target_node_id == formation.id)
+                    ),
+                    models.FlowNode.status.not_in(
+                        [FlowNodeStatus.CLOSED, FlowNodeStatus.COMPLETED, FlowNodeStatus.FINAL]
+                    ),
+                )
+            )
+        ).all()
+        for node in inputs:
+            if node.kind != FlowNodeKind.REGISTRATION or node.status != FlowNodeStatus.DRAFT:
+                logger.warning("Formation of tournament {} waits for node {} ({})", tournament_id, node.id, node.status)
+                return
+        try:
+            # Entries, teams and sheet feeds hold the intake with ``ON DELETE RESTRICT``: such an intake is in use.
+            async with session.begin_nested():
+                for node in inputs:
+                    await _flow_nodes.delete(session, node)
+                await session.flush()
+        except IntegrityError:
+            logger.warning("Registration of tournament {} is in use; formation stays", tournament_id)
+            return
+
+        if formation.config.get("mode") != "manual":
+            formation.config = {**formation.config, "mode": "manual"}
+        await flow_node_service.transition(session, formation.id, FlowNodeStatus.FORMING, actor=None)
+        await flow_node_service.transition(session, formation.id, FlowNodeStatus.COMPLETED, actor=None)
+
+    @staticmethod
+    async def _start_challonge_stage_nodes(session: AsyncSession, tournament_id: int) -> None:
+        """A stage Challonge has underway or finished matches for moves ``draft -> ready -> live``.
+
+        Challonge-created stages arrive as ``draft`` nodes; the import is what knows they started. Each move goes
+        through ``flow_node_service`` in its own savepoint and is skipped (logged) on a 409: a stage whose input is not
+        final yet stays where it is.
+        """
+        started = (
+            sa.select(models.BracketEncounter.encounter_id)
+            .join(models.Encounter, models.Encounter.id == models.BracketEncounter.encounter_id)
+            .join(
+                models.ChallongeMatchMapping,
+                models.ChallongeMatchMapping.encounter_id == models.BracketEncounter.encounter_id,
+            )
+            .where(
+                models.BracketEncounter.stage_id == models.FlowNode.stage_id,
+                models.Encounter.status.in_([enums.EncounterStatus.OPEN, enums.EncounterStatus.COMPLETED]),
+            )
+            .correlate(models.FlowNode)
+            .exists()
+        )
+        nodes = (
+            await session.execute(
+                sa.select(models.FlowNode.id, models.FlowNode.status)
+                .where(
+                    models.FlowNode.tournament_id == tournament_id,
+                    models.FlowNode.kind == FlowNodeKind.STAGE,
+                    models.FlowNode.status.in_([FlowNodeStatus.DRAFT, FlowNodeStatus.READY]),
+                    started,
+                )
+                .order_by(models.FlowNode.id)
+            )
+        ).all()
+        for node_id, current in nodes:
+            for target in (FlowNodeStatus.READY, FlowNodeStatus.LIVE):
+                if current == target:
+                    continue
+                try:
+                    async with session.begin_nested():
+                        await flow_node_service.transition(session, node_id, target, actor=None)
+                except HTTPException as exc:
+                    if exc.status_code != 409:
+                        raise
+                    logger.warning(
+                        "Challonge stage node {} of tournament {} stays {}: {}",
+                        node_id,
+                        tournament_id,
+                        current,
+                        exc.detail,
+                    )
+                    break
+                current = target

@@ -65,7 +65,7 @@ async def execute_global_stat_sum(
     "global_winrate",
     grain=AchievementGrain.user,
     description="Career winrate ranking",
-    optional=("include_league", "limit", "metric", "op", "order", "value"),
+    optional=("limit", "metric", "op", "order", "value"),
     depends_on=("tournament.encounter", "tournament.player"),
 )
 async def execute_global_winrate(
@@ -81,13 +81,11 @@ async def execute_global_winrate(
         op/value: optional HAVING filter on winrate.
         order: "desc" (default) | "asc".
         limit: optional top/bottom N.
-        include_league: bool (default False).
     """
     op = params.get("op")
     value = params.get("value")
     order = params.get("order", "desc")
     limit = params.get("limit")
-    include_league = params.get("include_league", False)
     metric = params.get("metric", "winrate")
 
     # The team's own score over the score of everyone seated in the encounter.
@@ -118,7 +116,6 @@ async def execute_global_winrate(
             models.Encounter.discipline == "overwatch",
             models.WorkspaceMember.workspace_id == context.workspace_id,
             models.Encounter.status == EncounterStatus.COMPLETED,
-            *([] if include_league else [models.Tournament.is_league.is_(False)]),
         )
         .group_by(models.WorkspaceMember.player_id)
     )

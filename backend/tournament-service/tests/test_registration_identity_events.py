@@ -21,6 +21,9 @@ from shared.messaging.config import PLAYER_REFRESH_REQUESTED_ROUTING_KEY  # noqa
 from shared.testing import create_test_async_engine  # noqa: E402
 from src.services.tournament import events  # noqa: E402
 
+#: Nobody here has an inbox, so the node id is never looked up.
+NODE_ID = 1
+
 
 class RegistrationIdentityEventsTests(IsolatedAsyncioTestCase):
     if sys.platform == "win32":
@@ -87,7 +90,7 @@ class RegistrationIdentityEventsTests(IsolatedAsyncioTestCase):
             registration = await self._registration(
                 discipline, {"battlenet": ["Battle # 1234", "Alt#1234"], "riot": [" Riot Name # EUW "]}
             )
-            await events.enqueue_registration_approved(self.session, registration)
+            await events.enqueue_registration_approved(self.session, registration, registration_node_id=NODE_ID)
             await events.enqueue_registration_rank_check(self.session, registration)
             await self.session.flush()
             owned = await self._refreshes(registration)
@@ -104,14 +107,14 @@ class RegistrationIdentityEventsTests(IsolatedAsyncioTestCase):
 
     async def test_missing_owner_provider_stays_null_even_when_other_game_is_present(self):
         registration = await self._registration("lol", {"battlenet": ["Foreign#1234"]})
-        await events.enqueue_registration_approved(self.session, registration)
+        await events.enqueue_registration_approved(self.session, registration, registration_node_id=NODE_ID)
         await self.session.flush()
         [row] = await self._refreshes(registration)
         assert row.payload_json["identity"] is None
 
     async def test_a_registration_without_a_player_requests_no_refresh(self):
         registration = await self._registration("overwatch", {"battlenet": ["Battle#1234"]}, with_player=False)
-        await events.enqueue_registration_approved(self.session, registration)
+        await events.enqueue_registration_approved(self.session, registration, registration_node_id=NODE_ID)
         await events.enqueue_registration_rank_check(self.session, registration)
         await self.session.flush()
         assert await self._refreshes(registration) == []

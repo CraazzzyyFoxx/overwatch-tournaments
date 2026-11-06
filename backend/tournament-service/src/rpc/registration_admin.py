@@ -40,6 +40,7 @@ from __future__ import annotations
 
 from typing import Any, NamedTuple
 
+import sqlalchemy as sa
 from faststream.rabbit.annotations import RabbitMessage
 
 from shared import models
@@ -52,7 +53,17 @@ from shared.schemas.discipline_filter import DisciplineFilterQuery
 from shared.services.roster import roster_engine
 from src import schemas
 from src.core import auth
-from src.rpc._helpers import _bool, _dump, _identity, _path_int, _payload, _q1, _require_id, _run
+from src.rpc._helpers import (
+    _bool,
+    _dump,
+    _identity,
+    _path_int,
+    _payload,
+    _q1,
+    _registration_node_id,
+    _require_id,
+    _run,
+)
 from src.schemas.registration import (
     SubscriptionProviderConfigUpsert,
     WorkspaceSubscriptionRequirementUpsert,
@@ -91,7 +102,6 @@ from src.services.registration.serializers import (
     serialize_status,
 )
 from src.services.registration.templates import template_service
-from src.services.registration.windows import windows_service
 
 # --- helpers -----------------------------------------------------------------
 
@@ -149,6 +159,23 @@ async def _registration_ctx(session: Any, data: dict[str, Any], action: str, res
     ws_id = await auth.get_registration_workspace_id(session, registration_id)
     ensure_workspace_permission(user, ws_id, resource, action)
     return _Ctx(user, registration_id, ws_id)
+
+
+class _NodeCtx(NamedTuple):
+    """A per-registration authz context plus the registration node the request names."""
+
+    ctx: _Ctx
+    node_id: int
+
+
+async def _registration_node_ctx(session: Any, data: dict[str, Any], action: str) -> _NodeCtx:
+    """:func:`_registration_ctx` plus the registration node the request names, checked against the registration's
+    own tournament."""
+    ctx = await _registration_ctx(session, data, action)
+    tournament_id = await session.scalar(
+        sa.select(models.Registration.tournament_id).where(models.Registration.id == ctx.id)
+    )
+    return _NodeCtx(ctx, await _registration_node_id(session, data, tournament_id))
 
 
 async def _tournament_ctx(session: Any, data: dict[str, Any], action: str, resource: str = "team") -> _Ctx:
@@ -215,13 +242,14 @@ async def _owner_provider(session: Any, registration: Any) -> str:
     return identity_provider((await _owner_tournament(session, registration)).discipline)
 
 
-async def _registration_response(session: Any, ctx: _Ctx, registration: Any) -> Any:
-    """The response every per-registration admin mutation returns.
+async def _registration_response(session: Any, ctx: _Ctx, entry: models.RegistrationEntry) -> Any:
+    """The response every per-registration admin mutation returns (the registration as read through its ``entry``).
 
     The signal is STAGED here, not published: the caller's own commit is what
     releases it, so a response body can never describe a broadcast that outlived
     a failed transaction.
     """
+    registration = entry.registration
     status_meta_map = await get_status_metas_map(session, workspace_id=ctx.ws_id)
     await emit_balancer_registrations_changed(
         session,
@@ -240,10 +268,12 @@ async def _registration_response(session: Any, ctx: _Ctx, registration: Any) -> 
         workspace_id=ctx.ws_id,
         discipline=discipline,
         role_codes=rated_role_codes(discipline),
+        entries={registration.id: entry},
     )
     return _dump(
         serialize_registration(
             registration,
+            entry,
             workspace_id=ctx.ws_id,
             provider=identity_provider(discipline),
             status_meta_map=status_meta_map,
@@ -255,29 +285,31 @@ async def _registration_response(session: Any, ctx: _Ctx, registration: Any) -> 
 async def _stage_transition(
     session: Any,
     data: dict[str, Any],
-    ctx: _Ctx,
+    node: _NodeCtx,
     *,
     action: str,
     after: dict[str, Any],
-) -> models.Registration:
-    """Stage the audit row for a lifecycle transition on one registration.
+) -> models.RegistrationEntry:
+    """Stage the audit row for a lifecycle transition on one registration's entry in the node.
 
-    Reads the row first, so ``before`` is the state actually being left and the
+    Reads the entry first, so ``before`` is the state actually being left and the
     feed carries the registration's name rather than only its id. ``before`` is
-    narrowed to the same keys ``after`` names: the journal records a transition,
-    not a snapshot of the row. Staged before the service runs -- see
+    narrowed to the same keys ``after`` names (the node always among them): the journal records a
+    transition, not a snapshot of the row. Staged before the service runs -- see
     ``services/registration/audit.py`` on call order.
 
-    Returns the row it read, which the caller hands the service as
-    ``registration=``: the transition then loads the registration graph once.
+    Returns the entry it read, which the caller hands the service as
+    ``entry=``: the transition then loads the registration graph once.
 
     A transition that names a ``status`` passes the same status rule as
     ``reg_update`` before anything is staged: ``reg_restore`` lands ``approved``,
     so it needs ``registration.approve`` unless the row already is approved.
     """
-    current = await lifecycle.lifecycle_service.get_registration_by_id(session, ctx.id)
+    ctx = node.ctx
+    current = await lifecycle.lifecycle_service.get_entry(session, node.node_id, ctx.id)
     if "status" in after:
         _ensure_status_permission(ctx, after["status"], current=current.status)
+    after = {**after, "registration_node_id": node.node_id}
     await reg_audit.audit_service.stage(
         session,
         action=action,
@@ -285,7 +317,9 @@ async def _stage_transition(
         workspace_id=ctx.ws_id,
         data=data,
         entity_id=ctx.id,
-        entity_label=reg_audit.label(current, provider=await _owner_provider(session, current)),
+        entity_label=reg_audit.label(
+            current.registration, provider=await _owner_provider(session, current.registration)
+        ),
         before={field: getattr(current, field) for field in after},
         after=after,
     )
@@ -330,12 +364,10 @@ def register(broker: Any, logger: Any) -> None:
             requirement = await subscription_config.subscription_config_service.load_workspace_requirement_blob(
                 session, ctx.ws_id
             )
-            is_open = await windows_service.load_registration_open(session, ctx.id)
             return _dump(
                 serialize_registration_form(
                     form,
                     discipline=await reg_common._common_service.get_tournament_discipline(session, ctx.id),
-                    is_open=is_open,
                     subscription_requirement=requirement,
                     stale_registrations=await form_service.stale_count(session, form),
                 )
@@ -360,12 +392,10 @@ def register(broker: Any, logger: Any) -> None:
             requirement = await subscription_config.subscription_config_service.load_workspace_requirement_blob(
                 session, ctx.ws_id
             )
-            is_open = await windows_service.load_registration_open(session, ctx.id)
             return _dump(
                 serialize_registration_form(
                     form,
                     discipline=await reg_common._common_service.get_tournament_discipline(session, ctx.id),
-                    is_open=is_open,
                     subscription_requirement=requirement,
                     stale_registrations=await form_service.stale_count(session, form),
                 )
@@ -464,12 +494,10 @@ def register(broker: Any, logger: Any) -> None:
             requirement = await subscription_config.subscription_config_service.load_workspace_requirement_blob(
                 session, ctx.ws_id
             )
-            is_open = await windows_service.load_registration_open(session, ctx.id)
             return _dump(
                 serialize_registration_form(
                     form,
                     discipline=await reg_common._common_service.get_tournament_discipline(session, ctx.id),
-                    is_open=is_open,
                     subscription_requirement=requirement,
                     stale_registrations=await form_service.stale_count(session, form),
                 )
@@ -503,12 +531,14 @@ def register(broker: Any, logger: Any) -> None:
     async def _regteam_list(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _tournament_ctx(session, data, "read")
+            node_id = await _registration_node_id(session, data, ctx.id)
             # `_q1`, not `data.get`: `AllQuery` nests the query string, so a direct
             # lookup would silently read `False` for every request.
             include_terminal = _q1(data, "include_terminal", _bool, default=False)
             teams = await team_service.teams_service.list_teams(
                 session,
                 tournament_id=ctx.id,
+                registration_node_id=node_id,
                 include_terminal=include_terminal,
             )
             items = await team_service.teams_service.describe_teams(
@@ -520,7 +550,7 @@ def register(broker: Any, logger: Any) -> None:
                 RegistrationTeamListResponse(
                     items=items,
                     total=len(items),
-                    unassigned_players=await team_service.teams_service.count_unassigned_players(session, ctx.id),
+                    unassigned_players=await team_service.teams_service.count_unassigned_players(session, node_id),
                 )
             )
 
@@ -838,7 +868,7 @@ def register(broker: Any, logger: Any) -> None:
             return _dump(
                 await lifecycle.lifecycle_service.list_registration_reads(
                     session,
-                    ctx.id,
+                    await _registration_node_id(session, data, ctx.id),
                     workspace_id=ctx.ws_id,
                     status_filter=_q1(data, "status_filter"),
                     inclusion_filter=_q1(data, "inclusion_filter"),
@@ -860,9 +890,9 @@ def register(broker: Any, logger: Any) -> None:
             _ensure_status_permission(ctx, body.status, current="approved")
 
             await reg_common._common_service.ensure_tournament_exists(session, ctx.id)
-            registration = await lifecycle.lifecycle_service.create_manual_registration(
+            entry = await lifecycle.lifecycle_service.create_manual_registration(
                 session,
-                tournament_id=ctx.id,
+                await _registration_node_id(session, data, ctx.id),
                 display_name=body.display_name,
                 admin_notes=body.admin_notes,
                 answers=body.answers,
@@ -878,6 +908,7 @@ def register(broker: Any, logger: Any) -> None:
             # trade-off as shared.rpc.crud's service-backed create). Ceiling: a
             # crash between the two commits loses the trail, never the other way
             # round.
+            registration = entry.registration
             provider = await _owner_provider(session, registration)
             primary_identity = registration.primary_game_identity(provider=provider)
             await reg_audit.audit_service.stage(
@@ -890,13 +921,14 @@ def register(broker: Any, logger: Any) -> None:
                 entity_label=reg_audit.label(registration, provider=provider),
                 after={
                     "primary_handle": primary_identity.handle if primary_identity else None,
-                    "status": registration.status,
-                    "balancer_status": registration.balancer_status,
+                    "registration_node_id": entry.registration_node_id,
+                    "status": entry.status,
+                    "balancer_status": entry.balancer_status,
                     "roles": reg_audit.role_snapshot(registration),
                 },
             )
             await session.commit()
-            return await _registration_response(session, ctx, registration)
+            return await _registration_response(session, ctx, entry)
 
         return await _run(logger, op)
 
@@ -906,7 +938,8 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.reg_update")
     async def _reg_update(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _registration_ctx(session, data, "update")
+            node = await _registration_node_ctx(session, data, "update")
+            ctx = node.ctx
             body = schemas.BalancerRegistrationUpdateRequest.model_validate(_payload(data))
             if _touches_roles(body):
                 ensure_workspace_permission(ctx.user, ctx.ws_id, "registration", "roles")
@@ -915,8 +948,9 @@ def register(broker: Any, logger: Any) -> None:
             # round-trips its whole form, and a journal of no-ops is a journal
             # nobody reads.
             current = await lifecycle.lifecycle_service.get_registration_by_id(session, ctx.id)
-            _ensure_status_permission(ctx, body.status, current=current.status)
-            before, after = reg_audit.profile_changes(current, body.model_dump())
+            entry = await lifecycle.lifecycle_service.get_entry(session, node.node_id, ctx.id)
+            _ensure_status_permission(ctx, body.status, current=entry.status)
+            before, after = reg_audit.profile_changes(current, body.model_dump(), entry)
             if before or after:
                 await reg_audit.audit_service.stage(
                     session,
@@ -930,7 +964,7 @@ def register(broker: Any, logger: Any) -> None:
                     after=after,
                 )
 
-            registration = await lifecycle.lifecycle_service.update_registration_profile(
+            await lifecycle.lifecycle_service.update_registration_profile(
                 session,
                 ctx.id,
                 display_name=body.display_name,
@@ -944,8 +978,9 @@ def register(broker: Any, logger: Any) -> None:
                 pin=body.pin,
                 clear_pin=body.clear_pin,
                 registration=current,
+                entry=entry,
             )
-            return await _registration_response(session, ctx, registration)
+            return await _registration_response(session, ctx, entry)
 
         return await _run(logger, op)
 
@@ -953,17 +988,19 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.reg_approve")
     async def _reg_approve(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _registration_ctx(session, data, "approve")
+            node = await _registration_node_ctx(session, data, "approve")
+            ctx = node.ctx
             current = await _stage_transition(
-                session, data, ctx, action="registration.approve", after={"status": "approved"}
+                session, data, node, action="registration.approve", after={"status": "approved"}
             )
-            registration = await lifecycle.lifecycle_service.approve_registration(
+            entry = await lifecycle.lifecycle_service.approve_registration(
                 session,
+                node.node_id,
                 ctx.id,
                 reviewed_by=ctx.user.id,
-                registration=current,
+                entry=current,
             )
-            return await _registration_response(session, ctx, registration)
+            return await _registration_response(session, ctx, entry)
 
         return await _run(logger, op)
 
@@ -971,17 +1008,19 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.reg_reject")
     async def _reg_reject(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _registration_ctx(session, data, "reject")
+            node = await _registration_node_ctx(session, data, "reject")
+            ctx = node.ctx
             current = await _stage_transition(
-                session, data, ctx, action="registration.reject", after={"status": "rejected"}
+                session, data, node, action="registration.reject", after={"status": "rejected"}
             )
-            registration = await lifecycle.lifecycle_service.reject_registration(
+            entry = await lifecycle.lifecycle_service.reject_registration(
                 session,
+                node.node_id,
                 ctx.id,
                 reviewed_by=ctx.user.id,
-                registration=current,
+                entry=current,
             )
-            return await _registration_response(session, ctx, registration)
+            return await _registration_response(session, ctx, entry)
 
         return await _run(logger, op)
 
@@ -989,12 +1028,13 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.reg_include_balancer")
     async def _reg_include_balancer(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _registration_ctx(session, data, "update")
+            node = await _registration_node_ctx(session, data, "update")
+            ctx = node.ctx
             # The balancer status this lands on is derived from the resolved
             # roster, so the after-image reuses the very function the service
             # applies. Hence the explicit stage instead of _stage_transition: the
             # after-value is computed, not a literal.
-            current = await lifecycle.lifecycle_service.get_registration_by_id(session, ctx.id)
+            current = await lifecycle.lifecycle_service.get_entry(session, node.node_id, ctx.id)
             await reg_audit.audit_service.stage(
                 session,
                 action="registration.balancer_include",
@@ -1002,20 +1042,24 @@ def register(broker: Any, logger: Any) -> None:
                 workspace_id=ctx.ws_id,
                 data=data,
                 entity_id=ctx.id,
-                entity_label=reg_audit.label(current, provider=await _owner_provider(session, current)),
+                entity_label=reg_audit.label(
+                    current.registration, provider=await _owner_provider(session, current.registration)
+                ),
                 before={
+                    "registration_node_id": node.node_id,
                     "balancer_status": current.balancer_status,
                     "exclude_reason": current.exclude_reason,
                 },
                 after={
+                    "registration_node_id": node.node_id,
                     "balancer_status": reg_common.included_balancer_status(
-                        await reg_common.resolve_roster(session, current)
+                        await reg_common.resolve_roster(session, node.node_id, current.registration)
                     ),
                     "exclude_reason": None,
                 },
             )
-            registration = await lifecycle.lifecycle_service.add_to_balancer(session, ctx.id, registration=current)
-            return await _registration_response(session, ctx, registration)
+            entry = await lifecycle.lifecycle_service.add_to_balancer(session, node.node_id, ctx.id, entry=current)
+            return await _registration_response(session, ctx, entry)
 
         return await _run(logger, op)
 
@@ -1023,14 +1067,15 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.reg_withdraw")
     async def _reg_withdraw(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _registration_ctx(session, data, "update")
+            node = await _registration_node_ctx(session, data, "update")
+            ctx = node.ctx
             current = await _stage_transition(
-                session, data, ctx, action="registration.withdraw", after={"status": "withdrawn"}
+                session, data, node, action="registration.withdraw", after={"status": "withdrawn"}
             )
-            registration = await lifecycle.lifecycle_service.withdraw_registration(
-                session, ctx.id, registration=current
+            entry = await lifecycle.lifecycle_service.withdraw_registration(
+                session, node.node_id, ctx.id, entry=current
             )
-            return await _registration_response(session, ctx, registration)
+            return await _registration_response(session, ctx, entry)
 
         return await _run(logger, op)
 
@@ -1039,12 +1084,13 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.reg_restore")
     async def _reg_restore(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _registration_ctx(session, data, "update")
+            node = await _registration_node_ctx(session, data, "update")
+            ctx = node.ctx
             current = await _stage_transition(
-                session, data, ctx, action="registration.restore", after={"status": "approved"}
+                session, data, node, action="registration.restore", after={"status": "approved"}
             )
-            registration = await lifecycle.lifecycle_service.restore_registration(session, ctx.id, registration=current)
-            return await _registration_response(session, ctx, registration)
+            entry = await lifecycle.lifecycle_service.restore_registration(session, node.node_id, ctx.id, entry=current)
+            return await _registration_response(session, ctx, entry)
 
         return await _run(logger, op)
 
@@ -1052,11 +1098,13 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.reg_delete")
     async def _reg_delete(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _registration_ctx(session, data, "delete")
+            node = await _registration_node_ctx(session, data, "delete")
+            ctx = node.ctx
             # One read instead of a tournament_id-only scalar select: the audit row
             # needs the name and status being removed anyway, and
-            # soft_delete_registration 404s on a missing id either way.
-            current = await lifecycle.lifecycle_service.get_registration_by_id(session, ctx.id)
+            # soft_delete_registration 404s on a missing entry either way. The ENTRY goes (plan
+            # Decision 11), the profile stays.
+            current = await lifecycle.lifecycle_service.get_entry(session, node.node_id, ctx.id)
             await reg_audit.audit_service.stage(
                 session,
                 action="registration.delete",
@@ -1064,12 +1112,19 @@ def register(broker: Any, logger: Any) -> None:
                 workspace_id=ctx.ws_id,
                 data=data,
                 entity_id=ctx.id,
-                entity_label=reg_audit.label(current, provider=await _owner_provider(session, current)),
-                before={"status": current.status, "balancer_status": current.balancer_status},
+                entity_label=reg_audit.label(
+                    current.registration, provider=await _owner_provider(session, current.registration)
+                ),
+                before={
+                    "registration_node_id": node.node_id,
+                    "status": current.status,
+                    "balancer_status": current.balancer_status,
+                },
             )
-            tournament_id = current.tournament_id
+            tournament_id = current.registration.tournament_id
             await lifecycle.lifecycle_service.soft_delete_registration(
                 session,
+                node.node_id,
                 ctx.id,
                 deleted_by=ctx.user.id,
             )
@@ -1084,17 +1139,18 @@ def register(broker: Any, logger: Any) -> None:
     async def _reg_bulk_approve(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _tournament_ctx(session, data, "approve", resource="registration")
+            node_id = await _registration_node_id(session, data, ctx.id)
             registration_ids = _bulk_ids(_payload(data))
             await _stage_bulk(
                 session,
                 data,
                 ctx,
                 action="registration.bulk_approve",
-                after={"status": "approved", "registration_ids": registration_ids},
+                after={"status": "approved", "registration_node_id": node_id, "registration_ids": registration_ids},
             )
             approved, skipped = await lifecycle.lifecycle_service.bulk_approve_registrations(
                 session,
-                ctx.id,
+                node_id,
                 registration_ids,
                 reviewed_by=ctx.user.id,
             )
@@ -1109,26 +1165,28 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.reg_set_balancer_status")
     async def _reg_set_balancer_status(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _registration_ctx(session, data, "update")
+            node = await _registration_node_ctx(session, data, "update")
+            ctx = node.ctx
             body = schemas.SetBalancerStatusRequest.model_validate(_payload(data))
             current = await _stage_transition(
                 session,
                 data,
-                ctx,
+                node,
                 action="registration.balancer_status",
                 after={
                     "balancer_status": body.balancer_status,
                     "exclude_reason": body.exclude_reason,
                 },
             )
-            registration = await lifecycle.lifecycle_service.set_balancer_status(
+            entry = await lifecycle.lifecycle_service.set_balancer_status(
                 session,
+                node.node_id,
                 ctx.id,
                 balancer_status=body.balancer_status,
                 exclude_reason=body.exclude_reason,
-                registration=current,
+                entry=current,
             )
-            return await _registration_response(session, ctx, registration)
+            return await _registration_response(session, ctx, entry)
 
         return await _run(logger, op)
 
@@ -1137,17 +1195,18 @@ def register(broker: Any, logger: Any) -> None:
     async def _reg_bulk_add_balancer(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _tournament_ctx(session, data, "update", resource="registration")
+            node_id = await _registration_node_id(session, data, ctx.id)
             registration_ids = _bulk_ids(_payload(data))
             await _stage_bulk(
                 session,
                 data,
                 ctx,
                 action="registration.bulk_balancer_include",
-                after={"registration_ids": registration_ids},
+                after={"registration_node_id": node_id, "registration_ids": registration_ids},
             )
             updated, skipped = await lifecycle.lifecycle_service.bulk_add_to_balancer(
                 session,
-                ctx.id,
+                node_id,
                 registration_ids,
             )
             if updated:
@@ -1162,6 +1221,7 @@ def register(broker: Any, logger: Any) -> None:
     async def _reg_bulk_set_balancer_status(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _tournament_ctx(session, data, "update", resource="registration")
+            node_id = await _registration_node_id(session, data, ctx.id)
             body = schemas.BulkSetBalancerStatusRequest.model_validate(_payload(data))
             await _stage_bulk(
                 session,
@@ -1169,6 +1229,7 @@ def register(broker: Any, logger: Any) -> None:
                 ctx,
                 action="registration.bulk_balancer_status",
                 after={
+                    "registration_node_id": node_id,
                     "balancer_status": body.balancer_status,
                     "exclude_reason": body.exclude_reason,
                     "registration_ids": body.registration_ids,
@@ -1176,7 +1237,7 @@ def register(broker: Any, logger: Any) -> None:
             )
             updated, skipped = await lifecycle.lifecycle_service.bulk_set_balancer_status(
                 session,
-                ctx.id,
+                node_id,
                 body.registration_ids,
                 balancer_status=body.balancer_status,
                 exclude_reason=body.exclude_reason,
@@ -1193,10 +1254,12 @@ def register(broker: Any, logger: Any) -> None:
     async def _reg_rank_autofill_preview(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _tournament_ctx(session, data, "read", resource="registration")
+            node_id = await _registration_node_id(session, data, ctx.id)
             body = schemas.BalancerRegistrationRankAutofillRequest.model_validate(_payload(data))
             result = await rank_autofill.rank_autofill_service.autofill_registration_ranks_from_parsed(
                 session,
                 ctx.id,
+                node_id,
                 registration_ids=body.registration_ids,
                 overwrite_existing=body.overwrite_existing,
                 add_to_balancer=body.add_to_balancer,
@@ -1216,6 +1279,7 @@ def register(broker: Any, logger: Any) -> None:
             ctx = await _tournament_ctx(session, data, "update", resource="registration")
             # Rewrites the ranks themselves, so it needs the roles/ranks grant too.
             ensure_workspace_permission(ctx.user, ctx.ws_id, "registration", "roles")
+            node_id = await _registration_node_id(session, data, ctx.id)
             body = schemas.BalancerRegistrationRankAutofillRequest.model_validate(_payload(data))
             # Rank autofill rewrites the numbers the balancer sorts on, across as
             # many registrations as the request names, so the parameters it ran
@@ -1227,6 +1291,7 @@ def register(broker: Any, logger: Any) -> None:
                 ctx,
                 action="registration.rank_autofill",
                 after={
+                    "registration_node_id": node_id,
                     "registration_ids": body.registration_ids,
                     "overwrite_existing": body.overwrite_existing,
                     "add_to_balancer": body.add_to_balancer,
@@ -1237,6 +1302,7 @@ def register(broker: Any, logger: Any) -> None:
             result = await rank_autofill.rank_autofill_service.autofill_registration_ranks_from_parsed(
                 session,
                 ctx.id,
+                node_id,
                 registration_ids=body.registration_ids,
                 overwrite_existing=body.overwrite_existing,
                 add_to_balancer=body.add_to_balancer,
@@ -1282,27 +1348,29 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.reg_check_in")
     async def _reg_check_in(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _registration_ctx(session, data, "check_in")
+            node = await _registration_node_ctx(session, data, "check_in")
+            ctx = node.ctx
             body = schemas.CheckInRequest.model_validate(_payload(data))
             current = await _stage_transition(
                 session,
                 data,
-                ctx,
+                node,
                 action="registration.check_in" if body.checked_in else "registration.check_in_undo",
                 after={"checked_in": body.checked_in},
             )
             if body.checked_in:
-                registration = await lifecycle.lifecycle_service.check_in_registration(
+                entry = await lifecycle.lifecycle_service.check_in_registration(
                     session,
+                    node.node_id,
                     ctx.id,
                     checked_in_by=ctx.user.id,
-                    registration=current,
+                    entry=current,
                 )
             else:
-                registration = await lifecycle.lifecycle_service.uncheck_in_registration(
-                    session, ctx.id, registration=current
+                entry = await lifecycle.lifecycle_service.uncheck_in_registration(
+                    session, node.node_id, ctx.id, entry=current
                 )
-            return await _registration_response(session, ctx, registration)
+            return await _registration_response(session, ctx, entry)
 
         return await _run(logger, op)
 

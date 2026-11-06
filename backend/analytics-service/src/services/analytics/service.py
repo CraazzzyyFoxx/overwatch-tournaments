@@ -6,6 +6,7 @@ from sqlalchemy.orm import aliased
 
 from shared import models
 from shared.core import enums
+from shared.core.chrono import tournament_chrono_key
 from shared.repository import AnalyticsAlgorithmRepository, AnalyticsPlayerRepository, TeamRepository
 from shared.repository.stats_queries import player_facts
 from shared.services.workspace_scope import workspace_scope_filter
@@ -78,37 +79,6 @@ class AnalyticsService:
             .group_by(match_seat.team_id)
         ).cte("player_matches")
 
-        team_counts = (
-            sa.select(
-                models.Team.tournament_id.label("tournament_id"),
-                sa.func.count(models.Team.id).label("team_count"),
-            )
-            .join(models.Tournament, models.Team.tournament_id == models.Tournament.id)
-            .where(models.Tournament.discipline == discipline, *workspace_scope_filter(workspace_id, workspace_ids))
-            .group_by(models.Team.tournament_id)
-        ).cte("team_counts")
-
-        # A team's FINAL tournament placement is the overall_position of its LATEST
-        # stage standing (the playoff bracket if it advanced, else the group stage),
-        # not ``min()`` across stages: an advancing team carries a placeholder
-        # overall_position=0 in the group stage, so ``min()`` mis-reads a 13th-place
-        # finisher as the champion (inflating placement_score and the placement gate).
-        standings = (
-            sa.select(
-                models.Standing.team_id.label("team_id"),
-                models.Standing.tournament_id.label("tournament_id"),
-                models.Standing.overall_position.label("overall_position"),
-            )
-            .join(models.Tournament, models.Standing.tournament_id == models.Tournament.id)
-            .where(models.Tournament.discipline == discipline, *workspace_scope_filter(workspace_id, workspace_ids))
-            .distinct(models.Standing.team_id, models.Standing.tournament_id)
-            .order_by(
-                models.Standing.team_id,
-                models.Standing.tournament_id,
-                models.Standing.stage_id.desc(),
-            )
-        ).cte("team_standings")
-
         facts = player_facts(discipline=discipline)
         impact_points = (
             sa.select(
@@ -129,6 +99,7 @@ class AnalyticsService:
             .group_by(models.Player.id)
         ).cte("impact_points")
 
+        start, end, _ = tournament_chrono_key()
         query = (
             sa.select(
                 models.Team.id.label("team_id"),
@@ -138,13 +109,15 @@ class AnalyticsService:
                 models.Player.role.label("role"),
                 models.Player.rank.label("rank"),
                 models.Tournament.id.label("tournament_id"),
-                # Tournament chronology: ids are not chronological, so every per-player history orders by this.
-                sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at).label("started_at"),
+                # Tournament chronology (the key of `shared.core.chrono`): ids are not chronological, so every
+                # per-player history orders by it.
+                start.label("started_at"),
+                end.label("ended_at"),
                 sa.func.coalesce(points.c.wins, 0).label("wins"),
                 sa.func.coalesce(points.c.losses, 0).label("losses"),
                 sa.func.coalesce(matches.c.match_count, 0).label("match_count"),
-                standings.c.overall_position.label("overall_position"),
-                team_counts.c.team_count.label("team_count"),
+                models.ParticipantResult.placement.label("overall_position"),
+                models.ParticipantResult.field_size.label("team_count"),
                 impact_points.c.impact_points.label("impact_points"),
             )
             .select_from(models.Team)
@@ -165,14 +138,13 @@ class AnalyticsService:
             )
             .join(matches, models.Player.team_id == matches.c.team_id, isouter=True)
             .join(
-                standings,
+                models.ParticipantResult,
                 sa.and_(
-                    standings.c.team_id == models.Team.id,
-                    standings.c.tournament_id == models.Tournament.id,
+                    models.ParticipantResult.tournament_id == models.Tournament.id,
+                    models.ParticipantResult.workspace_member_id == models.Player.workspace_member_id,
                 ),
                 isouter=True,
             )
-            .join(team_counts, team_counts.c.tournament_id == models.Tournament.id, isouter=True)
             .join(impact_points, impact_points.c.player_id == models.Player.id, isouter=True)
             .where(
                 models.Tournament.id >= 1,
@@ -180,7 +152,7 @@ class AnalyticsService:
                 models.Tournament.discipline == discipline,
                 *workspace_scope_filter(workspace_id, workspace_ids),
             )
-            .order_by(models.WorkspaceMember.player_id, models.Player.role, models.Tournament.id)
+            .order_by(models.WorkspaceMember.player_id, models.Player.role, *tournament_chrono_key())
         )
 
         result = await session.execute(query)
@@ -196,26 +168,23 @@ class AnalyticsService:
         *,
         discipline: str,
     ) -> list[int]:
-        """The ``look_back`` most recent tournament ids up to the end tournament, by START DATE.
+        """The ``look_back`` most recent tournament ids up to the end tournament, by the tournament chronology key.
 
-        Chronology is ``(coalesce(start_date, created_at), id)``. Returns the
+        Chronology is ``shared.core.chrono.tournament_chrono_key`` (start, end, id). Returns the
         explicit id list, not an id interval: ids are not chronological in this
         database (tournament 62 started months before 61), so an ``id BETWEEN``
         window around an out-of-order tournament would pull in events played after
         it. Result is ordered oldest → newest and includes ``end_tournament_id`` itself.
         """
-        chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
         end_key = (
-            await session.execute(
-                sa.select(chrono, models.Tournament.id).where(models.Tournament.id == end_tournament_id)
-            )
+            await session.execute(sa.select(*tournament_chrono_key()).where(models.Tournament.id == end_tournament_id))
         ).one_or_none()
         if end_key is None:
             return [int(end_tournament_id)]
         rows = await session.execute(
             sa.select(models.Tournament.id)
             .where(
-                sa.tuple_(chrono, models.Tournament.id) <= sa.tuple_(*end_key),
+                sa.tuple_(*tournament_chrono_key()) <= sa.tuple_(*end_key),
                 # Hidden tournaments are containers, not seasons. The per-workspace
                 # scrim container would occupy one of the ``look_back`` slots while
                 # contributing no encounters to the replay.
@@ -223,7 +192,7 @@ class AnalyticsService:
                 models.Tournament.discipline == discipline,
                 *workspace_scope_filter(workspace_id, workspace_ids),
             )
-            .order_by(chrono.desc(), models.Tournament.id.desc())
+            .order_by(*(c.desc() for c in tournament_chrono_key()))
             .limit(max(int(look_back), 1))
         )
         ids = [int(row[0]) for row in rows.all()]
@@ -242,12 +211,11 @@ class AnalyticsService:
 
         Companion to :func:`lookback_tournament_ids` — takes the explicit id list a
         date window resolves to (an id interval cannot express one) and orders the
-        replay by tournament start date so rating updates happen in the order the
+        replay by the tournament chronology key so rating updates happen in the order the
         games were actually played.
         """
         if not tournament_ids:
             return []
-        chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
         query = (
             sa.select(models.Encounter)
             .options(
@@ -267,7 +235,7 @@ class AnalyticsService:
                 models.Tournament.discipline == discipline,
                 *workspace_scope_filter(workspace_id, workspace_ids),
             )
-            .order_by(chrono, models.Encounter.tournament_id, models.Encounter.id)
+            .order_by(*tournament_chrono_key(), models.Encounter.id)
         )
         result = await session.scalars(query)
         return result.unique().all()  # type: ignore
@@ -280,23 +248,22 @@ class AnalyticsService:
         *,
         discipline: str,
     ) -> list[int]:
-        """Tournaments of the scope started after ``tournament_id`` that already have v1 rows, oldest first.
+        """Tournaments of the scope after ``tournament_id`` in the chronology that already have v1 rows, oldest first.
 
-        Chronology is ``(coalesce(start_date, created_at), id)``; "has v1 rows" means ``analytics.player_shift`` rows.
+        Chronology is ``shared.core.chrono.tournament_chrono_key``; "has v1 rows" means ``analytics.player_shift`` rows.
         """
-        chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
         key = (
-            await session.execute(sa.select(chrono, models.Tournament.id).where(models.Tournament.id == tournament_id))
+            await session.execute(sa.select(*tournament_chrono_key()).where(models.Tournament.id == tournament_id))
         ).one()
         rows = await session.execute(
             sa.select(models.Tournament.id)
             .where(
-                sa.tuple_(chrono, models.Tournament.id) > sa.tuple_(*key),
+                sa.tuple_(*tournament_chrono_key()) > sa.tuple_(*key),
                 models.Tournament.discipline == discipline,
                 *workspace_scope_filter(workspace_id),
                 sa.exists().where(models.AnalyticsPlayer.tournament_id == models.Tournament.id),
             )
-            .order_by(chrono, models.Tournament.id)
+            .order_by(*tournament_chrono_key())
         )
         return [int(row[0]) for row in rows.all()]
 

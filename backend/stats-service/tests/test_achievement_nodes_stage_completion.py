@@ -50,13 +50,22 @@ class _StageCase(_EngineTestCase):
             stage_type=stage_type,
             order=order,
             max_rounds=1,
-            is_completed=completed,
+        )
+        self.db.insert(
+            models.FlowNode.__table__,
+            tournament_id=REAL_TOURNAMENT_ID,
+            kind="stage",
+            name=f"stage {order}",
+            status="completed" if completed else "live",
+            stage_id=stage_id,
         )
         return stage_id
 
     def complete(self, stage_id: int) -> None:
         self.db.session.execute(
-            sa.update(models.Stage.__table__).where(models.Stage.__table__.c.id == stage_id).values(is_completed=True)
+            sa.update(models.FlowNode.__table__)
+            .where(models.FlowNode.__table__.c.stage_id == stage_id)
+            .values(status="completed")
         )
         self.db.session.commit()
 
@@ -94,8 +103,8 @@ class StageCompletedNodeTests(_StageCase):
 
 
 class BracketNodesWaitForStageCompletionTests(_StageCase):
-    async def test_standing_position_waits_for_its_stage(self) -> None:
-        playoff = self.stage(enums.StageType.SINGLE_ELIMINATION, order=0, completed=False)
+    async def test_standing_position_waits_for_the_tournament_result(self) -> None:
+        playoff = self.stage(enums.StageType.SINGLE_ELIMINATION, order=0, completed=True)
         self.db.insert(
             models.Standing.__table__,
             id=self.db._id(),
@@ -114,7 +123,8 @@ class BracketNodesWaitForStageCompletionTests(_StageCase):
         params = {"op": "==", "value": 1}
 
         self.assertEqual(set(), await self.node("standing_position", params))
-        self.complete(playoff)
+        self.db.placement(REAL_TOURNAMENT_ID, self.teams["home"], 1)
+        self.db.session.commit()
         self.assertEqual({HOME_KEY}, await self.node("standing_position", params))
 
     async def test_final_scoreline_waits_for_the_final_stage(self) -> None:

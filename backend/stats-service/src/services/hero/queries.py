@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core import enums, pagination
+from shared.core.chrono import tournament_chrono_key
 from shared.division_grid import DivisionGrid, division_case_expr, ladder_grid
 from shared.repository.stats_reads import duel_matches
 from shared.services.division_grid.access import canonical_division_expr, tournament_grid_versions
@@ -530,13 +531,9 @@ class HeroQueries(DisciplineQueries):
                 sa.func.row_number()
                 .over(
                     partition_by=models.WorkspaceMember.player_id,
-                    # The newest ranked event first, by start date (undated last), not id: ids follow creation, not
+                    # The newest ranked event first, by the tournament chronology, not id: ids follow creation, not
                     # play. A player never ranked keeps the newest row and no division.
-                    order_by=[
-                        models.Player.rank.is_(None),
-                        models.Tournament.start_date.desc().nulls_last(),
-                        models.Player.tournament_id.desc(),
-                    ],
+                    order_by=[models.Player.rank.is_(None), *(c.desc() for c in tournament_chrono_key())],
                 )
                 .label("rn"),
             )

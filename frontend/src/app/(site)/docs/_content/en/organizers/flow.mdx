@@ -1,0 +1,100 @@
+A tournament is a graph of steps. Registrations, team formations and stages are boxes; arrows between them say who moves on to the next step. The graph lives on the **Flow** tab of the tournament's admin section. A single-day event needs none of it: every tournament starts with a **Registration** and a **Formation** box already connected, and the other tabs keep working as before. Use the **Flow** tab when you want groups, a re-formation before the playoff, an individual Swiss with a draft, or a league season that runs over several days.
+
+<Callout type="warning">
+Everything that changes a node needs the workspace permission to update tournaments: saving the graph, a node's settings and schedule, and moving a node between statuses. A role that may only create tournaments or teams can see the **Flow** tab only if it can also read tournaments, and cannot change anything on it. See [Roles and permissions](/docs/organizers/roles).
+</Callout>
+
+## Nodes
+
+There are eight kinds of node. The first three are steps with a lifecycle of their own; the other five compute a list from other lists and need no one to start them.
+
+| Node | What it does |
+|---|---|
+| **Registration** | One intake of players: a form, a sign-up window, optional check-in. It hands the approved (and checked-in) players on. Its statuses are **Draft**, **Open**, **Check-in**, **Closed**. |
+| **Formation** | Turns players into teams in one of four ways: **Balancer**, **Draft**, **Registered teams** or **Manual**. Its statuses are **Draft**, **Forming**, **Completed**. |
+| **Stage** | A group stage, bracket, Swiss or FFA league. It takes teams (players, for an individual Swiss), plays them out and hands on its ranking. Its statuses are **Draft**, **Ready**, **Live**, **Completed**. |
+| **Filter** | Keeps part of a ranking: **Top N**, a **Range**, **Top N per group**, a **Swiss status** (qualified or eliminated) or a **Manual pick**. This is where "who goes through" is decided. |
+| **Merge** | Joins several lists of the same kind into one, in the order the arrows were drawn; a repeated participant is kept once. |
+| **Split** | Cuts a ranking into buckets of a given size, in order or in a snake order, each leaving through its own output. |
+| **Aggregate** | Adds up the results of several stages into one score per participant. See the League season section below. |
+| **Leaderboard** | The final table of the tournament. It is what the public **Table** tab shows, and it takes the places you pin. |
+
+The pure nodes show **Pending** (an input has no results yet), **Tentative** (results are in, but some input is still playing) or **Final** (every input is final).
+
+## Building
+
+Open **Admin → Tournaments →** your tournament **→ Flow**.
+
+1. Add a node from the **Nodes** palette: drag it onto the canvas, or click it. The palette has two groups, **Lifecycle** and **Transitions**.
+2. Draw an arrow by dragging from a dot on the right side of one node to a dot on the left side of another. Dots have a colour: blue carries players, amber carries teams. You can connect dots of the same colour; the one exception is a team list into a **Formation**, which dissolves the teams back into players.
+3. Click a node to open its settings in the side panel.
+4. Watch the **Issues** list: it re-checks the graph while you work. An **Error** blocks saving (an arrow loop, mismatched colours, two arrows into a one-input dot, an aggregate that needs more inputs than it has). A **Warning** only points something out.
+5. Press **Save flow**. The whole change is saved at once, or not at all. **Discard** drops the unsaved changes.
+
+If your save would delete a registration, formation or stage box that was already saved, you are asked to confirm first: the dialog lists what goes with each box (entries, balancer config and draft sessions, stage groups and matches). A box that still owns teams, entries or sheet feeds cannot be deleted until you remove those. If someone else changes a box on the server while you are editing, your edit is kept, the box shows **Changed on server** and the **Issues** list says so; boxes you did not touch simply take the new server settings.
+
+While the graph has unsaved changes, the settings of registration, formation and stage nodes ask you to save or discard first, because those forms save on their own.
+
+A node you added appears with the status **Draft**. A stage needs its groups or brackets: add them in the stage's settings under **Items** before you start it.
+
+## Presets
+
+On a tournament that still has only its starting boxes, **Presets** offers a ready-made graph. The preset reuses the starting **Registration** and **Formation**, so nothing is duplicated.
+
+| Preset | What it builds |
+|---|---|
+| **Single stage** | Formation → one **Playoff** stage. |
+| **Groups → playoff** | Formation → **Groups** (round robin) → filter **Top 2 per group** → **Playoff** (single elimination, seeded across groups). |
+| **Groups → re-formation → playoff** | Formation → **Groups** → filter **Top 4** → a second formation, **Playoff teams**, → **Playoff**. The second formation starts in the same mode as the first. |
+| **Individual Swiss → draft → playoff** | Registration → **Swiss** (individual, 4 playoff teams) → filter **Qualifiers** (top 20) → the formation, now in **Draft** mode → **Playoff**. 20 qualifiers make 4 teams of 5. |
+| **League season (N days, best K)** | For each of N days (2 to 10): **Day i** registration → **Day i teams** formation → **Day i** round-robin stage. All days feed an **Aggregate** named **Season**, which feeds a **Leaderboard** named **Season table**. |
+
+Change the numbers after you apply a preset if they do not fit: they are plain filter and stage settings.
+
+A preset adds stages, not their contents. Open each stage's settings and add the groups or bracket under **Items** before you move the stage to **Ready**.
+
+## Running nodes
+
+Each node is moved by its own status control in the side panel: a registration opens, closes and runs check-in on its own schedule; a formation goes **Forming**, then **Completed** when you export the teams; a stage goes **Ready** (inputs are seated), **Live** (matches are generated), then **Completed** by itself when every match is finished. Several stages may be live at the same time, which is how the days of a league run.
+
+What each kind shows in the panel:
+
+- **Registration**: its settings, its sign-up schedule and its entries, filtered to this node.
+- **Formation**: the mode, with a button to the matching screen: the draft dashboard for **Draft**, a link to **Open the balancer** for **Balancer**, **Open registered teams** for **Registered teams**, **Open the roster** for **Manual**. The mode can be changed while the node is **Draft**.
+- **Stage**: the stage settings and its **Items**, as on the **Bracket** tab.
+- **Filter, Merge, Split, Aggregate, Leaderboard**: their settings; the aggregate also shows a preview table of the tentative results.
+
+What freezes:
+
+- A node that has started (it left **Draft**) can no longer be deleted or re-configured, and neither can the arrows leading into it.
+- A filter, aggregate or other computing node freezes once any step after it has started.
+- You can always add a new step at the end: a new day, a new group stage. A running league appends its next day this way.
+
+A formation that is **Completed** can go back to **Forming** only while nothing after it has started.
+
+**Reopen** is offered on every closed registration and completed formation. If a later step has already started, the platform refuses and says so.
+
+## League season
+
+A league season is one tournament whose days are stages. Build it with the **League season (N days, best K)** preset: **Days** is N, **Best results counted** is K.
+
+The **Aggregate** node adds up what each participant scored on each day. With K smaller than N the mode is **Best N**: the K best days count, the rest are ignored. With K equal to N every day counts. The score of a day is set on the aggregate:
+
+- **Stage points**: the points the participant had in that day's standings;
+- **Points by place**: a table of place → points, 0 for a place that is not in it;
+- **Formula**: an expression over `place`, `participants`, `points`, `wins`, `draws`, `losses`, `map_diff`, `buchholz` and `ffa_score`.
+
+A day the participant did not play counts as 0 in **Sum of all** and **Last N**, is skipped in **Best N**, and is left out of the divisor in **Average**. Participants are ordered by the total; a tie goes to the one with more best places (most firsts, then most seconds), then to the better place on the latest day. A tie that remains can be settled with a pin on the **Leaderboard**.
+
+The **Table** tab shows the result live while the season runs, and the **Aggregate** node shows the same numbers as a preview.
+
+## What players see
+
+- **Table** — the **Leaderboard**: one column per day, the results that count highlighted, and above it the rule in words ("Only the best 2 results count."). The tab exists only for tournaments with a leaderboard node.
+- **Format** — the graph itself, read-only: each box is a step with its status, arrows show who moves on.
+- **Bracket** — when the tournament has several branches (for example several league days), the stages are grouped by the registrations upstream of them. With one branch, nothing changes.
+- **Registration cards** — a tournament with two or more registration nodes shows one card per open intake, for example **Register for Day 3**. With one intake the usual register button stays.
+
+<Callout>
+Group tables no longer draw the **advances** cut line. The number of teams that move on is now a setting of the filter node after the stage, not of the stage, so the table has nothing to draw the line from. The standings themselves are unchanged. Cut lines drawn from the filter are not part of this release.
+</Callout>

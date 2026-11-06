@@ -42,7 +42,7 @@ def compute_drift_report(
     """Return ``{feature: scale-normalised distance}`` plus a flagged list.
 
     ``df`` must contain a ``tournament_id`` column; ``tournament_ids`` orders its
-    tournaments chronologically (oldest first, as :func:`tournament_ids_up_to`
+    tournaments chronologically (oldest first, as :func:`tournaments_up_to`
     returns them) — ids are not chronological, so the recent window cannot come
     from sorting them. Features compared are all numeric columns excluding
     identifiers. Each distance is expressed in baseline standard deviations, so

@@ -15,7 +15,9 @@ class TournamentReadiness(BaseModel):
 
     tournament_id: int
     status: str
-    team_formation: str
+    #: Distinct ``mode`` of the tournament's formation nodes (balancer | draft | registered | manual), sorted;
+    #: empty without a formation node. The flow decides which formation checks apply. Unmasked.
+    formation_modes: list[str]
     # visible with tournament.read:
     schedule_configured: bool | None
     grid_selected: bool | None

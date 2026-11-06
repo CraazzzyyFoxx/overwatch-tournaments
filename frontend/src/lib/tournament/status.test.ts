@@ -1,32 +1,28 @@
 import { describe, expect, it } from "vitest";
 
-import { areStreamsVisible, isRegistrationOpen, mayHavePastBroadcasts } from "./status";
-import type { Tournament, TournamentStatus } from "@/types/tournament.types";
+import { areStreamsVisible, displayStatus, mayHavePastBroadcasts } from "./status";
+import type { TournamentFlowNode } from "@/types/flow.types";
+import type { TournamentDisplayStatus, TournamentStatus } from "@/types/tournament.types";
 
 /**
- * The stream gate, spelled out over the WHOLE status vocabulary rather than the
- * two statuses that should pass. A status added to `TournamentStatus` without a
- * decision here fails the exhaustiveness case below instead of silently
- * inheriting "hidden" — which is how the pre-gate bug read in reverse: a
- * registration-phase page showed a permanent "channel is offline" dock and an
- * empty Streams tab.
+ * The stream gate, spelled out over the WHOLE display vocabulary rather than the
+ * status that should pass. A status added without a decision here fails the
+ * exhaustiveness case below instead of silently inheriting "hidden" — which is
+ * how the pre-gate bug read in reverse: a registration-phase page showed a
+ * permanent "channel is offline" dock and an empty Streams tab.
  */
-const EXPECTED: Record<TournamentStatus, boolean> = {
+const EXPECTED: Record<TournamentDisplayStatus, boolean> = {
+  announcement: false,
   registration: false,
-  // The live player draft is broadcast, so it is the one pre-competition phase
-  // whose streams belong on screen.
-  draft: true,
   check_in: false,
+  forming: false,
   live: true,
-  // Match play under another name — it shares the "live" presentation bucket,
-  // which is what the gate actually tests.
-  playoffs: true,
   completed: false,
   archived: false
 };
 
 describe("areStreamsVisible", () => {
-  for (const [status, expected] of Object.entries(EXPECTED) as [TournamentStatus, boolean][]) {
+  for (const [status, expected] of Object.entries(EXPECTED) as [TournamentDisplayStatus, boolean][]) {
     it(`${expected ? "shows" : "hides"} streams in ${status}`, () => {
       expect(areStreamsVisible(status)).toBe(expected);
     });
@@ -38,115 +34,59 @@ describe("areStreamsVisible", () => {
  * The poller records from check-in on, and a finished event keeps its VODs —
  * the one place this gate must disagree with `areStreamsVisible`.
  */
-const PAST_BROADCASTS: Record<TournamentStatus, boolean> = {
+const PAST_BROADCASTS: Record<TournamentDisplayStatus, boolean> = {
   announcement: false,
   registration: false,
   check_in: true,
-  draft: true,
+  forming: true,
   live: true,
-  playoffs: true,
   completed: true,
   archived: true
 };
 
 describe("mayHavePastBroadcasts", () => {
-  for (const [status, expected] of Object.entries(PAST_BROADCASTS) as [TournamentStatus, boolean][]) {
+  for (const [status, expected] of Object.entries(PAST_BROADCASTS) as [TournamentDisplayStatus, boolean][]) {
     it(`${expected ? "reads" : "skips"} past broadcasts in ${status}`, () => {
       expect(mayHavePastBroadcasts(status)).toBe(expected);
     });
   }
 });
 
-const NOW = Date.parse("2026-08-20T12:00:00Z");
-const HOUR = 60 * 60 * 1000;
-
-function regWindow(
-  ends_at: string | null,
-  starts_at = "2026-08-01T00:00:00Z"
-): Tournament["phase_schedule"] {
-  return [{ status: "registration", starts_at, ends_at }] as Tournament["phase_schedule"];
+function node(id: number, kind: string, status: string): TournamentFlowNode {
+  return { id, kind, name: `Node ${id}`, status, config: {}, schedule: [], stage_id: null } as TournamentFlowNode;
 }
 
-function gate(
-  overrides: Partial<Pick<Tournament, "status" | "phase_schedule" | "allow_late_registration">>
-) {
-  return isRegistrationOpen(
-    {
-      status: "live",
-      phase_schedule: regWindow(null),
-      allow_late_registration: false,
-      ...overrides
-    },
-    NOW
-  );
+function show(status: TournamentStatus, nodes?: TournamentFlowNode[]) {
+  return displayStatus({ status, flow_nodes: nodes });
 }
 
-/**
- * The client mirror of `shared.services.registration_window`. It only decides
- * whether the register button renders, which is exactly why it has to agree with
- * the server: a mirror that drifts either hides a working button or offers one
- * that 400s. `allow_late_registration` spent a release ignored by the backend
- * predicate — these cases pin the boundary it was reinstated with.
- */
-describe("isRegistrationOpen", () => {
-  it("is closed with no registration row, whatever else is scheduled", () => {
-    expect(gate({ phase_schedule: [] as Tournament["phase_schedule"] })).toBe(false);
+describe("displayStatus", () => {
+  it("is the status unless the tournament is live", () => {
+    expect(show("announcement", [node(1, "registration", "open")])).toBe("announcement");
+    expect(show("completed")).toBe("completed");
+    expect(show("archived")).toBe("archived");
+  });
+
+  it("shows registration while a registration node is open and no stage is live", () => {
+    expect(show("live", [node(1, "registration", "open"), node(2, "stage", "draft")])).toBe("registration");
+  });
+
+  it("shows check_in while a registration node is in check-in", () => {
+    expect(show("live", [node(1, "registration", "check_in")])).toBe("check_in");
+  });
+
+  it("shows live once a stage is live, even with registration still open", () => {
+    expect(show("live", [node(1, "registration", "open"), node(2, "stage", "live")])).toBe("live");
+  });
+
+  it("shows live once a stage has completed, and when the read has no nodes", () => {
+    expect(show("live", [node(1, "registration", "closed"), node(2, "stage", "completed")])).toBe("live");
+    expect(show("live")).toBe("live");
+  });
+
+  it("shows forming while live with registration closed and no stage started", () => {
     expect(
-      gate({
-        phase_schedule: [
-          { status: "check_in", starts_at: "2026-08-01T00:00:00Z", ends_at: null }
-        ] as Tournament["phase_schedule"]
-      })
-    ).toBe(false);
-  });
-
-  it("is open inside the window in any non-terminal phase", () => {
-    expect(gate({ phase_schedule: regWindow(null) })).toBe(true);
-    expect(gate({ phase_schedule: regWindow("2026-08-21T00:00:00Z") })).toBe(true);
-  });
-
-  it("is closed once the window has ended", () => {
-    expect(gate({ phase_schedule: regWindow("2026-08-19T00:00:00Z") })).toBe(false);
-  });
-
-  it("is closed before the window starts", () => {
-    expect(
-      gate({ phase_schedule: regWindow(null, new Date(NOW + HOUR).toISOString()) })
-    ).toBe(false);
-  });
-
-  describe("allow_late_registration", () => {
-    it("reopens a window that has ended", () => {
-      expect(
-        gate({ phase_schedule: regWindow("2026-08-19T00:00:00Z"), allow_late_registration: true })
-      ).toBe(true);
-    });
-
-    it("does not open a tournament with no registration row", () => {
-      expect(
-        gate({ phase_schedule: [] as Tournament["phase_schedule"], allow_late_registration: true })
-      ).toBe(false);
-    });
-
-    it("does not open a window that has not started", () => {
-      expect(
-        gate({
-          phase_schedule: regWindow(null, new Date(NOW + HOUR).toISOString()),
-          allow_late_registration: true
-        })
-      ).toBe(false);
-    });
-
-    it("cannot beat the terminal floor", () => {
-      for (const status of ["completed", "archived"] as const) {
-        expect(
-          gate({
-            status,
-            phase_schedule: regWindow("2026-08-19T00:00:00Z"),
-            allow_late_registration: true
-          })
-        ).toBe(false);
-      }
-    });
+      show("live", [node(1, "registration", "closed"), node(2, "formation", "forming"), node(3, "stage", "ready")])
+    ).toBe("forming");
   });
 });

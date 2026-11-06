@@ -1,4 +1,4 @@
-"""``for_tournament`` reads plain Core rows; ``resolve`` reads the ORM rows a caller loaded. Both must agree."""
+"""``for_registration_node`` reads plain Core rows; ``resolve`` reads the ORM rows a caller loaded. Both must agree."""
 
 from __future__ import annotations
 
@@ -69,10 +69,25 @@ class RosterEngineReadsTests(IsolatedAsyncioTestCase):
             s.add(tournament)
             await s.flush()
             self.tournament_id = tournament.id
+            node = models.FlowNode(
+                tournament_id=tournament.id, kind="registration", name="R", status="closed", config={}
+            )
+            s.add(node)
+            await s.flush()
+            self.node_id = node.id
+            #: Each registration's entry columns, by position in ``registrations`` below.
+            entry_values: list[dict] = []
 
             def registration(**values) -> models.Registration:
-                values.setdefault("balancer_status", "ready")
-                return models.Registration(tournament_id=tournament.id, status="approved", **values)
+                entry_values.append(
+                    {
+                        "status": "approved",
+                        "balancer_status": values.pop("balancer_status", "ready"),
+                        "checked_in": values.pop("checked_in", False),
+                        "deleted_at": values.pop("entry_deleted_at", None),
+                    }
+                )
+                return models.Registration(tournament_id=tournament.id, **values)
 
             def role(code: str, priority: int, rank: int | None, **values) -> models.RegistrationRole:
                 leaf = roles[code]
@@ -115,11 +130,17 @@ class RosterEngineReadsTests(IsolatedAsyncioTestCase):
                 registration(balancer_status="excluded", roles=[role("damage", 0, 2400)]),
                 # A member of another workspace: the home workspace's canon must not reach it.
                 registration(workspace_member_id=members[3].id, roles=[role("tank", 0, None)]),
+                # Removed from the node: the entry is soft-deleted, the profile stays.
                 registration(
-                    workspace_member_id=members[2].id, deleted_at=datetime.now(UTC), roles=[role("tank", 0, 2200)]
+                    workspace_member_id=members[2].id, entry_deleted_at=datetime.now(UTC), roles=[role("tank", 0, 2200)]
                 ),
             ]
             s.add_all(registrations)
+            await s.flush()
+            s.add_all(
+                models.RegistrationEntry(registration_node_id=node.id, registration_id=reg.id, **values)
+                for reg, values in zip(registrations, entry_values, strict=True)
+            )
             s.add_all(
                 models.MemberRank(
                     workspace_id=home.id,
@@ -143,7 +164,7 @@ class RosterEngineReadsTests(IsolatedAsyncioTestCase):
             await s.commit()
         await self.engine.dispose()
 
-    async def test_for_tournament_reads_what_resolve_reads_off_loaded_rows(self) -> None:
+    async def test_for_registration_node_reads_what_resolve_reads_off_loaded_rows(self) -> None:
         one, two, excluded, foreign, deleted = self.ids
         for kwargs, expected in (
             ({}, {one, two, excluded, foreign}),
@@ -151,16 +172,26 @@ class RosterEngineReadsTests(IsolatedAsyncioTestCase):
             ({"registration_ids": self.ids, "include_deleted": True}, set(self.ids)),
         ):
             async with self.Session() as s:
-                rosters = await roster_engine.for_tournament(s, self.tournament_id, **kwargs)
+                rosters = await roster_engine.for_registration_node(s, self.node_id, **kwargs)
             async with self.Session() as s:
                 rows = await s.scalars(
                     sa.select(models.Registration)
                     .where(models.Registration.id.in_(rosters))
                     .options(*registration_load_options())
                 )
+                entries = {
+                    entry.registration_id: entry
+                    for entry in await s.scalars(
+                        sa.select(models.RegistrationEntry).where(
+                            models.RegistrationEntry.registration_node_id == self.node_id,
+                            models.RegistrationEntry.registration_id.in_(rosters),
+                        )
+                    )
+                }
                 loaded = await roster_engine.resolve(
                     s,
                     list(rows),
+                    entries=entries,
                     workspace_id=self.workspace_ids[0],
                     tournament_id=self.tournament_id,
                     discipline="overwatch",
@@ -180,7 +211,88 @@ class RosterEngineReadsTests(IsolatedAsyncioTestCase):
         )
         assert rosters[foreign].rank_on("tank") is None
 
-    async def test_pool_ids_keep_only_the_balancer_pool(self) -> None:
-        one, two, _excluded, foreign, _deleted = self.ids
+    async def test_pool_ids_keep_the_balancer_pool_of_the_nodes_input(self) -> None:
+        one, two, excluded, foreign, _deleted = self.ids
         async with self.Session() as s:
-            assert await roster_engine.pool_ids(s, self.tournament_id, self.ids) == {one, two, foreign}
+            node = models.FlowNode(tournament_id=self.tournament_id, kind="formation", name="Teams", status="draft")
+            source = await s.get_one(models.FlowNode, self.node_id)
+            s.add(node)
+            await s.flush()
+            s.add(
+                models.FlowEdge(
+                    tournament_id=self.tournament_id,
+                    source_node_id=source.id,
+                    source_port="participants",
+                    target_node_id=node.id,
+                    target_port="players",
+                )
+            )
+            # ``two`` is not in the node's input: the pool alone would keep it.
+            members = await s.scalars(
+                sa.select(models.Registration.workspace_member_id).where(
+                    models.Registration.id.in_([one, excluded, foreign]),
+                    models.Registration.workspace_member_id.is_not(None),
+                )
+            )
+            s.add_all(
+                models.FlowNodeResult(
+                    node_id=source.id, port="participants", rank=rank, workspace_member_id=member_id, state="final"
+                )
+                for rank, member_id in enumerate(members, start=1)
+            )
+            await s.commit()
+            assert await roster_engine.pool_ids(s, node.id, self.ids) == {one, foreign}
+
+    async def test_several_upstream_nodes_pool_every_member_and_the_newest_entry_decides(self) -> None:
+        one, two, _excluded, _foreign, _deleted = self.ids
+        async with self.Session() as s:
+            newer = models.FlowNode(tournament_id=self.tournament_id, kind="registration", name="R2", status="closed")
+            formation = models.FlowNode(
+                tournament_id=self.tournament_id, kind="formation", name="Teams", status="draft"
+            )
+            s.add_all([newer, formation])
+            await s.flush()
+            s.add_all(
+                models.FlowEdge(
+                    tournament_id=self.tournament_id,
+                    source_node_id=source,
+                    source_port="participants",
+                    target_node_id=formation.id,
+                    target_port="players",
+                )
+                for source in (self.node_id, newer.id)
+            )
+            members = dict(
+                (
+                    await s.execute(
+                        sa.select(models.Registration.id, models.Registration.workspace_member_id).where(
+                            models.Registration.id.in_([one, two])
+                        )
+                    )
+                ).all()
+            )
+            # ``one`` joined the older intake only; ``two`` both, and the newer intake pulls it out of the pool.
+            for source, registrations in ((self.node_id, (one, two)), (newer.id, (two,))):
+                s.add_all(
+                    models.FlowNodeResult(
+                        node_id=source,
+                        port="participants",
+                        rank=rank,
+                        workspace_member_id=members[registration],
+                        state="final",
+                    )
+                    for rank, registration in enumerate(registrations, start=1)
+                )
+            entry = models.RegistrationEntry(
+                registration_node_id=newer.id, registration_id=two, status="approved", balancer_status="excluded"
+            )
+            s.add(entry)
+            await s.commit()
+            assert set(await roster_engine.for_node_input(s, formation.id)) == {one, two}
+            assert set(await roster_engine.for_node_input(s, formation.id, pool_only=True)) == {one}
+            assert await roster_engine.pool_ids(s, formation.id, [one, two]) == {one}
+            assert set(await roster_engine.for_node_registrations(s, formation.id, [one, two])) == {one, two}
+            entry.balancer_status = "ready"
+            await s.commit()
+            assert set(await roster_engine.for_node_input(s, formation.id, pool_only=True)) == {one, two}
+            assert await roster_engine.pool_ids(s, formation.id, [one, two]) == {one, two}

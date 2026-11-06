@@ -39,11 +39,7 @@ _WORKSPACE_ID = 4
 DEFAULT_ROSTER_SHAPE = RosterShape(entries=(("tank", 1), ("damage", 2), ("support", 2)))
 
 
-def _tournament(
-    *,
-    tournament_id: int = 1,
-    draft_format_json: dict | None = None,
-) -> models.Tournament:
+def _tournament(*, tournament_id: int = 1) -> models.Tournament:
     tournament = models.Tournament(
         id=tournament_id,
         created_at=datetime.now(UTC),
@@ -52,22 +48,18 @@ def _tournament(
         name=f"Tournament {tournament_id}",
         slug=f"tournament-{tournament_id}",
         description=None,
-        is_league=False,
         is_finished=False,
         is_hidden=False,
         status=enums.TournamentStatus.LIVE,
         start_date=datetime.now(UTC),
         end_date=datetime.now(UTC),
         auto_transitions_enabled=True,
-        allow_late_registration=False,
         discord_broadcasts_enabled=True,
         discord_dms_enabled=True,
         logs_official=False,
         pov_stream_delay_s=0,
-        team_formation="balancer",
         division_grid_version_id=5,
         discipline="overwatch",
-        draft_format_json=draft_format_json,
         # Plain columns the serializer reads: unset on a detached instance means
         # a refresh attempt, not NULL.
         cover_image_url=None,
@@ -106,6 +98,15 @@ class _LockProbeSession:
         if "registration.team" in rendered:
             return self.team_status
         return self.draft_status
+
+    async def scalars(self, _statement: object) -> list:
+        """The ``flow_nodes`` entity's reads: this tournament has no nodes."""
+
+        class _Rows(list):
+            def all(self) -> list:
+                return list(self)
+
+        return _Rows()
 
     async def execute(self, statement: Any) -> Any:
         """No ``challonge_source`` rows — this fake covers the roster-shape branch only.

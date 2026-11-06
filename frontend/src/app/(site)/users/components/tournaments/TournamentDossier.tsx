@@ -12,7 +12,6 @@ import ProfileWidget from "@/components/profile/ProfileWidget";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { PlaceBadge } from "@/components/ui/place-badge";
@@ -24,20 +23,15 @@ import {
   type SummaryCell
 } from "@/app/(site)/users/components/tournaments/tournaments-history.atoms";
 import {
-  type TournamentGroup,
-  divisionLabel,
-  groupAggregate,
-  groupBestPlacement,
-  groupDisplayName,
   groupEncountersByStage,
-  isLeagueGroup,
   mapsWinratePct,
   placementMedal,
+  tournamentAggregate,
   winrateColor
 } from "@/app/(site)/users/components/tournaments/tournaments-history.helpers";
 
 interface Props {
-  group: TournamentGroup<UserTournamentEntry> | null;
+  tournament: UserTournamentEntry | null;
   selfUserId: number;
   /** True while the selected event's encounters are still being fetched
    *  lazily (see TournamentsHistory) — shows a run-section skeleton instead
@@ -210,7 +204,7 @@ const SingleDossier = ({
 }) => {
   const tr = useTranslations();
   const ontology = useDisciplineMetadata(t.workspace_id, t.discipline).data ?? null;
-  const agg = groupAggregate(t);
+  const agg = tournamentAggregate(t);
   const cells = summaryCells(tr, {
     placement: t.placement ?? null,
     countTeams: t.count_teams ?? null,
@@ -235,11 +229,6 @@ const SingleDossier = ({
               >
                 {t.name}
               </HoverPrefetchLink>
-              {t.is_league ? (
-                <Badge tone="neutral" voice="label">
-                  {tr("users.tournaments.leagueBadge")}
-                </Badge>
-              ) : null}
             </div>
             <div className="mt-1.5 flex items-center gap-2 text-caption text-[color:var(--aqt-fg-muted)]">
               <PlayerRoleIcon role={t.role} ontology={ontology} size={15} />
@@ -264,109 +253,9 @@ const SingleDossier = ({
   );
 };
 
-const DivisionHeader = ({ t }: { t: UserTournamentEntry }) => {
-  const agg = groupAggregate(t);
-  return (
-    <div className="flex items-center gap-3 py-2.5">
-      <DivisionIcon
-        division={t.division}
-        tournamentGrid={t.division_grid_version}
-        width={28}
-        height={28}
-      />
-      <HoverPrefetchLink
-        href={tournamentHref(t.id)}
-        className="min-w-0 flex-1 truncate text-body font-semibold text-[color:var(--aqt-fg)] hover:text-[color:var(--aqt-teal)]"
-      >
-        {divisionLabel(t)}
-      </HoverPrefetchLink>
-      <PlaceBadge place={t.placement ?? null} size="sm" />
-      <WdlText won={agg.won} lost={agg.lost} draw={agg.draw} className="text-label" />
-    </div>
-  );
-};
-
-const LeagueDossier = ({
-  entries,
-  selfUserId,
-  loadingEncounters
-}: {
-  entries: UserTournamentEntry[];
-  selfUserId: number;
-  loadingEncounters?: boolean;
-}) => {
-  const tr = useTranslations();
-  const agg = entries.reduce(
-    (acc, t) => {
-      const a = groupAggregate(t);
-      return {
-        won: acc.won + a.won,
-        lost: acc.lost + a.lost,
-        draw: acc.draw + a.draw,
-        mapsWon: acc.mapsWon + a.mapsWon,
-        mapsLost: acc.mapsLost + a.mapsLost
-      };
-    },
-    { won: 0, lost: 0, draw: 0, mapsWon: 0, mapsLost: 0 }
-  );
-  const best = groupBestPlacement(entries);
-  const bestEntry = entries.find((t) => t.placement === best) ?? entries[0];
-  const closenessValues = entries
-    .map((t) => t.closeness)
-    .filter((c): c is number => typeof c === "number");
-  const avgCloseness = closenessValues.length
-    ? closenessValues.reduce((sum, c) => sum + c, 0) / closenessValues.length
-    : null;
-  const cells = summaryCells(tr, {
-    placement: best,
-    countTeams: bestEntry.count_teams ?? null,
-    won: agg.won,
-    lost: agg.lost,
-    draw: agg.draw,
-    mapsWon: agg.mapsWon,
-    mapsLost: agg.mapsLost,
-    closeness: avgCloseness
-  });
-
-  return (
-    <Card className="overflow-hidden">
-      <div className="p-4">
-        <div className="flex items-start gap-3.5">
-          <PlaceBadge place={best} size="lg" />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="aqt-display text-title font-bold leading-tight text-[color:var(--aqt-fg)]">
-                {groupDisplayName(entries)}
-              </span>
-              <Badge tone="neutral" voice="label">
-                {tr("users.tournaments.leagueBadge")}
-              </Badge>
-            </div>
-            <div className="mt-1.5 aqt-tnum text-caption text-[color:var(--aqt-fg-muted)]">
-              {tr("users.tournaments.divisionsCount", { count: String(entries.length) })}
-            </div>
-          </div>
-        </div>
-      </div>
-      <SummaryStrip cells={cells} extra={<ModuleSummaryCell entries={entries} />} />
-      <div className="p-4">
-        <SectionLabel>{tr("users.tournaments.dossier.divisions")}</SectionLabel>
-        <div className="divide-y divide-[color:var(--aqt-border)]">
-          {entries.map((t) => (
-            <div key={t.id} className="py-4 first:pt-0 last:pb-0">
-              <DivisionHeader t={t} />
-              <EventBody t={t} selfUserId={selfUserId} loadingEncounters={loadingEncounters} />
-            </div>
-          ))}
-        </div>
-      </div>
-    </Card>
-  );
-};
-
-const TournamentDossier = ({ group, selfUserId, loadingEncounters }: Props) => {
+const TournamentDossier = ({ tournament, selfUserId, loadingEncounters }: Props) => {
   const t = useTranslations();
-  if (!group) {
+  if (!tournament) {
     return (
       <Card className="flex flex-col items-center justify-center gap-3 overflow-hidden px-4 py-16 text-center">
         <Trophy size={26} className="text-[color:var(--aqt-fg-faint)]" aria-hidden="true" />
@@ -376,16 +265,7 @@ const TournamentDossier = ({ group, selfUserId, loadingEncounters }: Props) => {
       </Card>
     );
   }
-  if (isLeagueGroup(group)) {
-    return (
-      <LeagueDossier
-        entries={group}
-        selfUserId={selfUserId}
-        loadingEncounters={loadingEncounters}
-      />
-    );
-  }
-  return <SingleDossier t={group} selfUserId={selfUserId} loadingEncounters={loadingEncounters} />;
+  return <SingleDossier t={tournament} selfUserId={selfUserId} loadingEncounters={loadingEncounters} />;
 };
 
 export default TournamentDossier;

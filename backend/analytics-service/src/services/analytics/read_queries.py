@@ -4,6 +4,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.chrono import tournament_chrono_key
 from shared.repository import (
     AnalyticsAlgorithmRepository,
     AnalyticsPlayerRepository,
@@ -235,27 +236,43 @@ class AnalyticsReadService:
     async def get_streaks(
         self, session: AsyncSession, tournament_id: int
     ) -> typing.Sequence[tuple[models.User, str | None, str | None, str, int]]:
+        start, end, tid = tournament_chrono_key()
+        current = (
+            sa.select(start.label("chrono_start"), end.label("chrono_end"), tid.label("tournament_id"))
+            .where(models.Tournament.id == tournament_id)
+            .subquery("current")
+        )
         subquery = (
             sa.select(
                 models.WorkspaceMember.player_id.label("user_id"),
                 models.Player.role,
                 models.Player.sub_role,
                 models.Tournament.discipline,
-                models.Standing.overall_position,
+                models.ParticipantResult.placement.label("overall_position"),
+                start.label("chrono_start"),
+                end.label("chrono_end"),
+                models.ParticipantResult.tournament_id,
             )
-            .select_from(models.Player)
-            .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
+            .select_from(models.ParticipantResult)
+            .join(
+                models.Player,
+                sa.and_(
+                    models.Player.tournament_id == models.ParticipantResult.tournament_id,
+                    models.Player.workspace_member_id == models.ParticipantResult.workspace_member_id,
+                    models.Player.team_id == models.ParticipantResult.final_team_id,
+                ),
+            )
+            .join(models.Tournament, models.Tournament.id == models.ParticipantResult.tournament_id)
             .join(
                 models.WorkspaceMember,
-                models.WorkspaceMember.id == models.Player.workspace_member_id,
+                models.WorkspaceMember.id == models.ParticipantResult.workspace_member_id,
             )
-            .join(models.Standing, models.Standing.team_id == models.Player.team_id)
-            .where(
-                sa.and_(
-                    models.Player.tournament_id <= tournament_id,
-                )
+            .join(
+                current,
+                sa.tuple_(start, end, tid)
+                <= sa.tuple_(current.c.chrono_start, current.c.chrono_end, current.c.tournament_id),
             )
-            .order_by(models.Player.tournament_id.desc())
+            .where(models.ParticipantResult.placement.is_not(None))
         ).subquery()
 
         query = (
@@ -266,18 +283,17 @@ class AnalyticsReadService:
                 subquery.c.discipline,
                 subquery.c.overall_position,
             )
-            .select_from(models.Player)
+            .select_from(models.ParticipantResult)
             .join(
                 models.WorkspaceMember,
-                models.WorkspaceMember.id == models.Player.workspace_member_id,
+                models.WorkspaceMember.id == models.ParticipantResult.workspace_member_id,
             )
             .join(subquery, subquery.c.user_id == models.WorkspaceMember.player_id)
             .join(models.User, models.User.id == subquery.c.user_id)
             .where(
-                sa.and_(
-                    models.Player.tournament_id == tournament_id,
-                )
+                models.ParticipantResult.tournament_id == tournament_id, models.ParticipantResult.placement.is_not(None)
             )
+            .order_by(subquery.c.chrono_start.desc(), subquery.c.chrono_end.desc(), subquery.c.tournament_id.desc())
         )
 
         result = await session.execute(query)

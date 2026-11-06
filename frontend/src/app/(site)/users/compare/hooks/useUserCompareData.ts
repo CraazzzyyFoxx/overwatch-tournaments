@@ -133,7 +133,7 @@ export const useUserCompareData = ({
 
   const tournamentsQuery = useQuery({
     queryKey: tournamentQueryKeys.selectOptions(workspaceId ?? null),
-    queryFn: () => tournamentService.getAll(null, workspaceId ?? null),
+    queryFn: () => tournamentService.getAll(workspaceId ?? null),
     staleTime: 5 * 60 * 1000
   });
 

@@ -17,9 +17,13 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { PageStateCard } from "@/components/ui/page-state-card";
+import { registrationIntake } from "@/lib/tournament/flow-nodes";
 import { tabFallback } from "../../hubQueries";
 import { SettingsSectionPage } from "../SettingsSection";
+import { RegistrationNodeScope } from "../RegistrationNodeScope";
 import { useRegistrationFormSection } from "../useRegistrationFormSection";
+import { useRegistrationNodeConfig } from "../useRegistrationNodeConfig";
+import type { TournamentFlowNode } from "@/types/flow.types";
 
 /**
  * Every rule that refuses an entry, on one screen.
@@ -32,12 +36,18 @@ import { useRegistrationFormSection } from "../useRegistrationFormSection";
 export default function AdmissionSettingsPage() {
   return (
     <SettingsSectionPage section="admission">
-      {({ tournament, tournamentId, canTeamCreate }) => (
-        <AdmissionForm
-          tournamentId={tournamentId}
-          teamRegistration={tournament.team_formation === "registration"}
-          disabled={!canTeamCreate}
-        />
+      {({ tournament, tournamentId, canTeamCreate, canUpdateTournament }) => (
+        <RegistrationNodeScope tournament={tournament}>
+          {(node) => (
+            <AdmissionForm
+              tournamentId={tournamentId}
+              node={node}
+              teamRegistration={registrationIntake(tournament, node) === "team"}
+              disabled={!canTeamCreate}
+              nodeDisabled={!canUpdateTournament}
+            />
+          )}
+        </RegistrationNodeScope>
       )}
     </SettingsSectionPage>
   );
@@ -45,20 +55,31 @@ export default function AdmissionSettingsPage() {
 
 function AdmissionForm({
   tournamentId,
+  node,
   teamRegistration,
-  disabled
-}: Readonly<{ tournamentId: number; teamRegistration: boolean; disabled: boolean }>) {
+  disabled,
+  nodeDisabled
+}: Readonly<{
+  tournamentId: number;
+  node: TournamentFlowNode;
+  teamRegistration: boolean;
+  disabled: boolean;
+  nodeDisabled: boolean;
+}>) {
   const t = useTranslations("registrationFormAdmin.page");
   const ids = useId();
   const { value, saved, patch, dirty, summary, saving, save, discard, error, retry } =
     useRegistrationFormSection(tournamentId);
+  // The profile rules are the form's, the subscription and team rules the node's: two endpoints, one save bar.
+  const intake = useRegistrationNodeConfig(tournamentId, node);
+  const cfg = intake.form;
 
   // Read-only: the rule lives on the workspace and the server projects it onto
   // the form, so this page can state what the toggle enforces without offering
   // to edit it here.
   const resolvedRequirement = useRequirementDescription(saved?.subscription_requirement_json);
 
-  if (!value) {
+  if (!value || !cfg) {
     return error ? (
       <PageStateCard
         state="error"
@@ -138,17 +159,17 @@ function AdmissionForm({
           >
             <Switch
               id={`${ids}-subscription`}
-              checked={value.require_subscription ?? false}
-              disabled={disabled}
-              onCheckedChange={(next) => patch({ require_subscription: next })}
+              checked={cfg.require_subscription}
+              disabled={nodeDisabled}
+              onCheckedChange={(next) => intake.patch({ require_subscription: next })}
             />
           </SettingRow>
           <SettingRow htmlFor={`${ids}-stage`} label={t("subscription.stage")}>
             <Select
-              value={value.subscription_stage ?? "check_in"}
-              disabled={disabled || !value.require_subscription}
+              value={cfg.subscription_stage}
+              disabled={nodeDisabled || !cfg.require_subscription}
               onValueChange={(next) =>
-                patch({ subscription_stage: next as "registration" | "check_in" })
+                intake.patch({ subscription_stage: next as "registration" | "check_in" })
               }
             >
               <SelectTrigger
@@ -174,9 +195,9 @@ function AdmissionForm({
               hint={t("team.scopeHint")}
             >
               <Select
-                value={value.subscription_scope ?? "player"}
-                disabled={disabled || !value.require_subscription}
-                onValueChange={(next) => patch({ subscription_scope: next as "player" | "team" })}
+                value={cfg.subscription_scope}
+                disabled={nodeDisabled || !cfg.require_subscription}
+                onValueChange={(next) => intake.patch({ subscription_scope: next as "player" | "team" })}
               >
                 <SelectTrigger
                   id={`${ids}-sub-scope`}
@@ -208,9 +229,9 @@ function AdmissionForm({
                 id={`${ids}-rank-min`}
                 integer
                 min={0}
-                value={value.team_rank_min ?? null}
-                disabled={disabled}
-                onValueChange={(next) => patch({ team_rank_min: next })}
+                value={cfg.team_rank_min}
+                disabled={nodeDisabled}
+                onValueChange={(next) => intake.patch({ team_rank_min: next })}
                 size="sm"
                 className="w-24"
               />
@@ -220,9 +241,9 @@ function AdmissionForm({
                 id={`${ids}-rank-max`}
                 integer
                 min={0}
-                value={value.team_rank_max ?? null}
-                disabled={disabled}
-                onValueChange={(next) => patch({ team_rank_max: next })}
+                value={cfg.team_rank_max}
+                disabled={nodeDisabled}
+                onValueChange={(next) => intake.patch({ team_rank_max: next })}
                 size="sm"
                 className="w-24"
               />
@@ -232,9 +253,9 @@ function AdmissionForm({
                 id={`${ids}-rank-spread`}
                 integer
                 min={0}
-                value={value.team_max_rank_spread ?? null}
-                disabled={disabled}
-                onValueChange={(next) => patch({ team_max_rank_spread: next })}
+                value={cfg.team_max_rank_spread}
+                disabled={nodeDisabled}
+                onValueChange={(next) => intake.patch({ team_max_rank_spread: next })}
                 size="sm"
                 className="w-24"
               />
@@ -246,9 +267,9 @@ function AdmissionForm({
             >
               <Switch
                 id={`${ids}-unique-id`}
-                checked={value.team_unique_identity ?? false}
-                disabled={disabled}
-                onCheckedChange={(next) => patch({ team_unique_identity: next })}
+                checked={cfg.team_unique_identity}
+                disabled={nodeDisabled}
+                onCheckedChange={(next) => intake.patch({ team_unique_identity: next })}
               />
             </SettingRow>
             <SettingRow
@@ -258,9 +279,9 @@ function AdmissionForm({
             >
               <Switch
                 id={`${ids}-discord-guild`}
-                checked={value.team_require_discord_guild ?? false}
-                disabled={disabled}
-                onCheckedChange={(next) => patch({ team_require_discord_guild: next })}
+                checked={cfg.team_require_discord_guild}
+                disabled={nodeDisabled}
+                onCheckedChange={(next) => intake.patch({ team_require_discord_guild: next })}
               />
             </SettingRow>
           </SettingGroup>
@@ -268,11 +289,18 @@ function AdmissionForm({
       </div>
 
       <SaveBar
-        dirty={dirty}
-        summary={summary}
-        saving={saving}
-        onDiscard={discard}
-        onSave={save}
+        dirty={dirty || intake.dirty}
+        summary={[dirty ? summary : null, intake.dirty ? intake.summary : null].filter(Boolean).join(" · ")}
+        error={intake.error}
+        saving={saving || intake.saving}
+        onDiscard={() => {
+          discard();
+          intake.discard();
+        }}
+        onSave={() => {
+          if (dirty) save();
+          if (intake.dirty && !nodeDisabled) intake.save();
+        }}
       />
     </>
   );

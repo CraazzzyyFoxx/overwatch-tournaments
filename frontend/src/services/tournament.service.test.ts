@@ -48,14 +48,7 @@ describe("tournamentService.getActive", () => {
   // tournaments only, instead of every tournament for the client to filter.
   it("asks the server for the active statuses only", async () => {
     await tournamentService.getActive();
-    expect(calls[0].options?.query?.status).toEqual([
-      "live",
-      "playoffs",
-      "registration",
-      "check_in",
-      "announcement",
-      "draft",
-    ]);
+    expect(calls[0].options?.query?.status).toEqual(["announcement", "live"]);
   });
 });
 
@@ -67,10 +60,10 @@ describe("tournamentService.getAll", () => {
   // Every row at per_page -1: the stages of each would be most of the payload,
   // and a picker draws none of them.
   it("loads no stages unless the caller asks for them", async () => {
-    await tournamentService.getAll(null, 7);
+    await tournamentService.getAll(7);
     expect(calls[0].options?.query?.entities).toEqual(["participants_count"]);
 
-    await tournamentService.getAll(null, 7, null, ["stages", "participants_count"]);
+    await tournamentService.getAll(7, null, ["stages", "participants_count"]);
     expect(calls[1].options?.query?.entities).toEqual(["stages", "participants_count"]);
   });
 });
@@ -111,6 +104,7 @@ describe("tournamentService.getPublicOverview", () => {
               // read is where the document is wanted — the shell decides the
               // Rules tab's existence from it and the tab renders it.
               "rules",
+              "flow_nodes",
             ],
           },
         },
@@ -148,11 +142,10 @@ describe("tournamentService.listTournaments", () => {
     calls.length = 0;
   });
 
-  it("sends paging, sort and the three filters the backend understands", async () => {
+  it("sends paging, sort and the filters the backend understands", async () => {
     await tournamentService.listTournaments({
       workspaceId: 7,
       status: "live",
-      isLeague: false,
       query: "spring",
       sort: "participants_count",
       order: "desc",
@@ -170,9 +163,8 @@ describe("tournamentService.listTournaments", () => {
             sort: "participants_count",
             order: "desc",
             workspace_id: 7,
-            entities: ["stages", "participants_count", "teams_count"],
+            entities: ["stages", "participants_count", "teams_count", "flow_nodes"],
             status: "live",
-            is_league: false,
             query: "spring",
           },
         },
@@ -180,22 +172,19 @@ describe("tournamentService.listTournaments", () => {
     ]);
   });
 
-  // `is_league: false` is a real filter and must survive; the absent ones must
-  // not travel at all. A present-but-null `status` would be a value the backend
-  // matches against, and an empty `query` would ILIKE '%%' on every row while
-  // making the request key differ from the unsearched one.
-  it("omits unset filters instead of sending nulls, and keeps is_league false", async () => {
+  // Absent filters must not travel at all. A present-but-null `status` would be a
+  // value the backend matches against, and an empty `query` would ILIKE '%%' on
+  // every row while making the request key differ from the unsearched one.
+  it("omits unset filters instead of sending nulls", async () => {
     await tournamentService.listTournaments({
       workspaceId: null,
       status: null,
-      isLeague: false,
       query: "   ",
     });
 
     const query = calls[0].options?.query as Record<string, unknown>;
     expect(query.status).toBeUndefined();
     expect(query.query).toBeUndefined();
-    expect(query.is_league).toBe(false);
     expect(query.page).toBe(1);
     expect(query.sort).toBe("start_date");
     expect(query.order).toBe("desc");
@@ -213,8 +202,7 @@ describe("tournamentService.getFacets", () => {
   it("sends exactly the list's filters and no paging", async () => {
     await tournamentService.getFacets({
       workspaceId: 7,
-      status: "registration",
-      isLeague: true,
+      status: "announcement",
       query: " cup ",
     });
 
@@ -224,8 +212,7 @@ describe("tournamentService.getFacets", () => {
         options: {
           query: {
             workspace_id: 7,
-            status: "registration",
-            is_league: true,
+            status: "announcement",
             query: "cup",
           },
         },

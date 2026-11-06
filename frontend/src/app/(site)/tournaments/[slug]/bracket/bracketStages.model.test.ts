@@ -15,7 +15,7 @@ function stage(
   items: Partial<StageItem>[],
   isCompleted = false
 ): Stage {
-  return { id, stage_type: stageType, name: `Stage ${id}`, items, is_completed: isCompleted } as Stage;
+  return { id, stage_type: stageType, name: `Stage ${id}`, items, status: isCompleted ? "completed" : "draft" } as Stage;
 }
 
 const seeded = { id: 1, inputs: [{ id: 10 }] } as Partial<StageItem>;
@@ -33,6 +33,24 @@ function tabs(groups: Stage[], playoff: Stage, activeStageId: number) {
     labels: { groupStage: "Group stage", playoff: "Playoff" }
   }).items.map(({ label, disabled }) => [label, disabled]);
 }
+
+describe("buildBracketTabs links", () => {
+  it("the groups view link keeps its branch by naming its first group stage", () => {
+    const a = stage(252, "swiss", [seeded, { ...seeded, id: 3 }]);
+    const b = stage(254, "round_robin", [seeded]);
+    const items = buildBracketTabs({
+      tournament,
+      groupStages: [a, b],
+      eliminationStages: [],
+      activeStageId: 252,
+      viewParam: null,
+      matchCountsKnown: true,
+      stageIdsWithMatches: new Set(),
+      labels: { groupStage: "Group stage", playoff: "Playoff" }
+    }).items;
+    expect(items[0].href).toContain("view=groups&stage=252");
+  });
+});
 
 describe("buildBracketTabs before any match", () => {
   it("keeps a seeded group stage and an unfinished bracket selectable", () => {

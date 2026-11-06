@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Api } from "./api";
-import { battleTag, type Registration, type RoleRef } from "./flows";
-import { createTournament, createWorkspace, setStatus, uniq, type Tournament, type Workspace } from "./seed";
+import { battleTag, OW_FORM, type Registration, type RoleRef } from "./flows";
+import { createTournament, createWorkspace, nodeOf, transitionNode, uniq, type Tournament, type Workspace } from "./seed";
 import type { TestUser } from "./users";
 
 // Live-draft and mix seeding for the team-formation specs. The plain balancer
@@ -19,18 +19,19 @@ export const owRole = (role: string): RoleRef => ({ dimension: "player_role", ro
 export async function addRegistration(
   api: Api,
   tournamentId: number,
+  registrationNodeId: number,
   opts: { tag: string; userId?: number; roles: readonly RoleRank[] }
 ): Promise<Registration> {
-  return api.post<Registration>(
-    `/api/v1/admin/balancer/tournaments/${tournamentId}/registrations`,
-    {
+  return api.call<Registration>("POST", `/api/v1/admin/balancer/tournaments/${tournamentId}/registrations`, {
+    query: { registration_node_id: registrationNodeId },
+    body: {
       answers: { identity_battlenet: [opts.tag] },
       status: "approved",
       auth_user_id: opts.userId ?? null,
       roles: opts.roles.map(([role, rank], i) => ({ role: owRole(role), rank_value: rank, is_primary: i === 0, priority: i })),
     },
-    201
-  );
+    expectStatus: 201,
+  });
 }
 
 // ---------------------------------------------------------------- draft
@@ -87,6 +88,8 @@ export type DraftSetup = {
   pool: Registration[];
   poolTags: string[];
   session: DraftSession;
+  /** The draft formation node (`forming`): the draft board and session list are read through it. */
+  formationNodeId: number;
   /** `/api/v1/balancer/draft/tournaments/{tid}/sessions/{sid}`: seed, patch, export, delete. */
   base: string;
   /** `/api/v1/balancer/draft/sessions/{sid}`: start, pause, resume, cancel, rollback. */
@@ -94,7 +97,7 @@ export type DraftSetup = {
 };
 
 /**
- * A draft tournament in its DRAFT phase with two real captains (tank mains)
+ * A draft tournament whose registration is closed and whose formation node is `forming`, with two real captains (tank mains)
  * and eight pool players (four damage, four support): 2 teams × 4 picks, snake.
  * The session is seeded (`ready`) unless `start` makes it `live`.
  */
@@ -105,22 +108,32 @@ export async function seedDraft(
 ): Promise<DraftSetup> {
   const workspace = await createWorkspace(api);
   const tournament = await createTournament(api, workspace.id, { team_formation: "draft" });
-  await setStatus(api, tournament.id, "draft");
+  // The pool is registered while the intake is open; the draft starts once it is closed and the formation is forming.
+  const registration = await nodeOf(api, tournament.id, "registration");
+  const formation = await nodeOf(api, tournament.id, "formation");
+  await api.put(`/api/v1/admin/balancer/tournaments/${tournament.id}/registration-form`, { form_schema: OW_FORM });
+  await transitionNode(api, registration.id, "open");
   const captains: [TestUser, TestUser] = [await makeUser("capa"), await makeUser("capb")];
   const captainTags: [string, string] = [battleTag(uniq("CapA")), battleTag(uniq("CapB"))];
   const captainRegs = [
-    await addRegistration(api, tournament.id, { tag: captainTags[0], userId: captains[0].id, roles: [["tank", 3000], ["damage", 2900]] }),
-    await addRegistration(api, tournament.id, { tag: captainTags[1], userId: captains[1].id, roles: [["tank", 2950], ["support", 2850]] }),
+    await addRegistration(api, tournament.id, registration.id, { tag: captainTags[0], userId: captains[0].id, roles: [["tank", 3000], ["damage", 2900]] }),
+    await addRegistration(api, tournament.id, registration.id, { tag: captainTags[1], userId: captains[1].id, roles: [["tank", 2950], ["support", 2850]] }),
   ];
   const poolTags: string[] = [];
   const pool: Registration[] = [];
   for (const [i, role] of ["damage", "damage", "damage", "damage", "support", "support", "support", "support"].entries()) {
     const tag = battleTag(uniq("Dr"));
     poolTags.push(tag);
-    pool.push(await addRegistration(api, tournament.id, { tag, roles: [[role, 2500 + i * 60]] }));
+    pool.push(await addRegistration(api, tournament.id, registration.id, { tag, roles: [[role, 2500 + i * 60]] }));
   }
+  await transitionNode(api, registration.id, "closed");
+  await transitionNode(api, formation.id, "forming");
   const sessions = `/api/v1/balancer/draft/tournaments/${tournament.id}/sessions`;
-  const created = await api.post<DraftSession>(sessions, { pool_source: "manual", pick_time_seconds: opts.pickTimeSeconds ?? 300 });
+  const created = await api.post<DraftSession>(sessions, {
+    pool_source: "manual",
+    pick_time_seconds: opts.pickTimeSeconds ?? 300,
+    formation_node_id: formation.id,
+  });
   const base = `${sessions}/${created.id}`;
   const lifecycle = `/api/v1/balancer/draft/sessions/${created.id}`;
   const seeded = await api.post<{ session: DraftSession }>(`${base}/seed`, {
@@ -128,7 +141,7 @@ export async function seedDraft(
     captain_order: "manual",
   });
   const session = opts.start ? await api.post<DraftSession>(`${lifecycle}/start`) : seeded.session;
-  return { workspace, tournament, captains, captainTags, pool, poolTags, session, base, lifecycle };
+  return { workspace, tournament, captains, captainTags, pool, poolTags, session, formationNodeId: formation.id, base, lifecycle };
 }
 
 /** The first feasibility-safe option of the on-clock pick, picked by `as` (its captain or an admin). */

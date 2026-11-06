@@ -110,11 +110,9 @@ function singleBracketStage(seededTeams = 8): Stage {
     description: null,
     stage_type: "double_elimination",
     max_rounds: 5,
-    advance_count: null,
-    advance_upper_count: null,
     order: 1,
-    is_active: true,
-    is_completed: false,
+    node_id: 1,
+    status: "live",
     ranking_preset: null,
     tiebreak_order: null,
     scoring: {

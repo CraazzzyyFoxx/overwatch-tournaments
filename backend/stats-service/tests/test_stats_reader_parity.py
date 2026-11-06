@@ -78,7 +78,7 @@ def _json(value: Any) -> Any:
         if {"participants", "encounter_id", "map_id", "duration_s"} <= result.keys():
             return _frozen_match(result)
         if {"workspace_id", "discipline"} <= result.keys() and (
-            {"is_league", "team_id", "players"} <= result.keys() or {"playtime", "stats"} <= result.keys()
+            {"team_id", "players"} <= result.keys() or {"playtime", "stats"} <= result.keys()
         ):
             # The owner context P7 added to a user's tournament row and tournament stats; it is not reader output the
             # frozen capture had.
@@ -91,7 +91,7 @@ def _json(value: Any) -> Any:
             # The games a users-index row/card gained for the cross-game index (spec §8.2); not reader output the frozen
             # capture had.
             del result["disciplines"]
-        if result.keys() == {"id", "name", "discipline", "is_league", "is_finished", "status"}:
+        if result.keys() == {"id", "name", "discipline", "is_finished", "status"}:
             # The game a profile's tournament card gained for the cross-game profile (spec §6.6); not reader output the
             # frozen capture had.
             del result["discipline"]

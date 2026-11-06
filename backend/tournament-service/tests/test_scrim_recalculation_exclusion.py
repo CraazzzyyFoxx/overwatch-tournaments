@@ -75,7 +75,6 @@ def _compile_bigint_sqlite(type_, compiler, **kw):  # noqa: ANN001, ANN003, ANN2
 # are deliberately not created.
 TABLE_NAMES = (
     "tournament.tournament",
-    "tournament.tournament_phase_schedule",
     "tournament.stage",
     "tournament.stage_round_best_of",
     "tournament.stage_item",
@@ -176,6 +175,14 @@ class _Fixture:
                 " encounter_id INTEGER PRIMARY KEY, tournament_id INTEGER NOT NULL,"
                 " stage_id INTEGER, stage_item_id INTEGER, round INTEGER NOT NULL)"
             )
+            # Stage.node loads with the stage; no scrim stage has one, so the table only has to exist (JSONB has no sqlite form).
+            conn.exec_driver_sql(
+                "CREATE TABLE tournament.flow_node ("
+                " id INTEGER PRIMARY KEY, tournament_id INTEGER NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL,"
+                " status TEXT NOT NULL, config TEXT NOT NULL DEFAULT '{}', stage_id INTEGER,"
+                " position_x REAL NOT NULL DEFAULT 0, position_y REAL NOT NULL DEFAULT 0,"
+                " started_at TIMESTAMP, completed_at TIMESTAMP, created_at TIMESTAMP, updated_at TIMESTAMP)"
+            )
             create_sqlite_tables(conn, tables)
         self.session = Session(self.engine)
         self.shim = _AsyncSessionShim(self.session)
@@ -201,7 +208,6 @@ class _Fixture:
             name=name,
             slug=f"tournament-{tournament_id}",
             is_hidden=is_hidden,
-            is_league=False,
             # A lazily provisioned scrim container never gets a start date; a real
             # tournament always has one.
             start_date=datetime(2026, 1, 1, tzinfo=UTC) if dated else None,
@@ -428,7 +434,9 @@ class ScrimStandingsInventionTests(_DatabaseTestCase):
             self.db.session.scalar(sa.select(sa.func.count()).select_from(models.Standing.__table__)),
         )
 
-        await standings_service.standings_service.recalculate_for_tournament(self.db.shim, CONTAINER_ID, commit=True)
+        run = await standings_service.standings_service.recalculate_for_tournament(
+            self.db.shim, CONTAINER_ID, commit=True
+        )
 
         rows = self.db.session.execute(
             sa.select(
@@ -449,8 +457,5 @@ class ScrimStandingsInventionTests(_DatabaseTestCase):
             {room["stage"] for room in rooms},
             {row.stage_id for row in rows},
         )
-        # And every room's stage is now flagged as a concluded bracket.
-        self.assertEqual(
-            [True] * len(rooms),
-            list(self.db.session.scalars(sa.select(models.Stage.__table__.c.is_completed))),
-        )
+        # And every room's stage counts as a concluded bracket.
+        self.assertEqual({room["stage"] for room in rooms}, set(run.completed_stage_ids))

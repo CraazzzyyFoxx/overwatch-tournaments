@@ -33,6 +33,7 @@ from src.rpc import pick_ban_admin
 from src.schemas import captain as captain_schemas
 from src.schemas import encounter_report_form as report_form_schemas
 from src.schemas import ffa as ffa_schemas
+from src.schemas import flow as flow_schemas
 from src.schemas import individual_swiss as individual_swiss_schemas
 from src.schemas import pick_ban_outcomes as pick_ban_outcomes_schemas
 from src.schemas import pregame_rooms as pregame_rooms_schemas
@@ -76,7 +77,6 @@ OPERATIONS: dict[str, Op] = {
         response_array=True,
         query_params=(
             _WS_ANY,
-            QueryParam("is_league", "boolean"),
             QueryParam("discipline", description="Installed discipline code; absent lists every game."),
         ),
     ),
@@ -85,6 +85,7 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.get_player_standings": Op(
         response=individual_swiss_schemas.PlayerStandingRead, response_array=True
     ),
+    "rpc.tournament.get_flow": Op(response=flow_schemas.FlowRead),
     "rpc.tournament.get_individual_rounds": Op(
         response=individual_swiss_schemas.IndividualRoundRead, response_array=True
     ),
@@ -182,16 +183,22 @@ OPERATIONS: dict[str, Op] = {
     # ── bespoke: registered-team image (binary upload + delete) ────────────
     "rpc.tournament.regteam_image_upload": Op(response=reg_team_schemas.RegistrationTeamRead),
     "rpc.tournament.regteam_image_delete": Op(response=reg_team_schemas.RegistrationTeamRead),
-    # ── bespoke: tournament status / lifecycle ─────────────────────────────
-    "rpc.tournament.tournament_finish": Op(response=schemas.TournamentRead),
-    "rpc.tournament.tournament_status": Op(request=schemas.TournamentStatusTransition, response=schemas.TournamentRead),
-    "rpc.tournament.tournament_schedule_set": Op(
-        request=schemas.TournamentScheduleSet, response=schemas.TournamentRead
-    ),
+    # ── bespoke: tournament archive ────────────────────────────────────────
+    "rpc.tournament.tournament_archive": Op(request=schemas.TournamentArchiveSet, response=schemas.TournamentRead),
     # ── bespoke: voice channels ────────────────────────────────────────────
     "rpc.tournament.voice_get": Op(response=voice_schemas.VoiceStatus),
     "rpc.tournament.voice_put": Op(request=voice_schemas.VoiceSettings, response=voice_schemas.VoiceStatus),
     "rpc.tournament.voice_sync": Op(response=voice_schemas.VoiceStatus),
+    # ── bespoke: flow graph ────────────────────────────────────────────────
+    "rpc.tournament.flow_get": Op(response=flow_schemas.AdminFlowRead),
+    "rpc.tournament.flow_node_transition": Op(
+        request=flow_schemas.FlowNodeTransition, response=flow_schemas.FlowNodeRead
+    ),
+    "rpc.tournament.flow_node_schedule_set": Op(
+        request=flow_schemas.FlowNodeScheduleSet, response=flow_schemas.FlowNodeRead
+    ),
+    "rpc.tournament.flow_apply": Op(request=flow_schemas.FlowChanges, response=flow_schemas.AdminFlowRead),
+    "rpc.tournament.flow_validate": Op(request=flow_schemas.FlowChanges, response=flow_schemas.FlowValidationRead),
     "rpc.tournament.standing_recalculate": Op(response=schemas.TournamentComputationJobRead),
     "rpc.tournament.standing_pins_set": Op(
         request=schemas.StandingPinsUpdate, response=schemas.TournamentComputationJobRead
@@ -203,15 +210,7 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.individual_swiss_lock_qualification": Op(response=individual_swiss_schemas.QualificationLockRead),
     # ── bespoke: stage workflow ────────────────────────────────────────────
     "rpc.tournament.stage_merge": Op(request=schemas.MergeGroupStagesRequest, response=schemas.StageRead),
-    "rpc.tournament.stage_activate": Op(response=schemas.StageRead),
-    "rpc.tournament.stage_deactivate": Op(response=schemas.StageRead),
     "rpc.tournament.stage_generate": Op(response=schemas.TournamentComputationJobRead),
-    "rpc.tournament.stage_activate_and_generate": Op(response=schemas.TournamentComputationJobRead),
-    "rpc.tournament.stage_auto_wire": Op(
-        response=schemas.StageRead,
-        query_params=(QueryParam("source_stage_id", "integer", description="The group stage to wire from."),),
-    ),
-    "rpc.tournament.stage_wire": Op(request=schemas.WireFromGroupsRequest, response=schemas.StageRead),
     "rpc.tournament.stage_seed": Op(request=schemas.SeedTeamsRequest, response=schemas.StageRead),
     "rpc.tournament.stage_bracket_template_get": Op(response=schemas.BracketTemplateRead),
     "rpc.tournament.stage_bracket_template_set": Op(request=BracketTemplate, response=schemas.BracketTemplateRead),
@@ -267,7 +266,6 @@ OPERATIONS: dict[str, Op] = {
             QueryParam("end_date", required=True),
             QueryParam("challonge_slug", required=True),
             QueryParam("discipline", required=True),
-            QueryParam("is_league", "boolean"),
             QueryParam("division_grid_version_id", "integer"),
         ),
     ),

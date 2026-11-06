@@ -8,7 +8,7 @@ import { useCatalogEntities } from "@/hooks/useCatalogEntities";
 import { tournamentPicture } from "@/lib/tournament/art";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { stageProgress } from "@/lib/tournament/stage-progress";
-import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { getTournamentStatusMeta, displayStatus } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import { formatDateRange } from "@/lib/datetime";
 import { useFormatter } from "@/lib/datetime/client";
@@ -18,7 +18,8 @@ import { TournamentCover } from "@/components/tournaments/TournamentCover";
 import { Progress } from "@/components/ui/progress";
 import { GameLabel } from "@/components/workspace/GameLabel";
 import type { DisciplineDescriptor } from "@/types/discipline.types";
-import type { TeamFormation, Tournament } from "@/types/tournament.types";
+import type { Tournament } from "@/types/tournament.types";
+import { primaryFormationMode } from "@/lib/tournament/flow-nodes";
 
 /**
  * One tournament in the card view.
@@ -41,9 +42,10 @@ const TournamentCard = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const { variant } = getTournamentStatusMeta(tournament.status);
+  const { variant } = getTournamentStatusMeta(displayStatus(tournament));
   const isFinished = variant === "finished";
-  const stage = stageProgress(tournament, tournament.status, t);
+  const stage = stageProgress(tournament, displayStatus(tournament), t);
+  const formation = primaryFormationMode(tournament);
   const players = tournament.participants_count ?? 0;
   const teams = tournament.teams_count;
   // Only a card without a cover reads anything for its picture: the map last
@@ -80,7 +82,7 @@ const TournamentCard = ({
         {isFinished ? null : (
           <span className="absolute right-2 top-2 z-[2] flex rounded-md bg-[color:var(--aqt-bg)]">
             <TournamentStatusPill status={variant}>
-              {t(`common.statusBadge.${tournament.status}`)}
+              {t(`common.statusBadge.${displayStatus(tournament)}`)}
             </TournamentStatusPill>
           </span>
         )}
@@ -107,16 +109,10 @@ const TournamentCard = ({
               <GameLabel code={tournament.discipline} games={games} />
             </>
           ) : null}
-          {tournament.is_league && (
+          {formation && (
             <>
               <span aria-hidden className="text-[color:var(--aqt-fg-dim)]">·</span>
-              <span>{t("common.league")}</span>
-            </>
-          )}
-          {tournament.team_formation && (
-            <>
-              <span aria-hidden className="text-[color:var(--aqt-fg-dim)]">·</span>
-              <span>{t(`common.${tournament.team_formation as TeamFormation}`)}</span>
+              <span>{t(`common.formationMode.${formation}`)}</span>
             </>
           )}
         </p>

@@ -31,12 +31,17 @@ import {
 } from "@/components/ui/select";
 import { getApiErrorMessage } from "@/lib/api/error";
 import { formatAdmissionRefusal } from "@/lib/registration/admission";
-import { isPhaseWindowActive } from "@/lib/tournament/status";
+import { isCheckInOpen, registrationIntake, registrationNodeConfig } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import {
+  tournamentMyRegistrationQueryOptions,
+  tournamentRegistrationsQueryOptions
+} from "@/lib/tournament/registrations-query";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useViewerRegistrationNode } from "@/hooks/useViewerRegistrationNode";
 import registrationService from "@/services/registration.service";
 import CheckInSubscriptionProof from "@/components/registration/CheckInSubscriptionProof";
 import MyTeamSection from "@/components/registration/MyTeamSection";
@@ -76,7 +81,7 @@ import { ViewSegment } from "../../_components/ViewSegment";
 import { MyRegistrationCard } from "./MyRegistrationCard";
 import {
   ADMIN_ONLY_COLUMN_IDS,
-  POOL_TEAM_FORMATIONS,
+  hasPoolFormation,
   STATUS_FILTER_META,
   STATUS_FILTER_ORDER,
   type StatusFilter
@@ -111,16 +116,16 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
 
   const isAuthenticated = authStatus === "authenticated" && user !== null;
 
+  const registrationNode = useViewerRegistrationNode(tournament);
+  const registrationNodeId = registrationNode?.id ?? null;
+  const requireSubscription = registrationNodeConfig(registrationNode).require_subscription;
+
   const myRegQuery = useQuery({
-    queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationService.getMyRegistration(tournament.id),
+    ...tournamentMyRegistrationQueryOptions(tournament, registrationNode),
     enabled: isAuthenticated
   });
 
-  const listQuery = useQuery({
-    queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationService.listRegistrations(tournament.id)
-  });
+  const listQuery = useQuery(tournamentRegistrationsQueryOptions(tournament, registrationNode));
 
   const formQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationForm(tournament.workspace_id, tournament.id),
@@ -128,7 +133,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
   });
 
   const withdrawMutation = useMutation({
-    mutationFn: () => registrationService.withdrawMyRegistration(tournament.id),
+    mutationFn: () => registrationService.withdrawMyRegistration(tournament.id, registrationNodeId!),
     onSuccess: async () => {
       setIsWithdrawDialogOpen(false);
       await Promise.all([
@@ -146,7 +151,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
   });
 
   const checkInMutation = useMutation({
-    mutationFn: () => registrationService.checkInMyRegistration(tournament.id),
+    mutationFn: () => registrationService.checkInMyRegistration(tournament.id, registrationNodeId!),
     onSuccess: (updated) => {
       setIsCheckInDialogOpen(false);
       // The response IS the updated registration: write it into the cache
@@ -155,7 +160,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
       // button spinning through the post-invalidation rebuild (and the WS
       // structure_changed event refreshes the list anyway).
       queryClient.setQueryData(
-        tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
+        tournamentQueryKeys.registration(tournament.workspace_id, tournament.id, registrationNodeId ?? 0),
         updated
       );
       void queryClient.invalidateQueries({
@@ -181,7 +186,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
     Boolean(myRegistration) &&
     myRegistration?.status === "approved" &&
     myRegistration.checked_in !== true &&
-    isPhaseWindowActive(tournament, "check_in");
+    isCheckInOpen(registrationNode);
 
   // The check-in window is open and this player still has to confirm: open the
   // dialog for them rather than trusting they will find the button. `claimCheckInPrompt`
@@ -223,9 +228,10 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
         { discipline: tournament.discipline, identityProvider, ontology },
         divisionGrid,
         heroesMap,
-        hasTeams
+        hasTeams,
+        requireSubscription
       ),
-    [form, t, tournament.discipline, identityProvider, ontology, divisionGrid, heroesMap, hasTeams]
+    [form, t, tournament.discipline, identityProvider, ontology, divisionGrid, heroesMap, hasTeams, requireSubscription]
   );
   const allColumns = useMemo(
     () =>
@@ -333,7 +339,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
   // what is its state" for every reader, which is what the section is opened
   // for. The by-role pool is the second read, offered only where a pool exists
   // (balancer/draft) — team registration has no pool to show.
-  const hasPoolView = POOL_TEAM_FORMATIONS[tournament.team_formation] === true;
+  const hasPoolView = hasPoolFormation(tournament);
   const defaultView: ParticipantView = "table";
 
   const participantUrl = useMemo(
@@ -571,7 +577,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
 
           Both components self-gate and render nothing when they have nothing to
           say, so a solo tournament pays no vertical space. */}
-      {tournament.team_formation === "registration" && (
+      {registrationIntake(tournament, registrationNode) === "team" && (
         <>
           <MyInviteOffers tournament={tournament} />
           <MyTeamSection tournament={tournament} />
@@ -599,7 +605,8 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
           <CheckInSubscriptionProof
             tournamentId={tournament.id}
             requirement={form?.subscription_requirement_json}
-            active={isCheckInDialogOpen && form?.require_subscription === true}
+            registrationNodeId={registrationNodeId}
+            active={isCheckInDialogOpen && requireSubscription}
           />
           {checkInMutation.isError && (
             <p role="alert" className="text-sm text-[color:var(--aqt-rose)]">

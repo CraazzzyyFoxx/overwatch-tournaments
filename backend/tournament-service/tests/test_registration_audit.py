@@ -39,6 +39,7 @@ from shared.models.registration.registration import Registration  # noqa: E402
 
 WORKSPACE_ID = 1
 REGISTRATION_ID = 55
+NODE_ID = 9
 
 #: Grants the "registration" gates the handlers check on workspace 1 (moved off
 #: the legacy blanket "team" resource these handlers used to share with the
@@ -89,6 +90,10 @@ class _FakeSession:
         self.rows: list[Any] = []
         self.trace = trace
 
+    async def scalar(self, _statement: Any) -> int:
+        """The registration's tournament id (the registration node is checked against it)."""
+        return 3
+
     def add(self, row: Any) -> None:
         self.rows.append(row)
         self.trace.append("audit")
@@ -127,14 +132,24 @@ def _registration(**overrides: Any) -> SimpleNamespace:
         "organizer_notes": None,
         "admin_notes": None,
         "custom_fields_json": None,
+        "roles": [_role("damage", 30)],
+    }
+    entry_fields = {
         "status": "pending",
         "balancer_status": "not_in_balancer",
         "exclude_reason": None,
         "checked_in": False,
-        "roles": [_role("damage", 30)],
+        "is_reserve": False,
     }
+    for field in entry_fields:
+        if field in overrides:
+            entry_fields[field] = overrides.pop(field)
     base.update(overrides)
     registration = SimpleNamespace(**base)
+    #: The participation the admin handlers read status, balancer status and check-in from.
+    registration.entry = SimpleNamespace(
+        id=1, registration_node_id=NODE_ID, registration=registration, reviewer=None, **entry_fields
+    )
     # The model's own algorithm, run against the stub's rows.
     registration.primary_game_identity = partial(Registration.primary_game_identity, registration)
     return registration
@@ -188,9 +203,15 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
         async def fake_get(_session, _registration_id):
             return stored
 
+        async def fake_get_entry(_session, _node_id, _registration_id):
+            return stored.entry
+
+        async def fake_node_id(_session, _data, _tournament_id):
+            return NODE_ID
+
         async def fake_service(*_args, **_kwargs):
             trace.append("service")
-            return stored
+            return stored.entry
 
         async def fake_status_metas(_session, *, workspace_id):
             return {}
@@ -204,7 +225,9 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
         with (
             patch.object(helpers.db, "async_session_maker", FakeSessionMaker(session)),
             patch.object(registration_admin.auth, "get_registration_workspace_id", fake_ws_id),
+            patch.object(registration_admin, "_registration_node_id", fake_node_id),
             patch.object(registration_admin.lifecycle.lifecycle_service, "get_registration_by_id", fake_get),
+            patch.object(registration_admin.lifecycle.lifecycle_service, "get_entry", fake_get_entry),
             patch.object(registration_admin.lifecycle.lifecycle_service, service_attr, fake_service),
             patch.object(registration_admin, "get_status_metas_map", fake_status_metas),
             patch.object(registration_admin, "emit_balancer_registrations_changed", fake_emit),
@@ -409,8 +432,8 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
         self.assertEqual(1, len(session.rows))
         row = session.rows[0]
         self.assertEqual("registration.approve", row.action)
-        self.assertEqual({"status": "pending"}, row.before_json)
-        self.assertEqual({"status": "approved"}, row.after_json)
+        self.assertEqual({"registration_node_id": NODE_ID, "status": "pending"}, row.before_json)
+        self.assertEqual({"registration_node_id": NODE_ID, "status": "approved"}, row.after_json)
 
     async def test_check_in_undo_is_a_distinct_action(self):
         _, session, _ = await self._invoke(
@@ -423,8 +446,8 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
         self.assertEqual(1, len(session.rows))
         row = session.rows[0]
         self.assertEqual("registration.check_in_undo", row.action)
-        self.assertEqual({"checked_in": True}, row.before_json)
-        self.assertEqual({"checked_in": False}, row.after_json)
+        self.assertEqual({"registration_node_id": NODE_ID, "checked_in": True}, row.before_json)
+        self.assertEqual({"registration_node_id": NODE_ID, "checked_in": False}, row.after_json)
 
     async def test_bulk_approve_is_filed_on_the_tournament(self):
         broker = CapturingBroker()
@@ -442,8 +465,12 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
         async def fake_emit(*_args, **_kwargs):
             return None
 
+        async def fake_node_id(_session, _data, _tournament_id):
+            return NODE_ID
+
         with (
             patch.object(helpers.db, "async_session_maker", FakeSessionMaker(session)),
+            patch.object(registration_admin, "_registration_node_id", fake_node_id),
             patch.object(registration_admin.auth, "get_tournament_workspace_id", fake_ws_id),
             patch.object(registration_admin.lifecycle.lifecycle_service, "bulk_approve_registrations", fake_bulk),
             patch.object(registration_admin, "emit_balancer_registrations_changed", fake_emit),

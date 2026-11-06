@@ -1,10 +1,8 @@
-"""Seed writers on the test Postgres: who waits for whom, and what a seed may point at.
+"""Seed writers on the test Postgres: who waits for whom.
 
 ``seed_teams`` takes the stage lock every other input writer takes and refuses
-a stage that already has encounters. Requalification locks the encounter rows
-of the items that still look untouched and asks again under the lock, so a
-result landing meanwhile is seen, not overwritten. A TENTATIVE seed may only
-qualify from a stage item of its own tournament.
+a stage that already has encounters. Re-seating a ready stage locks the encounter
+rows of the items it changes, so a write landing meanwhile is waited for, not overwritten.
 """
 
 from __future__ import annotations
@@ -16,11 +14,8 @@ import sqlalchemy as sa
 from shared.core import enums
 from shared.core.errors import BaseAPIException
 from shared.models.encounter import Encounter
-from shared.models.encounter.team import EncounterTeam
+from shared.models.tournament.flow import FlowEdge, FlowNode, FlowNodeResult
 from shared.models.tournament.stage import Stage, StageItem, StageItemInput
-from shared.models.tournament.standings import Standing
-from shared.models.tournament.tournament import Tournament
-from src import schemas
 from src.services.admin.stage import stage_service
 from tests._encounter_layer import EncounterLayerCase
 
@@ -39,51 +34,12 @@ class StageSeedGuardTests(EncounterLayerCase):
                 stage_type=enums.StageType.ROUND_ROBIN,
                 order=0,
             )
-            foreign = Tournament(workspace_id=self.workspace_id, name="Other", slug=f"other-{self.tournament_id}")
-            s.add_all([groups, foreign])
-            await s.flush()
-            foreign_stage = Stage(
-                tournament_id=foreign.id,
-                scoring_rule_id=self.rule_id,
-                name="Their groups",
-                stage_type=enums.StageType.ROUND_ROBIN,
-                order=0,
-            )
-            s.add(foreign_stage)
+            s.add(groups)
             await s.flush()
             group = StageItem(stage_id=groups.id, name="A", type=enums.StageItemType.GROUP, order=0)
-            foreign_group = StageItem(stage_id=foreign_stage.id, name="A", type=enums.StageItemType.GROUP, order=0)
-            s.add_all([group, foreign_group])
+            s.add(group)
             await s.commit()
-            self.groups_id, self.group_id, self.foreign_group_id = groups.id, group.id, foreign_group.id
-
-    async def _tentative(self, source_stage_item_id: int) -> StageItemInput:
-        async with self.Session() as s:
-            return await stage_service.create_stage_item_input(
-                s,
-                self.item_id,
-                schemas.StageItemInputCreate(
-                    slot=1,
-                    input_type=enums.StageItemInputType.TENTATIVE,
-                    source_stage_item_id=source_stage_item_id,
-                    source_position=1,
-                ),
-            )
-
-    async def test_a_seed_cannot_qualify_from_another_tournament(self) -> None:
-        with self.assertRaises(BaseAPIException) as created:
-            await self._tentative(self.foreign_group_id)
-        self.assertEqual(400, created.exception.status_code)
-
-        own = await self._tentative(self.group_id)
-        async with self.Session() as s:
-            with self.assertRaises(BaseAPIException) as updated:
-                await stage_service.update_stage_item_input(
-                    s, own.id, schemas.StageItemInputUpdate(source_stage_item_id=self.foreign_group_id)
-                )
-        self.assertEqual(400, updated.exception.status_code)
-        async with self.Session() as s:
-            self.assertEqual(self.group_id, (await s.get_one(StageItemInput, own.id)).source_stage_item_id)
+            self.groups_id, self.group_id = groups.id, group.id
 
     async def test_seeding_refuses_a_stage_with_encounters(self) -> None:
         await self.encounter(0, 1)
@@ -106,55 +62,80 @@ class StageSeedGuardTests(EncounterLayerCase):
             await holder.rollback()
         await asyncio.wait_for(seeding, 10)
 
-    async def test_requalification_sees_a_result_that_landed_while_it_waited(self) -> None:
-        # Group A ranks t0 first; the playoff still holds t1 off that place, untouched so far.
+    async def test_reseat_waits_for_an_encounter_write_in_flight(self) -> None:
+        # Group A ranks t0 first; the ready playoff still holds t1 on that seat, with its pairing already drawn.
         async with self.Session() as s:
+            groups_node = FlowNode(
+                tournament_id=self.tournament_id,
+                kind="stage",
+                name="Groups",
+                status="completed",
+                stage_id=self.groups_id,
+            )
+            top = FlowNode(tournament_id=self.tournament_id, kind="filter", name="Top", status="final", config={"n": 2})
+            s.add_all([groups_node, top])
+            await s.flush()
+            rows = [
+                FlowNodeResult(
+                    node_id=top.id,
+                    port="passed",
+                    rank=rank,
+                    team_id=self.teams[index],
+                    stage_item_id=self.group_id,
+                    item_rank=rank,
+                    state="final",
+                )
+                for rank, index in ((1, 0), (2, 1))
+            ]
+            s.add_all(rows)
+            await s.flush()
+            playoff_node_id = await s.scalar(sa.select(FlowNode.id).where(FlowNode.stage_id == self.stage_id))
+            await s.execute(sa.update(FlowNode).where(FlowNode.id == playoff_node_id).values(status="ready"))
             s.add_all(
                 [
-                    Standing(
+                    FlowEdge(
                         tournament_id=self.tournament_id,
-                        team_id=self.teams[index],
-                        stage_id=self.groups_id,
-                        stage_item_id=self.group_id,
-                        position=index + 1,
-                        matches=1,
-                        points=1 - index,
-                    )
-                    for index in (0, 1)
+                        source_node_id=groups_node.id,
+                        source_port="ranking",
+                        target_node_id=top.id,
+                        target_port="ranking",
+                    ),
+                    FlowEdge(
+                        tournament_id=self.tournament_id,
+                        source_node_id=top.id,
+                        source_port="passed",
+                        target_node_id=playoff_node_id,
+                        target_port="participants",
+                    ),
                 ]
                 + [
                     StageItemInput(
                         stage_item_id=self.item_id,
-                        slot=1,
+                        slot=slot,
                         input_type=enums.StageItemInputType.FINAL,
-                        team_id=self.teams[1],
-                        source_stage_item_id=self.group_id,
-                        source_position=1,
+                        team_id=self.teams[index],
+                        source_result_id=rows[index].id,
                     )
+                    for slot, index in ((1, 1), (2, 0))
                 ]
             )
             await s.commit()
-        encounter_id = await self.encounter(1, 2)
+        encounter_id = await self.encounter(1, 0)
 
         async with self.Session() as writer:
-            # A result write in flight: the encounter locked, a score written, not yet committed.
+            # A write in flight: the encounter locked, not yet committed.
             await writer.execute(sa.select(Encounter.id).where(Encounter.id == encounter_id).with_for_update())
-            await writer.execute(
-                sa.update(EncounterTeam)
-                .where(EncounterTeam.encounter_id == encounter_id, EncounterTeam.slot == 1)
-                .values(score=1)
-            )
 
-            async def requalify() -> int:
+            async def reseat() -> int:
                 async with self.Session() as s:
-                    applied = await stage_service.requalify_downstream_inputs(s, self.tournament_id)
+                    moved = await stage_service.reseat_ready_stages(s, self.tournament_id)
                     await s.commit()
-                    return applied
+                    return moved
 
-            requalifying = asyncio.create_task(requalify())
+            reseating = asyncio.create_task(reseat())
             await asyncio.sleep(_BLOCKED_FOR)
-            self.assertFalse(requalifying.done())
+            self.assertFalse(reseating.done(), "the reseat must queue behind the encounter lock")
             await writer.commit()
 
-        self.assertEqual(0, await asyncio.wait_for(requalifying, 10), "a started playoff is not re-seeded")
-        self.assertEqual([(1, "t1"), (2, "t2")], await self.seats(encounter_id))
+        self.assertEqual(2, await asyncio.wait_for(reseating, 10))
+        self.assertEqual([(1, "t0"), (2, "t1")], await self.seats(encounter_id))

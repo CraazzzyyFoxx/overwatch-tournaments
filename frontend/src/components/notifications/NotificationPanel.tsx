@@ -434,11 +434,13 @@ function Row({
           });
         }
       }
-      // A phase with no end carries no `closes_at`, and a match whose time is not
-      // fixed yet carries no `scheduled_at`; an ICU `select` needs its argument in
+      // A phase with no end carries no `closes_at`, a match whose time is not
+      // fixed yet carries no `scheduled_at`, and an announcement of a legacy node
+      // carries no `node_name`; an ICU `select` needs its argument in
       // every case, so the message branches on this sentinel.
       if (item.kind === "registration.opened" || item.kind === "check_in.opened") {
         values.closes_at ??= "none";
+        values.node_name ??= "none";
       }
       if (item.kind === "encounter.scheduled") values.scheduled_at ??= "none";
       // The key is only known at runtime, so the typed translator cannot

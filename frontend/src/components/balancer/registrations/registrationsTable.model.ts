@@ -13,7 +13,6 @@ export function adminRoleForm(tournament: { id: number; workspace_id: number; di
     tournament_id: tournament.id,
     workspace_id: tournament.workspace_id,
     discipline: tournament.discipline,
-    is_open: true,
     form_schema: { schema_version: 1, sections: [] },
     version_id: 0,
     version_number: 0

@@ -180,10 +180,11 @@ async def create_job(
     user,
     broker,
     tournament_id: int | None = None,
+    formation_node_id: int | None = None,
     discipline: str | None = None,
 ) -> CreateJobResponse:
-    """Queue a balance job for an uploaded pool, or -- with ``uploaded_file=None`` and a ``tournament_id`` -- for
-    the tournament's own pool.
+    """Queue a balance job for an uploaded pool, or -- with ``uploaded_file=None`` and a ``formation_node_id`` -- for
+    the pool that formation node's input holds.
 
     The tournament pool is built here by the same engine the draft reads (``shared.services.roster``), so the
     balancer and the draft cannot be fed two different rank sources.
@@ -192,7 +193,7 @@ async def create_job(
 
     if uploaded_file is None:
         _access_policy.ensure_workspace_access(user, workspace_id)
-        rosters = await roster_engine.for_tournament(session, tournament_id, pool_only=True)
+        rosters = await roster_engine.for_node_input(session, formation_node_id, pool_only=True)
         player_data = roster_engine.balancer_input(rosters.values())
         if not player_data["players"]:
             raise HTTPException(
@@ -240,6 +241,7 @@ async def create_job(
                     "config_overrides": config_overrides,
                     "job_id": job_id,
                     "tournament_id": tournament_id,
+                    "formation_node_id": formation_node_id,
                     "created_by": user.id,
                     "credential_type": getattr(user, "_credential_type", "access_token"),
                     "api_key_id": api_key_id,
@@ -267,6 +269,7 @@ async def create_job(
         await _emit_job(
             tournament_id,
             BALANCER_JOB_QUEUED,
+            formation_node_id=formation_node_id,
             job_id=job_id,
             status="queued",
             actor_user_id=user.id,
@@ -406,12 +409,14 @@ async def execute_balance_job(job_id: str, *, progress_clock=None) -> None:
     # without one (API-key/public) skip realtime broadcasting entirely.
     rt_tournament_id = current_meta.get("tournament_id") if isinstance(current_meta, dict) else None
     rt_actor_id = current_meta.get("created_by") if isinstance(current_meta, dict) else None
+    rt_node_id = current_meta.get("formation_node_id") if isinstance(current_meta, dict) else None
 
     async def publish_job_progress(update: dict[str, Any]) -> None:
         if rt_tournament_id is None:
             return
         await _emit_job_progress(
             int(rt_tournament_id),
+            formation_node_id=rt_node_id,
             job_id=job_id,
             status=str(update.get("status", "running")),
             progress=update.get("progress"),
@@ -429,6 +434,7 @@ async def execute_balance_job(job_id: str, *, progress_clock=None) -> None:
         await _emit_job(
             int(rt_tournament_id),
             event_type,
+            formation_node_id=rt_node_id,
             job_id=job_id,
             status=status_value,
             progress=progress,

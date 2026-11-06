@@ -5,21 +5,20 @@ from faststream.exceptions import RejectMessage
 from loguru import logger
 
 from shared import models
-from shared.messaging.config import ACHIEVEMENT_EVALUATE_QUEUE
-from shared.messaging.outbox import enqueue_outbox_event
 from shared.repository import TournamentRepository
-from shared.schemas.events import AchievementEvaluateEvent
-from shared.services.scrim_scope import is_scrim_container
 from shared.services.tournament.computation import dispatch_job
 from src.core import db
 from src.services.admin.stage import stage_service as admin_stage_service
 from src.services.computation.jobs import failure_message, is_refusal, jobs_service
+from src.services.flow.engine import flow_engine
+from src.services.flow.lifecycle import flow_node_service
 from src.services.individual_swiss import individual_swiss_rounds_service
 from src.services.standings.service import standings_service
 from src.services.standings.swiss_auto_round import swiss_rounds_service
 from src.services.tournament.events import (
     RESULT_RESOURCES,
     STRUCTURE_RESOURCES,
+    enqueue_achievement_evaluation,
     publish_tournament_invalidation,
 )
 
@@ -28,25 +27,17 @@ _tournaments = TournamentRepository()
 # Standings are the input to every placement-, streak- and playoff-shaped rule.
 # The outbox row goes out in the same transaction as the standings themselves,
 # so the evaluation can never observe an older generation than the one that
-# triggered it. The same job flips ``Stage.is_completed``, which the
-# stage-completion rules read.
-_STANDINGS_CHANGED_TABLES = ["tournament.standing", "tournament.player", "tournament.team", "tournament.stage"]
-
-
-async def _enqueue_achievement_evaluation(session, tournament: models.Tournament) -> None:
-    if await is_scrim_container(session, tournament.id):
-        return
-    await enqueue_outbox_event(
-        session,
-        AchievementEvaluateEvent(
-            workspace_id=tournament.workspace_id,
-            tournament_id=tournament.id,
-            changed_tables=_STANDINGS_CHANGED_TABLES,
-        ),
-        # Default exchange: the routing key IS the queue name.
-        exchange=None,
-        routing_key=ACHIEVEMENT_EVALUATE_QUEUE.name,
-    )
+# triggered it. The same job moves the stage nodes to ``completed`` (and back), which the
+# stage-completion rules read. The recalculation also rewrites
+# ``participant_result`` of a finished tournament.
+_STANDINGS_CHANGED_TABLES = [
+    "tournament.standing",
+    "tournament.player",
+    "tournament.team",
+    "tournament.stage",
+    "tournament.flow_node",
+    "tournament.participant_result",
+]
 
 
 async def _isolated(session, what: str, tournament_id: int, step):
@@ -125,17 +116,27 @@ async def process_standings_job(job_id: int) -> None:
                 or 0
             )
             run = await standings_service.recalculate_for_tournament(session, tournament_id, commit=False)
-            requalified = generated = None
+            requalified = generated = moved = None
             if run.tournament is not None:
                 stages = run.tournament.stages
-                # The standings that just moved are what a frozen playoff seed was
-                # resolved FROM: re-resolve the ones an untouched downstream stage
-                # item still holds, in this transaction, before anything publishes.
+                # The rule decides, the node moves: first, so the Swiss passes below see which stages still play.
+                moved = await _isolated(
+                    session,
+                    "Stage completion",
+                    tournament_id,
+                    lambda: flow_node_service.sync_stage_completion(session, tournament_id, run.completed_stage_ids),
+                )
+                # The flow reads the standings and the stages they just moved; the stages seated off its results follow.
+                await _isolated(
+                    session, "Flow recompute", tournament_id, lambda: flow_engine.recompute(session, tournament_id)
+                )
+                # A ready stage was seated from results that just moved: re-seat it, in this transaction, before
+                # anything publishes.
                 requalified = await _isolated(
                     session,
                     "Requalification",
                     tournament_id,
-                    lambda: admin_stage_service.requalify_downstream_inputs(session, tournament_id, stages=stages),
+                    lambda: admin_stage_service.reseat_ready_stages(session, tournament_id),
                 )
                 # What was loaded for the ranking is reused unless requalification moved seats or rolled back (a
                 # rolled-back savepoint expires what it touched): then the Swiss pass reads its own.
@@ -165,8 +166,8 @@ async def process_standings_job(job_id: int) -> None:
                 await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
             elif run.changed or requalified:
                 await publish_tournament_invalidation(session, tournament_id, RESULT_RESOURCES)
-            if run.changed:
-                await _enqueue_achievement_evaluation(session, run.tournament)
+            if run.changed or moved:
+                await enqueue_achievement_evaluation(session, run.tournament, _STANDINGS_CHANGED_TABLES)
             await jobs_service.mark_job_succeeded(
                 session,
                 current,

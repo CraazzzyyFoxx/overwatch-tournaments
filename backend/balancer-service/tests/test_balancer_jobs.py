@@ -212,6 +212,7 @@ class CreateJobTests(IsolatedAsyncioTestCase):
                 user=SimpleNamespace(id=9),
                 broker=SimpleNamespace(),
                 tournament_id=42,
+                formation_node_id=7,
             )
 
         emit.assert_awaited_once()
@@ -220,6 +221,8 @@ class CreateJobTests(IsolatedAsyncioTestCase):
         self.assertEqual(args[1], "balancer_job.queued")
         self.assertEqual(kwargs["job_id"], "job-xyz")
         self.assertEqual(kwargs["status"], "queued")
+        # The event names the node, so a page on another formation ignores the job's result.
+        self.assertEqual(kwargs["formation_node_id"], 7)
         self.assertEqual(kwargs["actor_user_id"], 9)
 
     async def test_api_key_create_job_reserves_limit_and_stores_metadata(self) -> None:

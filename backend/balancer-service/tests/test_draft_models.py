@@ -39,7 +39,7 @@ def test_tables_live_in_draft_schema() -> None:
 
 def test_session_has_partial_unique_active_index() -> None:
     idx = {i.name for i in DraftSession.__table__.indexes}
-    assert "uq_draft_session_active_tournament" in idx
+    assert "uq_draft_session_active_formation_node" in idx
 
 
 def test_pick_has_version_and_clock_columns() -> None:

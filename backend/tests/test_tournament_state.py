@@ -1,181 +1,27 @@
 from __future__ import annotations
 
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
-from types import SimpleNamespace
 
 backend_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(backend_root))
 
 from shared.core.enums import TournamentStatus  # noqa: E402
-from shared.core.tournament_state import (  # noqa: E402
-    PHASE_ORDER,
-    can_transition,
-    is_within_phase_window,
-    next_due_status,
-)
-
-NOW = datetime(2026, 7, 17, 12, 0, tzinfo=UTC)
+from shared.core.tournament_state import FINISHED_STATUSES, as_utc, is_finished_for_status  # noqa: E402
 
 
-def _row(status: TournamentStatus, starts_in: timedelta, ends_in: timedelta | None = None) -> SimpleNamespace:
-    return SimpleNamespace(
-        status=status,
-        starts_at=NOW + starts_in,
-        ends_at=NOW + ends_in if ends_in is not None else None,
-    )
+def test_finished_statuses() -> None:
+    assert frozenset({TournamentStatus.COMPLETED, TournamentStatus.ARCHIVED}) == FINISHED_STATUSES
+    assert [is_finished_for_status(s) for s in TournamentStatus] == [False, False, True, True]
 
 
-# ─── next_due_status ─────────────────────────────────────────────────────────
+def test_tournament_status_has_four_values() -> None:
+    assert [s.value for s in TournamentStatus] == ["announcement", "live", "completed", "archived"]
 
 
-def test_next_due_status_picks_latest_due_phase_skipping_intermediates() -> None:
-    # DRAFT and LIVE are both overdue -> jump straight to LIVE (skip DRAFT).
-    schedule = [
-        _row(TournamentStatus.DRAFT, timedelta(hours=-2)),
-        _row(TournamentStatus.LIVE, timedelta(hours=-1)),
-    ]
-    assert next_due_status(TournamentStatus.REGISTRATION, schedule, NOW) == TournamentStatus.LIVE
-
-
-def test_next_due_status_ignores_phases_not_yet_due() -> None:
-    schedule = [
-        _row(TournamentStatus.CHECK_IN, timedelta(minutes=-5)),
-        _row(TournamentStatus.LIVE, timedelta(hours=1)),
-    ]
-    assert next_due_status(TournamentStatus.REGISTRATION, schedule, NOW) == TournamentStatus.CHECK_IN
-
-
-def test_next_due_status_advances_from_check_in_to_draft() -> None:
-    schedule = [_row(TournamentStatus.DRAFT, timedelta(minutes=-1))]
-    assert next_due_status(TournamentStatus.CHECK_IN, schedule, NOW) == TournamentStatus.DRAFT
-
-
-def test_next_due_status_ignores_non_schedulable_rows() -> None:
-    # PLAYOFFS/COMPLETED are manual phases; a (bogus) due row never drives automation.
-    schedule = [
-        _row(TournamentStatus.PLAYOFFS, timedelta(hours=-1)),
-        _row(TournamentStatus.COMPLETED, timedelta(hours=-1)),
-    ]
-    assert next_due_status(TournamentStatus.LIVE, schedule, NOW) is None
-
-
-def test_next_due_status_returns_none_when_nothing_due() -> None:
-    schedule = [_row(TournamentStatus.CHECK_IN, timedelta(minutes=10))]
-    assert next_due_status(TournamentStatus.REGISTRATION, schedule, NOW) is None
-    assert next_due_status(TournamentStatus.REGISTRATION, [], NOW) is None
-
-
-def test_next_due_status_never_goes_backward_or_sideways() -> None:
-    # Only backward (REGISTRATION) and same-phase (CHECK_IN) rows are due.
-    schedule = [
-        _row(TournamentStatus.REGISTRATION, timedelta(hours=-3)),
-        _row(TournamentStatus.CHECK_IN, timedelta(hours=-1)),
-    ]
-    assert next_due_status(TournamentStatus.CHECK_IN, schedule, NOW) is None
-
-
-def test_next_due_status_handles_naive_datetimes_as_utc() -> None:
-    schedule = [
-        SimpleNamespace(
-            status=TournamentStatus.LIVE,
-            starts_at=NOW.replace(tzinfo=None) - timedelta(minutes=1),
-            ends_at=None,
-        )
-    ]
-    assert next_due_status(TournamentStatus.CHECK_IN, schedule, NOW) == TournamentStatus.LIVE
-
-
-# ─── is_within_phase_window ──────────────────────────────────────────────────
-
-
-def test_window_defaults_to_whole_phase_without_a_row() -> None:
-    assert is_within_phase_window(TournamentStatus.CHECK_IN, [], NOW) is True
-    # A row for a *different* phase does not narrow this phase's window.
-    other = [_row(TournamentStatus.REGISTRATION, timedelta(hours=1))]
-    assert is_within_phase_window(TournamentStatus.CHECK_IN, other, NOW) is True
-
-
-def test_window_closed_before_starts_at() -> None:
-    schedule = [_row(TournamentStatus.CHECK_IN, timedelta(minutes=5))]
-    assert is_within_phase_window(TournamentStatus.CHECK_IN, schedule, NOW) is False
-
-
-def test_window_closed_after_ends_at() -> None:
-    schedule = [_row(TournamentStatus.CHECK_IN, timedelta(hours=-2), ends_in=timedelta(hours=-1))]
-    assert is_within_phase_window(TournamentStatus.CHECK_IN, schedule, NOW) is False
-
-
-def test_window_open_between_starts_and_ends() -> None:
-    schedule = [_row(TournamentStatus.CHECK_IN, timedelta(hours=-1), ends_in=timedelta(hours=1))]
-    assert is_within_phase_window(TournamentStatus.CHECK_IN, schedule, NOW) is True
-
-
-def test_window_with_null_ends_at_spans_rest_of_phase() -> None:
-    schedule = [_row(TournamentStatus.CHECK_IN, timedelta(hours=-1))]
-    assert is_within_phase_window(TournamentStatus.CHECK_IN, schedule, NOW) is True
-
-
-# ─── can_transition ──────────────────────────────────────────────────────────
-
-
-def test_announcement_opens_the_lifecycle_and_check_in_precedes_team_draft() -> None:
-    assert PHASE_ORDER[TournamentStatus.ANNOUNCEMENT] < PHASE_ORDER[TournamentStatus.REGISTRATION]
-    assert PHASE_ORDER[TournamentStatus.REGISTRATION] < PHASE_ORDER[TournamentStatus.CHECK_IN]
-    assert PHASE_ORDER[TournamentStatus.CHECK_IN] < PHASE_ORDER[TournamentStatus.DRAFT]
-    assert PHASE_ORDER[TournamentStatus.DRAFT] < PHASE_ORDER[TournamentStatus.LIVE]
-
-
-def test_forward_transitions_allow_phase_skips() -> None:
-    assert can_transition(TournamentStatus.REGISTRATION, TournamentStatus.CHECK_IN)
-    assert can_transition(TournamentStatus.REGISTRATION, TournamentStatus.DRAFT)
-    assert can_transition(TournamentStatus.REGISTRATION, TournamentStatus.LIVE)
-    assert can_transition(TournamentStatus.CHECK_IN, TournamentStatus.DRAFT)
-    assert can_transition(TournamentStatus.CHECK_IN, TournamentStatus.LIVE)
-    assert can_transition(TournamentStatus.DRAFT, TournamentStatus.LIVE)
-    assert can_transition(TournamentStatus.LIVE, TournamentStatus.PLAYOFFS)
-    assert can_transition(TournamentStatus.LIVE, TournamentStatus.COMPLETED)
-
-
-def test_rollbacks_to_prior_effective_phases_are_legal() -> None:
-    assert can_transition(TournamentStatus.CHECK_IN, TournamentStatus.REGISTRATION)
-    assert can_transition(TournamentStatus.DRAFT, TournamentStatus.CHECK_IN)
-    assert can_transition(TournamentStatus.DRAFT, TournamentStatus.REGISTRATION)
-    assert can_transition(TournamentStatus.LIVE, TournamentStatus.DRAFT)
-    assert can_transition(TournamentStatus.LIVE, TournamentStatus.CHECK_IN)
-    assert can_transition(TournamentStatus.COMPLETED, TournamentStatus.ARCHIVED)
-    assert can_transition(TournamentStatus.ARCHIVED, TournamentStatus.COMPLETED)
-
-
-def test_illegal_transitions_rejected() -> None:
-    assert not can_transition(TournamentStatus.REGISTRATION, TournamentStatus.PLAYOFFS)
-    assert not can_transition(TournamentStatus.PLAYOFFS, TournamentStatus.LIVE)
-    assert not can_transition(TournamentStatus.REGISTRATION, TournamentStatus.COMPLETED)
-    assert not can_transition(TournamentStatus.PLAYOFFS, TournamentStatus.REGISTRATION)
-    assert not can_transition(TournamentStatus.COMPLETED, TournamentStatus.LIVE)
-
-
-def test_the_registration_row_is_what_ends_the_announcement() -> None:
-    # ANNOUNCEMENT has no schedule row of its own; the REGISTRATION row is both
-    # "registration opens" and "the announcement is over".
-    schedule = [_row(TournamentStatus.REGISTRATION, timedelta(minutes=-1))]
-    assert next_due_status(TournamentStatus.ANNOUNCEMENT, schedule, NOW) == TournamentStatus.REGISTRATION
-
-
-def test_an_announcement_with_nothing_scheduled_stays_put() -> None:
-    assert next_due_status(TournamentStatus.ANNOUNCEMENT, [], NOW) is None
-    future = [_row(TournamentStatus.REGISTRATION, timedelta(hours=1))]
-    assert next_due_status(TournamentStatus.ANNOUNCEMENT, future, NOW) is None
-
-
-def test_announcement_transitions() -> None:
-    # Skips are legal from the announcement too — an organizer may open straight
-    # into check-in or live.
-    assert can_transition(TournamentStatus.ANNOUNCEMENT, TournamentStatus.REGISTRATION)
-    assert can_transition(TournamentStatus.ANNOUNCEMENT, TournamentStatus.LIVE)
-    # Un-announcing is a rollback to the prior effective phase, so no force.
-    assert can_transition(TournamentStatus.REGISTRATION, TournamentStatus.ANNOUNCEMENT)
-    # From anywhere play has started, though, it is a force-only correction.
-    assert not can_transition(TournamentStatus.LIVE, TournamentStatus.ANNOUNCEMENT)
-    assert not can_transition(TournamentStatus.ANNOUNCEMENT, TournamentStatus.COMPLETED)
+def test_as_utc_reads_naive_as_utc_and_converts_aware() -> None:
+    naive = datetime(2026, 7, 17, 12, 0)
+    assert as_utc(naive) == datetime(2026, 7, 17, 12, 0, tzinfo=UTC)
+    plus_two = datetime(2026, 7, 17, 14, 0, tzinfo=timezone(timedelta(hours=2)))
+    assert as_utc(plus_two) == datetime(2026, 7, 17, 12, 0, tzinfo=UTC)

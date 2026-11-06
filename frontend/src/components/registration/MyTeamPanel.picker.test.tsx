@@ -56,6 +56,7 @@ vi.mock("@/services/registration-team.service", () => ({
 const TEAM: RegistrationTeam = {
   id: 7,
   tournament_id: 1,
+  registration_node_id: 7,
   name: "Alpha",
   image_url: null,
   status: "forming",
@@ -183,7 +184,7 @@ describe("captain's free-agent picker", () => {
 
     await chooseTargetedMode();
 
-    expect(listFreeAgents).toHaveBeenCalledWith(1);
+    expect(listFreeAgents).toHaveBeenCalledWith(1, 7);
   });
 
   it("offers each candidate with their roles, translated", async () => {

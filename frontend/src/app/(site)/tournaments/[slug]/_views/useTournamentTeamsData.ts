@@ -3,10 +3,11 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { registrationIntake } from "@/lib/tournament/flow-nodes";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { tournamentRegistrationsQueryOptions } from "@/lib/tournament/registrations-query";
 import { tournamentTeamsQueryOptions } from "@/lib/tournament/teams-query";
 import encounterService from "@/services/encounter.service";
-import registrationService from "@/services/registration.service";
 import type { Registration } from "@/types/registration.types";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -44,10 +45,9 @@ export function useTournamentTeamsData(tournament: Tournament) {
   // section's own list and hero catalogue, so both are cache reads after one
   // visit there. Only draft/balancer tournaments register players one by one;
   // a team-registration read would come back without per-player picks.
-  const hasPlayerRegistrations = tournament.team_formation !== "registration";
+  const hasPlayerRegistrations = registrationIntake(tournament) !== "team";
   const registrationsQuery = useQuery({
-    queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationService.listRegistrations(tournament.id),
+    ...tournamentRegistrationsQueryOptions(tournament),
     enabled: hasPlayerRegistrations
   });
   const heroesMap = useHeroesMap(tournament.discipline, { enabled: hasPlayerRegistrations });

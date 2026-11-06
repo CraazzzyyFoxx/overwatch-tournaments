@@ -90,7 +90,7 @@ class Notification(db.Base):
         ),
         # ``notify(dedupe_key=...)``'s existence check. Deliberately NOT unique:
         # a unique index would turn two racing status transitions into an
-        # ``IntegrityError`` inside ``transition_status``; a rare duplicate row
+        # ``IntegrityError`` inside a node transition; a rare duplicate row
         # is the cheaper failure.
         Index(
             "ix_notification_dedupe",

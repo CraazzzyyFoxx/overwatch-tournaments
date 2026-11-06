@@ -122,7 +122,7 @@ async function render() {
         <QueryClientProvider
           client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}
         >
-          <SheetsFeedPage tournamentId={95} />
+          <SheetsFeedPage tournamentId={95} registrationNodeId={7} />
         </QueryClientProvider>
       </NextIntlClientProvider>
     );

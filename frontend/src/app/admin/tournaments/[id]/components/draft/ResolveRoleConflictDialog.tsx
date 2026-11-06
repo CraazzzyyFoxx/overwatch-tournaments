@@ -40,6 +40,7 @@ interface ResolveRoleConflictDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tournamentId: number;
+  formationNodeId: number;
   board: DraftBoard;
   feasibility: DraftFeasibility | null;
   /** The owner game's role dictionary: the roles an organizer may add, their names and the rated dimension. */
@@ -54,6 +55,7 @@ export function ResolveRoleConflictDialog({
   open,
   onOpenChange,
   tournamentId,
+  formationNodeId,
   board,
   feasibility,
   ontology
@@ -110,7 +112,9 @@ export function ResolveRoleConflictDialog({
     onSuccess: async () => {
       notify.success(t("committed"));
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.draftBoard(tournamentId) }),
+        queryClient.invalidateQueries({
+          queryKey: tournamentQueryKeys.draftBoard(tournamentId, formationNodeId)
+        }),
         queryClient.invalidateQueries({
           queryKey: tournamentQueryKeys.draftFeasibility(board.session.id)
         })

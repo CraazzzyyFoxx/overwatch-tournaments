@@ -66,7 +66,7 @@ DOCS: dict[str, dict] = {
     # ── public reads (arrays) ──────────────────────────────────────────────
     "rpc.tournament.lookup_tournaments": {
         "summary": "Lookup tournaments",
-        "description": "Permission: public; no authentication required — hidden tournaments, and every tournament of a hidden workspace, are never listed here, for any caller. Returns a lightweight id/name list of up to 500 most-recent tournaments, optionally filtered by workspace, league flag and installed discipline (an uninstalled code is 422), for pickers.",
+        "description": "Permission: public; no authentication required — hidden tournaments, and every tournament of a hidden workspace, are never listed here, for any caller. Returns a lightweight id/name list of up to 500 most-recent tournaments, optionally filtered by workspace and installed discipline (an uninstalled code is 422), for pickers.",
     },
     "rpc.tournament.get_stages": {
         "summary": "List tournament stages",
@@ -83,6 +83,10 @@ DOCS: dict[str, dict] = {
     "rpc.tournament.get_individual_rounds": {
         "summary": "Get individual Swiss rounds",
         "description": "Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns an `individual_swiss` stage's encounters grouped by round, each seat with its roster snapshot (role, rank, round captain). 404 for a stage that is not an `individual_swiss` stage of this tournament.",
+    },
+    "rpc.tournament.get_flow": {
+        "summary": "Get a tournament's flow",
+        "description": "Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns the tournament's flow graph: nodes with their resolved ports, edges, and every node's ranked results (`tentative` until the node's inputs are final).",
     },
     # ── ffa lobbies ────────────────────────────────────────────────────────
     "rpc.tournament.ffa_stage": {
@@ -124,7 +128,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.tournaments_facets": {
         "summary": "Tournament facet counts",
-        "description": "Permission: public; no authentication required — every count is filtered to the tournaments the viewer may see. Returns chip counters for the tournaments list: unfiltered total/live plus per-status and league/standard counts, each axis counted without its own filter.",
+        "description": "Permission: public; no authentication required — every count is filtered to the tournaments the viewer may see. Returns chip counters for the tournaments list: unfiltered total/live plus per-status counts, each axis counted without its own filter.",
     },
     "rpc.tournament.list_encounters": {
         "summary": "List encounters",
@@ -259,11 +263,11 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.admin.create#stage_item_input": {
         "summary": "Create stage item input",
-        "description": "Permission: workspace `stage.create`. Creates a stage item input under a stage item. A `source_stage_item_id` that does not exist or belongs to another tournament is 400.",
+        "description": "Permission: workspace `stage.create`. Creates a stage item input under a stage item (`final` with a team, or `empty`).",
     },
     "rpc.tournament.admin.update#stage_item_input": {
         "summary": "Update stage item input",
-        "description": "Permission: workspace `stage.update`. Updates a stage item input by id. A `source_stage_item_id` that does not exist or belongs to another tournament is 400.",
+        "description": "Permission: workspace `stage.update`. Updates a stage item input by id. Editing its team clears its `source_result_id` (a hand-seeded seat).",
     },
     "rpc.tournament.admin.delete#stage_item_input": {
         "summary": "Delete stage item input",
@@ -496,18 +500,10 @@ DOCS: dict[str, dict] = {
         "summary": "List tournament links",
         "description": "Permission: workspace `tournament_link.read`. Lists a tournament's links ordered by sort_order then id, optionally only the active ones.",
     },
-    # ── bespoke: tournament status / lifecycle ─────────────────────────────
-    "rpc.tournament.tournament_finish": {
-        "summary": "Toggle tournament finished",
-        "description": "Permission: superuser only. Toggles a tournament's `is_finished` flag and returns it with stages.",
-    },
-    "rpc.tournament.tournament_status": {
-        "summary": "Transition tournament status",
-        "description": "Permission: workspace `tournament.update` on the tournament's workspace; the `force` flag additionally requires superuser. Transitions a tournament to the requested status.",
-    },
-    "rpc.tournament.tournament_schedule_set": {
-        "summary": "Set tournament phase schedule",
-        "description": "Permission: workspace `tournament.update` on the tournament's workspace. Replaces the tournament's phase schedule (full replace of REGISTRATION/CHECK_IN/DRAFT/LIVE rows).",
+    # ── bespoke: tournament archive ────────────────────────────────────────
+    "rpc.tournament.tournament_archive": {
+        "summary": "Archive or unarchive a tournament",
+        "description": "Permission: workspace `tournament.update` on the tournament's workspace. `archived: true` needs a `completed` tournament (409 `tournament_not_completed`); `false` needs an `archived` one and returns it to `completed`. Returns the tournament with stages.",
     },
     "rpc.tournament.standing_recalculate": {
         "summary": "Recalculate standings",
@@ -523,7 +519,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.individual_swiss_lock_qualification": {
         "summary": "Lock individual Swiss qualification",
-        "description": "Permission: workspace `stage.update` and `tournament.update` on the tournament's workspace. Closes the personal Swiss day: first recalculates the personal table from the current results and pins, stamps the stage `qualification_locked_at` (the qualifier and captain flags are frozen from then on, and pins and the playoff team count are refused), then every non-qualified player of the completed stage gets balancer status `excluded` with reason `not_qualified`, then the tournament moves LIVE to DRAFT, so the draft pool is exactly the qualifiers. Answers the qualifiers (role, then place) and the playoff captains. 409 when the stage is not an `individual_swiss` stage, is not completed, has no qualifiers, is already locked, the tournament is not LIVE, or the tournament's draft format is not snake (checked before any exclusion).",
+        "description": "Permission: workspace `stage.update` and `tournament.update` on the tournament's workspace. Closes the personal Swiss day: first recalculates the personal table from the current results and pins, stamps the stage `qualification_locked_at` (the qualifier and captain flags are frozen from then on, and pins and the playoff team count are refused), then completes the stage's flow node (`live` to `completed`). The tournament status follows the nodes, and the filter downstream decides who plays on. Answers the qualifiers (role, then place) and the playoff captains. 409 when the stage is not an `individual_swiss` stage, its node is not `live` or the stage is already locked (`qualification_not_live`), the stage is not completed (`stage_not_completed`), it has no qualifiers, or the tournament's draft format is not snake.",
     },
     # ── preview access (who may see a hidden tournament before it is public) ─
     # Workspace-admin gated rather than tournament-permission gated: this grants
@@ -552,6 +548,27 @@ DOCS: dict[str, dict] = {
     "rpc.tournament.voice_sync": {
         "summary": "Sync tournament voice channels",
         "description": "Permission: workspace `tournament.update` on the tournament's workspace. Asks the bot to reconcile the tournament's Discord voice channels with the plan now (repairs a channel deleted by hand) and answers the status like the read.",
+    },
+    # ── flow graph ─────────────────────────────────────────────────────────
+    "rpc.tournament.flow_get": {
+        "summary": "Get a tournament's flow (admin)",
+        "description": "Permission: workspace `tournament.read` on the tournament's workspace. The public flow read plus the validator's issues on the stored graph, the port catalogue per node kind and the config each kind starts with (`config_defaults`).",
+    },
+    "rpc.tournament.flow_apply": {
+        "summary": "Change a tournament's flow graph",
+        "description": "Permission: workspace `tournament.update`. Replaces part of the tournament's node graph in one transaction: `nodes` creates (`ref`) or updates (`id`) nodes, `edges` wires them (an endpoint is a node id or a new node's `ref`), `delete_node_ids` / `delete_edge_ids` remove. A started node, or a pure node with a started lifecycle node downstream, cannot be deleted, re-configured or re-wired (`node_frozen`, 409); a draft registration or formation node that still owns entries, registration teams, sheet feeds, teams or players cannot be deleted (`node_has_dependents`, 409, the message names what blocks); a new `stage` node carries a `stage` payload and the save creates its stage, renaming a saved stage node renames its stage, and deleting a draft stage node deletes its stage; an invalid graph answers 422 `flow_invalid`. Answers the admin flow read.",
+    },
+    "rpc.tournament.flow_validate": {
+        "summary": "Validate flow changes (dry run)",
+        "description": "Permission: workspace `tournament.update` on the tournament's workspace. Validates a `FlowChanges` diff exactly like `PUT …/flow` (frozen-node rules included) and returns the issues and the resolved ports of every node, new ones under their negative ids (`ref_ids`, `new_edge_ids` map them back). Writes nothing.",
+    },
+    "rpc.tournament.flow_node_transition": {
+        "summary": "Move a flow node along its lifecycle",
+        "description": "Permission: workspace `tournament.update`. Moves one registration, formation or stage node along its lifecycle (`invalid_node_transition`, `input_not_final`, `downstream_started` answer 409) and re-derives the tournament status.",
+    },
+    "rpc.tournament.flow_node_schedule_set": {
+        "summary": "Set a flow node's schedule",
+        "description": "Permission: workspace `tournament.update`. Replaces the node's schedule (full replace). A row's `starts_at` moves the node when the tournament's `auto_transitions_enabled` is on: registration `open` (draft to open) and `check_in` (open to check_in), formation and stage `start` (draft to forming, ready to live); `ends_at` only closes the phase's action window. 422 `invalid_schedule_phase` for a phase the node's kind does not have, `invalid_schedule` for a duplicate phase, an end not after its start, or a check-in that does not start after the open.",
     },
     # ── bespoke: pick-ban live-session admin overrides (map + hero) ────────
     "rpc.tournament.admin_pick_ban_session_reset": {
@@ -725,14 +742,6 @@ DOCS: dict[str, dict] = {
         "summary": "Merge group stages",
         "description": "Permission: workspace `stage.update` on the target stage's workspace. Merges source group stages into a target stage.",
     },
-    "rpc.tournament.stage_activate": {
-        "summary": "Activate stage",
-        "description": "Permission: workspace `stage.update` on the stage's workspace. Activates a stage.",
-    },
-    "rpc.tournament.stage_deactivate": {
-        "summary": "Deactivate stage",
-        "description": "Permission: workspace `stage.update` on the stage's workspace. Reverts an accidentally-activated stage back to Draft/preview; refuses (409) once any of its matches has been reported or started.",
-    },
     "rpc.tournament.stage_generate": {
         "summary": "Generate stage bracket",
         "description": "Permission: workspace `stage.update` on the stage's workspace. Enqueues a bracket-generation job (202 Accepted) for the stage.",
@@ -740,18 +749,6 @@ DOCS: dict[str, dict] = {
     "rpc.tournament.stage_apply_best_of": {
         "summary": "Apply best-of to existing matches",
         "description": "Permission: workspace `stage.update` on the stage's workspace. Rewrites best_of on the stage's existing encounters from the stage's best-of config (in place, preserving scores).",
-    },
-    "rpc.tournament.stage_activate_and_generate": {
-        "summary": "Activate and generate stage",
-        "description": "Permission: workspace `stage.update` on the stage's workspace (the optional force flag needs no extra grant). Enqueues a combined activate-and-generate bracket job (202 Accepted), honoring an optional force flag.",
-    },
-    "rpc.tournament.stage_auto_wire": {
-        "summary": "Auto-wire stage from groups",
-        "description": "Permission: workspace `stage.update` on the stage's workspace. Wires the stage's TENTATIVE inputs from a round-robin/Swiss stage's \"Teams advancing to playoff\" count — the same auto-wire Activate & generate runs automatically, exposed standalone for preview/debugging. The source is the one group stage of the latest earlier phase; pass source_stage_id to name it when that phase runs several divisions in parallel (a value that is not an integer is 422 `invalid_query_param`).",
-    },
-    "rpc.tournament.stage_wire": {
-        "summary": "Wire stage from groups",
-        "description": "Permission: workspace `stage.update` on the target stage's workspace. Wires a target stage's slots from a source group stage's top placements.",
     },
     "rpc.tournament.stage_seed": {
         "summary": "Seed teams into stage",
@@ -1760,7 +1757,7 @@ DOCS: dict[str, dict] = {
         "summary": "Organizer dashboard trends",
         "description": (
             "Permission: workspace `tournament.read`. Returns participants, newcomers, duel log coverage and the"
-            " median match-end-to-confirmation time of the workspace's last 10 finished, non-league, non-hidden"
+            " median match-end-to-confirmation time of the workspace's last 10 finished, non-hidden"
             " tournaments, oldest first, optionally narrowed to one installed `discipline` (404"
             " `discipline_not_installed` for an unknown code). 422 without `workspace_id`."
         ),

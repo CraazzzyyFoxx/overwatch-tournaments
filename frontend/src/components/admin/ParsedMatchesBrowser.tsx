@@ -93,7 +93,7 @@ export function ParsedMatchesBrowser({
 
   const tournamentsQuery = useQuery({
     queryKey: tournamentQueryKeys.adminList(workspaceId, ALL_DISCIPLINES),
-    queryFn: () => tournamentService.getAll(null, workspaceId),
+    queryFn: () => tournamentService.getAll(workspaceId),
     enabled: workspaceId != null && tournamentId == null
   });
   const chipTournamentGame = tournamentsQuery.data?.results.find(

@@ -134,7 +134,7 @@ class Workspace(db.TimeStampIntegerMixin):
     # ``Player`` row is created: ``"global"`` counts any workspace's
     # tournaments, ``"workspace"`` counts only this workspace's. Plain string,
     # not a Postgres enum -- same "stay flexible" precedent as
-    # ``Tournament.team_formation``. See ``shared.services.newcomer_status``.
+    # ``TournamentLink.kind``. See ``shared.services.newcomer_status``.
     # Admin-editable via the same PATCH /workspaces/{id} path as
     # ``branding_enabled``.
     newcomer_scope: Mapped[str] = mapped_column(String(16), server_default="global", nullable=False)

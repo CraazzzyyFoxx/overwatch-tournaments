@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { Card } from "@/components/ui/card";
 import { FilterChip } from "@/components/ui/filter-chip";
 import { SearchField } from "@/components/ui/search-field";
-import { TOURNAMENT_STATUS_ORDER, getTournamentStatusMeta } from "@/lib/tournament/status";
+import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import type { TournamentStatus } from "@/types/tournament.types";
 import {
   Select,
@@ -17,8 +17,8 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-export type StatusFilter = "all" | TournamentStatus;
-export type TypeFilter = "all" | "standard" | "league";
+/** A stored status, or `registration`: tournaments whose registration node is open or in check-in (a derived phase). */
+export type StatusFilter = "all" | TournamentStatus | "registration";
 export type SortBy = "latest" | "oldest" | "participants";
 export type ViewMode = "cards" | "list";
 
@@ -27,23 +27,27 @@ export type ViewMode = "cards" | "list";
  * fact (`getTournamentStatusMeta(...).variant`); what colour that bucket wears
  * is presentation, so it stays here.
  */
-const VARIANT_DOT: Record<"live" | "upcoming" | "finished" | "draft", string> = {
+const VARIANT_DOT: Record<"live" | "upcoming" | "finished", string> = {
   live: "var(--aqt-rose)",
   upcoming: "var(--aqt-amber)",
-  finished: "var(--aqt-fg-dim)",
-  draft: "var(--aqt-blue)"
+  finished: "var(--aqt-fg-dim)"
 };
+
+/** The chips, in the order the bar lists them. `registration` is the derived sign-up phase; the rest are stored statuses. */
+const STATUS_CHIPS = [
+  "registration",
+  "live",
+  "announcement",
+  "completed",
+  "archived"
+] as const satisfies readonly Exclude<StatusFilter, "all">[];
 
 interface TournamentsFiltersProps {
   /** Every visible tournament in the workspace, filters aside. From the facets. */
   total: number;
-  statusCounts: Record<TournamentStatus, number>;
+  statusCounts: Record<Exclude<StatusFilter, "all">, number>;
   statusFilter: StatusFilter;
   onStatusChange: (value: StatusFilter) => void;
-  typeFilter: TypeFilter;
-  leagueCount: number;
-  standardCount: number;
-  onTypeChange: (value: TypeFilter) => void;
   search: string;
   onSearchChange: (value: string) => void;
   sortBy: SortBy;
@@ -57,10 +61,6 @@ const TournamentsFilters = ({
   statusCounts,
   statusFilter,
   onStatusChange,
-  typeFilter,
-  leagueCount,
-  standardCount,
-  onTypeChange,
   search,
   onSearchChange,
   sortBy,
@@ -69,8 +69,6 @@ const TournamentsFilters = ({
   onViewChange
 }: TournamentsFiltersProps) => {
   const t = useTranslations();
-  const toggleType = (value: Exclude<TypeFilter, "all">) =>
-    onTypeChange(typeFilter === value ? "all" : value);
 
   return (
     /* Phone first: one horizontally scrollable chip row (wrapping chips used to
@@ -80,9 +78,6 @@ const TournamentsFilters = ({
        row is under the touch minimum. */
     <Card className="flex flex-col gap-2.5 p-2.5 md:flex-row md:flex-wrap md:items-center md:gap-2">
       <div className="-mx-2.5 flex items-center gap-x-5 gap-y-2 overflow-x-auto px-2.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
-        {/* Two groups, not one run of chips split by a hairline: status and
-            format answer different questions, and a divider between them
-            disappeared (or stranded itself) the moment the row wrapped. */}
         <div
           role="group"
           aria-label={t("common.status")}
@@ -97,7 +92,7 @@ const TournamentsFilters = ({
             {t("common.all")}
           </FilterChip>
 
-          {TOURNAMENT_STATUS_ORDER.map((status) => {
+          {STATUS_CHIPS.map((status) => {
             const count = statusCounts[status] ?? 0;
             // A chip is only worth its place when it narrows something: an empty
             // bucket narrows to nothing, and one that matches the total ("All 77"
@@ -118,29 +113,6 @@ const TournamentsFilters = ({
               </FilterChip>
             );
           })}
-        </div>
-
-        <div
-          role="group"
-          aria-label={t("tournamentsList.filters.typeLabel")}
-          className="flex shrink-0 items-center gap-2"
-        >
-          <FilterChip
-            active={typeFilter === "standard"}
-            count={standardCount}
-            onClick={() => toggleType("standard")}
-            className="max-md:h-10"
-          >
-            {t("tournamentsList.filters.standard")}
-          </FilterChip>
-          <FilterChip
-            active={typeFilter === "league"}
-            count={leagueCount}
-            onClick={() => toggleType("league")}
-            className="max-md:h-10"
-          >
-            {t("common.league")}
-          </FilterChip>
         </div>
       </div>
 

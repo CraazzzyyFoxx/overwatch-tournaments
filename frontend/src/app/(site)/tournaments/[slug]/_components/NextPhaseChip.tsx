@@ -8,12 +8,9 @@ import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { Button } from "@/components/ui/button";
 import type { Tournament } from "@/types/tournament.types";
 
-import { nextPhaseBoundary } from "../_views/tournamentSchedule.model";
+import { nextPhaseBoundary, phaseTitleKey } from "../_views/tournamentSchedule.model";
 
-type PhaseInput = Pick<
-  Tournament,
-  "status" | "team_formation" | "phase_schedule" | "auto_transitions_enabled"
->;
+type PhaseInput = Pick<Tournament, "flow_nodes" | "auto_transitions_enabled">;
 
 export type NextPhase = {
   /** "Registration closes", "Check-in starts", "Start": what happens. */
@@ -50,18 +47,18 @@ export function useNextPhase(tournament: PhaseInput): NextPhase | null {
   if (!next) return null;
 
   const at = new Date(next.at);
-  const phase = t(`common.statusBadge.${next.status}`);
-  // The live phase is the tournament itself: its start is "the start", its
-  // close the end — "Live starts" would read as a status, not as an event.
+  const key = phaseTitleKey(next);
+  const phase = key ? t(key) : next.nodeName;
+  // A stage's start is "the start", its close the end — "Group stage starts" would read as a status, not as an event.
   const label =
-    next.status === "live"
+    next.kind === "stage"
       ? t(
-          next.kind === "close"
+          next.boundary === "close"
             ? "tournamentDetail.phaseFact.ends"
             : "tournamentDetail.phaseFact.kickoff"
         )
       : t(
-          next.kind === "close"
+          next.boundary === "close"
             ? "tournamentDetail.phaseFact.closes"
             : "tournamentDetail.phaseFact.starts",
           {

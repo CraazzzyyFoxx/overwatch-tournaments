@@ -24,33 +24,31 @@ from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.chrono import tournament_chrono_key
 from shared.disciplines import DISCIPLINES
 from shared.observability import observe_scheduled_job
 from src.core import db
 
 from .services.ml.features.aggregations import build_match_features_with_strength
 from .services.ml.training.drift import compute_drift_report
-from .services.ml.training.splits import tournament_ids_up_to
+from .services.ml.training.splits import tournaments_up_to
 
 logger = logging.getLogger(__name__)
 
 
 async def _drift_check(session: AsyncSession, code: str) -> None:
     """Feature drift of one discipline's recent tournaments; alert when over threshold."""
-    # The chronologically latest tournament, not ``max(id)``: ids are not chronological.
+    # The chronologically latest tournament by the key `tournaments_up_to` bounds history by, not ``max(id)``.
     latest = await session.scalar(
         sa.select(models.Tournament.id)
         .where(models.Tournament.discipline == code, models.Tournament.is_hidden.is_(False))
-        .order_by(
-            sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at).desc(),
-            models.Tournament.id.desc(),
-        )
+        .order_by(*(c.desc() for c in tournament_chrono_key()))
         .limit(1)
     )
     if not latest:
         logger.info("No %s tournaments yet — skipping drift check", code)
         return
-    tids = await tournament_ids_up_to(session, int(latest), discipline=code)
+    tids = [t.id for t in await tournaments_up_to(session, int(latest), discipline=code)]
     # Build a feature frame across the last 10 tournaments only (fast path).
     recent_ids = tids[-10:] if len(tids) > 10 else tids
     frames = []

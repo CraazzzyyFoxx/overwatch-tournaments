@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared import models
+from shared.core.errors import ApiExc, ApiHTTPException
 from shared.repository.base import BaseRepository
 
 
@@ -22,7 +23,6 @@ class RegistrationRepository(BaseRepository[models.Registration]):
         *,
         team_id: int,
         slot_code: str,
-        is_substitute: bool,
     ) -> bool:
         """Seat a registration on a team only if it sits on none. ``True`` only when it was seated.
 
@@ -35,10 +35,69 @@ class RegistrationRepository(BaseRepository[models.Registration]):
         seated = await session.scalar(
             sa.update(registration)
             .where(registration.id == registration_id, registration.registration_team_id.is_(None))
-            .values(registration_team_id=team_id, team_slot_code=slot_code, is_substitute=is_substitute)
+            .values(registration_team_id=team_id, team_slot_code=slot_code)
             .returning(registration.id)
         )
         return seated is not None
+
+
+class RegistrationEntryRepository(BaseRepository[models.RegistrationEntry]):
+    """``registration_entry`` — a registration's participation in one registration node."""
+
+    def __init__(self) -> None:
+        super().__init__(models.RegistrationEntry)
+
+    async def get_for(
+        self,
+        session: AsyncSession,
+        registration_node_id: int,
+        registration_id: int,
+        *,
+        options: Sequence[_AbstractLoad] | None = None,
+        populate_existing: bool = False,
+    ) -> models.RegistrationEntry | None:
+        """The live (not soft-deleted) entry of ``registration_id`` in the node, if it has one."""
+        entry = models.RegistrationEntry
+        query = self._apply_options(
+            self.select().where(
+                entry.registration_node_id == registration_node_id,
+                entry.registration_id == registration_id,
+                entry.deleted_at.is_(None),
+            ),
+            options,
+        )
+        if populate_existing:
+            query = query.execution_options(populate_existing=True)
+        return await session.scalar(query)
+
+    async def require_for(
+        self,
+        session: AsyncSession,
+        registration_node_id: int,
+        registration_id: int,
+        *,
+        options: Sequence[_AbstractLoad] | None = None,
+        populate_existing: bool = False,
+    ) -> models.RegistrationEntry:
+        entry = await self.get_for(
+            session, registration_node_id, registration_id, options=options, populate_existing=populate_existing
+        )
+        if entry is None:
+            raise ApiHTTPException(
+                status_code=404,
+                detail=[ApiExc(code="registration_entry_not_found", msg="Registration entry not found")],
+            )
+        return entry
+
+    async def live_for_registration(
+        self, session: AsyncSession, registration_id: int
+    ) -> list[models.RegistrationEntry]:
+        """Every live (not soft-deleted) entry of the profile, whatever the node."""
+        entry = models.RegistrationEntry
+        result = await session.scalars(
+            self.select().where(entry.registration_id == registration_id, entry.deleted_at.is_(None))
+        )
+        return list(result.all())
 
 
 class RegistrationFormRepository(BaseRepository[models.RegistrationForm]):

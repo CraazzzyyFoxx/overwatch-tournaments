@@ -81,6 +81,7 @@ from .ranks import (
     RankSnapshotRepository,
 )
 from .registration import (
+    RegistrationEntryRepository,
     RegistrationRepository,
     RegistrationRoleRepository,
     RegistrationTeamInviteRepository,
@@ -144,7 +145,6 @@ from .tournament import (
     TeamRepository,
     TournamentComputationJobRepository,
     TournamentLinkRepository,
-    TournamentPhaseScheduleRepository,
     TournamentPreviewAccessRepository,
     TournamentRecalculationStateRepository,
     TournamentRepository,
@@ -268,6 +268,7 @@ __all__ = (
     "RankFetchLogRepository",
     "RankSnapshotRepository",
     "RefreshTokenRepository",
+    "RegistrationEntryRepository",
     "RegistrationFormRepository",
     "RegistrationFormTemplateRepository",
     "RegistrationFormVersionRepository",
@@ -302,7 +303,6 @@ __all__ = (
     "TeamRepository",
     "TournamentComputationJobRepository",
     "TournamentLinkRepository",
-    "TournamentPhaseScheduleRepository",
     "TournamentPollTarget",
     "TournamentPreviewAccessRepository",
     "TournamentRecalculationStateRepository",

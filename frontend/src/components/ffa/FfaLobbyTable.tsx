@@ -1,13 +1,10 @@
 "use client";
 
-import React from "react";
 import { useTranslations } from "next-intl";
 import { Lock } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
-import { eyebrowClass } from "@/components/ui/eyebrow";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { straddlingTieGroups } from "@/lib/tournament/tie-clusters";
 import { cn } from "@/lib/utils";
 import type { FfaColumn, FfaGameCell, FfaLobby, FfaLobbyRow } from "@/types/ffa.types";
 
@@ -108,9 +105,8 @@ function GameCell({ cell, columns }: Readonly<{ cell: FfaGameCell; columns: FfaC
  * One FFA lobby, as its standings.
  *
  * A lobby has no second screen: the group's table IS this table, so it carries
- * everything a group standings table carries — the advance line, the tie
- * clusters that line runs through, the per-game record — with the lobby's own
- * `advance_count` rather than a stage-wide guess.
+ * everything a group standings table carries — the tie clusters, the pinned
+ * places, the per-game record.
  *
  * Zone-neutral on purpose (docs/frontend-zones.md): the public bracket, the
  * public lobby page and the organizer's lobby editor all render the same
@@ -130,24 +126,9 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
 
   // Before the first game counts, every team is level on every tiebreaker, so
   // the engine answers one cluster holding the whole lobby. Printed as-is that
-  // is "everyone 1st" and, under a cut line, "the assigned order decides who
-  // advances" — claims about a lobby nobody has played. No ranks, no verdicts
-  // until there are results to rank by; the cut line stays, it is the rule.
+  // is "everyone 1st" — a claim about a lobby nobody has played. No ranks
+  // until there are results to rank by.
   const ranked = rows.some((row) => row.games_played > 0);
-
-  const advanceCount = lobby.advance_count;
-  const showCut = advanceCount != null && rows.length > advanceCount;
-  const showStatus = advanceCount != null && ranked;
-  const tiedAtCut =
-    advanceCount == null || !ranked
-      ? new Set<number>()
-      : straddlingTieGroups(
-          rows.map((row) => ({
-            position: row.position ?? Number.MAX_SAFE_INTEGER,
-            tie_group: row.tie_group
-          })),
-          advanceCount
-        );
 
   // The whole series, not the games entered so far: the empty columns are what
   // say how many games are still to come.
@@ -159,9 +140,6 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
   // component is what makes "a spectator never sees a hidden value" a property
   // of the markup instead of a property of whoever picked the endpoint.
   const columns = lobby.rules.columns.filter((column) => column.public);
-  // `5`: rank, team, points, games and the trailing filler cell.
-  const columnCount = 5 + columns.length + positions.length + (showStatus ? 1 : 0);
-
   // What turns the numbers back into something a reader can check: the rule
   // this lobby was actually scored by, printed as the organizer wrote it.
   const placementPoints = lobby.rules.placement_points.join(" / ");
@@ -212,47 +190,20 @@ export default function FfaLobbyTable({ lobby }: Readonly<{ lobby: FfaLobby }>) 
                 {t("ffa.colGame", { position })}
               </TableHead>
             ))}
-            {showStatus && (
-              <TableHead scope="col" className="text-center">
-                <span className="sr-only">{t("common.status")}</span>
-              </TableHead>
-            )}
             {/* Takes the slack width, so the numbers sit next to the team name
                 instead of being pushed to the far edge. A `td`: it heads nothing. */}
             <TableCell aria-hidden className="w-full p-0" />
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row, index) => (
-            <React.Fragment key={row.team_id}>
-              <LobbyRow
-                row={row}
-                positions={positions}
-                ranked={ranked}
-                medals={ranked && advanceCount == null}
-                advancing={showStatus && row.position != null && row.position <= advanceCount}
-                tied={row.tie_group != null && tiedAtCut.has(row.tie_group)}
-                showStatus={showStatus}
-                columns={columns}
-              />
-              {showCut && index === advanceCount - 1 && (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={columnCount} className="p-0" data-ffa-cut>
-                    <span className={cn(eyebrowClass(), "flex items-center gap-3 py-1.5 text-[color:var(--aqt-teal)]")}>
-                      {/* Leading and sticky, not centred: on a phone the table
-                          scrolls sideways and a centred label sat off-screen. */}
-                      <span className="sticky left-5 whitespace-nowrap">
-                        {t("common.topAdvance", { count: advanceCount })}
-                      </span>
-                      <span
-                        aria-hidden
-                        className="h-px flex-1 bg-[color:color-mix(in_srgb,var(--aqt-teal)_40%,transparent)]"
-                      />
-                    </span>
-                  </TableCell>
-                </TableRow>
-              )}
-            </React.Fragment>
+          {rows.map((row) => (
+            <LobbyRow
+              key={row.team_id}
+              row={row}
+              positions={positions}
+              ranked={ranked}
+              columns={columns}
+            />
           ))}
         </TableBody>
       </Table>
@@ -291,33 +242,20 @@ const STICKY_TEAM =
  * organizer's `Card` directly, in either theme. Hover deepens the tint instead
  * of swapping it for the primitive's neutral one, as the group table does.
  */
-const ROW_TONE = {
-  tie: "bg-[color:color-mix(in_srgb,var(--aqt-amber)_8%,hsl(var(--card)))] hover:bg-[color:color-mix(in_srgb,var(--aqt-amber)_13%,hsl(var(--card)))]",
-  advancing:
-    "bg-[color:color-mix(in_srgb,var(--aqt-teal)_5%,hsl(var(--card)))] hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_9%,hsl(var(--card)))]",
-  none: "bg-card hover:bg-[color:color-mix(in_srgb,hsl(var(--foreground))_4%,hsl(var(--card)))]"
-} as const;
+const ROW_TONE =
+  "bg-card hover:bg-[color:color-mix(in_srgb,hsl(var(--foreground))_4%,hsl(var(--card)))]";
 
 function LobbyRow({
   row,
   positions,
   columns,
-  ranked,
-  medals,
-  advancing,
-  tied,
-  showStatus
+  ranked
 }: Readonly<{
   row: FfaLobbyRow;
   positions: number[];
   /** The public columns, already filtered by the table. */
   columns: FfaColumn[];
   ranked: boolean;
-  /** No advance line: the rank is plain standings, so the top three get medals. */
-  medals: boolean;
-  advancing: boolean;
-  tied: boolean;
-  showStatus: boolean;
 }>) {
   const t = useTranslations();
   const gameAt = new Map(row.games.map((cell) => [cell.position, cell]));
@@ -327,23 +265,13 @@ function LobbyRow({
   const rank = ranked ? (row.tie_group ?? row.position) : null;
 
   return (
-    <TableRow
-      data-advancing={advancing ? "" : undefined}
-      data-tie={tied ? "" : undefined}
-      // The tie wins the tint: the line cuts through the cluster, so
-      // "advancing" is a promise the lobby's results have not made.
-      className={tied ? ROW_TONE.tie : advancing ? ROW_TONE.advancing : ROW_TONE.none}
-    >
+    <TableRow className={ROW_TONE}>
       <TableCell className="whitespace-nowrap">
         <span
           data-ffa-rank
           className={cn(
             "aqt-tnum text-heading font-bold leading-none",
-            tied
-              ? "text-[color:var(--aqt-amber)]"
-              : advancing
-                ? "text-[color:var(--aqt-teal)]"
-                : (medals && rank != null && MEDAL_TEXT[rank]) || "text-[color:var(--aqt-fg-faint)]"
+            (rank != null && MEDAL_TEXT[rank]) || "text-[color:var(--aqt-fg-faint)]"
           )}
         >
           {rank ?? "—"}
@@ -402,24 +330,6 @@ function LobbyRow({
           </TableCell>
         );
       })}
-      {showStatus && (
-        <TableCell className="text-center">
-          <span
-            data-ffa-status
-            title={tied ? t("ffa.tieDecidesAdvance") : undefined}
-            className={cn(
-              "inline-flex items-center rounded px-2 py-0.5 text-label font-bold uppercase tracking-label",
-              tied
-                ? "bg-[color:color-mix(in_srgb,var(--aqt-amber)_14%,transparent)] text-[color:var(--aqt-amber)]"
-                : advancing
-                  ? "bg-[color:color-mix(in_srgb,var(--aqt-teal)_14%,transparent)] text-[color:var(--aqt-teal)]"
-                  : "bg-[color:var(--aqt-overlay-2)] text-[color:var(--aqt-fg-dim)]"
-            )}
-          >
-            {tied ? t("ffa.tieStatus") : advancing ? t("ffa.advancing") : t("ffa.eliminated")}
-          </span>
-        </TableCell>
-      )}
       <TableCell aria-hidden className="p-0" />
     </TableRow>
   );

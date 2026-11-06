@@ -64,17 +64,6 @@ def _social_account_read(account: models.SocialAccount) -> schemas.SocialAccount
     return read
 
 
-def resolve_team_placement(team: models.Team) -> int | None:
-    """Pick the best (lowest, positive) overall_position across standings."""
-    standings = getattr(team, "standings", None) or []
-    positive_positions = [
-        standing.overall_position for standing in standings if getattr(standing, "overall_position", 0) > 0
-    ]
-    if positive_positions:
-        return min(positive_positions)
-    return None
-
-
 def _division_grid_version(tournament: models.Tournament) -> DivisionGridVersionRead | None:
     if getattr(tournament, "division_grid_version", None) is None:
         return None
@@ -87,7 +76,6 @@ def to_user_tournament_summary(tournament: models.Tournament) -> schemas.UserTou
         id=tournament.id,
         name=tournament.name,
         discipline=tournament.discipline,
-        is_league=tournament.is_league,
         is_finished=tournament.is_finished,
         status=tournament.status,
     )
@@ -156,7 +144,6 @@ def to_encounter_tournament_summary(
     return schemas.UserEncounterTournament(
         id=tournament.id,
         name=tournament.name,
-        is_league=tournament.is_league,
         is_finished=tournament.is_finished,
         status=tournament.status,
     )
@@ -286,15 +273,6 @@ def encounter_play_key(encounter: models.Encounter) -> tuple[datetime, int]:
     """
     played = encounter.ended_at or encounter.confirmed_at or encounter.started_at or encounter.created_at
     return (played or _MISSING_PLAYED_AT, encounter.id)
-
-
-def tournament_recency_key(tournament: models.Tournament) -> tuple[bool, datetime, int]:
-    """Sort key (``reverse=True`` = newest first) for tournaments: start date, undated last, then id.
-
-    The SQL readers' ``start_date DESC NULLS LAST, id DESC``. Ids follow creation, not play: across workspaces an
-    imported or later-created community's old event outranks a newer one by id.
-    """
-    return (tournament.start_date is not None, tournament.start_date or _MISSING_PLAYED_AT, tournament.id)
 
 
 def sort_user_matches(

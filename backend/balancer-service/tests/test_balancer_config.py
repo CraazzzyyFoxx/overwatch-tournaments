@@ -432,12 +432,13 @@ class TournamentConfigPersistenceTests(IsolatedAsyncioTestCase):
             result = await balancer_admin_service.upsert_tournament_config(
                 session,
                 77,
+                88,
                 9,
                 {"population_size": 150, "use_captains": None, "workspace_id": 9},
                 user,
             )
 
-        self.assertEqual(result.tournament_id, 77)
+        self.assertEqual((result.tournament_id, result.formation_node_id), (77, 88))
         self.assertEqual(result.workspace_id, 9)
         self.assertEqual(result.config_json, {"population_size": 150})
         self.assertEqual(result.updated_by, 42)
@@ -473,6 +474,7 @@ class TournamentConfigPersistenceTests(IsolatedAsyncioTestCase):
             result = await balancer_admin_service.upsert_tournament_config(
                 session,
                 77,
+                88,
                 9,
                 {"max_result_variants": 6},
                 user,

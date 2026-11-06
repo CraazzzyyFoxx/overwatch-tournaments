@@ -36,6 +36,7 @@ from shared.models.registration.registration import Registration  # noqa: E402
 WORKSPACE_ID = 1
 TOURNAMENT_ID = 3
 REGISTRATION_ID = 55
+NODE_ID = 9
 
 
 def _identity(*actions: str) -> dict[str, Any]:
@@ -51,7 +52,7 @@ def _identity(*actions: str) -> dict[str, Any]:
     )
 
 
-def _registration(status: str) -> SimpleNamespace:
+def _registration() -> SimpleNamespace:
     registration = SimpleNamespace(
         id=REGISTRATION_ID,
         tournament_id=TOURNAMENT_ID,
@@ -59,11 +60,20 @@ def _registration(status: str) -> SimpleNamespace:
         display_name="Ferz",
         identities=[],
         roles=[],
-        status=status,
-        balancer_status="not_in_balancer",
     )
     registration.primary_game_identity = partial(Registration.primary_game_identity, registration)
     return registration
+
+
+def _entry(status: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        registration_node_id=NODE_ID,
+        registration=_registration(),
+        status=status,
+        balancer_status="not_in_balancer",
+        exclude_reason=None,
+        is_reserve=False,
+    )
 
 
 class StatusWritePermissionTests(IsolatedAsyncioTestCase):
@@ -73,16 +83,22 @@ class StatusWritePermissionTests(IsolatedAsyncioTestCase):
         """Run one handler; returns the envelope, the statuses the service was asked to write, and the audit rows."""
         broker = CapturingBroker()
         registration_admin.register(broker, SimpleNamespace(exception=lambda *a, **k: None))
-        stored = _registration(stored_status)
+        stored = _entry(stored_status)
         written: list[Any] = []
         rows: list[Any] = []
-        session = SimpleNamespace(add=rows.append, commit=AsyncMock())
+        session = SimpleNamespace(add=rows.append, commit=AsyncMock(), scalar=AsyncMock(return_value=TOURNAMENT_ID))
 
         async def workspace_of(_session: Any, _id: int) -> int:
             return WORKSPACE_ID
 
         async def get(_session: Any, _registration_id: int) -> SimpleNamespace:
+            return stored.registration
+
+        async def get_entry(_session: Any, _node_id: int, _registration_id: int) -> SimpleNamespace:
             return stored
+
+        async def node_id(_session: Any, _data: dict, _tournament_id: int) -> int:
+            return NODE_ID
 
         async def write(_session: Any, *_args: Any, **kwargs: Any) -> SimpleNamespace:
             written.append(kwargs["status_value"])
@@ -91,7 +107,7 @@ class StatusWritePermissionTests(IsolatedAsyncioTestCase):
         async def nothing(*_args: Any, **_kwargs: Any) -> None:
             return None
 
-        async def restore(_session: Any, _registration_id: int, **_kwargs: Any) -> SimpleNamespace:
+        async def restore(_session: Any, _node_id: int, _registration_id: int, **_kwargs: Any) -> SimpleNamespace:
             # ``restore_registration`` always lands ``approved``.
             written.append("approved")
             return stored
@@ -109,7 +125,9 @@ class StatusWritePermissionTests(IsolatedAsyncioTestCase):
             patch.object(registration_admin.auth, "get_registration_workspace_id", workspace_of),
             patch.object(registration_admin.auth, "get_tournament_workspace_id", workspace_of),
             patch.object(registration_admin.reg_common._common_service, "ensure_tournament_exists", nothing),
+            patch.object(registration_admin, "_registration_node_id", node_id),
             patch.object(service, "get_registration_by_id", get),
+            patch.object(service, "get_entry", get_entry),
             patch.object(service, "update_registration_profile", write),
             patch.object(service, "create_manual_registration", write),
             patch.object(service, "restore_registration", restore),

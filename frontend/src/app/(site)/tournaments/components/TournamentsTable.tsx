@@ -6,11 +6,12 @@ import { useFormatter } from "@/lib/datetime/client";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { LayoutGrid } from "lucide-react";
 
-import type { TeamFormation, Tournament } from "@/types/tournament.types";
+import type { Tournament } from "@/types/tournament.types";
+import { primaryFormationMode } from "@/lib/tournament/flow-nodes";
 import { formatDateRange } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
 import { stageProgress } from "@/lib/tournament/stage-progress";
-import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { getTournamentStatusMeta, displayStatus } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
 import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { Button } from "@/components/ui/button";
@@ -35,8 +36,9 @@ const TournamentRow = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const { variant } = getTournamentStatusMeta(tournament.status);
-  const stage = stageProgress(tournament, tournament.status, t);
+  const { variant } = getTournamentStatusMeta(displayStatus(tournament));
+  const stage = stageProgress(tournament, displayStatus(tournament), t);
+  const formation = primaryFormationMode(tournament);
   const players = tournament.participants_count ?? 0;
 
   return (
@@ -56,7 +58,7 @@ const TournamentRow = ({
             >
               {tournament.name}
             </Link>
-            {(tournament.status === "live" || tournament.status === "playoffs") && (
+            {variant === "live" && (
               <TournamentStatusPill status="live" className="px-[7px] py-0.5">
                 {t("common.live")}
               </TournamentStatusPill>
@@ -75,16 +77,10 @@ const TournamentRow = ({
                 <GameLabel code={tournament.discipline} games={games} />
               </>
             ) : null}
-            {tournament.is_league && (
+            {formation && (
               <>
                 <span className={SEP}>·</span>
-                {t("common.league")}
-              </>
-            )}
-            {tournament.team_formation && (
-              <>
-                <span className={SEP}>·</span>
-                {t(`common.${tournament.team_formation as TeamFormation}`)}
+                {t(`common.formationMode.${formation}`)}
               </>
             )}
           </span>
@@ -92,7 +88,7 @@ const TournamentRow = ({
       </TableCell>
       <TableCell className={CELL}>
         <TournamentStatusPill status={variant}>
-          {t(`common.statusBadge.${tournament.status}`)}
+          {t(`common.statusBadge.${displayStatus(tournament)}`)}
         </TournamentStatusPill>
       </TableCell>
       <TableCell className={CELL}>

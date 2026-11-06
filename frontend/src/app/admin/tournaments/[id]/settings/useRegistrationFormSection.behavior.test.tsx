@@ -94,7 +94,7 @@ describe("registration settings owner resolution", () => {
     await mount();
     expect(section.value).toBeNull();
     await act(async () => {
-      section.patch({ auto_approve: true });
+      section.patch({ show_ranks: true });
       section.save();
     });
     await settle();
@@ -105,7 +105,7 @@ describe("registration settings owner resolution", () => {
     await act(async () => section.save());
     await settle();
     const body: AdminRegistrationFormUpsert = upsertRegistrationForm.mock.calls[0][1];
-    expect(body.auto_approve).toBe(true);
+    expect(body.show_ranks).toBe(true);
     const fields = body.form_schema.sections.flatMap((entry) => entry.fields);
     expect(fields.find((field) => field.key === "identity_riot")?.required).toBe(true);
     expect(fields.some((field) => field.key === "identity_battlenet")).toBe(false);
@@ -139,8 +139,6 @@ describe("registration settings owner resolution", () => {
         version_id: 1,
         version_number: 1,
         stale_registrations: 0,
-        auto_approve: false,
-        max_participants: 24,
         form_schema: {
           schema_version: 1,
           sections: [
@@ -161,12 +159,11 @@ describe("registration settings owner resolution", () => {
       });
       await mount();
       expect(section.value).not.toBeNull();
-      await act(async () => section.patch({ auto_approve: true }));
+      await act(async () => section.patch({ show_ranks: true }));
       await act(async () => section.save());
       await settle();
       const body: AdminRegistrationFormUpsert = upsertRegistrationForm.mock.calls[0][1];
-      expect(body.auto_approve).toBe(true);
-      expect(body.max_participants).toBe(24);
+      expect(body.show_ranks).toBe(true);
       expect(body.form_schema.sections).toEqual([
         {
           key: "custom",

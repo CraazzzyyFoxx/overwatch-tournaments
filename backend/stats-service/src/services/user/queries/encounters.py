@@ -16,6 +16,7 @@ from shared import models
 from shared.core import enums, pagination
 from shared.disciplines import discipline, identity_provider
 from shared.models.catalog.role import leaf_code
+from shared.repository.participant_result import is_member_tournament_row
 from shared.repository.stats_queries import match_context
 from shared.repository.stats_reads import MatchReadContext, duel_matches, get_match_members, get_match_reads
 from shared.schemas.catalog import CatalogEntityRead
@@ -953,7 +954,7 @@ class UserEncounterQueries(DisciplineQueries):
     async def get_player_by_user_and_tournament(
         self, session: AsyncSession, user_id: int, tournament_id: int
     ) -> models.Player | None:
-        """Look up a user's Player row for a specific tournament.
+        """Look up a user's tournament Player row: the final team's (spec §11.4).
 
         Loads `team` + `team.tournament` (+ its `division_grid_version`) +
         `team.standings` for the stats page. The grid version is eager-loaded so the
@@ -972,6 +973,7 @@ class UserEncounterQueries(DisciplineQueries):
                 sa.and_(
                     models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
                     models.Player.tournament_id == tournament_id,
+                    is_member_tournament_row(),
                 )
             )
         )

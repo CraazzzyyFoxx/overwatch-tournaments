@@ -59,6 +59,8 @@ class EncounterTeam(db.TimeStampIntegerMixin):
             ["encounter.encounter.id", "encounter.encounter.tournament_id"],
             ondelete="CASCADE",
             name="fk_team_encounter_tournament",
+            deferrable=True,
+            initially="IMMEDIATE",
         ),
         # Deleting the source team empties the pointer and keeps the
         # participation, its games and its roster.
@@ -67,6 +69,8 @@ class EncounterTeam(db.TimeStampIntegerMixin):
             ["tournament.team.id", "tournament.team.tournament_id"],
             ondelete="SET NULL (team_id)",
             name="fk_team_source",
+            deferrable=True,
+            initially="IMMEDIATE",
         ),
         CheckConstraint("slot >= 1", name="ck_team_slot"),
         CheckConstraint("placement IS NULL OR placement >= 1", name="ck_team_placement"),

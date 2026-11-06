@@ -22,6 +22,7 @@ from shared.models.encounter.scoring_rule import ScoringRule
 from shared.models.tournament.tournament import Tournament
 
 if typing.TYPE_CHECKING:
+    from shared.models.tournament.flow import FlowNode
     from shared.models.tournament.team import Team
 
 
@@ -70,7 +71,10 @@ class Stage(db.TimeStampIntegerMixin):
     __tablename__ = "stage"
     __table_args__ = (
         CheckConstraint("de_grand_final_type IN ('no_reset', 'with_reset')", name="ck_stage_de_grand_final_type"),
-        CheckConstraint("seed_ranking IN ('slot', 'avg_sr', 'total_sr', 'random')", name="ck_stage_seed_ranking"),
+        CheckConstraint(
+            "seed_ranking IN ('slot', 'source', 'avg_sr', 'total_sr', 'random', 'cross', 'snake')",
+            name="ck_stage_seed_ranking",
+        ),
         CheckConstraint("best_of_default >= 1", name="ck_stage_best_of_default"),
         CheckConstraint("best_of_final IS NULL OR best_of_final >= 1", name="ck_stage_best_of_final"),
         CheckConstraint("swiss_qualify_wins IS NULL OR swiss_qualify_wins >= 1", name="ck_stage_swiss_qualify_wins"),
@@ -100,25 +104,11 @@ class Stage(db.TimeStampIntegerMixin):
     description: Mapped[str | None] = mapped_column(String(), nullable=True)
     stage_type: Mapped[enums.StageType] = mapped_column(STAGE_TYPE_ENUM)
     max_rounds: Mapped[int] = mapped_column(Integer(), default=5, server_default="5")
-    # How many teams advance from each group of this (group) stage to the next
-    # stage. NULL = not configured → the frontend derives it from bracket wiring
-    # or falls back to a default. Mirrors the wire-from-groups ``top`` parameter.
-    advance_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    # Group stages only: how many of each group's ``advance_count`` start in the
-    # Upper bracket of the double elimination they feed; the rest start in its
-    # Lower bracket. NULL = all of them start Upper. A group's own value overrides it.
-    advance_upper_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     order: Mapped[int] = mapped_column(Integer(), default=0)
-    is_active: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
-    # Sticky, unlike ``is_active``: set True the first time the stage is
-    # activated and never cleared again, even after a later stage's
-    # activation flips ``is_active`` back to False. ``admin/stage/generation.py::
-    # generate_encounters`` can populate a stage's encounters while it is
-    # still Draft (a preview of the bracket shape before the stage goes
-    # live) -- captains cannot report or veto against those encounters
-    # until this flips True (tournament-service ``src.services.bracket.usability``).
+    # Set when the stage's node goes ``ready → live`` and cleared on ``ready → draft``. A bracket
+    # ``admin/stage/generation.py::generate_encounters`` built as a preview stays unusable for captains (they cannot
+    # report or veto against it) until this is True (tournament-service ``src.services.bracket.usability``).
     is_published: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
-    is_completed: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
 
     # ── Regulation. NULL means "not set here": the engine falls back to the
     # default points (1 / 0.5 / 0), the stage type's preset (ranking) or the win
@@ -182,6 +172,20 @@ class Stage(db.TimeStampIntegerMixin):
     #: encounter is over. Loaded with the stage because ``scoring`` -- which
     #: every stage read carries -- is built from it.
     scoring_rule: Mapped[ScoringRule] = relationship(lazy="selectin")
+    #: The stage's flow node (spec §4.5): its status is the stage's lifecycle. Loaded with the stage because every
+    #: stage read carries ``node_id`` and ``status``. Scrim room stages have none.
+    node: Mapped[FlowNode | None] = relationship(
+        lazy="selectin", uselist=False, cascade="all, delete-orphan", passive_deletes=True
+    )
+
+    @property
+    def node_id(self) -> int | None:
+        """``None`` for a scrim room's stage: the scrim container is intentionally flowless."""
+        return self.node.id if self.node is not None else None
+
+    @property
+    def status(self) -> str | None:
+        return self.node.status if self.node is not None else None
 
     @property
     def scoring(self) -> dict[str, typing.Any]:
@@ -254,13 +258,6 @@ class StageItem(db.TimeStampIntegerMixin):
     name: Mapped[str] = mapped_column(String())
     type: Mapped[enums.StageItemType] = mapped_column(STAGE_ITEM_TYPE_ENUM)
     order: Mapped[int] = mapped_column(Integer(), default=0)
-    # Per-group override of ``Stage.advance_count``: how many teams advance from
-    # THIS group. NULL = inherit the stage's number, which is what every group
-    # did before the column existed. Set it when groups are uneven and a flat
-    # "top N from each" is the wrong bar.
-    advance_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
-    # Per-group override of ``Stage.advance_upper_count``; NULL = inherit.
-    advance_upper_count: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
     stage: Mapped[Stage] = relationship(back_populates="items")
     inputs: Mapped[list[StageItemInput]] = relationship(
@@ -276,6 +273,7 @@ class StageItemInput(db.TimeStampIntegerMixin):
     __tablename__ = "stage_item_input"
     __table_args__ = (
         UniqueConstraint("stage_item_id", "slot", name="uq_stage_item_input_item_slot"),
+        CheckConstraint("seat_source IN ('flow', 'manual')", name="ck_stage_item_input_seat_source"),
         {"schema": "tournament"},
     )
 
@@ -290,14 +288,16 @@ class StageItemInput(db.TimeStampIntegerMixin):
         nullable=True,
         index=True,
     )
-    source_stage_item_id: Mapped[int | None] = mapped_column(
-        ForeignKey(StageItem.id, ondelete="SET NULL"), nullable=True
+    #: The flow result row this seat was taken from (``seat_inputs``); NULL for a hand-seeded team.
+    source_result_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tournament.flow_node_result.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    source_position: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    #: ``flow``: the seat follows the stage's input (``seat_inputs`` / requalification own it); ``manual``: an admin wrote
+    #: it and nothing but an admin moves it.
+    seat_source: Mapped[str] = mapped_column(String(8), default="flow", server_default="flow")
 
     stage_item: Mapped[StageItem] = relationship(back_populates="inputs", foreign_keys=[stage_item_id])
     team: Mapped[Team | None] = relationship(foreign_keys=[team_id])
-    source_stage_item: Mapped[StageItem | None] = relationship(foreign_keys=[source_stage_item_id])
 
 
 class SwissBye(db.TimeStampIntegerMixin):

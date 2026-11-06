@@ -1,99 +1,25 @@
 import type { EncounterWithUserStats, UserTournament, UserTournamentEntry } from "@/types/user.types";
 import { encounterPerspective } from "@/app/(site)/users/components/shared/encounter-perspective";
 
-/** League grouping key: the prefix before " | " in the tournament name. */
-export const leagueKey = (t: UserTournament): string => t.name.split(" | ")[0];
-
-/** Division label for a league entry: the suffix after " | " (falls back to the
- *  raw name when there is no separator). */
-export const divisionLabel = (t: UserTournament): string => {
-  const parts = t.name.split(" | ");
-  return parts.length > 1 ? parts.slice(1).join(" | ") : t.name;
-};
-
-/** A standalone event, or a league's divisions; `T` is what an entry carries (the dossier's: its grid and run). */
-export type TournamentGroup<T extends UserTournament = UserTournament> = T | T[];
-
-/**
- * Group consecutive league tournaments (those with `is_league` sharing the same
- * game and league-name prefix) into arrays; non-league tournaments remain
- * standalone entries. Input order is preserved, so a league's divisions stay
- * contiguous exactly as the API returns them. A cross-game history can put two
- * games' same-named leagues side by side: they stay apart.
- */
-export const groupTournamentsByLeague = <T extends UserTournament>(tournaments: T[]): TournamentGroup<T>[] => {
-  const result: TournamentGroup<T>[] = [];
-  let currentLeague: T[] = [];
-
-  tournaments.forEach((t) => {
-    const previous = currentLeague.at(-1);
-    const sameLeague =
-      t.is_league &&
-      previous !== undefined &&
-      previous.discipline === t.discipline &&
-      leagueKey(previous) === leagueKey(t);
-    if (currentLeague.length > 0 && !sameLeague) {
-      result.push(currentLeague);
-      currentLeague = [];
-    }
-    if (t.is_league) currentLeague.push(t);
-    else result.push(t);
-  });
-
-  if (currentLeague.length > 0) result.push(currentLeague);
-
-  return result;
-};
-
 // ─── Master-detail (Event dossier) helpers ──────────────────────────────────────
 // Pure, side-effect-free logic shared by the explorer container, list and
 // dossier. Kept here (not in a component) so it stays unit-testable.
 
-/** Entries covered by a list group as a flat array. */
-export const groupEntries = <T extends UserTournament>(group: TournamentGroup<T>): T[] =>
-  Array.isArray(group) ? group : [group];
-
-export const isLeagueGroup = <T extends UserTournament>(group: TournamentGroup<T>): group is T[] =>
-  Array.isArray(group);
-
-/** Stable selection/URL key for a group: the first entry's tournament id. */
-export const groupRepId = (group: TournamentGroup): number => groupEntries(group)[0].id;
-
-/** Every tournament id a group covers (a league group covers all its divisions). */
-export const groupTournamentIds = (group: TournamentGroup): number[] =>
-  groupEntries(group).map((t) => t.id);
-
-/** Display name: the league prefix for leagues, the tournament name otherwise. */
-export const groupDisplayName = (group: TournamentGroup): string =>
-  isLeagueGroup(group) ? leagueKey(group[0]) : group.name;
-
-/** Best (lowest) placement across a group's entries; null when none recorded. */
-export const groupBestPlacement = (group: TournamentGroup): number | null => {
-  const placements = groupEntries(group)
-    .map((t) => t.placement)
-    .filter((p): p is number => typeof p === "number" && p > 0);
-  return placements.length ? Math.min(...placements) : null;
-};
-
-/** Aggregate W-D-L + map tallies across a group's entries. */
-export interface GroupAggregate {
+/** W-D-L + map tallies of one tournament. */
+export interface TournamentAggregate {
   won: number;
   lost: number;
   draw: number;
   mapsWon: number;
   mapsLost: number;
 }
-export const groupAggregate = (group: TournamentGroup): GroupAggregate =>
-  groupEntries(group).reduce<GroupAggregate>(
-    (acc, t) => ({
-      won: acc.won + (t.won ?? 0),
-      lost: acc.lost + (t.lost ?? 0),
-      draw: acc.draw + (t.draw ?? 0),
-      mapsWon: acc.mapsWon + (t.maps_won ?? 0),
-      mapsLost: acc.mapsLost + (t.maps_lost ?? 0),
-    }),
-    { won: 0, lost: 0, draw: 0, mapsWon: 0, mapsLost: 0 }
-  );
+export const tournamentAggregate = (t: UserTournament): TournamentAggregate => ({
+  won: t.won ?? 0,
+  lost: t.lost ?? 0,
+  draw: t.draw ?? 0,
+  mapsWon: t.maps_won ?? 0,
+  mapsLost: t.maps_lost ?? 0
+});
 
 export type PlacementMedal = "gold" | "silver" | "bronze" | "none";
 export const placementMedal = (placement: number | null | undefined): PlacementMedal => {

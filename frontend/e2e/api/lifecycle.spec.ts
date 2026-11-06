@@ -3,8 +3,9 @@ import { expect, test } from "../support/fixtures";
 import {
   balanceAndExport,
   battleTag,
+  completeStages,
   createStage,
-  generateStage,
+  startStage,
   listEncounters,
   OW_FORM,
   openRegistration,
@@ -18,12 +19,11 @@ import {
   setResult,
   type Encounter,
   type Registration,
-  type RegistrationForm,
   type Stage,
   type StageType,
   type Team,
 } from "../support/flows";
-import { createTournament, createWorkspace, setStatus, type Tournament } from "../support/seed";
+import { createTournament, createWorkspace, flowNodes, nodeOf, setArchived, transitionNode, type Tournament } from "../support/seed";
 import type { TestUser } from "../support/users";
 
 type Readiness = {
@@ -46,12 +46,12 @@ type Readiness = {
 
 type ApiError = { code: string; detail: string; fields?: { code: string }[] };
 
-/** A refused manual transition answers 400 with the machine code `invalid_status_transition`. */
-async function expectTransitionRefused(api: Api, tournamentId: number, status: string) {
-  const res = await api.raw("PATCH", `/api/v1/admin/tournaments/${tournamentId}/status`, { body: { status } });
+/** A refused node move answers 409 with its machine code. */
+async function expectNodeMoveRefused(api: Api, nodeId: number, status: string, code: string) {
+  const res = await api.raw("POST", `/api/v1/admin/flow-nodes/${nodeId}/transition`, { body: { status } });
   const body = (await res.json()) as ApiError;
-  expect(res.status(), `→ ${status} must be refused: ${JSON.stringify(body)}`).toBe(400);
-  expect(body.fields?.map((f) => f.code), `→ ${status} error code`).toContain("invalid_status_transition");
+  expect(res.status(), `→ ${status} must be refused: ${JSON.stringify(body)}`).toBe(409);
+  expect(body.fields?.map((f) => f.code), `→ ${status} error code`).toContain(code);
 }
 
 // 4 teams × (1 tank, 2 damage, 2 support). Index 12 signs up as damage and edits to support.
@@ -69,7 +69,7 @@ test("overwatch lifecycle: announcement → archived through the API", async ({ 
   const created = await createTournament(adminApi, ws.id);
   const tid = created.id;
 
-  await test.step("announcement: empty readiness, guarded transitions", async () => {
+  await test.step("announcement: empty readiness, guarded node moves", async () => {
     expect(created.status).toBe("announcement");
     const r = await readiness();
     expect(r).toMatchObject({
@@ -79,36 +79,33 @@ test("overwatch lifecycle: announcement → archived through the API", async ({ 
       stages_total: 0,
       bracket_generated: false,
     });
-    for (const target of ["playoffs", "completed", "archived"]) await expectTransitionRefused(adminApi, tid, target);
-
-    // Auto transitions on: the first manual move must switch them off.
-    await adminApi.patch(`/api/v1/admin/tournaments/${tid}`, { auto_transitions_enabled: true });
-    const res = await adminApi.raw("PATCH", `/api/v1/admin/tournaments/${tid}/status`, { body: { status: "registration" } });
-    const body = (await res.json()) as ApiError;
-    expect(res.status(), "registration without a form").toBe(409);
-    expect(body.fields?.map((f) => f.code)).toContain("registration_form_missing");
-    const still = await adminApi.get<Tournament & { auto_transitions_enabled: boolean }>(`/api/v1/admin/tournaments/${tid}`);
-    expect(still.status, "refused transition left the status alone").toBe("announcement");
-    expect(still.auto_transitions_enabled, "refused transition left automation on").toBe(true);
+    const registration = await nodeOf(adminApi, tid, "registration");
+    const formation = await nodeOf(adminApi, tid, "formation");
+    expect(registration.status).toBe("draft");
+    await expectNodeMoveRefused(adminApi, registration.id, "check_in", "invalid_node_transition");
+    await expectNodeMoveRefused(adminApi, registration.id, "closed", "invalid_node_transition");
+    await expectNodeMoveRefused(adminApi, formation.id, "completed", "invalid_node_transition");
+    await expectNodeMoveRefused(adminApi, registration.id, "open", "registration_form_missing");
+    const still = await adminApi.get<Tournament>(`/api/v1/admin/tournaments/${tid}`);
+    expect(still.status, "refused moves left the status alone").toBe("announcement");
   });
 
   let versionId = 0;
-  await test.step("form + registration status (manual move disables automation) + schedule", async () => {
+  let registrationNodeId = 0;
+  await test.step("form + registration node open + schedule", async () => {
     await adminApi.put(`/api/v1/admin/balancer/tournaments/${tid}/registration-form`, { form_schema: OW_FORM });
     expect((await readiness()).registration_form_configured).toBe(true);
+    expect((await readiness()).schedule_configured).toBe(false);
 
-    const moved = await setStatus(adminApi, tid, "registration");
-    expect(moved.status).toBe("registration");
-    expect(moved.auto_transitions_enabled, "manual status change disables auto transitions").toBe(false);
+    // Saves the form again, writes the sign-up and check-in windows and moves the node draft → open.
+    ({ versionId, registrationNodeId } = await openRegistration(adminApi, tid));
+    const after = await readiness();
+    expect(after.schedule_configured).toBe(true);
+    expect(after.status, "a lifecycle node left draft: the tournament is live").toBe("live");
 
-    const schedule = openWindows();
-    const t = await adminApi.put<{ phase_schedule: { status: string }[] }>(`/api/v1/admin/tournaments/${tid}/schedule`, { schedule });
-    expect(t.phase_schedule.map((p) => p.status)).toEqual(schedule.map((p) => p.status));
-    expect((await readiness()).schedule_configured).toBe(true);
-
-    const form = await anonApi.get<RegistrationForm>(`/api/v1/tournaments/${tid}/registration/form`);
-    expect(form.is_open, "public form open inside the REGISTRATION window").toBe(true);
-    versionId = form.version_id;
+    const node = (await flowNodes(anonApi, tid)).find((candidate) => candidate.id === registrationNodeId);
+    expect(node?.status, "the public page announces the open intake").toBe("open");
+    expect(node?.schedule.map((entry) => entry.phase).sort()).toEqual(openWindows().map((entry) => entry.phase).sort());
   });
 
   const pool: TestUser[] = [];
@@ -124,14 +121,14 @@ test("overwatch lifecycle: announcement → archived through the API", async ({ 
     for (const [i, role] of POOL_ROLES.entries()) {
       const user = await makeUser("lc");
       pool.push(user);
-      const reg = await registerSelf(user, tid, versionId, { roles: [i === EDITOR ? "damage" : role] });
+      const reg = await registerSelf(user, tid, registrationNodeId, versionId, { roles: [i === EDITOR ? "damage" : role] });
       expect(reg.status).toBe("pending");
       regs.set(i, reg);
     }
     withdrawer = await makeUser("lcw");
     rejected = await makeUser("lcr");
-    const withdrawnReg = await registerSelf(withdrawer, tid, versionId, { roles: ["tank"] });
-    const rejectedReg = await registerSelf(rejected, tid, versionId, { roles: ["damage"] });
+    const withdrawnReg = await registerSelf(withdrawer, tid, registrationNodeId, versionId, { roles: ["tank"] });
+    const rejectedReg = await registerSelf(rejected, tid, registrationNodeId, versionId, { roles: ["damage"] });
 
     const dup = await pool[0].api.raw("POST", `/api/v1/tournaments/${tid}/registration`, {
       body: { form_version_id: versionId, answers: { identity_battlenet: [battleTag("dup")], roles: [{ role: "tank", is_primary: true }] } },
@@ -202,7 +199,7 @@ test("overwatch lifecycle: announcement → archived through the API", async ({ 
     const early = await pool[1].api.raw("POST", `/api/v1/tournaments/${tid}/registration/me/check-in`);
     expect(early.status(), "check-in before CHECK_IN status").toBe(409);
 
-    await setStatus(adminApi, tid, "check_in");
+    await transitionNode(adminApi, registrationNodeId, "check_in");
     for (const user of pool) {
       const me = await user.api.post<Registration>(`/api/v1/tournaments/${tid}/registration/me/check-in`);
       expect(me.checked_in, `${user.username} checked in`).toBe(true);
@@ -212,6 +209,8 @@ test("overwatch lifecycle: announcement → archived through the API", async ({ 
     const late = await pool[2].api.raw("DELETE", `/api/v1/tournaments/${tid}/registration/me`);
     expect(late.status(), "withdraw after check-in").toBe(409);
     expect((await readiness()).registrations_checked_in).toBe(20);
+    // The formation's input must be final before it can start.
+    await transitionNode(adminApi, registrationNodeId, "closed");
   });
 
   let teams: Team[] = [];
@@ -220,7 +219,8 @@ test("overwatch lifecycle: announcement → archived through the API", async ({ 
     const cfg = await adminApi.get<{ config_json: Record<string, unknown> }>(`/api/v1/balancer/tournaments/${tid}/config`);
     expect(cfg.config_json).toMatchObject({ use_captains: true, generation_count: 150 });
 
-    const out = await balanceAndExport(adminApi, tid);
+    const formation = await nodeOf(adminApi, tid, "formation");
+    const out = await balanceAndExport(adminApi, tid, formation.id);
     for (const team of out.variant.teams) {
       const captains = Object.values(team.roster).flat().filter((p) => p.is_captain);
       expect(captains, `${team.name}: one captain with use_captains`).toHaveLength(1);
@@ -243,7 +243,7 @@ test("overwatch lifecycle: announcement → archived through the API", async ({ 
 
   let groups: Stage;
   let encounters: Encounter[] = [];
-  await test.step("group stage seeded; going LIVE auto-generates it", async () => {
+  await test.step("group stage seeded; starting its node generates it", async () => {
     groups = await createStage(adminApi, tid, teams.map((t) => t.id), { stageType: "round_robin", name: "Groups", bestOf: 3 });
     expect(groups.items[0].inputs).toHaveLength(4);
     let r = await readiness();
@@ -251,9 +251,8 @@ test("overwatch lifecycle: announcement → archived through the API", async ({ 
     expect(r.stage_slots_filled).toBe(true);
     expect(r.bracket_generated).toBe(false);
 
-    await expectTransitionRefused(adminApi, tid, "completed");
-    await setStatus(adminApi, tid, "live");
-    // Entering LIVE queues generation of the first wave of group stages (async job).
+    await startStage(adminApi, groups);
+    // Starting the node generates the stage's first matches.
     await expect
       .poll(async () => (encounters = await listEncounters(anonApi, tid, groups.id)).length, {
         message: "LIVE autostarts the seeded round-robin stage (6 encounters, no manual generate)",
@@ -261,7 +260,7 @@ test("overwatch lifecycle: announcement → archived through the API", async ({ 
       })
       .toBe(6);
     const stages = await anonApi.get<Stage[]>(`/api/v1/tournaments/${tid}/stages`);
-    expect(stages.find((s) => s.id === groups.id)).toMatchObject({ is_active: true, is_published: true });
+    expect(stages.find((s) => s.id === groups.id)).toMatchObject({ status: "live", is_published: true });
     r = await readiness();
     expect(r.bracket_generated).toBe(true);
     expect(r.duel_encounters_total).toBe(6);
@@ -318,14 +317,12 @@ test("overwatch lifecycle: announcement → archived through the API", async ({ 
   });
 
   await test.step("playoffs: final between the top two", async () => {
-    await setStatus(adminApi, tid, "playoffs");
-    await expectTransitionRefused(adminApi, tid, "live");
     const final = await createStage(adminApi, tid, [teams[0].id, teams[1].id], {
       stageType: "single_elimination",
       name: "Final",
       order: 1,
     });
-    await generateStage(adminApi, final.id);
+    await startStage(adminApi, final);
     const [match] = await listEncounters(anonApi, tid, final.id);
     expect(match.teams.map((s) => s.team_id).sort()).toEqual([teams[0].id, teams[1].id].sort());
     // The group runner-up takes the title.
@@ -334,16 +331,16 @@ test("overwatch lifecycle: announcement → archived through the API", async ({ 
     expect(rows.find((r) => r.position === 1)?.team_id, "final winner first").toBe(teams[1].id);
   });
 
-  await test.step("finish → completed → archived", async () => {
-    const done = await adminApi.post<Tournament & { is_finished: boolean }>(`/api/v1/admin/tournaments/${tid}/finish`);
+  await test.step("every stage completed → tournament completed → archived", async () => {
+    await completeStages(adminApi, tid);
+    const done = await adminApi.get<Tournament & { is_finished: boolean }>(`/api/v1/tournaments/${tid}`);
     expect(done).toMatchObject({ status: "completed", is_finished: true });
-    await expectTransitionRefused(adminApi, tid, "live");
-    const form = await anonApi.get<RegistrationForm>(`/api/v1/tournaments/${tid}/registration/form`);
-    expect(form.is_open, "COMPLETED closes registration whatever the window says").toBe(false);
-    await setStatus(adminApi, tid, "archived");
+    const registration = (await flowNodes(anonApi, tid)).find((node) => node.id === registrationNodeId);
+    expect(registration?.status, "a finished tournament takes no sign-ups").toBe("closed");
+    await expectNodeMoveRefused(adminApi, registrationNodeId, "open", "downstream_started");
+    await setArchived(adminApi, tid, true);
     const pub = await anonApi.get<Tournament & { is_finished: boolean }>(`/api/v1/tournaments/${tid}`);
     expect(pub).toMatchObject({ status: "archived", is_finished: true });
-    await expectTransitionRefused(adminApi, tid, "registration");
     expect((await readiness()).status).toBe("archived");
   });
 });
@@ -365,9 +362,11 @@ for (const stageType of ["round_robin", "single_elimination", "double_eliminatio
 test("seedPlayers + balanceAndExport build teams from the pool", async ({ adminApi }) => {
   const ws = await createWorkspace(adminApi);
   const t = await createTournament(adminApi, ws.id);
-  await openRegistration(adminApi, t.id);
-  await seedPlayers(adminApi, t.id, 10);
-  const out = await balanceAndExport(adminApi, t.id);
+  const { registrationNodeId } = await openRegistration(adminApi, t.id);
+  await seedPlayers(adminApi, t.id, 10, { registrationNodeId });
+  await transitionNode(adminApi, registrationNodeId, "closed");
+  const formation = await nodeOf(adminApi, t.id, "formation");
+  const out = await balanceAndExport(adminApi, t.id, formation.id);
   expect(out.teams).toHaveLength(2);
   for (const team of out.teams) expect(team.players).toHaveLength(5);
 });

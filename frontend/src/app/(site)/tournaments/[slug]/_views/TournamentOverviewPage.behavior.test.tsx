@@ -141,12 +141,10 @@ function makeStage(overrides: Partial<StageSummary> & { id: number }): StageSumm
     description: null,
     stage_type: "double_elimination",
     max_rounds: 2,
-    advance_count: null,
-    advance_upper_count: null,
     order: 1,
-    is_active: true,
+    node_id: 1,
+    status: "live",
     is_published: true,
-    is_completed: false,
     ranking_preset: null,
     tiebreak_order: null,
     scoring: {
@@ -171,24 +169,42 @@ function makeStage(overrides: Partial<StageSummary> & { id: number }): StageSumm
   };
 }
 
-/** A schedule whose registration is over and whose play window is open. */
-const PHASE_SCHEDULE: Tournament["phase_schedule"] = [
+type FlowNode = NonNullable<Tournament["flow_nodes"]>[number];
+
+const REGISTRATION_SCHEDULE = [
   {
-    status: "registration",
+    phase: "open",
     starts_at: new Date("2024-08-01T10:00:00Z").toISOString(),
     ends_at: new Date("2024-08-10T10:00:00Z").toISOString()
   },
   {
-    status: "check_in",
+    phase: "check_in",
     starts_at: new Date("2024-08-11T10:00:00Z").toISOString(),
     ends_at: null
-  },
-  {
-    status: "live",
-    starts_at: new Date("2024-08-12T10:00:00Z").toISOString(),
-    ends_at: null
   }
-];
+] as FlowNode["schedule"];
+
+/** Registration over its window with check-in planned, and a stage that starts when play does. */
+function registrationNode(status: string, config: Record<string, unknown> = {}): FlowNode {
+  return { id: 4, kind: "registration", name: "Registration", status, config, schedule: REGISTRATION_SCHEDULE, stage_id: null } as FlowNode;
+}
+const STAGE_NODE = {
+  id: 11,
+  kind: "stage",
+  name: "Playoffs",
+  status: "live",
+  config: {},
+  schedule: [{ phase: "start", starts_at: new Date("2024-08-12T10:00:00Z").toISOString(), ends_at: null }],
+  stage_id: 7
+} as FlowNode;
+const formationNode = (status: string, mode = "draft"): FlowNode =>
+  ({ id: 9, kind: "formation", name: "Teams", status, config: { mode }, schedule: [], stage_id: null }) as FlowNode;
+
+/** Before play: the tournament is `live` because a registration node is, no stage has started, teams not forming. */
+const SIGN_UP: Partial<Tournament> = {
+  stages: [makeStage({ id: 7, status: "draft" })],
+  flow_nodes: [registrationNode("open"), formationNode("draft"), { ...STAGE_NODE, status: "draft" }]
+};
 
 function makeTournament(status: TournamentStatus, overrides: Partial<Tournament> = {}): Tournament {
   return {
@@ -203,14 +219,11 @@ function makeTournament(status: TournamentStatus, overrides: Partial<Tournament>
     description: "Players may swap roles between matches.",
     challonge_id: null,
     challonge_slug: null,
-    is_league: false,
     is_finished: false,
     is_hidden: false,
-    team_formation: "draft",
+    flow_nodes: [registrationNode("open"), formationNode("forming"), STAGE_NODE],
     status,
     auto_transitions_enabled: true,
-    allow_late_registration: false,
-    phase_schedule: PHASE_SCHEDULE,
     stages: [makeStage({ id: 7 })],
     participants_count: 20,
     registrations_count: 24,
@@ -679,7 +692,7 @@ const COPY = en.tournamentDetail.overview;
 
 describe("before the tournament starts", () => {
   it("counts the field by primary role against the roster shape", async () => {
-    tournament = makeTournament("registration");
+    tournament = makeTournament("live", SIGN_UP);
     listRegistrations.mockResolvedValue(
       regList([
         makeRegistration(1, "tank", "Hornet#21345"),
@@ -733,7 +746,10 @@ describe("before the tournament starts", () => {
   });
 
   it("counts a team-registration field in teams, with no role shape to fill", async () => {
-    tournament = makeTournament("registration", { team_formation: "registration" });
+    tournament = makeTournament("live", {
+      ...SIGN_UP,
+      flow_nodes: [registrationNode("open", { intake: "team" }), formationNode("draft", "registered"), { ...STAGE_NODE, status: "draft" }]
+    });
     const team = (id: number) =>
       ({
         id,
@@ -761,7 +777,10 @@ describe("before the tournament starts", () => {
   });
 
   it("keeps the schedule under the anchor the retired /schedule route points at", async () => {
-    tournament = makeTournament("check_in");
+    tournament = makeTournament("live", {
+      ...SIGN_UP,
+      flow_nodes: [registrationNode("check_in"), formationNode("draft"), { ...STAGE_NODE, status: "draft" }]
+    });
     await mount();
 
     const phases = container.querySelector("#phases");
@@ -772,7 +791,11 @@ describe("before the tournament starts", () => {
 
 describe("while the captains draft", () => {
   beforeEach(() => {
-    tournament = makeTournament("draft");
+    // Registration closed, the draft formation node forming, no stage started.
+    tournament = makeTournament("live", {
+      stages: [makeStage({ id: 7, status: "draft" })],
+      flow_nodes: [{ ...registrationNode("closed") }, formationNode("forming"), { ...STAGE_NODE, status: "draft" }]
+    });
     getTournamentBoard.mockResolvedValue(liveDraftBoard());
   });
 
@@ -956,7 +979,6 @@ describe("while it is being played", () => {
         result_status: "none",
         best_of: 3,
         scheduled_at: null,
-        advance_count: null,
         rules: { columns: [], placement_points: [], formula: null },
         // Out of order on purpose: the card ranks by `position`.
         rows: [row(2, "Gamma Lobby", 2, 2, 9), row(1, "Alpha Lobby", 1, 1, 14)]
@@ -978,7 +1000,7 @@ describe("while it is being played", () => {
 describe("once it is over", () => {
   beforeEach(() => {
     tournament = makeTournament("completed", {
-      stages: [makeStage({ id: 7, is_active: false, is_completed: true })]
+      stages: [makeStage({ id: 7, status: "completed" })]
     });
     getAllEncounters.mockResolvedValue(encounterList(playedBracket()));
   });
@@ -1080,7 +1102,7 @@ describe("once it is over", () => {
 
   it("drops to third-by-standings when the tournament never had a bracket", async () => {
     tournament = makeTournament("completed", {
-      stages: [makeStage({ id: 7, name: "League", stage_type: "round_robin", is_completed: true })]
+      stages: [makeStage({ id: 7, name: "League", stage_type: "round_robin", status: "completed" })]
     });
     getAllEncounters.mockResolvedValue(encounterList([makeEncounter(1, 1, ALPHA, GAMMA, [2, 0])]));
     getStandings.mockResolvedValue([
@@ -1114,9 +1136,15 @@ describe("the reference card", () => {
     is_active: true
   };
 
-  for (const status of ["check_in", "draft", "live", "completed"] as const) {
-    it(`states the format, the full description and the links in the ${status} branch`, async () => {
-      tournament = makeTournament(status, { links: [DISCORD] });
+  const BRANCHES: [string, TournamentStatus, Partial<Tournament>][] = [
+    ["check-in", "live", { ...SIGN_UP, flow_nodes: [registrationNode("check_in"), formationNode("draft")] }],
+    ["draft", "live", { stages: [makeStage({ id: 7, status: "draft" })] }],
+    ["live", "live", {}],
+    ["completed", "completed", {}]
+  ];
+  for (const [branch, status, overrides] of BRANCHES) {
+    it(`states the format, the full description and the links in the ${branch} branch`, async () => {
+      tournament = makeTournament(status, { ...overrides, links: [DISCORD] });
       getAllEncounters.mockResolvedValue(encounterList(playedBracket()));
       await mount();
 
@@ -1172,7 +1200,6 @@ describe("the reference card", () => {
           stage_type: "swiss",
           order: 0,
           max_rounds: 5,
-          advance_count: 8,
           swiss_qualify_wins: 3,
           swiss_eliminate_losses: 3
         }),
@@ -1181,7 +1208,6 @@ describe("the reference card", () => {
           name: "Playoffs",
           stage_type: "double_elimination",
           order: 1,
-          advance_count: 2
         })
       ]
     });
@@ -1193,9 +1219,6 @@ describe("the reference card", () => {
     expect(steps[0]).toContain("5 rounds");
     expect(steps[0]).toContain("Through at 3 wins");
     expect(steps[0]).toContain("Out at 3 losses");
-    expect(steps[0]).toContain("Top 8 advance");
-    // The last stage advances nobody, whatever its `advance_count` says.
-    expect(steps[1]).not.toContain("advance");
     expect(steps[1]).toContain(COPY.format.grandFinalNoReset);
   });
 

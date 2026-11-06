@@ -68,7 +68,13 @@ class TestReadSchema:
     @staticmethod
     def _read(**overrides):
         return RegistrationRead(
-            id=1, tournament_id=10, workspace_id=7, display=PersonDisplayRead(name="Player"), **overrides
+            id=1,
+            entry_id=2,
+            registration_node_id=3,
+            tournament_id=10,
+            workspace_id=7,
+            display=PersonDisplayRead(name="Player"),
+            **overrides,
         )
 
     def test_defaults_to_absent(self):

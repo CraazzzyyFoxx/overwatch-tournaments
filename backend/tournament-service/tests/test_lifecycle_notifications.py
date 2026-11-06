@@ -61,9 +61,11 @@ TABLE_NAMES = (
     "players.user",
     "workspace_member",
     "registration.registration",
+    "registration.registration_entry",
+    "tournament.flow_node",
     "stats.match",
     "tournament.tournament",
-    "tournament.tournament_phase_schedule",
+    "tournament.flow_node_schedule",
     "tournament.team",
     "tournament.player",
     "tournament.stage",
@@ -183,11 +185,15 @@ class _Fixture:
             name=TOURNAMENT_NAME,
             slug="autumn-cup",
             is_hidden=False,
-            is_league=False,
             status=TournamentStatus.ANNOUNCEMENT,
             start_date=datetime(2026, 1, 1, tzinfo=UTC),
         )
         self.session.add(self.tournament)
+        self.session.flush()
+        self.node = models.FlowNode(
+            tournament_id=TOURNAMENT_ID, kind="registration", name="Registration", status="open", config={}
+        )
+        self.session.add(self.node)
         self.session.flush()
 
     def close(self) -> None:
@@ -196,14 +202,9 @@ class _Fixture:
 
     # -- builders ---------------------------------------------------------
 
-    def schedule(self, status: TournamentStatus, *, starts_at: datetime, ends_at: datetime | None = None) -> None:
+    def schedule(self, phase: str, *, starts_at: datetime, ends_at: datetime | None = None) -> None:
         self.session.add(
-            models.TournamentPhaseSchedule(
-                tournament_id=TOURNAMENT_ID,
-                status=status,
-                starts_at=starts_at,
-                ends_at=ends_at,
-            )
+            models.FlowNodeSchedule(node_id=self.node.id, phase=phase, starts_at=starts_at, ends_at=ends_at)
         )
         self.session.flush()
 
@@ -234,12 +235,15 @@ class _Fixture:
         registration = models.Registration(
             tournament_id=TOURNAMENT_ID,
             workspace_member_id=member.id,
-            status=status,
-            checked_in=checked_in,
             deleted_at=deleted_at,
-            is_substitute=False,
         )
         self.session.add(registration)
+        self.session.flush()
+        self.session.add(
+            models.RegistrationEntry(
+                registration_node_id=self.node.id, registration_id=registration.id, status=status, checked_in=checked_in
+            )
+        )
         self.session.flush()
         return registration
 
@@ -376,92 +380,109 @@ class _LifecycleTestCase(IsolatedAsyncioTestCase):
         self.fx = _Fixture()
         self.addCleanup(self.fx.close)
 
-    async def _enter(self, status: TournamentStatus) -> None:
-        self.fx.tournament.status = status
-        await lifecycle_notifier.on_status_entered(self.fx.shim, self.fx.tournament)
+    async def _enter(self, status: enums.FlowNodeStatus) -> None:
+        self.fx.node.status = status.value
+        await lifecycle_notifier.on_node_entered(self.fx.shim, self.fx.tournament, self.fx.node)
 
 
 class RegistrationOpenedTests(_LifecycleTestCase):
-    """Entering REGISTRATION announces a sign-up that actually works."""
+    """Opening a registration node announces a sign-up that actually works."""
 
     async def test_an_open_window_announces_to_the_workspace_and_the_channel(self) -> None:
         closes_at = datetime.now(UTC) + timedelta(days=2)
         self.fx.schedule(
-            TournamentStatus.REGISTRATION,
+            "open",
             starts_at=datetime.now(UTC) - timedelta(hours=1),
             ends_at=closes_at,
         )
 
-        await self._enter(TournamentStatus.REGISTRATION)
+        await self._enter(enums.FlowNodeStatus.OPEN)
 
         rows = self.fx.notifications("registration.opened")
         self.assertEqual(1, len(rows))
         self.assertEqual("workspace", rows[0].audience)
         self.assertEqual(WORKSPACE_ID, rows[0].workspace_id)
         self.assertEqual(TOURNAMENT_NAME, rows[0].payload_json["tournament_name"])
+        self.assertNotIn("node_name", rows[0].payload_json)
+        self.assertEqual(self.fx.node.id, rows[0].payload_json["registration_node_id"])
         self.assertEqual(closes_at, _instant(rows[0].payload_json["closes_at"]))
-        self.assertEqual(f"tournament:{TOURNAMENT_ID}", rows[0].dedupe_key)
+        self.assertEqual(f"flow_node:{self.fx.node.id}", rows[0].dedupe_key)
         self.assertEqual(1, len(self.fx.broadcasts()))
 
+    async def test_the_announcement_names_the_node_when_the_tournament_has_several_intakes(self) -> None:
+        self.fx.session.add(
+            models.FlowNode(tournament_id=TOURNAMENT_ID, kind="registration", name="Other", status="open", config={})
+        )
+        self.fx.session.flush()
+
+        await self._enter(enums.FlowNodeStatus.OPEN)
+
+        self.assertEqual(self.fx.node.name, self.fx.notifications("registration.opened")[0].payload_json["node_name"])
+
     async def test_a_window_that_has_not_started_announces_nothing(self) -> None:
-        """A manual transition ahead of the schedule leaves the register button
+        """A manual move ahead of the schedule leaves the register button
         refusing; inviting people to it is worse than silence."""
         self.fx.schedule(
-            TournamentStatus.REGISTRATION,
+            "open",
             starts_at=datetime.now(UTC) + timedelta(days=1),
             ends_at=datetime.now(UTC) + timedelta(days=3),
         )
 
-        await self._enter(TournamentStatus.REGISTRATION)
+        await self._enter(enums.FlowNodeStatus.OPEN)
 
         self.assertEqual([], self.fx.notifications())
         self.assertEqual([], self.fx.broadcasts())
 
     async def test_late_registration_promises_no_closing_time(self) -> None:
-        self.fx.tournament.allow_late_registration = True
+        self.fx.node.config = {"allow_late_registration": True}
         self.fx.schedule(
-            TournamentStatus.REGISTRATION,
+            "open",
             starts_at=datetime.now(UTC) - timedelta(days=3),
             ends_at=datetime.now(UTC) - timedelta(days=1),
         )
 
-        await self._enter(TournamentStatus.REGISTRATION)
+        await self._enter(enums.FlowNodeStatus.OPEN)
 
         rows = self.fx.notifications("registration.opened")
         self.assertEqual(1, len(rows))
         self.assertNotIn("closes_at", rows[0].payload_json)
 
+    async def test_a_node_without_a_window_row_is_announced_by_its_status(self) -> None:
+        await self._enter(enums.FlowNodeStatus.OPEN)
+
+        self.assertEqual(1, len(self.fx.notifications("registration.opened")))
+
     async def test_a_hidden_tournament_is_not_announced_at_all(self) -> None:
         self.fx.tournament.is_hidden = True
-        self.fx.schedule(TournamentStatus.REGISTRATION, starts_at=datetime.now(UTC) - timedelta(hours=1))
+        self.fx.schedule("open", starts_at=datetime.now(UTC) - timedelta(hours=1))
 
-        await self._enter(TournamentStatus.REGISTRATION)
+        await self._enter(enums.FlowNodeStatus.OPEN)
 
         self.assertEqual([], self.fx.notifications())
         self.assertEqual([], self.fx.broadcasts())
 
     async def test_muted_discord_keeps_the_workspace_row_but_posts_nothing(self) -> None:
         self.fx.tournament.discord_broadcasts_enabled = False
-        self.fx.schedule(TournamentStatus.REGISTRATION, starts_at=datetime.now(UTC) - timedelta(hours=1))
+        self.fx.schedule("open", starts_at=datetime.now(UTC) - timedelta(hours=1))
 
-        await self._enter(TournamentStatus.REGISTRATION)
+        await self._enter(enums.FlowNodeStatus.OPEN)
 
         self.assertEqual(1, len(self.fx.notifications("registration.opened")))
         self.assertEqual([], self.fx.broadcasts())
 
     async def test_re_entering_the_phase_does_not_write_a_second_row(self) -> None:
-        """Status flap (REGISTRATION -> ANNOUNCEMENT -> REGISTRATION)."""
-        self.fx.schedule(TournamentStatus.REGISTRATION, starts_at=datetime.now(UTC) - timedelta(hours=1))
+        """Status flap (open -> closed -> open)."""
+        self.fx.schedule("open", starts_at=datetime.now(UTC) - timedelta(hours=1))
 
-        await self._enter(TournamentStatus.REGISTRATION)
-        await self._enter(TournamentStatus.ANNOUNCEMENT)
-        await self._enter(TournamentStatus.REGISTRATION)
+        await self._enter(enums.FlowNodeStatus.OPEN)
+        await self._enter(enums.FlowNodeStatus.CLOSED)
+        await self._enter(enums.FlowNodeStatus.OPEN)
 
         self.assertEqual(1, len(self.fx.notifications("registration.opened")))
 
 
 class CheckInOpenedTests(_LifecycleTestCase):
-    """Entering CHECK_IN tells the people who still owe a check-in."""
+    """Moving a node into check-in tells the people who still owe a check-in there."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -473,26 +494,56 @@ class CheckInOpenedTests(_LifecycleTestCase):
         self.fx.registration(self.fx.member("Shadow", auth_user_id=None))
 
     async def test_only_approved_unchecked_registrations_with_an_account_are_told(self) -> None:
-        self.fx.schedule(TournamentStatus.CHECK_IN, starts_at=datetime.now(UTC) - timedelta(minutes=5))
+        self.fx.schedule("check_in", starts_at=datetime.now(UTC) - timedelta(minutes=5))
 
-        await self._enter(TournamentStatus.CHECK_IN)
+        await self._enter(enums.FlowNodeStatus.CHECK_IN)
 
         self.assertEqual([601], self.fx.recipients("check_in.opened"))
-        self.assertEqual("user", self.fx.notifications("check_in.opened")[0].audience)
-        self.assertEqual(WORKSPACE_ID, self.fx.notifications("check_in.opened")[0].source_workspace_id)
+        row = self.fx.notifications("check_in.opened")[0]
+        self.assertEqual("user", row.audience)
+        self.assertEqual(WORKSPACE_ID, row.source_workspace_id)
+        self.assertEqual(self.fx.node.id, row.payload_json["registration_node_id"])
+        self.assertNotIn("node_name", row.payload_json)
         self.assertEqual(1, len(self.fx.broadcasts()))
 
+    async def test_the_node_is_named_when_the_tournament_has_several_intakes(self) -> None:
+        self.fx.session.add(
+            models.FlowNode(tournament_id=TOURNAMENT_ID, kind="registration", name="Other", status="open", config={})
+        )
+        self.fx.session.flush()
+
+        await self._enter(enums.FlowNodeStatus.CHECK_IN)
+
+        row = self.fx.notifications("check_in.opened")[0]
+        self.assertEqual(self.fx.node.name, row.payload_json["node_name"])
+
+    async def test_only_entries_of_the_node_are_told(self) -> None:
+        other = models.FlowNode(
+            tournament_id=TOURNAMENT_ID, kind="registration", name="Other", status="open", config={}
+        )
+        self.fx.session.add(other)
+        self.fx.session.flush()
+        registration = self.fx.registration(self.fx.member("Elsewhere", auth_user_id=605))
+        entry = self.fx.session.scalar(
+            sa.select(models.RegistrationEntry).where(models.RegistrationEntry.registration_id == registration.id)
+        )
+        entry.registration_node_id = other.id
+        self.fx.session.flush()
+
+        await self._enter(enums.FlowNodeStatus.CHECK_IN)
+
+        self.assertEqual([601], self.fx.recipients("check_in.opened"))
+
     async def test_a_missing_schedule_row_spans_the_whole_phase(self) -> None:
-        """Unlike registration, check-in without a row is open for the phase --
-        ``is_within_phase_window``'s documented contract."""
-        await self._enter(TournamentStatus.CHECK_IN)
+        """Check-in without a row is open for the whole status."""
+        await self._enter(enums.FlowNodeStatus.CHECK_IN)
 
         self.assertEqual([601], self.fx.recipients("check_in.opened"))
 
     async def test_a_window_that_has_not_started_tells_nobody(self) -> None:
-        self.fx.schedule(TournamentStatus.CHECK_IN, starts_at=datetime.now(UTC) + timedelta(hours=2))
+        self.fx.schedule("check_in", starts_at=datetime.now(UTC) + timedelta(hours=2))
 
-        await self._enter(TournamentStatus.CHECK_IN)
+        await self._enter(enums.FlowNodeStatus.CHECK_IN)
 
         self.assertEqual([], self.fx.notifications())
         self.assertEqual([], self.fx.broadcasts())
@@ -501,32 +552,32 @@ class CheckInOpenedTests(_LifecycleTestCase):
         """They are registered already -- what must not happen is the channel
         post and the workspace-wide row."""
         self.fx.tournament.is_hidden = True
-        self.fx.schedule(TournamentStatus.CHECK_IN, starts_at=datetime.now(UTC) - timedelta(minutes=5))
+        self.fx.schedule("check_in", starts_at=datetime.now(UTC) - timedelta(minutes=5))
 
-        await self._enter(TournamentStatus.CHECK_IN)
+        await self._enter(enums.FlowNodeStatus.CHECK_IN)
 
         self.assertEqual([601], self.fx.recipients("check_in.opened"))
         self.assertEqual([], self.fx.broadcasts())
 
     async def test_muted_discord_still_tells_registrants_but_posts_nothing(self) -> None:
         self.fx.tournament.discord_broadcasts_enabled = False
-        self.fx.schedule(TournamentStatus.CHECK_IN, starts_at=datetime.now(UTC) - timedelta(minutes=5))
+        self.fx.schedule("check_in", starts_at=datetime.now(UTC) - timedelta(minutes=5))
 
-        await self._enter(TournamentStatus.CHECK_IN)
+        await self._enter(enums.FlowNodeStatus.CHECK_IN)
 
         self.assertEqual([601], self.fx.recipients("check_in.opened"))
         self.assertEqual([], self.fx.broadcasts())
 
     async def test_re_entering_the_phase_does_not_write_a_second_row(self) -> None:
-        self.fx.schedule(TournamentStatus.CHECK_IN, starts_at=datetime.now(UTC) - timedelta(minutes=5))
+        self.fx.schedule("check_in", starts_at=datetime.now(UTC) - timedelta(minutes=5))
 
-        await self._enter(TournamentStatus.CHECK_IN)
-        await self._enter(TournamentStatus.CHECK_IN)
+        await self._enter(enums.FlowNodeStatus.CHECK_IN)
+        await self._enter(enums.FlowNodeStatus.CHECK_IN)
 
         self.assertEqual(1, len(self.fx.notifications("check_in.opened")))
 
-    async def test_another_phase_notifies_nobody(self) -> None:
-        await self._enter(TournamentStatus.LIVE)
+    async def test_another_status_notifies_nobody(self) -> None:
+        await self._enter(enums.FlowNodeStatus.CLOSED)
 
         self.assertEqual([], self.fx.notifications())
 
@@ -708,7 +759,7 @@ class EncounterScheduledTests(_LifecycleTestCase):
 
         self.assertEqual([], self.fx.notifications())
 
-    async def test_a_preview_bracket_stays_silent_until_the_stage_is_activated(self) -> None:
+    async def test_a_preview_bracket_stays_silent_until_the_stage_is_started(self) -> None:
         stage = self.fx.stage()
         self.fx.encounter(
             teams=[self.home.id, self.away.id],
@@ -718,7 +769,7 @@ class EncounterScheduledTests(_LifecycleTestCase):
 
         self.assertEqual([], self.fx.notifications())
 
-        await stage_service.activate_stage(self.fx.shim, stage.id, notify=False, commit=False, stage=stage)
+        await stage_service.start_stage(self.fx.shim, stage)
 
         self.assertEqual([701, 702], self.fx.recipients("encounter.scheduled"))
         # Bulk event: a whole bracket going live posts nothing to the channel.

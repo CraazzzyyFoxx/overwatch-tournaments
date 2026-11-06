@@ -297,7 +297,6 @@ const BUILDERS: Record<string, Builder> = {
   // ── Standings ──
   standing_position: (p, o) => ({
     text: msg(o, "leaf.standing_position", { amount: amount(o, p.op, p.value) }),
-    details: [p.include_groups === true ? msg(o, "q.groupsIncluded") : null],
   }),
   standing_record: (p, o) => ({
     text: msg(o, "leaf.standing_record", {
@@ -314,7 +313,6 @@ const BUILDERS: Record<string, Builder> = {
       position: amount(o, p.position_op ?? "==", p.position_value ?? 1),
       amount: amount(o, p.op, p.value),
     }),
-    details: [leagueDetail(p.is_league, o)],
   }),
   tournament_winrate: (p, o) => ({
     text: msg(o, "leaf.tournament_winrate", { amount: amount(o, p.op, p.value, true) }),
@@ -353,20 +351,10 @@ const BUILDERS: Record<string, Builder> = {
     p.op && p.value != null
       ? { text: msg(o, "leaf.is_newcomer_count", { amount: amount(o, p.op, p.value) }) }
       : { text: msg(o, "leaf.is_newcomer") },
-  tournament_type: (p, o) => ({
-    text: msg(
-      o,
-      p.is_league === true
-        ? "leaf.tournament_type_league"
-        : p.is_league === false
-          ? "leaf.tournament_type_regular"
-          : "leaf.tournament_type_any"
-    ),
-  }),
+  tournament_type: (_p, o) => ({ text: msg(o, "leaf.tournament_type_any") }),
   tournament_count: (p, o) => ({
     text: msg(o, "leaf.tournament_count", { amount: amount(o, p.op, p.value) }),
     details: [
-      leagueDetail(p.is_league, o),
       p.start_after != null ? msg(o, "q.startedAfter", { date: text(p.start_after) }) : null,
       p.start_before != null ? msg(o, "q.startedBefore", { date: text(p.start_before) }) : null,
     ],
@@ -454,7 +442,6 @@ const BUILDERS: Record<string, Builder> = {
         p.op && p.value != null
           ? msg(o, "q.winrateThreshold", { amount: amount(o, p.op, p.value, true) })
           : null,
-        p.include_league === true ? msg(o, "q.leaguesIncluded") : null,
       ],
     };
   },
@@ -544,12 +531,6 @@ function lostInRound(p: Params, o: ConditionTextOptions): string | null {
   const round = p.lost_in_round as { op?: string; value?: unknown } | undefined;
   if (!round?.op) return null;
   return msg(o, "q.lostInRound", { amount: amount(o, round.op, round.value) });
-}
-
-function leagueDetail(isLeague: unknown, o: ConditionTextOptions): string | null {
-  if (isLeague === true) return msg(o, "q.leaguesOnly");
-  if (isLeague === null) return msg(o, "q.leaguesIncluded");
-  return null;
 }
 
 /** Any node, named: the catalogue label, or the node name read as words. */

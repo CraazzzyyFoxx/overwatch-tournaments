@@ -38,6 +38,7 @@ from shared.repository.stats import StatsMatchRepository
 from shared.schemas.events import WorkspaceMemberChangedEvent
 from shared.schemas.user_merge_auth import AuthMergeResult
 from shared.services import user_cache
+from shared.services.participant_result import write_participant_results
 from shared.services.stats_evidence import capture_stats_evidence, owner_scopes, stage_stats_evidence
 from src import schemas
 from src.services.admin.auth_merge import apply_auth_merge, preview_auth_merge
@@ -688,7 +689,8 @@ class UserMergeService:
         ``workspace_member`` in that same workspace — idempotently created if it
         doesn't exist yet.
 
-        One UPDATE per distinct workspace, not per row.
+        One UPDATE per distinct workspace, not per row. The moved rows' tournaments get their results rewritten: the
+        source member's would cascade away with its membership.
         """
         rows = (
             await session.execute(
@@ -709,6 +711,9 @@ class UserMergeService:
                 sa.update(models.Player).where(models.Player.id.in_(player_ids)).values(workspace_member_id=member.id)
             )
             moved += int(result.rowcount or 0)
+
+        for tournament_id in sorted({int(row[1]) for row in rows}):
+            await write_participant_results(session, tournament_id)
 
         return moved
 

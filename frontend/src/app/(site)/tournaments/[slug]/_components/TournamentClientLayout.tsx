@@ -15,9 +15,11 @@ import {
   areStreamsVisible,
   getTournamentStatusMeta,
   isTournamentStatusEnded,
-  mayHavePastBroadcasts
+  mayHavePastBroadcasts,
+  displayStatus
 } from "@/lib/tournament/status";
-import { reachedAtLeast } from "@/lib/tournament/lifecycle";
+import { kindOf } from "@/lib/flow/kinds";
+import { draftFormationNode } from "@/lib/tournament/flow-nodes";
 import { formatDateRange } from "@/lib/datetime";
 import { useFormatter } from "@/lib/datetime/client";
 import { useInvalidation } from "@/hooks/useInvalidation";
@@ -137,13 +139,13 @@ export default function TournamentClientLayout({
   // subscription of its own: `tournament.streams` arrives on the invalidation
   // topic above, and an invalidation of a key nobody observes costs nothing.
   const streamsTournamentId =
-    tournament && areStreamsVisible(tournament.status) ? tournamentId : undefined;
+    tournament && areStreamsVisible(displayStatus(tournament)) ? tournamentId : undefined;
   const streams = useTournamentStreamsQuery(streamsTournamentId).data;
   // The past broadcasts are the Stream tab's other reason to exist, and the one
   // that outlives the event. Read from check-in on, when the poller starts
   // recording; no realtime resource carries them (see the query's staleTime).
   const vods = useTournamentVodsQuery(
-    tournament && mayHavePastBroadcasts(tournament.status) ? tournamentId : undefined
+    tournament && mayHavePastBroadcasts(displayStatus(tournament)) ? tournamentId : undefined
   ).data;
 
   const hasMapPool = useTournamentHasMapPool(tournamentId);
@@ -182,16 +184,16 @@ export default function TournamentClientLayout({
   const players = tournamentPlayersCount(tournament);
 
   const isEnded = isTournamentStatusEnded(tournament.status);
-  const statusVariant = getTournamentStatusMeta(tournament.status).variant;
+  const statusVariant = getTournamentStatusMeta(displayStatus(tournament)).variant;
   const overviewHref = `/tournaments/${tournament.slug}`;
   // The full hero belongs to the section it describes. Resolved exactly the way
   // the rail resolves its own active tab, so the two cannot disagree.
   const isOverviewSection = isTournamentOverviewPath(pathname, tournament.slug);
   // The draft room is an external route, so it cannot be a rail tab. It appears
-  // once registration is over — before that there is no room to open, and
-  // "before" now includes the announcement phase that precedes registration.
-  const showDraftLink =
-    tournament.team_formation === "draft" && reachedAtLeast(tournament.status, "check_in");
+  // once the draft formation node leaves `draft` — a session is created only
+  // while it is `forming`, so before that there is no room to open.
+  const draftNode = draftFormationNode(tournament);
+  const showDraftLink = draftNode !== null && draftNode.status !== "draft";
 
   // The draft room is an external route, so it cannot be a rail tab; it stands
   // in the action row as its own button (wireframes §2 ④). Team formation used
@@ -268,12 +270,6 @@ export default function TournamentClientLayout({
                 </HoverPrefetchLink>
                 <span className="opacity-50">/</span>
                 <span>{formatDateRange(format, tournament.start_date, tournament.end_date)}</span>
-                {tournament.is_league ? (
-                  <>
-                    <span className="opacity-50">/</span>
-                    <span>{t("common.league")}</span>
-                  </>
-                ) : null}
               </HeroCoord>
             }
             title={
@@ -298,7 +294,7 @@ export default function TournamentClientLayout({
                on the cover art, where it could not be read. */
             meta={
               <TournamentStatusPill status={statusVariant}>
-                {t(`common.statusBadge.${tournament.status}`)}
+                {t(`common.statusBadge.${displayStatus(tournament)}`)}
               </TournamentStatusPill>
             }
             stamp={
@@ -352,7 +348,7 @@ export default function TournamentClientLayout({
             </span>
           </HoverPrefetchLink>
           <TournamentStatusPill status={statusVariant} className="shrink-0">
-            {t(`common.statusBadge.${tournament.status}`)}
+            {t(`common.statusBadge.${displayStatus(tournament)}`)}
           </TournamentStatusPill>
           <span className="text-caption text-[color:var(--aqt-fg-faint)]">
             {formatDateRange(format, tournament.start_date, tournament.end_date)}
@@ -368,12 +364,13 @@ export default function TournamentClientLayout({
 
       <TournamentSectionNav
         tournamentId={tournament.slug}
-        status={tournament.status}
+        status={displayStatus(tournament)}
         stages={stages}
         hasTeams={teamsCount > 0}
         hasStreams={hasStreamSection(streams, vods)}
         hasRules={Boolean(tournament.rules?.trim())}
         hasMapPool={hasMapPool}
+        hasLeaderboard={(tournament.flow_nodes ?? []).some((n) => kindOf(n) === "leaderboard")}
         collapsed={heroScrolledPast}
         collapsedTitle={<span title={tournament.name}>{collapsedRailTitle(tournament.name)}</span>}
         collapsedActions={

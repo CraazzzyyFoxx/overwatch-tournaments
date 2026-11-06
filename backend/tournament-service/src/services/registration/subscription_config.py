@@ -39,7 +39,7 @@ from shared.repository import (
     WorkspaceRepository,
     WorkspaceSubscriptionRequirementRepository,
 )
-from shared.services.registration_window import registration_open_clause
+from shared.services.registration_window import tournament_sign_up_open_clause
 from shared.services.subscriptions import parse_verification_method
 from shared.services.subscriptions.challenge_code import hash_code
 from src.schemas.registration import (
@@ -246,18 +246,18 @@ class SubscriptionConfigService:
         where the blast radius matters most: toggles on, no rule row yet, which is exactly
         where an admin stands when they first open this card.
         """
-        form = models.RegistrationForm
         return (
             await session.scalar(
                 sa.select(sa.func.count())
                 .select_from(models.Tournament)
-                .join(form, form.tournament_id == models.Tournament.id)
                 .where(
                     models.Tournament.workspace_id == workspace_id,
                     models.Tournament.is_finished.is_(False),
-                    form.require_subscription.is_(True),
-                    # Openness is the REGISTRATION schedule window, not a form flag.
-                    registration_open_clause(),
+                    # Some registration node accepts sign-ups AND requires the subscription: the node's status and
+                    # window decide openness, its config the toggle.
+                    tournament_sign_up_open_clause(
+                        None, models.FlowNode.config["require_subscription"].as_boolean().is_(True)
+                    ),
                 )
             )
         ) or 0

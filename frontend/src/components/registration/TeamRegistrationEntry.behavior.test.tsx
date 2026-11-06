@@ -77,7 +77,6 @@ const FORM = {
   id: 1,
   tournament_id: 84,
   workspace_id: 3,
-  is_open: true,
   discipline: "overwatch",
   version_id: 42,
   version_number: 1,
@@ -103,14 +102,22 @@ function tournament(slots: RosterSlotMap, discipline = "overwatch"): Tournament 
     workspace_id: 3,
     name: "Widow's Deadly Kiss",
     slug: "widows-deadly-kiss",
-    team_formation: "registration",
-    status: "registration",
-    allow_late_registration: false,
-    phase_schedule: [
+    status: "live",
+    flow_nodes: [
       {
-        status: "registration",
-        starts_at: new Date(now - 86_400_000).toISOString(),
-        ends_at: new Date(now + 86_400_000).toISOString()
+        id: 21,
+        kind: "registration",
+        name: "Registration",
+        status: "open",
+        config: {},
+        stage_id: null,
+        schedule: [
+          {
+            phase: "open",
+            starts_at: new Date(now - 86_400_000).toISOString(),
+            ends_at: new Date(now + 86_400_000).toISOString()
+          }
+        ]
       }
     ],
     discipline,
@@ -143,7 +150,7 @@ async function mount(slots: RosterSlotMap, discipline = "overwatch") {
     root.render(
       <NextIntlClientProvider locale="en" messages={en}>
         <QueryClientProvider client={client}>
-          <TeamRegistrationEntry tournament={tournament(slots, discipline)} />
+          <TeamRegistrationEntry tournament={tournament(slots, discipline)} registrationNodeId={21} />
         </QueryClientProvider>
       </NextIntlClientProvider>
     );

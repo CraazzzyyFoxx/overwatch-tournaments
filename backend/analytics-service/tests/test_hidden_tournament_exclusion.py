@@ -64,9 +64,6 @@ def _compile_array_sqlite(type_, compiler, **kw):  # noqa: ANN001, ANN003, ANN20
 # are unenforced under SQLite, so those tables are deliberately not created.
 TABLES = (
     models.Tournament.__table__,
-    # ``Tournament.phase_schedule`` is ``lazy="selectin"``, so loading a
-    # tournament through ``get_matches_for_tournaments``' ``joinedload`` queries this table too.
-    models.TournamentPhaseSchedule.__table__,
     models.Team.__table__,
     models.Player.__table__,
     PlayerRole.__table__,
@@ -80,6 +77,8 @@ TABLES = (
     models.StatsFact.__table__,
     models.StatDef.__table__,
     models.Standing.__table__,
+    models.ParticipantResult.__table__,
+    models.FlowNode.__table__,
 )
 
 WORKSPACE_ID = 1
@@ -363,7 +362,7 @@ class HiddenTournamentTimelineTests(_DatabaseTestCase):
         self.db.tournament(2, is_hidden=True, name="Scrims")
         self.db.tournament(3)
 
-        ids = await splits.tournament_ids_up_to(self.db.shim, 3, discipline="overwatch")
+        ids = [t.id for t in await splits.tournaments_up_to(self.db.shim, 3, discipline="overwatch")]
 
         self.assertEqual([1, 3], ids)
 
@@ -372,7 +371,7 @@ class HiddenTournamentTimelineTests(_DatabaseTestCase):
         self.db.tournament(2)
         self.db.tournament(3, is_hidden=True, name="Scrims")
 
-        ids = await splits.tournament_ids_up_to(self.db.shim, 3, discipline="overwatch")
+        ids = [t.id for t in await splits.tournaments_up_to(self.db.shim, 3, discipline="overwatch")]
 
         # A trailing hidden container must not become the cutoff fold either.
         self.assertEqual([1, 2], ids)

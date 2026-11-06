@@ -33,8 +33,6 @@ function tournament(id: number, name: string, discipline: string): Tournament {
     status: "completed",
     start_date: "2026-01-01",
     end_date: "2026-01-02",
-    is_league: false,
-    team_formation: null,
     stages: []
   } as unknown as Tournament;
 }
@@ -137,7 +135,7 @@ describe("tournament analytics host", () => {
     await render("");
 
     expect(nav.replace).toHaveBeenCalledWith("/tournaments/analytics?tournamentId=20");
-    expect(tournaments.getAll).toHaveBeenCalledWith(null, "all", null, ["stages", "participants_count"]);
+    expect(tournaments.getAll).toHaveBeenCalledWith("all", null, ["stages", "participants_count"]);
   });
 
   it("offers no tournament of a disabled game: a League-only workspace keeps its old Overwatch events unopened", async () => {

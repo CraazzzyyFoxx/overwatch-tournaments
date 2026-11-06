@@ -1,21 +1,42 @@
 import type { PlayerStanding, PlayerStandingPin } from "@/types/admin.types";
 
-/** One role's personal table, in the server's order (role by shape order, then place). */
-export interface RoleTable {
-  role: string;
-  rows: PlayerStanding[];
-}
-
 /** Unsaved pin edits by workspace member: a place, or `null` for "unpinned". */
 export type PinEdits = Readonly<Record<number, number | null>>;
 
-export function tablesByRole(rows: readonly PlayerStanding[], stageId: number): RoleTable[] {
-  const tables = new Map<string, PlayerStanding[]>();
+/** A row of the stage's personal table, with what the table draws off its role. */
+export interface PlayerStandingRow extends PlayerStanding {
+  /** Its draft pin when edited, else the saved one (a pinned row's `position` IS its pin). */
+  pin: number | null;
+  /** Players in its role: places are per role, so the highest place a pin can take. */
+  roleSize: number;
+  /** Its role's last qualifier with someone below: the playoff cut runs under this row. */
+  atCut: boolean;
+}
+
+/**
+ * The rows in the server's order (role by shape order, then place). The server
+ * marks qualifiers per role, so each role has its own cut.
+ */
+export function standingRows(rows: readonly PlayerStanding[], edits: PinEdits): PlayerStandingRow[] {
+  const roleSize = new Map<string, number>();
+  const lastOfRole = new Map<string, number>();
+  const lastQualified = new Map<string, number>();
   for (const row of rows) {
-    if (row.stage_id !== stageId) continue;
-    tables.set(row.role, [...(tables.get(row.role) ?? []), row]);
+    roleSize.set(row.role, (roleSize.get(row.role) ?? 0) + 1);
+    lastOfRole.set(row.role, row.workspace_member_id);
+    if (row.is_qualified) lastQualified.set(row.role, row.workspace_member_id);
   }
-  return [...tables].map(([role, tableRows]) => ({ role, rows: tableRows }));
+  return rows.map((row) => {
+    const edited = edits[row.workspace_member_id];
+    return {
+      ...row,
+      pin: edited !== undefined ? edited : row.is_pinned ? row.position : null,
+      roleSize: roleSize.get(row.role) ?? 0,
+      atCut:
+        lastQualified.get(row.role) === row.workspace_member_id &&
+        lastOfRole.get(row.role) !== row.workspace_member_id
+    };
+  });
 }
 
 /** A pinned row's `position` IS its pin (the server places a pin before anything else). */
@@ -36,13 +57,6 @@ function effectivePins(rows: readonly PlayerStanding[], edits: PinEdits): Map<nu
   return pins;
 }
 
-/** The pin a row shows: its draft when edited, else the saved one. */
-export function pinOf(row: PlayerStanding, edits: PinEdits): number | null {
-  const edited = edits[row.workspace_member_id];
-  if (edited !== undefined) return edited;
-  return row.is_pinned ? row.position : null;
-}
-
 export function pinsDirty(rows: readonly PlayerStanding[], edits: PinEdits): boolean {
   const saved = savedPins(rows);
   const next = effectivePins(rows, edits);
@@ -55,12 +69,4 @@ export function pinsPayload(rows: readonly PlayerStanding[], edits: PinEdits): P
     workspace_member_id,
     position
   }));
-}
-
-/**
- * Index of the last qualified row of a role table: the playoff cut. `-1` when
- * nobody qualifies. The server marks qualifiers per role, so each table has its own.
- */
-export function cutIndex(rows: readonly PlayerStanding[]): number {
-  return rows.reduce((last, row, index) => (row.is_qualified ? index : last), -1);
 }

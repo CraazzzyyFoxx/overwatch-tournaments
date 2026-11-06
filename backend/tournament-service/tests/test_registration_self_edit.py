@@ -30,12 +30,17 @@ from shared.core.enums import TournamentStatus  # noqa: E402
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from shared.core.social import normalize_social_handle  # noqa: E402
 from shared.domain.forms import FormField, FormSchema, FormSection  # noqa: E402
-from shared.services.roster import roster_engine  # noqa: E402
 from shared.testing.roles import rated_catalog, registration_role  # noqa: E402
 from src.services.registration import service as reg_service  # noqa: E402
 from src.services.registration.answers import answer_service  # noqa: E402
 from src.services.registration.rank_autofill import _rank_autofill_balancer_addition  # noqa: E402
-from src.services.registration.self_edit import self_edit_policy  # noqa: E402
+from src.services.registration.self_edit import self_edit_policy as _policy  # noqa: E402
+
+
+def self_edit_policy(registration, entry, sign_up_open, schema):
+    """The policy as the single-intake tests mean it: the profile has just this entry."""
+    return _policy(registration, entry, [entry], sign_up_open, schema)
+
 
 NOW = datetime.now(UTC)
 
@@ -64,24 +69,13 @@ def _schema(*, editable_keys: frozenset[str] = frozenset()) -> FormSchema:
     )
 
 
-def _tournament(*, ends_in: timedelta | None = timedelta(days=1)) -> models.Tournament:
-    """A tournament whose REGISTRATION window ends ``ends_in`` from now.
+def _tournament() -> models.Tournament:
+    return models.Tournament(id=7, workspace_id=1, discipline="overwatch", status=TournamentStatus.LIVE)
 
-    A negative delta with ``allow_late_registration`` is the late case: open, and
-    every sign-up in it is a reserve.
-    """
-    tournament = models.Tournament(
-        id=7, workspace_id=1, discipline="overwatch", status=TournamentStatus.REGISTRATION, allow_late_registration=True
-    )
-    tournament.phase_schedule = [
-        models.TournamentPhaseSchedule(
-            tournament_id=7,
-            status=TournamentStatus.REGISTRATION,
-            starts_at=NOW - timedelta(days=10),
-            ends_at=None if ends_in is None else NOW + ends_in,
-        )
-    ]
-    return tournament
+
+def _node() -> models.FlowNode:
+    """The registration node the entries sit in: open, no schedule row, so the status decides."""
+    return models.FlowNode(id=3, tournament_id=7, kind="registration", name="Registration", status="open", config={})
 
 
 def _identity(handle: str, *, provider: str = "battlenet", position: int = 0) -> models.RegistrationIdentity:
@@ -93,22 +87,34 @@ def _identity(handle: str, *, provider: str = "battlenet", position: int = 0) ->
     )
 
 
-def _registration(**kwargs: Any) -> models.Registration:
+_ENTRY_COLUMNS = ("status", "balancer_status", "checked_in", "reviewed_at", "is_reserve", "is_substitute")
+
+
+def _registration(**kwargs: Any) -> tuple[models.Registration, models.RegistrationEntry]:
+    """A registration and its entry in a registration node; the entry's columns are routed to it."""
+    entry_values: dict[str, Any] = {
+        "id": 1,
+        "registration_node_id": 3,
+        "status": "approved",
+        "balancer_status": "not_in_balancer",
+        **{column: kwargs.pop(column) for column in _ENTRY_COLUMNS if column in kwargs},
+    }
     defaults: dict[str, Any] = {
         "id": 1,
         "tournament_id": 7,
-        "status": "approved",
-        "balancer_status": "not_in_balancer",
         "submitted_at": NOW - timedelta(days=2),
         "identities": [_identity("Player#1234")],
         "public_notes": "hi",
     }
-    return models.Registration(**{**defaults, **kwargs})
+    registration = models.Registration(**{**defaults, **kwargs})
+    entry = models.RegistrationEntry(**entry_values)
+    entry.registration = registration
+    return registration, entry
 
 
 class PolicyTests(TestCase):
     def test_only_the_questions_the_organizer_opened_are_writable(self) -> None:
-        policy = self_edit_policy(_registration(), _tournament(), _schema(editable_keys=frozenset({"public_notes"})))
+        policy = self_edit_policy(*_registration(), True, _schema(editable_keys=frozenset({"public_notes"})))
 
         assert policy.can_edit is True
         assert "public_notes" in policy.writable_keys
@@ -117,39 +123,29 @@ class PolicyTests(TestCase):
     def test_a_question_this_row_never_answered_is_writable_anyway(self) -> None:
         """Otherwise a new question leaves everyone stuck on a stale version they
         cannot clear -- the normal case once the flag defaults to closed."""
-        policy = self_edit_policy(_registration(), _tournament(), _schema())
+        policy = self_edit_policy(*_registration(), True, _schema())
 
         assert "vk" in policy.writable_keys
         assert "public_notes" not in policy.writable_keys
 
     def test_a_form_with_nothing_open_cannot_be_edited_at_all(self) -> None:
         answered = _registration(custom_fields_json={"vk": "x"}, is_reserve=False)
-        answered.roles = [registration_role(role="tank", is_primary=True, priority=0)]
+        answered[0].roles = [registration_role(role="tank", is_primary=True, priority=0)]
         # Every schema key now has a stored answer, so the "never answered"
         # exception cannot open anything: this is the whole-form kill switch.
-        policy = self_edit_policy(answered, _tournament(), _schema())
+        policy = self_edit_policy(*answered, _tournament(), _schema())
 
         assert policy.can_edit is False
         assert policy.reason == "nothing_editable"
 
     def test_the_window_closes_editing_too(self) -> None:
-        closed = models.Tournament(id=7, status=TournamentStatus.REGISTRATION, allow_late_registration=False)
-        closed.phase_schedule = [
-            models.TournamentPhaseSchedule(
-                tournament_id=7,
-                status=TournamentStatus.REGISTRATION,
-                starts_at=NOW - timedelta(days=10),
-                ends_at=NOW - timedelta(days=1),
-            )
-        ]
-
-        policy = self_edit_policy(_registration(), closed, _schema(editable_keys=frozenset({"public_notes"})))
+        policy = self_edit_policy(*_registration(), False, _schema(editable_keys=frozenset({"public_notes"})))
 
         assert (policy.can_edit, policy.reason) == (False, "window_closed")
 
     def test_check_in_freezes_the_entry(self) -> None:
         policy = self_edit_policy(
-            _registration(checked_in=True), _tournament(), _schema(editable_keys=frozenset({"public_notes"}))
+            *_registration(checked_in=True), True, _schema(editable_keys=frozenset({"public_notes"}))
         )
 
         assert (policy.can_edit, policy.reason) == (False, "checked_in")
@@ -157,7 +153,7 @@ class PolicyTests(TestCase):
     def test_a_settled_registration_is_over(self) -> None:
         for status in ("withdrawn", "rejected"):
             policy = self_edit_policy(
-                _registration(status=status), _tournament(), _schema(editable_keys=frozenset({"public_notes"}))
+                *_registration(status=status), True, _schema(editable_keys=frozenset({"public_notes"}))
             )
             assert (policy.can_edit, policy.reason) == (False, "status_locked"), status
 
@@ -166,31 +162,64 @@ class PolicyTests(TestCase):
         the member link and every inherited rank layer are read through it."""
         opened = _schema(editable_keys=frozenset({"identity_battlenet", "public_notes"}))
 
-        assert "identity_battlenet" in self_edit_policy(_registration(), _tournament(), opened).writable_keys
-        assert (
-            "identity_battlenet"
-            not in self_edit_policy(_registration(reviewed_at=NOW), _tournament(), opened).writable_keys
-        )
+        assert "identity_battlenet" in self_edit_policy(*_registration(), True, opened).writable_keys
+        assert "identity_battlenet" not in self_edit_policy(*_registration(reviewed_at=NOW), True, opened).writable_keys
 
     def test_roles_re_lock_once_the_balancer_has_them(self) -> None:
         opened = _schema(editable_keys=frozenset({"roles"}))
 
-        assert "roles" in self_edit_policy(_registration(), _tournament(), opened).writable_keys
-        assert (
-            "roles" not in self_edit_policy(_registration(balancer_status="ready"), _tournament(), opened).writable_keys
-        )
-        assert (
-            "roles" not in self_edit_policy(_registration(registration_team_id=3), _tournament(), opened).writable_keys
-        )
+        assert "roles" in self_edit_policy(*_registration(), True, opened).writable_keys
+        assert "roles" not in self_edit_policy(*_registration(balancer_status="ready"), True, opened).writable_keys
+        assert "roles" not in self_edit_policy(*_registration(registration_team_id=3), True, opened).writable_keys
 
     def test_a_late_registrant_still_owns_their_on_call_answer(self) -> None:
         """The schedule marks the entry late; it never speaks for the player.
         Locking this was the counterpart of the write that forced it on."""
         opened = _schema(editable_keys=frozenset({"reserve"}))
-        late = _tournament(ends_in=-timedelta(days=3))
 
-        assert "reserve" in self_edit_policy(_registration(), _tournament(), opened).writable_keys
-        assert "reserve" in self_edit_policy(_registration(), late, opened).writable_keys
+        assert "reserve" in self_edit_policy(*_registration(), True, opened).writable_keys
+
+
+class OtherIntakeTests(TestCase):
+    """The answers are the profile's, so another intake's state locks them too."""
+
+    @staticmethod
+    def _second_entry(registration: models.Registration, **columns: Any) -> models.RegistrationEntry:
+        second = models.RegistrationEntry(id=2, registration_node_id=4, status="pending", **columns)
+        second.registration = registration
+        return second
+
+    def test_a_reviewed_entry_of_another_intake_locks_the_identity(self) -> None:
+        registration, first = _registration(reviewed_at=NOW)
+        second = self._second_entry(registration)
+        opened = _schema(editable_keys=frozenset({"identity_battlenet"}))
+
+        assert "identity_battlenet" not in _policy(registration, second, [first, second], True, opened).writable_keys
+
+    def test_a_pool_entry_of_another_intake_locks_the_roles(self) -> None:
+        registration, first = _registration(balancer_status="ready")
+        second = self._second_entry(registration)
+        opened = _schema(editable_keys=frozenset({"roles"}))
+
+        assert "roles" not in _policy(registration, second, [first, second], True, opened).writable_keys
+
+    def test_a_checked_in_entry_of_another_intake_freezes_the_edit(self) -> None:
+        registration, first = _registration(checked_in=True)
+        second = self._second_entry(registration)
+        policy = _policy(
+            registration, second, [first, second], True, _schema(editable_keys=frozenset({"public_notes"}))
+        )
+
+        assert (policy.can_edit, policy.reason) == (False, "checked_in")
+
+    def test_a_withdrawn_entry_of_another_intake_locks_nothing(self) -> None:
+        registration, first = _registration(status="withdrawn", reviewed_at=NOW, checked_in=True)
+        second = self._second_entry(registration)
+        opened = _schema(editable_keys=frozenset({"identity_battlenet"}))
+        policy = _policy(registration, second, [first, second], True, opened)
+
+        assert policy.can_edit is True
+        assert "identity_battlenet" in policy.writable_keys
 
 
 class _RecordingSession:
@@ -211,15 +240,15 @@ class _RecordingSession:
     async def refresh(self, obj: Any) -> None:
         return None
 
-    async def get(self, _entity: Any, _ident: Any, **_kwargs: Any) -> Any:
-        """``_reload_for_read`` re-reads the written row with its loader set."""
-        return None
+    async def get(self, entity: Any, _ident: Any, **_kwargs: Any) -> Any:
+        """The entry's node (its window gates the edit); ``_reload_for_read`` re-reads the written row, found nowhere."""
+        return _node() if entity is models.FlowNode else None
 
     async def scalar(self, *_args: Any, **_kwargs: Any) -> Any:
         return 42
 
     async def scalars(self, *_args: Any, **_kwargs: Any) -> Any:
-        result = mock.Mock()
+        result = mock.MagicMock()  # iterates empty: the node's schedule (no row, the status decides)
         result.all.return_value = list(rated_catalog().values())
         return result
 
@@ -249,20 +278,23 @@ async def _no_rosters(*_args: Any, **_kwargs: Any) -> dict:
 
 
 class WritePathTests(IsolatedAsyncioTestCase):
-    async def _update(self, registration: models.Registration, values: dict[str, Any], schema: FormSchema):
-        return await reg_service.registration_service.update_registration(
-            _RecordingSession(),
-            registration,
-            tournament=_tournament(),
-            values=values,
-            schema=schema,
-            form_version_id=5,
-        )
+    async def _update(self, entry: models.RegistrationEntry, values: dict[str, Any], schema: FormSchema):
+        with mock.patch.object(
+            reg_service.registration_service.entry_repo, "live_for_registration", mock.AsyncMock(return_value=[entry])
+        ):
+            return await reg_service.registration_service.update_registration(
+                _RecordingSession(),
+                entry,
+                tournament=_tournament(),
+                values=values,
+                schema=schema,
+                form_version_id=5,
+            )
 
     async def test_an_opened_answer_is_written(self) -> None:
-        registration = _registration()
+        registration, entry = _registration()
 
-        await self._update(registration, {"public_notes": "new"}, _schema(editable_keys=frozenset({"public_notes"})))
+        await self._update(entry, {"public_notes": "new"}, _schema(editable_keys=frozenset({"public_notes"})))
 
         assert registration.public_notes == "new"
 
@@ -271,7 +303,7 @@ class WritePathTests(IsolatedAsyncioTestCase):
         just touched, not as one opaque toast."""
         with self.assertRaises(HTTPException) as caught:
             await self._update(
-                _registration(),
+                _registration()[1],
                 {"identity_battlenet": ["Other#1111"]},
                 _schema(editable_keys=frozenset({"public_notes"})),
             )
@@ -289,11 +321,11 @@ class WritePathTests(IsolatedAsyncioTestCase):
             mock.patch.object(reg_service.registration_service, "ensure_unique_primary_game_handles", _noop),
             mock.patch.object(reg_service, "assign_workspace_system_role", _noop),
             mock.patch.object(reg_service, "enqueue_registration_approved", _noop),
-            mock.patch.object(roster_engine, "for_tournament", _no_rosters),
         ):
-            registration = await reg_service.registration_service.create_registration(
+            entry = await reg_service.registration_service.create_registration(
                 session,
                 tournament_id=7,
+                registration_node_id=3,
                 workspace_id=1,
                 auth_user_id=None,
                 values={"identity_battlenet": ["Player#1234"], "reserve": False},
@@ -301,7 +333,7 @@ class WritePathTests(IsolatedAsyncioTestCase):
                 form_version_id=3,
             )
 
-        assert registration.is_reserve is False
+        assert entry.is_reserve is False
 
     async def test_an_on_time_sign_up_keeps_its_own_answer(self) -> None:
         session = _RecordingSession()
@@ -310,11 +342,11 @@ class WritePathTests(IsolatedAsyncioTestCase):
             mock.patch.object(reg_service.registration_service, "ensure_unique_primary_game_handles", _noop),
             mock.patch.object(reg_service, "assign_workspace_system_role", _noop),
             mock.patch.object(reg_service, "enqueue_registration_approved", _noop),
-            mock.patch.object(roster_engine, "for_tournament", _no_rosters),
         ):
-            registration = await reg_service.registration_service.create_registration(
+            entry = await reg_service.registration_service.create_registration(
                 session,
                 tournament_id=7,
+                registration_node_id=3,
                 workspace_id=1,
                 auth_user_id=None,
                 values={"identity_battlenet": ["Player#1234"], "reserve": True},
@@ -322,8 +354,8 @@ class WritePathTests(IsolatedAsyncioTestCase):
                 form_version_id=3,
             )
 
-        assert registration.is_reserve is True
-        assert answer_service.answers_of(registration)["reserve"] is True
+        assert entry.is_reserve is True
+        assert answer_service.answers_of(entry.registration, entry)["reserve"] is True
 
 
 class RoundTripTests(IsolatedAsyncioTestCase):
@@ -334,7 +366,9 @@ class RoundTripTests(IsolatedAsyncioTestCase):
     organizer has since frozen. Echoing those back unchanged is no edit.
     """
 
-    async def _validate(self, registration: models.Registration, answers: dict[str, Any]) -> dict[str, Any]:
+    async def _validate(
+        self, registration: models.Registration, entry: models.RegistrationEntry, answers: dict[str, Any]
+    ) -> dict[str, Any]:
         only_vk = FormSchema(sections=[FormSection(key="all", fields=[FormField(key="vk", kind="text", label="VK")])])
         return await answer_service.validate(
             None,  # type: ignore[arg-type] -- no roles, no OAuth gate: nothing here reads the database
@@ -347,32 +381,38 @@ class RoundTripTests(IsolatedAsyncioTestCase):
             discipline="overwatch",
             hero_catalog=None,
             registration=registration,
+            entry=entry,
         )
 
     async def test_keys_the_form_never_asked_read_back_unchanged_are_ignored(self) -> None:
-        registration = _registration(is_reserve=False, stream_pov=False)
-        read = answer_service.answers_of(registration)
+        registration, entry = _registration(is_reserve=False, stream_pov=False)
+        read = answer_service.answers_of(registration, entry)
         assert {"reserve", "stream_pov"} <= set(read)
 
-        values = await self._validate(registration, {**read, "vk": "new"})
+        values = await self._validate(registration, entry, {**read, "vk": "new"})
 
         assert values == {"vk": "new"}
 
     async def test_a_changed_key_the_form_never_asked_is_still_refused(self) -> None:
         with self.assertRaises(HTTPException) as caught:
-            await self._validate(_registration(is_reserve=False, stream_pov=False), {"reserve": True})
+            await self._validate(*_registration(is_reserve=False, stream_pov=False), {"reserve": True})
 
         assert [(item["field"], item["code"]) for item in caught.exception.detail] == [("reserve", "unknown_field")]
 
     async def test_a_frozen_answer_sent_back_unchanged_is_no_edit(self) -> None:
-        registration = _registration()
+        registration, entry = _registration()
         with (
             mock.patch.object(reg_service.registration_service, "ensure_player_identity", _noop),
             mock.patch.object(reg_service.registration_service, "ensure_unique_primary_game_handles", _noop),
+            mock.patch.object(
+                reg_service.registration_service.entry_repo,
+                "live_for_registration",
+                mock.AsyncMock(return_value=[entry]),
+            ),
         ):
             await reg_service.registration_service.update_registration(
                 _RecordingSession(),
-                registration,
+                entry,
                 tournament=_tournament(),
                 values={"identity_battlenet": ["Player#1234"], "public_notes": "new"},
                 schema=_schema(editable_keys=frozenset({"public_notes"})),
@@ -388,7 +428,7 @@ class PoolSweepTests(TestCase):
         """The answer says "you can ring me", not "leave me out": holding these
         rows back from the pool was the whole misreading. Same inputs, same
         verdict, whichever way the switch was set."""
-        on_call = _rank_autofill_balancer_addition(_registration(is_reserve=True), [], add_to_balancer=True)
-        plain = _rank_autofill_balancer_addition(_registration(is_reserve=False), [], add_to_balancer=True)
+        on_call = _rank_autofill_balancer_addition(_registration(is_reserve=True)[1], [], add_to_balancer=True)
+        plain = _rank_autofill_balancer_addition(_registration(is_reserve=False)[1], [], add_to_balancer=True)
 
         assert on_call == plain

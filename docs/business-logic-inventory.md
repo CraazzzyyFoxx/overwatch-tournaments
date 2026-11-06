@@ -75,30 +75,28 @@ Other rules:
 
 ## 3. Tournament lifecycle
 
-State machine: `backend/shared/core/tournament_state.py`. Only `tournament-svc` applies it.
+Status is **derived** from the flow nodes (`backend/shared/core/flow_state.py`, written by `FlowNodeService.sync_tournament_status` in the transaction of every node move); node lifecycles live on the nodes (`FlowNodeService.transition`). Only `tournament-svc` applies them.
 
 ```
-ANNOUNCEMENT → REGISTRATION → [CHECK_IN] → [DRAFT] → LIVE → [PLAYOFFS] → COMPLETED ⇄ ARCHIVED
+ANNOUNCEMENT → LIVE → COMPLETED ⇄ ARCHIVED
 ```
 
-Phase order is 0…7. `CHECK_IN` is optional. `DRAFT` applies only when `team_formation="draft"`. Forward skips are legal (`REGISTRATION → LIVE` is one hop). Rollback edges exist up to `LIVE` so an organizer can reopen a phase without the superuser `force` bypass. `PLAYOFFS` only leads to `COMPLETED`. `COMPLETED ⇄ ARCHIVED` is reversible.
+`announcement` while every lifecycle node is `draft`; `live` once any has left `draft`; `completed` when every sink is done. `ARCHIVED` is the only manual status: `tournament_archive` archives a `completed` tournament (409 `tournament_not_completed` otherwise) and un-archives it back to `completed`; a correction that makes the flow incomplete turns an archived tournament `live`.
 
-The Individual Swiss qualification lock (§7) also takes a `LIVE` tournament back to `DRAFT`, once the personal stage is complete; it is an organizer action, not a schedule tick.
+`is_finished` is **derived**: true exactly for `COMPLETED` and `ARCHIVED`. “In play” = `LIVE` with a live stage node (a registration filling up is not a ball in play).
 
-`is_finished` is **derived**: true exactly for `COMPLETED` and `ARCHIVED`. “In play” = `LIVE | PLAYOFFS` (check-in is a lobby, not a ball in play).
+**Schedule** (`flow_node_schedule`, set per node by `flow_node_schedule_set`):
 
-**Schedule** (`tournament_phase_schedule`):
+- Phases: registration `open`, `check_in`; formation `start`; stage `start`.
+- `starts_at` moves the node (`SCHEDULE_TRANSITIONS`: registration `draft → open`, `open → check_in`; formation `draft → forming`; stage `ready → live`). `ends_at` **never** moves a node — it only closes that phase's action window.
+- One row per phase; `ends_at > starts_at` when set; a registration's `check_in` starts after its `open`.
 
-- Schedulable: `REGISTRATION`, `CHECK_IN`, `DRAFT`, `LIVE`. Not `ANNOUNCEMENT`, `PLAYOFFS`, `COMPLETED`.
-- `starts_at` moves status. `ends_at` **never** moves status — it only closes that phase's action window.
-- One row per phase; strictly increasing `starts_at`; `ends_at > starts_at` when set.
+**What moves a node — only two things:**
 
-**What moves status — only two things:**
+1. An admin via `flow_node_transition`. A manual move does not touch `auto_transitions_enabled`: the tick only moves a node from the exact status its phase starts from, so it never undoes an admin's move.
+2. The 30-second tick. Forward only, one due row at a time, tournament row locked before the node, one transaction per node. A refused move (no registration form, an input not final) is skipped and retried.
 
-1. An admin via `tournament_status`. Validated against the transition matrix unless `force`. A manual transition **disables** `auto_transitions_enabled` in the same transaction so automation never fights the admin.
-2. The 30-second tick. Forward only, only out of `{ANNOUNCEMENT, REGISTRATION, CHECK_IN, DRAFT}`, furthest destination `LIVE`. Several due rows → jump to the **latest** due phase, not step through intermediates. `FOR UPDATE SKIP LOCKED`, one transaction per tournament.
-
-Side effect of reaching `LIVE`: auto-start the first group-stage wave (stages sharing `order` are one parallel phase).
+Side effect of a stage's `ready → live`: its encounters are generated (the group-stage auto-start).
 
 **Visibility.** A hidden tournament 404s as “not found”. Preview allowlist (`tournament_preview_access`) for unpublished hidden events. Exception: a **scrim container** is readable by any workspace member (the opponent must open the link before claiming). Listings still hide the container.
 
@@ -108,18 +106,16 @@ Side effect of reaching `LIVE`: auto-start the first group-stage wave (stages sh
 
 ### Windows
 
-Registration inverts the other windows (`backend/shared/services/registration_window.py`):
+Sign-up and check-in are windows of a **registration node** (`backend/shared/services/registration_window.py`):
 
-- No `REGISTRATION` schedule row → closed.
-- `COMPLETED` / `ARCHIVED` → always closed.
-- `allow_late_registration` lifts `ends_at` without erasing the intended close time.
-- The tournament's current **phase does not participate**.
+- Sign-up is open iff the node is `open` and inside its `open` schedule row (a missing row means the status decides), or the node is `check_in` and `allow_late_registration` is on. `allow_late_registration` lifts the row's `ends_at` without erasing the intended close time.
+- A sign-up is *late* (written as a reserve) when the node is `check_in` or past the `open` row's `ends_at`.
+- Check-in is open iff the node is `check_in` and inside its `check_in` row (a missing row means open).
+- Several registration nodes run independent windows in one tournament.
 
-Check-in: status **must** be `CHECK_IN` **and** `now` inside the window (missing row / `ends_at NULL` = the whole phase).
+### Form, intake settings and statuses
 
-### Form and statuses
-
-One form per tournament: fields, flex mode, team rank rules, Discord-guild requirement, subscription toggle/stage/scope.
+The form holds the questions and the profile-level rules (open profile, rank visibility). Who may take part in an intake and when lives in the registration node's config: auto-approve, capacity, bench size, late sign-up, team rank rules, Discord-guild requirement, subscription toggle/stage/scope.
 
 Registration statuses are a per-workspace catalog. `ready` / `incomplete` **cannot be written by hand** — they are derived from roles + ranks.
 
@@ -200,13 +196,13 @@ Team size **2–12**. A one-slot roster is forbidden (nothing to draft or balanc
 
 Resolve: tournament override → workspace default → built-in 5v5. The client receives the already-resolved shape; it does not recompute `team_size` / `draft_rounds` except as a preview of an unconfirmed editor total.
 
-Locks: cannot change the workspace default while an inheriting tournament uses it and a draft/formation is in flight. Cannot change `team_formation` or shape while a draft session is active.
+Locks: cannot change the workspace default while an inheriting tournament uses it and a draft/formation is in flight. Cannot change the shape while a draft session is active. A draft formation node's `mode` and `draft_format` are locked by an unfinished draft session of that node (409 `draft_session_active` from `apply_changes`).
 
 ---
 
 ## 6. Team formation
 
-`tournament.team_formation` is a string, default `"balancer"`. Known values: **`balancer`**, **`draft`**. Captain-registered teams are a separate export path into `tournament.team`.
+How teams form is the flow's: a formation node's `config.mode` is `balancer | draft | registered | manual`, a registration node's `config.intake` is `solo | team`. A draft node's format rule lives in `config.draft_format`. The tournament row carries neither (`flowP7_01_drop_team_formation`). Captain-registered teams are a separate export path into `tournament.team`.
 
 ### Balancer
 
@@ -228,7 +224,7 @@ Captains: top N by `(-max_rating, uuid)`.
 
 Session: `setup → ready → live ⇄ paused → completed | cancelled`.
 
-A session is created, seeded and started only for a `team_formation="draft"` tournament (409 `tournament_not_draft_formation`; a superuser's start does not bypass it). Its settings (pick time, overtime, autopick strategy, override flag) change only in `setup | ready`; once the draft starts a patch is 409 `draft_settings_locked`.
+A session is created, seeded and started only for a formation node whose `config.mode` is `draft` (409 `tournament_not_draft_formation`; a superuser's start does not bypass it). Its format comes from the node's `config.draft_format` at creation. Its settings (pick time, overtime, autopick strategy, override flag) change only in `setup | ready`; once the draft starts a patch is 409 `draft_settings_locked`.
 
 Formats: `snake | linear | custom`. Custom round rules: linear / reverse / weakest / strongest / `team_avg_asc` / `team_avg_desc`. Captain order: manual / weakest / strongest / random (Mulberry32, seed in settings).
 
@@ -366,7 +362,7 @@ Jobs: `tournament_bracket_jobs` / `tournament_standings_jobs`, prefetch 4, isola
 
 Stage config: `max_rounds` (default 5), best-of (any), `pairing_mode` `score` | `balance` (default `score`), `playoff_team_count` `K` (default 4, ≥ 1). The two new fields exist only on this type: create/update fills the defaults for it and forces them `NULL` on every other type; an explicit `null` on an update restores the defaults. Points are the stage's `win_points` / `draw_points` / `loss_points` for the series (preset `wins`).
 
-**Start** (`IndividualSwissRoundsService.start`, reached by the ordinary "activate and generate" action; a stage that already has encounters is 409). The pool is the tournament's roster still in the balancer pool; the roster shape is the tournament's (`tournament_slot_shape`; first target Overwatch 1 tank / 2 damage / 2 support). Nothing is written until all of these hold; the system never trims the pool itself. Each refusal is 409 `{code, message}`:
+**Start** (`IndividualSwissRoundsService.start`, reached by the stage node's `ready → live` move; a stage that already has encounters is 409). The pool is the tournament's roster still in the balancer pool; the roster shape is the tournament's (`tournament_slot_shape`; first target Overwatch 1 tank / 2 damage / 2 support). Nothing is written until all of these hold; the system never trims the pool itself. Each refusal is 409 `{code, message}`:
 
 - `member_required` — a registration has no workspace member;
 - `one_role_required` — a player does not have exactly one playable (ranked) role (no flex);
@@ -399,7 +395,7 @@ Start then replaces the stage's `PlayerStanding` rows with the **frozen pool** (
 
 **Qualification** (`qualify`, `pick_captains`): the cut is per role — the first `K × shape[role]` places of each role are `is_qualified`, so the qualifiers are exactly `K` teams' worth by role. The **captains** are the `K` qualifiers with the highest `rank` across all roles (ties by member id), flagged `is_captain`. The cut line and captains exist from the start and follow every recalculation and pin.
 
-**Qualification lock** (`POST /api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/lock-qualification`, `qualification_service.lock`; permissions `stage.update` **and** `tournament.update`; audit `stage.lock_qualification`). Refused with 409: `not_individual_swiss`, `qualification_not_live` (the tournament is not `LIVE` — also what a second lock after a success gets), `stage_not_completed`, `no_qualifiers`. Otherwise, with the tournament row locked `FOR UPDATE` (two organizers locking at once serialize), every player of the table that is not `is_qualified` gets `balancer_status = excluded`, `exclude_reason = not_qualified` (`bulk_set_balancer_status`, realtime change emitted) — the balancer pool, hence the draft pool, is exactly the qualifiers — and then the tournament moves `LIVE → DRAFT`. These are **two commits**; a failure between them leaves a trimmed pool in LIVE, and calling the lock again re-applies the same exclusion and finishes the move. The answer lists the qualifiers (role order, position) and the captains (rank ↓). After `DRAFT` the qualifier list is frozen, which is why pins are refused. The draft is the ordinary live draft (§6): a player's role is fixed to their one role (the existing `illegal_role` check, `resolve_pick_slot`; a captain fills a slot of their own role) and the organizer sets the captain order (`weakest` lets the weakest captain pick first). The playoff stage is seeded by `seed_teams` mode `captain_rank` (the captain's own rank, highest first, no rank last, ties by team id; the mode belongs to `seed_teams` only and is not a `Stage.seed_ranking` value).
+**Qualification lock** (`POST /api/v1/admin/tournaments/{tournament_id}/stages/{stage_id}/lock-qualification`, `qualification_service.lock`; permissions `stage.update` **and** `tournament.update`; audit `stage.lock_qualification`). Refused with 409: `not_individual_swiss`, `qualification_not_live` (the stage's flow node is not `live`, or the stage is already locked — also what a second lock after a success gets), `stage_not_completed`, `no_qualifiers`, `draft_format_not_snake`. Otherwise, with the tournament row locked `FOR UPDATE` (two organizers locking at once serialize), the personal table is recalculated, `qualification_locked_at` is stamped and the stage node moves `live → completed` (`flow_node_service.transition`), in **one commit**; the tournament status follows the nodes and the balancer pool is untouched — who plays on is the downstream filter's business. The Swiss pool itself is the stage node's input (`roster_engine.for_node_input`). The answer lists the qualifiers (role order, position) and the captains (rank ↓). After the lock the qualifier list is frozen, which is why pins are refused (node `completed` or the marker set). The draft is the ordinary live draft (§6): a player's role is fixed to their one role (the existing `illegal_role` check, `resolve_pick_slot`; a captain fills a slot of their own role) and the organizer sets the captain order (`weakest` lets the weakest captain pick first). The playoff stage is seeded by `seed_teams` mode `captain_rank` (the captain's own rank, highest first, no rank last, ties by team id; the mode belongs to `seed_teams` only and is not a `Stage.seed_ranking` value).
 
 **Reads.** `GET /api/v1/tournaments/{id}/player-standings` (public; ordered by stage, role in roster-shape order, position; `map_diff` derived) and `GET /api/v1/tournaments/{id}/stages/{stage_id}/individual-rounds` (public; lobbies, rosters with roles, captains, score; 404 for another stage type or tournament). Both are `@versioned` by the tournament's standings generation; the gateway response cache is not enabled for them.
 

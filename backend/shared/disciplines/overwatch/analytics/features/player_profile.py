@@ -7,6 +7,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.chrono import tournament_chrono_key
 from shared.core.enums import LogStatsName
 from shared.domain.analytics import PERFORMANCE_MODEL
 from shared.repository.stats_queries import player_facts
@@ -54,6 +55,8 @@ async def load_player_signal_profile(
             models.AnalyticsAlgorithm.name == PERFORMANCE_MODEL.algorithm_name,
             *workspace_filter(workspace_id),
         )
+        # A stable row order: without it the planner's join order (and so the profile's row order) follows the indexes.
+        .order_by(models.AnalyticsPerformance.player_id)
     )
     base_df = pd.DataFrame((await session.execute(base_query)).mappings().all())
     if base_df.empty:
@@ -120,21 +123,20 @@ async def load_player_signal_profile(
         base_df["mvp_matches"] = 0
 
     # The window is the evaluated tournament plus the ``history_depth`` tournaments before it in the same scope, by
-    # chronology ``(coalesce(start_date, created_at), id)``: ids are global and not chronological. Like the id range it
+    # the chronology key of ``shared.core.chrono``: ids are global and not chronological. Like the id range it
     # replaces, it counts every tournament of the scope, hidden ones included.
-    chrono = sa.func.coalesce(models.Tournament.start_date, models.Tournament.created_at)
     evaluated_key = (
-        await session.execute(sa.select(chrono, models.Tournament.id).where(models.Tournament.id == tournament_id))
+        await session.execute(sa.select(*tournament_chrono_key()).where(models.Tournament.id == tournament_id))
     ).one()
     window_ids = (
         await session.scalars(
             sa.select(models.Tournament.id)
             .where(
-                sa.tuple_(chrono, models.Tournament.id) <= sa.tuple_(*evaluated_key),
+                sa.tuple_(*tournament_chrono_key()) <= sa.tuple_(*evaluated_key),
                 models.Tournament.discipline == "overwatch",
                 *workspace_filter(workspace_id),
             )
-            .order_by(chrono.desc(), models.Tournament.id.desc())
+            .order_by(*(c.desc() for c in tournament_chrono_key()))
             .limit(history_depth + 1)
         )
     ).all()
@@ -162,12 +164,7 @@ async def load_player_signal_profile(
             models.WorkspaceMember.player_id.in_(user_ids),
             *workspace_filter(workspace_id),
         )
-        .order_by(
-            models.WorkspaceMember.player_id,
-            models.Player.role,
-            chrono,
-            models.AnalyticsPerformance.tournament_id,
-        )
+        .order_by(models.WorkspaceMember.player_id, models.Player.role, *tournament_chrono_key())
     )
     history_df = pd.DataFrame((await session.execute(history_query)).mappings().all())
     histories: dict[tuple[int, str], dict[str, list[float]]] = {}

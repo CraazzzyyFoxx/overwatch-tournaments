@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import type { ConfirmIntent } from "@/components/kit/ConfirmDialog";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
-import type { Stage, StageItem } from "@/types/tournament.types";
+import type { Stage, StageItem, StageNodeStatus } from "@/types/tournament.types";
 import type { Team } from "@/types/team.types";
 
 /** Every confirm-guarded stage operation, and what the dialog says about it. */
@@ -15,8 +15,7 @@ type PendingOp =
   | { kind: "remove-input"; inputId: number; label: string }
   | { kind: "seed"; mode?: "captain_rank" }
   | { kind: "merge" }
-  | { kind: "force-activate" }
-  | { kind: "deactivate" }
+  | { kind: "revert" }
   | { kind: "regenerate" };
 
 interface StageOperationsOptions {
@@ -47,19 +46,18 @@ export function useStageOperations({
   const intentRootT = tRoot as unknown as (key: string, values?: Record<string, unknown>) => string;
   const [pendingOp, setPendingOp] = useState<PendingOp | null>(null);
 
-  const activateMutation = useMutation({
-    mutationFn: () => adminService.activateStage(stage.id),
-    onSuccess: () => onChanged()
-  });
-
-  const deactivateMutation = useMutation({
-    mutationFn: () => adminService.deactivateStage(stage.id),
-    onSuccess: () => {
+  // Every lifecycle move is one `NODE_TRANSITIONS.stage` step of the stage's node; the server runs its side effects.
+  const transitionMutation = useMutation({
+    mutationFn: (target: StageNodeStatus) => adminService.transitionNode(stage.node_id, target),
+    onSuccess: (_node, target) => {
       setPendingOp(null);
       onChanged();
-      notify.success(t("reverted"));
+      if (target === "draft") notify.success(t("reverted"));
     },
-    onError: (error) => notify.apiError(error, { title: t("revertError") })
+    onError: (error, target) => {
+      setPendingOp(null);
+      notify.apiError(error, { title: target === "draft" ? t("revertError") : t("transitionError") });
+    }
   });
 
   const generateMutation = useMutation({
@@ -100,43 +98,6 @@ export function useStageOperations({
       setPendingOp(null);
       onSelect(merged.id);
       onChanged();
-    }
-  });
-
-  const autoWireMutation = useMutation({
-    mutationFn: () => adminService.autoWireStage(stage.id),
-    onSuccess: () => {
-      onChanged();
-      notify.success(t("autoWired"));
-    },
-    onError: (error) =>
-      notify.apiError(error, { title: t("autoWireError") })
-  });
-
-  const activateAndGenerateMutation = useMutation({
-    mutationFn: (force?: boolean) =>
-      adminService.activateAndGenerateStage(stage.id, force ? { force: true } : undefined),
-    onSuccess: () => {
-      setPendingOp(null);
-      onChanged();
-    },
-    onError: (error, force) => {
-      // The server refuses while an upstream stage is unfinished; that refusal
-      // is the prompt for the force confirmation, not an error toast.
-      const detail =
-        error && typeof error === "object" && "detail" in error ? error.detail : null;
-      const upstreamPending =
-        typeof detail === "object" &&
-        detail !== null &&
-        "code" in detail &&
-        typeof detail.code === "string" &&
-        detail.code === "upstream_stages_not_completed";
-      if (upstreamPending && !force) {
-        setPendingOp({ kind: "force-activate" });
-        return;
-      }
-      setPendingOp(null);
-      notify.apiError(error, { title: t("activateError") });
     }
   });
 
@@ -185,8 +146,7 @@ export function useStageOperations({
     "remove-input": removeInputMutation.isPending,
     seed: seedMutation.isPending,
     merge: mergeMutation.isPending,
-    "force-activate": activateAndGenerateMutation.isPending,
-    deactivate: deactivateMutation.isPending,
+    revert: transitionMutation.isPending,
     regenerate: generateMutation.isPending
   };
   const opPending = pendingOp ? pendingByOp[pendingOp.kind] : false;
@@ -198,8 +158,7 @@ export function useStageOperations({
     else if (pendingOp.kind === "remove-input") removeInputMutation.mutate(pendingOp.inputId);
     else if (pendingOp.kind === "seed") seedMutation.mutate(pendingOp.mode ?? "snake_sr");
     else if (pendingOp.kind === "merge") mergeMutation.mutate();
-    else if (pendingOp.kind === "force-activate") activateAndGenerateMutation.mutate(true);
-    else if (pendingOp.kind === "deactivate") deactivateMutation.mutate();
+    else if (pendingOp.kind === "revert") transitionMutation.mutate("draft");
     else generateMutation.mutate();
   };
 
@@ -209,11 +168,9 @@ export function useStageOperations({
     intent,
     opPending,
     runPendingOp,
-    activateMutation,
+    transitionMutation,
     generateMutation,
-    applyBestOfMutation,
-    autoWireMutation,
-    activateAndGenerateMutation
+    applyBestOfMutation
   };
 }
 
@@ -225,7 +182,7 @@ const NEUTRAL_INTENT: ConfirmIntent = {
 };
 
 /**
- * The seven confirmations of the old screen, as intents of one dialog. The
+ * The confirmations of the old screen, as intents of one dialog. The
  * copy is carried over verbatim: it is the only place that explains what each
  * operation does to already-generated matches.
  */
@@ -288,13 +245,7 @@ const INTENTS = (t: (key: string, values?: Record<string, unknown>) => string, t
     tone: "warning",
     cascade: mergeCandidates.map((candidate) => tRoot("extra.cascadeStage", { name: candidate.name }))
   }),
-  "force-activate": (stage) => ({
-    title: t("forceActivateTitle"),
-    description: t("forceActivateDescription", { name: stage.name }),
-    confirmLabel: t("forceActivateConfirm"),
-    tone: "warning"
-  }),
-  deactivate: (stage) => ({
+  revert: (stage) => ({
     title: t("revertTitle"),
     description: t("revertDescription", { name: stage.name }),
     confirmLabel: t("revertConfirm"),

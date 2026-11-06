@@ -2,7 +2,7 @@
 
 Once a phase runs two divisions in parallel, "the stage before this one" is two
 stages, and only one of them ranked these teams. ``resolve_seeds`` therefore
-follows the bracket's own wiring (``StageItemInput.source_stage_item_id``) back
+follows the bracket's own wiring (``StageItemInput.source_result_id``) back
 to the stage that actually feeds it, and only falls back to stage order for a
 playoff wired by hand.
 """

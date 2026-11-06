@@ -138,6 +138,7 @@
     "subscriptionWorkspace",
     "teams",
     "tournamentDetail",
+    "unlinkedRegistrationsNotice",
     "users",
     "workspace"
   ],
@@ -177,6 +178,7 @@
     "statistics",
     "stream",
     "teams",
+    "unlinkedRegistrationsNotice",
     "users",
     "workspace"
   ]

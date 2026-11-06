@@ -1,23 +1,23 @@
 """Lifecycle facts a competitor is waiting to hear: registration opened, the
 check-in started, their next match is ready to play.
 
-Called inline from the three mutations that produce those facts
-(``transition_status``, encounter create/update, bracket advancement), inside
+Called inline from the mutations that produce those facts (``FlowNodeService.transition`` into a registration node's
+``open`` / ``check_in``, encounter create/update, bracket advancement), inside
 the caller's transaction and before its ``commit()`` -- the same shape as every
 other ``notify()`` producer in this service. Nothing here commits, and nothing
 here raises for a missing recipient: a lifecycle write must not fail because
 somebody has no account behind their roster row.
 
 Every call is keyed. ``dedupe_key`` is what makes the hooks re-entrant, and
-they need to be: a status can flap (REGISTRATION -> ANNOUNCEMENT ->
-REGISTRATION), the round scheduler sends one PATCH per encounter with the time
+they need to be: a node can flap (``open`` -> ``closed`` -> ``open``),
+the round scheduler sends one PATCH per encounter with the time
 it already has, and an encounter reaches :meth:`on_encounter_changed` from
 every site that can fill a team slot. The key says "this event", so a repeat
 writes nothing; a *new* opponent or a *new* match time is a new key, hence a
 fresh notification.
 
 ``ponytail:`` a window that opens *lazily* -- a manual transition made before
-``starts_at``, a ``set_schedule`` landing a start time already in the past, or
+``starts_at``, a schedule row landing a start time already in the past, or
 ``allow_late_registration`` flipped on later -- notifies nobody, because only a
 status write reaches this module. The upgrade path is the reminders tick,
 which detects the window crossing itself.
@@ -36,10 +36,10 @@ from shared import models
 from shared.core import enums, tournament_state
 from shared.domain.pick_ban_config import has_pool
 from shared.repository.notification_recipients import NotificationRecipientRepository
-from shared.repository.tournament import TournamentPhaseScheduleRepository
 from shared.services.notifications import PersonalNotification, broadcast, notify, notify_users
-from shared.services.registration_window import is_registration_window_open
 from src.services.bracket.advancement import AdvanceOutcome, advance_after_result
+from src.services.registration.windows import is_check_in_open_for, is_sign_up_open_for, node_config, windows_service
+from src.services.tournament.events import registration_node_label
 
 
 def _pick_ban_sessions():
@@ -62,11 +62,8 @@ def _as_utc(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
-def _phase_entry(
-    schedule: Iterable[models.TournamentPhaseSchedule],
-    status: enums.TournamentStatus,
-) -> models.TournamentPhaseSchedule | None:
-    return next((entry for entry in schedule if entry.status == status), None)
+def _phase_entry(schedule: Iterable[models.FlowNodeSchedule], phase: str) -> models.FlowNodeSchedule | None:
+    return next((entry for entry in schedule if entry.phase == phase), None)
 
 
 class LifecycleNotifier:
@@ -75,40 +72,35 @@ class LifecycleNotifier:
     def __init__(
         self,
         *,
-        schedule_repo: TournamentPhaseScheduleRepository = TournamentPhaseScheduleRepository(),
         recipient_repo: NotificationRecipientRepository = NotificationRecipientRepository(),
     ) -> None:
-        self.schedule_repo = schedule_repo
         self.recipient_repo = recipient_repo
 
-    async def on_status_entered(self, session: AsyncSession, tournament: models.Tournament) -> None:
-        """Announce the phase ``tournament`` has just been moved into.
+    async def on_node_entered(
+        self, session: AsyncSession, tournament: models.Tournament, node: models.FlowNode
+    ) -> None:
+        """Announce the registration node that has just been moved into ``open`` or ``check_in``.
 
-        Called with the new status already assigned. Any phase other than the
-        two that open a door for participants is silent.
+        Called with the new status already assigned. Any other move is silent. Every payload names the node
+        ("Day 3") and carries its id, so the check-in button knows which entry to check in.
         """
-        if tournament.status == enums.TournamentStatus.REGISTRATION:
-            await self._registration_opened(session, tournament)
-        elif tournament.status == enums.TournamentStatus.CHECK_IN:
-            await self._check_in_opened(session, tournament)
+        schedule = await windows_service.load_schedule(session, node.id)
+        if node.status == enums.FlowNodeStatus.OPEN:
+            await self._registration_opened(session, tournament, node, schedule)
+        elif node.status == enums.FlowNodeStatus.CHECK_IN:
+            await self._check_in_opened(session, tournament, node, schedule)
 
-    async def _registration_opened(self, session: AsyncSession, tournament: models.Tournament) -> None:
-        # Read rather than ``tournament.phase_schedule``: the instance the
-        # transition holds was loaded with its stages, and touching an unloaded
-        # relationship on an async session raises instead of lazy-loading.
-        schedule = await self.schedule_repo.list_for_tournament(session, tournament.id)
-        if not is_registration_window_open(
-            tournament.status,
-            schedule,
-            allow_late=tournament.allow_late_registration,
-        ):
-            # The status says REGISTRATION but the button does not work yet (no
-            # schedule row, or the window has not started). Inviting people to
-            # a sign-up that refuses them is worse than saying nothing.
-            logger.info(
-                "registration.opened skipped for tournament {}: registration window is closed",
-                tournament.id,
-            )
+    async def _registration_opened(
+        self,
+        session: AsyncSession,
+        tournament: models.Tournament,
+        node: models.FlowNode,
+        schedule: list[models.FlowNodeSchedule],
+    ) -> None:
+        if not is_sign_up_open_for(node, schedule):
+            # The status says open but the button does not work yet (the window has not started). Inviting people
+            # to a sign-up that refuses them is worse than saying nothing.
+            logger.info("registration.opened skipped for node {}: sign-up window is closed", node.id)
             return
 
         if tournament.is_hidden:
@@ -117,15 +109,16 @@ class LifecycleNotifier:
             # member's bell, a broadcast to a public channel.
             return
 
-        entry = _phase_entry(schedule, enums.TournamentStatus.REGISTRATION)
+        entry = _phase_entry(schedule, "open")
         payload = {
             "tournament_id": tournament.id,
             "tournament_name": tournament.name,
-            # ``allow_late_registration`` lifts ``ends_at``, so there is no
-            # closing time to promise.
-            "closes_at": None if tournament.allow_late_registration else (entry.ends_at if entry else None),
+            "node_name": await registration_node_label(session, tournament.id, node.id),
+            "registration_node_id": node.id,
+            # ``allow_late_registration`` lifts ``ends_at``, so there is no closing time to promise.
+            "closes_at": None if node_config(node).allow_late_registration else (entry.ends_at if entry else None),
         }
-        dedupe_key = f"tournament:{tournament.id}"
+        dedupe_key = f"flow_node:{node.id}"
         await notify(
             session,
             kind="registration.opened",
@@ -143,27 +136,27 @@ class LifecycleNotifier:
                 dedupe_key=dedupe_key,
             )
 
-    async def _check_in_opened(self, session: AsyncSession, tournament: models.Tournament) -> None:
-        schedule = await self.schedule_repo.list_for_tournament(session, tournament.id)
-        if not tournament_state.is_within_phase_window(
-            enums.TournamentStatus.CHECK_IN,
-            schedule,
-            datetime.now(UTC),
-        ):
-            logger.info(
-                "check_in.opened skipped for tournament {}: check-in window is not active",
-                tournament.id,
-            )
+    async def _check_in_opened(
+        self,
+        session: AsyncSession,
+        tournament: models.Tournament,
+        node: models.FlowNode,
+        schedule: list[models.FlowNodeSchedule],
+    ) -> None:
+        if not is_check_in_open_for(node, schedule):
+            logger.info("check_in.opened skipped for node {}: check-in window is not active", node.id)
             return
 
-        entry = _phase_entry(schedule, enums.TournamentStatus.CHECK_IN)
+        entry = _phase_entry(schedule, "check_in")
         payload = {
             "tournament_id": tournament.id,
             "tournament_name": tournament.name,
+            "node_name": await registration_node_label(session, tournament.id, node.id),
+            "registration_node_id": node.id,
             "closes_at": entry.ends_at if entry else None,
         }
-        dedupe_key = f"tournament:{tournament.id}"
-        recipients = await self.recipient_repo.check_in_pending_auth_user_ids(session, tournament.id)
+        dedupe_key = f"flow_node:{node.id}"
+        recipients = await self.recipient_repo.check_in_pending_auth_user_ids(session, node.id)
         await notify_users(
             session,
             kind="check_in.opened",

@@ -18,21 +18,29 @@ from shared.models.registration.registration import Registration, RegistrationRo
 from shared.repository import CatalogRoleRepository
 from shared.services.encounter.participants import active_teams
 from shared.services.encounter.result import apply_result
+from shared.testing.factories import add_entry
 from src import schemas
 from src.services.admin.stage import stage_service
 from src.services.individual_swiss import individual_swiss_rounds_service
 from src.services.individual_swiss.qualification import qualification_service
 from src.services.standings.service import standings_service
-from tests._encounter_layer import EncounterLayerCase
+from tests._encounter_layer import EncounterLayerCase, move_stage
 
 ROLES = {"tank": 4, "damage": 8, "support": 8}
 
 
 class IndividualSwissRoundsTests(EncounterLayerCase):
     async def _seed_pool(self, counts: dict[str, int]) -> None:
+        """The profiles and a closed registration node; the stage created afterwards is wired to it."""
         tag = f"isw-{os.getpid()}-{self.workspace_id}"
         async with self.Session() as s:
             catalog = await CatalogRoleRepository().rated_rows(s, discipline="overwatch", workspace_id=None)
+            node = models.FlowNode(
+                tournament_id=self.tournament_id, kind="registration", name="Day 1", status="closed", config={}
+            )
+            s.add(node)
+            await s.flush()
+            node_id = node.id
             for role, count in counts.items():
                 for index in range(count):
                     user = models.User(name=f"{tag}-{role}-{index}")
@@ -44,12 +52,11 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
                     registration = Registration(
                         tournament_id=self.tournament_id,
                         display_name=f"{role}{index}",
-                        status="approved",
-                        balancer_status="ready",
                         workspace_member_id=member.id,
                     )
                     s.add(registration)
                     await s.flush()
+                    await add_entry(s, node_id, registration.id, status="approved", balancer_status="ready")
                     s.add(
                         RegistrationRole(
                             registration_id=registration.id,
@@ -62,6 +69,26 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
                             is_active=True,
                         )
                     )
+            await s.commit()
+
+    async def _wire_pool(self, stage_id: int) -> None:
+        """``registration.participants -> stage.participants``: ``create_stage`` wires only a tournament's first stage."""
+        async with self.Session() as s:
+            registration_id = await s.scalar(
+                sa.select(models.FlowNode.id).where(
+                    models.FlowNode.tournament_id == self.tournament_id, models.FlowNode.kind == "registration"
+                )
+            )
+            stage_node_id = await s.scalar(sa.select(models.FlowNode.id).where(models.FlowNode.stage_id == stage_id))
+            s.add(
+                models.FlowEdge(
+                    tournament_id=self.tournament_id,
+                    source_node_id=registration_id,
+                    source_port="participants",
+                    target_node_id=stage_node_id,
+                    target_port="participants",
+                )
+            )
             await s.commit()
 
     async def _start(self, **fields) -> int:
@@ -79,10 +106,8 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
                 ),
             )
             stage_id = stage.id
-        async with self.Session() as s:
-            await stage_service.activate_and_generate(
-                s, stage_id, force=True, notify=False, commit=True, schedule_standings=False
-            )
+        await self._wire_pool(stage_id)
+        await move_stage(self.Session, stage_id, enums.FlowNodeStatus.READY, enums.FlowNodeStatus.LIVE)
         return stage_id
 
     async def _round(self, stage_id: int, number: int) -> list[int]:
@@ -221,7 +246,8 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
         await self._confirm(round_two[1], 2, 0)
         self.assertEqual([], await self._recalculate_and_generate(stage_id))
         async with self.Session() as s:
-            self.assertTrue((await s.get_one(models.Stage, stage_id)).is_completed)
+            run = await standings_service.recalculate_for_tournament(s, self.tournament_id)
+        self.assertIn(stage_id, run.completed_stage_ids)
         self.assertEqual([], await self._round(stage_id, 3))
         final = await self._table(stage_id)
         self.assertEqual({2}, {row.matches_played for row in final.values()})
@@ -262,11 +288,9 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
                 ),
             )
             stage_id = stage.id
-        async with self.Session() as s:
-            with self.assertRaises(BaseAPIException) as raised:
-                await stage_service.activate_and_generate(
-                    s, stage_id, force=True, notify=False, commit=True, schedule_standings=False
-                )
+        await self._wire_pool(stage_id)
+        with self.assertRaises(BaseAPIException) as raised:
+            await move_stage(self.Session, stage_id, enums.FlowNodeStatus.READY, enums.FlowNodeStatus.LIVE)
         self.assertEqual("playoff_too_large", raised.exception.detail["code"])
 
     async def test_balance_mode_splits_the_whole_pool_into_four_teams(self) -> None:
@@ -296,8 +320,8 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
 
         async with self.Session() as s:
             with self.assertRaises(BaseAPIException) as refused:
-                await stage_service.activate_and_generate(
-                    s, stage_id, force=True, notify=False, commit=True, schedule_standings=False
+                await stage_service.generate_encounters(
+                    s, stage_id, notify=False, commit=True, schedule_standings=False
                 )
         self.assertEqual(409, refused.exception.status_code)
         self.assertEqual(first_round, await self._round(stage_id, 1))
@@ -307,9 +331,7 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
             await s.execute(sa.delete(models.Encounter).where(models.Encounter.id.in_(first_round)))
             await s.commit()
         async with self.Session() as s:
-            await stage_service.activate_and_generate(
-                s, stage_id, force=True, notify=False, commit=True, schedule_standings=False
-            )
+            await stage_service.generate_encounters(s, stage_id, notify=False, commit=True, schedule_standings=False)
         self.assertEqual(20, len(await self._table(stage_id)))
         self.assertEqual(2, len(await self._round(stage_id, 1)))
         self.assertEqual([], await self._round(stage_id, 2))

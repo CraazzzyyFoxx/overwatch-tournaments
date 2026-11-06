@@ -1,7 +1,6 @@
 """An elimination stage's bracket before it is generated: planned rounds, preview, custom template."""
 
 from dataclasses import asdict
-from types import SimpleNamespace
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +21,6 @@ from src.domain.bracket import (
     template_to_skeleton,
     validate_template,
 )
-from src.domain.stage.seeds import group_advance_counts
 from src.domain.stage.seeds import lower_bracket_item as _lower_bracket_item
 from src.domain.stage.seeds import resolve_seeds as _resolve_seeds
 from src.services.admin.stage.base import StageServiceBase
@@ -237,11 +235,9 @@ class StageBracketMixin(StageServiceBase):
     async def _bracket_seed_counts(self, session: AsyncSession, stage: models.Stage) -> tuple[int, int]:
         """How many teams start in ``stage``'s upper and lower bracket.
 
-        Wired inputs (including still-TENTATIVE ones once activation resolves them)
-        are ground truth. Before any exist — the common case for a playoff seeded
-        only after its groups finish — the counts are projected from the preceding
-        group stage instead, so the bracket can be planned, and generated, off the
-        ``advance_count`` alone.
+        Seated inputs are ground truth. Before any exist — the common case for a playoff seated only
+        when it turns ``ready`` — the counts are projected from the rows of the stage's flow input, so the
+        bracket can be planned, and generated, while the groups are still running.
         """
         sorted_items = sorted(stage.items, key=lambda item: (item.order, item.id))
         upper, lower = _bracket_seeds(sorted_items, _lower_bracket_item(stage, sorted_items))
@@ -250,25 +246,12 @@ class StageBracketMixin(StageServiceBase):
         return await self._projected_bracket_seed_counts(session, stage)
 
     async def _projected_bracket_seed_counts(self, session: AsyncSession, stage: models.Stage) -> tuple[int, int]:
-        """The upper/lower seed counts the preceding group stage will feed into
-        ``stage``, mirroring ``_auto_wire_from_groups``: each group of the nearest
-        earlier Swiss/round-robin stage sends its own ``advance_count`` (falling
-        back to the stage's), split per group by ``advance_upper_count``. Only a
-        DOUBLE_ELIMINATION stage has a lower bracket, so anywhere
-        else the split is ignored and everyone advancing is an upper seed.
-        ``(0, 0)`` when there is no such source, or nothing is configured
-        to advance."""
-        source = await self._preceding_group_stage(session, stage)
-        if source is None:
-            return 0, 0
-        items = sorted(source.items, key=lambda item: (item.order, item.id))
-        # A source stage with no groups at all is one implicit group.
-        groups = items or [SimpleNamespace(id=0, advance_count=None, advance_upper_count=None)]
-        counts = group_advance_counts(
-            groups, default_advance=source.advance_count or 0, default_upper=source.advance_upper_count
+        """The upper/lower seed counts the stage's flow input will seat: its rows, minus the lower starters (only a
+        double-elimination stage has a lower bracket). ``(0, 0)`` without rows."""
+        _, rows = await self._stage_input_rows(session, stage)
+        lower = (
+            sum((row.breakdown or {}).get("bracket") == "lower" for row in rows)
+            if stage.stage_type == enums.StageType.DOUBLE_ELIMINATION
+            else 0
         )
-        upper = sum(item_upper for _, item_upper, _ in counts)
-        lower = sum(item_lower for _, _, item_lower in counts)
-        if stage.stage_type != enums.StageType.DOUBLE_ELIMINATION:
-            upper, lower = upper + lower, 0
-        return (upper, lower) if upper + lower else (0, 0)
+        return len(rows) - lower, lower

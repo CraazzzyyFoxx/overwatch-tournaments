@@ -1,165 +1,172 @@
 import { describe, expect, it } from "vitest";
 
-import type { Tournament, TournamentStatus } from "@/types/tournament.types";
+import type { TournamentFlowNode } from "@/types/flow.types";
+import type { Tournament } from "@/types/tournament.types";
 
-import { buildTournamentSchedule, nextPhaseBoundary } from "./tournamentSchedule.model";
-
-type Row = Tournament["phase_schedule"][number];
+import {
+  buildTournamentSchedule,
+  nextPhaseBoundary,
+  phaseTitleKey
+} from "./tournamentSchedule.model";
 
 const T = (hour: number, minute = 0) =>
   `2026-08-10T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00Z`;
 
 const at = (hour: number, minute = 0) => Date.parse(T(hour, minute));
 
-function row(status: TournamentStatus, startsAt: string, endsAt: string | null = null): Row {
-  return { status, starts_at: startsAt, ends_at: endsAt };
+type Row = TournamentFlowNode["schedule"][number];
+
+function row(phase: string, startsAt: string, endsAt: string | null = null): Row {
+  return { phase, starts_at: startsAt, ends_at: endsAt } as Row;
 }
 
-function tournament(overrides: Partial<Tournament> = {}) {
+function node(
+  id: number,
+  kind: string,
+  status: string,
+  schedule: Row[],
+  name = `Node ${id}`
+): TournamentFlowNode {
+  return { id, kind, name, status, config: {}, schedule, stage_id: null } as unknown as TournamentFlowNode;
+}
+
+const registrationRows = [row("open", T(10), T(18)), row("check_in", T(19), T(19, 45))];
+
+/** Registration (10:00–18:00, check-in 19:00–19:45) and a stage that starts at 20:00. */
+function tournament(
+  statuses: { registration?: string; stage?: string } = {},
+  overrides: Partial<Pick<Tournament, "flow_nodes" | "auto_transitions_enabled">> = {}
+) {
   return {
-    status: "registration" as TournamentStatus,
-    team_formation: "balancer",
     auto_transitions_enabled: true,
-    phase_schedule: [
-      row("registration", T(10), T(18)),
-      row("check_in", T(19), T(19, 45)),
-      row("live", T(20))
+    flow_nodes: [
+      node(1, "registration", statuses.registration ?? "open", registrationRows, "Registration"),
+      node(3, "stage", statuses.stage ?? "draft", [row("start", T(20))], "Main stage")
     ],
     ...overrides
-  } as Pick<
-    Tournament,
-    "status" | "team_formation" | "phase_schedule" | "auto_transitions_enabled"
-  >;
+  } as Pick<Tournament, "flow_nodes" | "auto_transitions_enabled">;
 }
 
 describe("buildTournamentSchedule", () => {
-  it("keeps scheduled phases in lifecycle order and drops unscheduled ones", () => {
+  it("lists every scheduled phase of the nodes by planned start, and drops the unscheduled", () => {
     const { segments } = buildTournamentSchedule({
-      tournament: tournament({ phase_schedule: [row("live", T(20)), row("registration", T(10))] }),
+      tournament: tournament(
+        {},
+        {
+          flow_nodes: [
+            node(3, "stage", "draft", [row("start", T(20))]),
+            node(2, "formation", "draft", [row("start", T(19, 30))]),
+            node(1, "registration", "draft", [row("open", T(10))]),
+            node(4, "stage", "draft", [])
+          ] as Tournament["flow_nodes"]
+        }
+      ),
       now: at(9)
     });
 
-    expect(segments.map((segment) => segment.status)).toEqual(["registration", "live"]);
+    expect(segments.map((segment) => [segment.kind, segment.phase])).toEqual([
+      ["registration", "open"],
+      ["formation", "start"],
+      ["stage", "start"]
+    ]);
   });
 
-  it("puts the phase the tournament is in on the timeline even when nobody scheduled it", () => {
-    // A balancer tournament forming its teams: registration and check-in are
-    // behind it, the start ahead, and `draft` has no row of its own.
+  it("derives each phase's state from its node's status, not from the clock", () => {
+    // The clock says check-in should have started two hours ago; the node never left `open`. The status wins.
+    const { segments } = buildTournamentSchedule({ tournament: tournament(), now: at(21) });
+
+    expect(segments.map((segment) => [segment.phase, segment.state])).toEqual([
+      ["open", "current"],
+      ["check_in", "upcoming"],
+      ["start", "upcoming"]
+    ]);
+  });
+
+  it("marks a phase done once its node is past it", () => {
     const { segments } = buildTournamentSchedule({
-      tournament: tournament({ status: "draft" }),
-      now: at(19, 50)
+      tournament: tournament({ registration: "closed", stage: "live" }),
+      now: at(9)
     });
 
-    expect(segments.map((segment) => [segment.status, segment.state])).toEqual([
-      ["registration", "done"],
+    expect(segments.map((segment) => [segment.phase, segment.state])).toEqual([
+      ["open", "done"],
       ["check_in", "done"],
-      ["draft", "current"],
-      ["live", "upcoming"]
+      ["start", "current"]
     ]);
-    // No time of its own to print or count down from: the countdown belongs to
-    // the start, which is the next thing that happens.
-    const current = segments[2];
-    expect(current.startsAt).toBeNull();
-    expect(current.countdownMs).toBeNull();
-    expect(segments[3].countdownTo).toBe("start");
-
-    // A lone "now" is not a timeline: with nothing scheduled there is none.
-    expect(
-      buildTournamentSchedule({
-        tournament: tournament({ status: "draft", phase_schedule: [] }),
-        now: at(19, 50)
-      }).segments
-    ).toEqual([]);
   });
 
-  it("shows a scheduled team-formation window whatever the formation", () => {
-    const phase_schedule = [row("registration", T(10)), row("draft", T(19)), row("live", T(20))];
+  it("names a registration phase by its node only when the tournament has several", () => {
+    expect(buildTournamentSchedule({ tournament: tournament(), now: at(9) }).segments[0].nodeNamed).toBe(false);
 
-    expect(
-      buildTournamentSchedule({
-        tournament: tournament({ phase_schedule, team_formation: "balancer" }),
-        now: at(9)
-      }).segments.map((segment) => segment.status)
-    ).toEqual(["registration", "draft", "live"]);
+    const two = tournament(
+      {},
+      {
+        flow_nodes: [
+          node(1, "registration", "open", registrationRows, "Day 1"),
+          node(2, "registration", "draft", [row("open", T(12))], "Day 3")
+        ] as Tournament["flow_nodes"]
+      }
+    );
+    expect(buildTournamentSchedule({ tournament: two, now: at(9) }).segments.every((s) => s.nodeNamed)).toBe(true);
+    expect(phaseTitleKey({ kind: "registration", phase: "open", nodeNamed: false })).toBe("common.statusBadge.registration");
+    expect(phaseTitleKey({ kind: "registration", phase: "check_in", nodeNamed: true })).toBe("common.statusBadge.check_in");
+    expect(phaseTitleKey({ kind: "formation", phase: "start", nodeNamed: false })).toBe(
+      "tournamentDetail.publicPages.schedule.formation"
+    );
+    expect(phaseTitleKey({ kind: "formation", phase: "start", nodeNamed: true })).toBeNull();
+    expect(phaseTitleKey({ kind: "stage", phase: "start", nodeNamed: false })).toBeNull();
   });
 
   it("flags a current phase whose window has closed, and hands the countdown to the next", () => {
-    // Registration ran 10:00–18:00; at 18:30 the status is still registration.
+    // Registration ran 10:00–18:00; at 18:30 the node is still open.
     const { segments } = buildTournamentSchedule({ tournament: tournament(), now: at(18, 30) });
-    const [registration, checkIn] = segments;
+    const [open, checkIn] = segments;
 
-    expect(registration.state).toBe("current");
-    expect(registration.windowClosed).toBe(true);
-    expect(registration.countdownMs).toBeNull();
+    expect(open.state).toBe("current");
+    expect(open.windowClosed).toBe(true);
+    expect(open.countdownMs).toBeNull();
     expect(checkIn.countdownTo).toBe("start");
 
-    const open = buildTournamentSchedule({ tournament: tournament(), now: at(12) }).segments[0];
-    expect(open.windowClosed).toBe(false);
-    expect(open.countdownTo).toBe("close");
-  });
-
-  it("derives segment state from the tournament status, not from the clock", () => {
-    // The clock says check-in should have started two hours ago; the status says
-    // the tournament never left registration. The status wins.
-    const { segments } = buildTournamentSchedule({
-      tournament: tournament({ status: "registration" }),
-      now: at(21)
-    });
-
-    expect(segments.map((segment) => [segment.status, segment.state])).toEqual([
-      ["registration", "current"],
-      ["check_in", "upcoming"],
-      ["live", "upcoming"]
-    ]);
-  });
-
-  it("marks every segment done once the tournament is past the schedulable phases", () => {
-    for (const status of ["playoffs", "completed", "archived"] as TournamentStatus[]) {
-      const { segments } = buildTournamentSchedule({
-        tournament: tournament({ status }),
-        now: at(9)
-      });
-      expect(segments.every((segment) => segment.state === "done")).toBe(true);
-    }
+    const ongoing = buildTournamentSchedule({ tournament: tournament(), now: at(12) }).segments[0];
+    expect(ongoing.windowClosed).toBe(false);
+    expect(ongoing.countdownTo).toBe("close");
   });
 
   it("counts the current phase down to its own closing time", () => {
     const { segments } = buildTournamentSchedule({
-      tournament: tournament({ status: "check_in" }),
+      tournament: tournament({ registration: "check_in" }),
       now: at(19, 30)
     });
-    const [registration, checkIn, live] = segments;
+    const [open, checkIn, start] = segments;
 
-    expect(registration.state).toBe("done");
+    expect(open.state).toBe("done");
     expect(checkIn.state).toBe("current");
     expect(checkIn.countdownMs).toBe(15 * 60_000);
-    // Exactly one boundary is counted down, so two competing timers can never
-    // disagree about what happens next.
-    expect(live.countdownMs).toBeNull();
+    // Exactly one boundary is counted down, so two competing timers can never disagree about what happens next.
+    expect(start.countdownMs).toBeNull();
   });
 
   it("counts a current phase down to its own start when the plan has not landed yet", () => {
-    // Status moved to live before the planned kickoff — a manual advance. The
-    // phase's own start is the nearest boundary, so it wins over both the
-    // closing time and any later phase.
+    // The node moved before its planned start — a manual advance. The phase's own start is the nearest boundary.
     const { segments } = buildTournamentSchedule({
-      tournament: tournament({
-        status: "check_in",
-        phase_schedule: [row("check_in", T(19), T(19, 45)), row("live", T(20))]
-      }),
+      tournament: tournament({ registration: "check_in" }),
       now: at(18, 40)
     });
 
-    expect(segments[0]).toMatchObject({ countdownMs: 20 * 60_000, countdownTo: "start" });
-    expect(segments[1].countdownMs).toBeNull();
+    expect(segments[1]).toMatchObject({ phase: "check_in", countdownMs: 20 * 60_000, countdownTo: "start" });
+    expect(segments[2].countdownMs).toBeNull();
   });
 
   it("counts down to the next phase when the current one has no closing time", () => {
     const { segments } = buildTournamentSchedule({
-      tournament: tournament({
-        status: "registration",
-        phase_schedule: [row("registration", T(10)), row("check_in", T(19), T(19, 45))]
-      }),
+      tournament: tournament(
+        {},
+        {
+          flow_nodes: [
+            node(1, "registration", "open", [row("open", T(10)), row("check_in", T(19), T(19, 45))])
+          ] as Tournament["flow_nodes"]
+        }
+      ),
       now: at(18)
     });
 
@@ -169,7 +176,7 @@ describe("buildTournamentSchedule", () => {
 
   it("never reports a negative countdown for a plan automation has not executed", () => {
     const { segments } = buildTournamentSchedule({
-      tournament: tournament({ status: "registration", auto_transitions_enabled: false }),
+      tournament: tournament({}, { auto_transitions_enabled: false }),
       now: at(19, 30)
     });
 
@@ -178,30 +185,32 @@ describe("buildTournamentSchedule", () => {
   });
 
   it("reports automation being off so the view can label the times as a plan", () => {
-    expect(buildTournamentSchedule({ tournament: tournament(), now: at(9) }).automationOff).toBe(
-      false
-    );
+    expect(buildTournamentSchedule({ tournament: tournament(), now: at(9) }).automationOff).toBe(false);
     expect(
-      buildTournamentSchedule({
-        tournament: tournament({ auto_transitions_enabled: false }),
-        now: at(9)
-      }).automationOff
+      buildTournamentSchedule({ tournament: tournament({}, { auto_transitions_enabled: false }), now: at(9) })
+        .automationOff
     ).toBe(true);
   });
 
-  it("returns no segments when the organizer published no schedule", () => {
+  it("returns no segments when no node has a schedule", () => {
     expect(
-      buildTournamentSchedule({ tournament: tournament({ phase_schedule: [] }), now: at(9) })
-        .segments
+      buildTournamentSchedule({
+        tournament: tournament({}, { flow_nodes: [node(1, "registration", "open", [])] as Tournament["flow_nodes"] }),
+        now: at(9)
+      }).segments
     ).toEqual([]);
   });
 
   it("ignores an unparsable timestamp instead of emitting NaN timings", () => {
     const { segments } = buildTournamentSchedule({
-      tournament: tournament({
-        status: "check_in",
-        phase_schedule: [row("check_in", "not-a-date", T(19, 45))]
-      }),
+      tournament: tournament(
+        { registration: "check_in" },
+        {
+          flow_nodes: [
+            node(1, "registration", "check_in", [row("check_in", "not-a-date", T(19, 45))])
+          ] as Tournament["flow_nodes"]
+        }
+      ),
       now: at(19, 30)
     });
 
@@ -212,28 +221,37 @@ describe("buildTournamentSchedule", () => {
 describe("nextPhaseBoundary", () => {
   it("names the current phase's close while its window is open", () => {
     expect(nextPhaseBoundary({ tournament: tournament(), now: at(12) })).toEqual({
-      status: "registration",
+      kind: "registration",
+      phase: "open",
+      nodeName: "Registration",
+      nodeNamed: false,
       at: T(18),
-      kind: "close",
+      boundary: "close",
       msLeft: at(18) - at(12)
     });
   });
 
   it("falls through to the next phase's start once the window has closed", () => {
     expect(nextPhaseBoundary({ tournament: tournament(), now: at(18, 30) })).toEqual({
-      status: "check_in",
+      kind: "registration",
+      phase: "check_in",
+      nodeName: "Registration",
+      nodeNamed: false,
       at: T(19),
-      kind: "start",
+      boundary: "start",
       msLeft: at(19) - at(18, 30)
     });
   });
 
-  it("is null when nothing lies ahead — a finished tournament or an empty schedule", () => {
+  it("is null when nothing lies ahead — every phase done or no schedule", () => {
     expect(
-      nextPhaseBoundary({ tournament: tournament({ status: "completed" }), now: at(23) })
+      nextPhaseBoundary({ tournament: tournament({ registration: "closed", stage: "completed" }), now: at(23) })
     ).toBeNull();
     expect(
-      nextPhaseBoundary({ tournament: tournament({ phase_schedule: [] }), now: at(9) })
+      nextPhaseBoundary({
+        tournament: tournament({}, { flow_nodes: [] as Tournament["flow_nodes"] }),
+        now: at(9)
+      })
     ).toBeNull();
   });
 });

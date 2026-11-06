@@ -3,22 +3,25 @@ import { Encounter } from "@/types/encounter.types";
 import { DivisionGridVersion } from "@/types/workspace.types";
 import type { RosterShape } from "@/lib/roster/shape";
 import type { TournamentLink } from "@/types/stream.types";
-import type { DraftFormatSettings } from "@/types/draft.types";
 import type { RoleRef } from "@/lib/roster/role-ref";
 import type { PersonDisplay } from "@/types/user.types";
 import type { Schema } from "@/types/api";
+import type { TournamentFlowNode } from "@/types/flow.types";
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
 
-export type TournamentStatus =
-  | "announcement"
-  | "registration"
-  | "draft"
-  | "check_in"
-  | "live"
-  | "playoffs"
-  | "completed"
-  | "archived";
+/** The derived tournament status (`shared/core/flow_state.py`); `archived` is the only one an admin sets. */
+export type TournamentStatus = "announcement" | "live" | "completed" | "archived";
+
+/**
+ * What a surface calls the phase of a tournament: the status, except `registration` / `check_in` while the
+ * tournament is `live` only because a registration node is open, and `forming` while it is `live` before any stage
+ * has started (`displayStatus`, `lib/tournament/status`).
+ */
+export type TournamentDisplayStatus = TournamentStatus | "registration" | "check_in" | "forming";
+
+/** The statuses of a stage node (`NODE_TRANSITIONS.stage`). */
+export type StageNodeStatus = "draft" | "ready" | "live" | "completed";
 
 export type StageType =
   | "round_robin"
@@ -30,7 +33,7 @@ export type StageType =
 
 export type StageItemType = "group" | "bracket_upper" | "bracket_lower" | "single_bracket";
 
-export type StageItemInputType = "final" | "tentative" | "empty";
+export type StageItemInputType = "final" | "empty";
 
 export type EncounterResultStatus = "none" | "pending_confirmation" | "confirmed" | "disputed";
 
@@ -53,8 +56,8 @@ export interface StageItemInput {
   slot: number;
   input_type: StageItemInputType;
   team_id: number | null;
-  source_stage_item_id: number | null;
-  source_position: number | null;
+  /** The flow result row the seat came from; `null` for a hand-seeded team. */
+  source_result_id: number | null;
 }
 
 export interface StageItem {
@@ -63,19 +66,14 @@ export interface StageItem {
   name: string;
   type: StageItemType;
   order: number;
-  /** Per-group override of `Stage.advance_count`; `null` inherits the stage. */
-  advance_count: number | null;
-  /**
-   * How many of this group's advancing teams start in the upper bracket;
-   * `null` inherits the stage. `0` is meaningful: the whole group starts in
-   * the lower bracket.
-   */
-  advance_upper_count: number | null;
   inputs: StageItemInput[];
 }
 
-/** How a bracket stage orders its seeds; `slot` keeps the manual/standings order. */
-export type SeedRanking = "slot" | "avg_sr" | "total_sr" | "random";
+/**
+ * How a stage orders its seeds: `slot` / `source` keep the manual / input order, `cross` and `snake` regroup the input
+ * by the group each row came from.
+ */
+export type SeedRanking = "slot" | "source" | "avg_sr" | "total_sr" | "random" | "cross" | "snake";
 
 /** How an `individual_swiss` round forms its lobbies. */
 export type StagePairingMode = "score" | "balance";
@@ -157,16 +155,12 @@ export interface StageSummary extends StageRegulation {
   description: string | null;
   stage_type: StageType;
   max_rounds: number;
-  advance_count: number | null;
-  /**
-   * How many of each group's advancing teams start in the upper bracket;
-   * `null` sends all of them up. The rest are seeded into `bracket_lower`.
-   */
-  advance_upper_count: number | null;
   order: number;
-  is_active: boolean;
+  /** The stage's flow node: `POST /admin/flow-nodes/{node_id}/transition` moves it. */
+  node_id: number;
+  /** The node's status is the stage's lifecycle (`draft → ready → live → completed`). */
+  status: StageNodeStatus;
   is_published: boolean;
-  is_completed: boolean;
   /** An organizer-drawn bracket template replaces the generated shape. */
   has_custom_bracket: boolean;
   challonge_id: number | null;
@@ -187,19 +181,6 @@ export interface Stage extends StageSummary {
 }
 
 // ─── Tournament ─────────────────────────────────────────────────────────────
-
-/**
- * How a tournament forms its teams; each value has a `common.*` label.
- * `solo` is nominal: players register one by one for an FFA tournament and no
- * team is formed, so it has no flow of its own.
- */
-export type TeamFormation = "balancer" | "draft" | "registration" | "solo";
-
-interface TournamentPhaseSchedule {
-  status: TournamentStatus;
-  starts_at: string;
-  ends_at: string | null;
-}
 
 export interface Tournament {
   id: number;
@@ -222,19 +203,10 @@ export interface Tournament {
   rules: string | null;
   challonge_id: number | null;
   challonge_slug: string | null;
-  is_league: boolean;
   is_finished: boolean;
   is_hidden: boolean;
-  /** Free string on the backend; the known values are `TeamFormation`. */
-  team_formation: string;
   status: TournamentStatus;
   auto_transitions_enabled: boolean;
-  /**
-   * Admits latecomers past the REGISTRATION window's `ends_at`, so an organizer
-   * can keep the advertised closing date on the page instead of erasing it by
-   * pushing `ends_at` out. Lifts `ends_at` ONLY — see `isRegistrationOpen`.
-   */
-  allow_late_registration: boolean;
   /**
    * Posts registration/check-in/match-time announcements to the workspace's
    * Discord notification channel.
@@ -255,7 +227,6 @@ export interface Tournament {
    * the rules require). Shifts the timestamps of their past broadcasts.
    */
   pov_stream_delay_s: number;
-  phase_schedule: TournamentPhaseSchedule[];
 
   stages: StageSummary[];
   participants_count: number | null;
@@ -266,8 +237,6 @@ export interface Tournament {
   discipline: string;
   /** Game identity provider resolved by the tournament's discipline. */
   identity_provider: string;
-  /** Draft format rule the wizard seeds every session with; `null` = snake. */
-  draft_format_json: DraftFormatSettings | null;
   /** Resolved shape. `null` when the read did not opt into the entity. */
   roster_shape: RosterShape | null;
   /**
@@ -282,6 +251,11 @@ export interface Tournament {
    * responses still sitting in a client cache from before this field existed.
    */
   links?: TournamentLink[];
+  /**
+   * The registration, formation, stage and leaderboard nodes with their status and schedule. Opt-in (`flow_nodes`),
+   * absent on a read that did not ask; read through `nodesOfKind` (`lib/tournament/flow-nodes`).
+   */
+  flow_nodes?: TournamentFlowNode[];
   /** Wide banner for the tournament hero. Uploaded separately from the
    * settings PATCH (see `adminService.uploadTournamentImage`). */
   cover_image_url: string | null;
@@ -300,11 +274,11 @@ export type TournamentImageSlot = "cover" | "logo";
  */
 export interface TournamentFacets {
   total: number;
-  /** `live` + `playoffs` combined: "matches happening right now". */
+  /** Tournaments with a stage node `live`: "matches happening right now". */
   live: number;
+  /** Tournaments with a registration node `open` or in `check_in`: the "Registration" chip. */
+  registration_open: number;
   by_status: Record<TournamentStatus, number>;
-  league: number;
-  standard: number;
 }
 
 // ─── Shared pick-ban vocabulary ─────────────────────────────────────────────

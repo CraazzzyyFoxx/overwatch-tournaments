@@ -50,7 +50,6 @@ class _ParticipationFixture(_scrim._Fixture):
             name=f"Foreign {tournament_id}",
             slug=f"foreign-{tournament_id}",
             is_hidden=False,
-            is_league=False,
             start_date=datetime(2026, 1, 1, tzinfo=UTC),
         )
 

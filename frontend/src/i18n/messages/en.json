@@ -57,12 +57,44 @@
     "players": "players",
     "inTeams": "in teams",
     "done": "done",
-    "format": "Format",
-    "teamFormation": "Team Formation",
     "stages": "Stages",
     "teams": "Teams",
     "participants": "Participants",
     "ranking": "Player standings",
+    "table": "Table",
+    "flow": {
+      "counted": "counted",
+      "notCounted": "not counted",
+      "kind": {
+        "registration": "Registration",
+        "formation": "Formation",
+        "stage": "Stage",
+        "filter": "Filter",
+        "merge": "Merge",
+        "split": "Split",
+        "aggregate": "Aggregate",
+        "leaderboard": "Leaderboard"
+      },
+      "status": {
+        "draft": "Draft",
+        "open": "Open",
+        "check_in": "Check-in",
+        "closed": "Closed",
+        "forming": "Forming",
+        "completed": "Completed",
+        "ready": "Ready",
+        "live": "Live",
+        "pending": "Pending",
+        "tentative": "Tentative",
+        "final": "Final"
+      },
+      "unit": {
+        "players": "Players",
+        "teams": "Teams"
+      },
+      "port": "{port} · {unit}",
+      "serverChanged": "Changed on server"
+    },
     "matches": "Matches",
     "heroes": "Heroes",
     "characters": "Characters",
@@ -106,7 +138,6 @@
     "groups": "Groups",
     "playoff": "Playoff",
     "playoffStandings": "Playoff standings",
-    "topAdvance": "TOP {count} ADVANCE",
     "buchholz": "Buchholz",
     "headToHead": "Head-to-Head",
     "scoreDiff": "Score differential",
@@ -282,16 +313,58 @@
     "roleVerificationFailed": "Failed to verify role",
     "tournamentNotFound": "Tournament not found.",
     "tournaments": "Tournaments",
-    "league": "League",
     "statusBadge": {
       "announcement": "Announced",
-      "draft": "Team formation",
       "registration": "Registration",
       "check_in": "Check-in",
+      "forming": "Starting soon",
       "live": "Live",
-      "playoffs": "Playoffs",
       "completed": "Completed",
       "archived": "Archived"
+    },
+    "flowNode": {
+      "kind": {
+        "registration": "Registration",
+        "formation": "Teams"
+      },
+      "open": "Open",
+      "checkIn": "Start check-in",
+      "close": "Close",
+      "reopen": "Reopen",
+      "startForming": "Start forming",
+      "backToDraft": "Back to draft",
+      "complete": "Complete",
+      "error": "Could not move the node",
+      "status": {
+        "draft": "Draft",
+        "open": "Open",
+        "check_in": "Check-in",
+        "closed": "Closed",
+        "forming": "Forming",
+        "completed": "Completed"
+      },
+      "confirm": {
+        "open": {
+          "title": "Open {name}?",
+          "description": "Players can sign up right away, and the community is told that registration is open."
+        },
+        "checkIn": {
+          "title": "Start check-in for {name}?",
+          "description": "Registered players are asked to confirm they are playing, and check-in is announced to the community."
+        },
+        "close": {
+          "title": "Close {name}?",
+          "description": "Players can no longer sign up or check in. Teams can be formed once registration is closed."
+        },
+        "reopen": {
+          "title": "Reopen {name}?",
+          "description": "The step returns to its previous status and its result stops being final. Reopening registration is announced to players."
+        },
+        "complete": {
+          "title": "Complete {name}?",
+          "description": "Team formation is finished and the teams are frozen. Balancing and exports stop until it is reopened."
+        }
+      }
     },
     "roles": {
       "tank": "Tank",
@@ -397,8 +470,12 @@
       "add": "Add to favorites",
       "remove": "Remove from favorites"
     },
-    "registration": "Team registration",
-    "solo": "Solo registration",
+    "formationMode": {
+      "balancer": "Balancer",
+      "draft": "Draft",
+      "registered": "Team registration",
+      "manual": "Manual"
+    },
     "connection": {
       "idle": "Not connected",
       "connecting": "Connecting",
@@ -535,7 +612,8 @@
     "button": {
       "closed": "Registration closed",
       "loginToRegister": "Login to register",
-      "register": "Register"
+      "register": "Register",
+      "registerFor": "Register for {node}"
     },
     "myCard": {
       "title": "Your Registration",
@@ -1368,6 +1446,9 @@
     }
   },
   "admin": {
+    "flowNodeSelect": {
+      "label": "{kind, select, registration {Registration} other {Formation}}"
+    },
     "saveBar": {
       "unsavedChanges": "Unsaved changes",
       "save": "Save changes",
@@ -2129,7 +2210,6 @@
       }
     },
     "hero": {
-      "formatLeague": "League",
       "formatCup": "Cup"
     },
     "community": {
@@ -2291,9 +2371,7 @@
       "teamsBalancedLabel": "Teams balanced"
     },
     "filters": {
-      "standard": "Standard",
       "searchPlaceholder": "Search tournaments",
-      "typeLabel": "Type",
       "sort": {
         "newest": "Newest first",
         "oldest": "Oldest first",
@@ -2328,8 +2406,7 @@
     },
     "stage": {
       "final": "Final",
-      "signups": "Sign-ups",
-      "setup": "Setup"
+      "signups": "Sign-ups"
     },
     "spotlight": {
       "label": "Tournament spotlight",
@@ -2920,8 +2997,6 @@
         "is_captain": "Captained the team",
         "is_newcomer": "First tournament for the player",
         "is_newcomer_count": "Tournaments entered as a newcomer: {amount}",
-        "tournament_type_league": "League tournament",
-        "tournament_type_regular": "Regular tournament, not a league",
         "tournament_type_any": "Tournament of any type",
         "tournament_count": "Tournaments entered: {amount}",
         "draft_pick": "Overall pick number in the live draft: {amount}",
@@ -2963,8 +3038,6 @@
         "lostInRound": "lost in round {amount}",
         "groupsIncluded": "group stage standings included",
         "groupsOnly": "group stage only",
-        "leaguesOnly": "league tournaments only",
-        "leaguesIncluded": "leagues included",
         "startedAfter": "started after {date}",
         "startedBefore": "started before {date}",
         "autopick": "picked automatically",
@@ -3137,13 +3210,54 @@
         "title": "How it's played",
         "rounds": "{count, plural, one {# round} other {# rounds}}",
         "final": "Final Bo{n}",
-        "advance": "Top {count} advance",
         "qualify": "Through at {count, plural, one {# win} other {# wins}}",
         "eliminate": "Out at {count, plural, one {# loss} other {# losses}}",
         "grandFinalReset": "Grand final with bracket reset",
         "grandFinalNoReset": "Grand final without bracket reset",
         "team": "Team",
         "learnMore": "How a tournament works",
+        "days": "{count, plural, one {# match day} other {# match days}}",
+        "stepDone": "Done",
+        "intro": {
+          "solo": "Solo sign-up",
+          "team": "Team sign-up"
+        },
+        "teams": {
+          "line": "Teams: {how}",
+          "mode": {
+            "balancer": "balancer",
+            "draft": "captain draft",
+            "registered": "registered teams",
+            "manual": "set by the organizers"
+          },
+          "round": "{mode}, re-formed every round",
+          "day": "{mode}, re-formed every day",
+          "byScore": "opponents by points"
+        },
+        "league": {
+          "mode": {
+            "sumAll": "every day counts",
+            "sumLastN": "last {n} of {total} days count",
+            "sumBestN": "best {n} of {total} days count",
+            "average": "average of all days counts"
+          },
+          "score": {
+            "stagePoints": "points = stage points",
+            "placementTable": "points by place in each day",
+            "formula": "points = {formula}"
+          }
+        },
+        "transition": {
+          "top": "Top {n} advance",
+          "perItemTop": "Top {n} per group advance",
+          "perItemUpper": "Top {n} per group advance: top {upper} to the upper bracket, the rest to the lower",
+          "upper": "Top {n} advance: the best {upper} to the upper bracket, the rest to the lower",
+          "range": "Places {from}–{to} advance",
+          "qualified": "Qualified players advance",
+          "eliminated": "Eliminated players move on",
+          "manual": "The organizers pick who advances",
+          "split": "Split into {names}"
+        },
         "types": {
           "round_robin": {
             "name": "Round-robin",
@@ -3340,8 +3454,7 @@
         "form": "Form",
         "formLabel": "Last three results",
         "maps": "Maps",
-        "mapsLabel": "Map difference",
-        "advance": "{count, plural, one {The group's top team goes through} other {The group's top # go through}}"
+        "mapsLabel": "Map difference"
       }
     },
     "mapPool": {
@@ -3486,6 +3599,7 @@
       "teamMatches": "Team matches",
       "matchedPlayers": "Matched:"
     },
+    "bracketBranches": "Branches",
     "bracketRegion": "Bracket — scroll horizontally to see all rounds",
     "stageTabsLabel": "Tournament stage",
     "sortTeams": "Sort teams",
@@ -3526,6 +3640,43 @@
         "title": "No standings yet",
         "description": "The table appears once the first round is played."
       }
+    },
+    "table": {
+      "title": "Table",
+      "empty": "The table appears once the first results are in.",
+      "livePreview": "Live preview",
+      "place": "#",
+      "participant": "Participant",
+      "total": "Total",
+      "formula": {
+        "mode": {
+          "sumAll": "Every result counts.",
+          "sumLastN": "Only the last {n} results count.",
+          "sumBestN": "Only the best {n} results count.",
+          "average": "The average of the results played counts."
+        },
+        "score": {
+          "stagePoints": "A result scores the stage points.",
+          "placementTable": "A result scores by place: {table}.",
+          "formula": "A result scores by the formula: {formula}."
+        },
+        "variables": {
+          "place": "place",
+          "participants": "participants",
+          "points": "stage points",
+          "wins": "wins",
+          "draws": "draws",
+          "losses": "losses",
+          "map_diff": "map difference",
+          "buchholz": "Buchholz",
+          "ffa_score": "FFA score"
+        },
+        "ties": "Ties go to the most best places, then to the place in the latest result."
+      }
+    },
+    "registerCards": {
+      "title": "Registration",
+      "registerFor": "Register for {name}"
     },
     "individualRounds": {
       "roundsLabel": "Rounds",
@@ -3634,7 +3785,8 @@
         "title": "Phase schedule",
         "startsRelative": "Starts {relative}",
         "closesRelative": "Closes {relative}",
-        "closed": "Closed"
+        "closed": "Closed",
+        "formation": "Team formation"
       },
       "standings": {
         "tableLabel": "Tournament standings. Scroll horizontally for all ranking metrics."
@@ -4322,18 +4474,12 @@
     "colRecord": "Record",
     "colMaps": "Maps",
     "colMapDiff": "Map Δ",
-    "advancing": "Adv",
-    "eliminated": "Out",
     "swissQualified": "Qualified",
     "swissEliminated": "Eliminated",
     "priority": "Priority {n}",
     "buchholzMedianFull": "median / full",
     "tieCluster": "Equal on every tiebreaker. Order assigned, not earned.",
-    "pinnedPlace": "Place set by the organizer",
-    "tieStatus": "Tie",
-    "tieDecidesAdvance": "Tied on every tiebreaker. The assigned order, not the results, decides whether this team advances.",
-    "upperBracketCut": "Top {count} → upper bracket",
-    "tieDecidesUpper": "Tied on every tiebreaker. The assigned order, not the results, decides whether this team starts in the upper bracket."
+    "pinnedPlace": "Place set by the organizer"
   },
   "bracket": {
     "round": "Round {n}",
@@ -4428,7 +4574,7 @@
       "eyebrowRoot": "Tournaments",
       "eyebrowCurrent": "Encounters",
       "title": "Encounters",
-      "lede": "Every encounter of every tournament and league: results, closeness and game logs.",
+      "lede": "Every encounter of every tournament: results, closeness and game logs.",
       "completed": "Completed",
       "recent": "+{count} in 7 days",
       "withLogs": "With logs",
@@ -6155,8 +6301,6 @@
       "title": "Tournament history",
       "clickToExpand": "click to expand",
       "mapNumber": "Map {n}",
-      "leagueBadge": "League",
-      "divisionsCount": "{count, plural, one {# division} other {# divisions}}",
       "bestPlacement": "· best #{n}",
       "teamName": "Team {name}",
       "roster": {
@@ -6182,8 +6326,7 @@
         "filter": {
           "all": "All",
           "titles": "Titles",
-          "podium": "Podium",
-          "leagues": "Leagues"
+          "podium": "Podium"
         }
       },
       "dossier": {
@@ -6191,7 +6334,6 @@
         "run": "The run",
         "noRun": "No matches recorded for this event.",
         "mapResults": "Maps: {won}W {lost}L",
-        "divisions": "Divisions",
         "summary": {
           "placement": "Placement",
           "record": "Record",
@@ -6652,18 +6794,13 @@
     "teamCountMax": "Max",
     "teamCountMaxHint": "The pool supports up to {count, plural, one {# team} other {# teams}}.",
     "teamCountLocked": "The session has already been created, so the team count is locked. Cancel it to change the count.",
-    "changeFormatInSettings": "Change in tournament settings",
+    "changeFormatInFlow": "Change in the Flow tab",
     "formatLockedByDraft": "A draft of this tournament is in progress, so its format is locked. Finish or cancel the draft to change it.",
     "rounds": "Rounds",
     "roundsDerived": "{rounds, plural, one {# pick per team} other {# picks per team}}. The captain fills the first slot.",
     "pickTime": "Time per pick",
     "customPickTime": "Custom time per pick in seconds",
     "format": "Draft format",
-    "groups": {
-      "format": {
-        "title": "Pick order"
-      }
-    },
     "formats": {
       "snake": {
         "title": "Snake",
@@ -7594,6 +7731,20 @@
     }
   },
   "errors": {
+    "flow": {
+      "invalid_node_transition": "This move is not available from the current status.",
+      "input_not_final": "A step this one depends on is not finished yet. For example, close registration before forming teams.",
+      "downstream_started": "A later step has already started, so this one can no longer be reopened.",
+      "node_frozen": "A later step has already started, so this one can no longer be edited.",
+      "flow_invalid": "The tournament flow is not valid. Check how its steps are connected.",
+      "flow_node_not_found": "This step no longer exists. Refresh the page.",
+      "formation_not_forming": "Team formation has not been started. Press Start forming at the top of the page, then try again.",
+      "formation_has_no_teams": "There are no teams yet, so team formation cannot be completed. Export teams first.",
+      "formation_wrong_mode": "This team formation works in another mode, so this export is not available here.",
+      "qualification_not_locked": "Lock the qualification before completing this stage.",
+      "boundary_tie": "Players are tied at the qualification cut-off. Resolve the tie before continuing.",
+      "node_has_dependents": "This step still has data attached to it (teams, registrations or sheet feeds). Remove or move that data first, then delete the step."
+    },
     "boundary": {
       "title": "Something went wrong",
       "description": "This section failed to load. Try again, or head back to the dashboard.",
@@ -7828,6 +7979,16 @@
         "maxParticipants": "Announced capacity",
         "maxParticipantsHint": "Shown next to the participant count as \"42 / 100\". Informational only. It is not a limit, and registrations past it are still accepted. Leave empty to show nothing."
       },
+      "capacity": {
+        "title": "Capacity"
+      },
+      "intake": {
+        "title": "Entry type",
+        "label": "Who registers",
+        "hint": "Players one by one, or whole teams their captains register. Team entries feed only a formation in Registered teams mode.",
+        "solo": "Players one by one",
+        "team": "Teams (captains register)"
+      },
       "questionnaire": {
         "title": "Questionnaire"
       },
@@ -7873,10 +8034,13 @@
     "status": {
       "title": "Registration status",
       "acceptLabel": "Accepting registrations",
-      "scheduleHint": "Set by the Registration window on Schedule.",
+      "scheduleHint": "Set by this registration node's status and sign-up window.",
       "stateOpen": "Open",
       "autoApproveLabel": "Auto-approve",
-      "autoApproveHint": "Skip manual review. Registrations are approved instantly and players are added to the pool automatically."
+      "autoApproveHint": "Skip manual review. Registrations are approved instantly and players are added to the pool automatically.",
+      "late": "Allow late registration",
+      "lateHint": "Keeps sign-ups open past the sign-up window's end time, so the advertised closing date stays on the page. Does not open registration that never started, and never reopens a finished tournament.",
+      "noEnd": "No end time is set on this node's sign-up window, so registration is already open-ended and this changes nothing."
     }
   },
   "subscriptionRequirement": {
@@ -8334,10 +8498,10 @@
       "registration": {
         "approved": "Your registration for <b>{tournament_name}</b> was approved",
         "rejected": "Your registration for <b>{tournament_name}</b> was rejected",
-        "opened": "Registration for <b>{tournament_name}</b> is open{closes_at, select, none {} other { until {closes_at}}}"
+        "opened": "Registration for <b>{tournament_name}</b>{node_name, select, none {} other { ({node_name})}} is open{closes_at, select, none {} other { until {closes_at}}}"
       },
       "check_in": {
-        "opened": "Check-in for <b>{tournament_name}</b> is open{closes_at, select, none {} other { until {closes_at}}} — confirm you are playing"
+        "opened": "Check-in for <b>{tournament_name}</b>{node_name, select, none {} other { ({node_name})}} is open{closes_at, select, none {} other { until {closes_at}}} — confirm you are playing"
       },
       "encounter": {
         "report_disputed": "{map_index, plural, =0 {A report in your match is disputed} other {The report for map # of your match is disputed}}",
@@ -8888,7 +9052,6 @@
       "roll": "Roll",
       "lobbyCodeLabel": "Lobby code",
       "lobbyCodePlaceholder": "Paste the code from the game",
-      "lobbyCodeSave": "Save",
       "lobbyCodeCopy": "Copy lobby code",
       "lobbyCodeCopied": "Lobby code copied",
       "lobbyCodeCopyFailed": "Could not reach the clipboard"
@@ -9471,12 +9634,8 @@
     "colGame": "G{position}",
     "gameLabel": "Game {position}",
     "tableLabel": "{lobby} standings",
-    "advancing": "Adv",
-    "eliminated": "Out",
-    "tieStatus": "Tie",
     "tieCluster": "Equal on every tiebreaker. Order assigned, not earned.",
     "pinnedPlace": "Place set by the organizer",
-    "tieDecidesAdvance": "Tied on every tiebreaker. The assigned order, not the lobby results, decides whether this team advances.",
     "gamesPerLobby": "Games per lobby",
     "gamesProgress": "{played} of {total, plural, one {# game} other {# games}} played",
     "legendFormula": "Points = <code>{formula}</code>",
@@ -9831,7 +9990,6 @@
       "label": "Trusted community",
       "title": "Trusted community — verified by the platform team"
     },
-    "league": "League",
     "entry": {
       "solo": "Solo entry",
       "team": "Team entry"
@@ -9886,7 +10044,6 @@
       "cancelTeam": "Cancel team assignment edit",
       "removeSlot": "Remove slot {seed} of {name}",
       "teamForSlot": "Team for slot {seed} of {name}",
-      "overrideTeam": "Override team in slot {seed} of {name}",
       "changeTeam": "Change team in slot {seed} of {name}",
       "teamToAdd": "Team to add to {name}",
       "empty": "No teams assigned yet. Pick a team below to fill the first slot.",
@@ -9900,8 +10057,7 @@
       "adding": "Adding…",
       "group": "Group {number}",
       "bracket": "Bracket",
-      "slotCount": "{count, plural, one {# slot} other {# slots}}",
-      "tentative": "Tentative"
+      "slotCount": "{count, plural, one {# slot} other {# slots}}"
     },
     "ffa": {
       "preset": "Scoring preset",
@@ -9949,26 +10105,25 @@
       "revertError": "Could not revert this stage to draft",
       "generateError": "Could not generate the bracket",
       "applyBestOfError": "Could not apply best-of to existing matches",
-      "autoWireError": "Could not auto-wire this stage from groups",
-      "activateError": "Could not activate and generate this stage",
+      "transitionError": "Could not move this stage",
       "seedError": "Could not seed teams into this stage",
       "deleteItemError": "Could not delete this structure item",
       "removeSlotError": "Could not remove this team slot",
       "reverted": "Stage reverted to draft",
       "updatedBestOf": "Updated best-of on {count, plural, one {# match} other {# matches}}",
-      "autoWired": "Auto-wired playoff seeds from the group stage",
       "published": "Published to captains",
       "notVisible": "Not visible to captains",
       "generate": "Generate bracket",
       "regenerate": "Regenerate",
-      "generateTitle": "Generates a preview. Captains can report once the stage is activated.",
+      "generateTitle": "Generates a preview. Captains can report once the stage is started.",
       "actions": "Actions for {name}",
-      "activate": "Activate stage",
-      "activateGenerate": "Activate & generate",
-      "autoWire": "Auto-wire from groups",
+      "markReady": "Mark ready",
+      "start": "Start",
+      "complete": "Complete",
+      "reopen": "Reopen",
       "seed": "Seed by SR",
       "merge": "Merge groups",
-      "revert": "Revert to draft",
+      "revert": "Back to draft",
       "delete": "Delete stage",
       "sections": "{name} sections",
       "unsaved": "Unsaved changes:",
@@ -9983,8 +10138,6 @@
       "reseedConfirm": "Seed teams",
       "mergeTitle": "Merge group stages",
       "mergeConfirm": "Merge stages",
-      "forceActivateTitle": "Activate before upstream stages finish",
-      "forceActivateConfirm": "Activate anyway",
       "revertTitle": "Revert stage to draft",
       "revertConfirm": "Revert to draft",
       "regenerateTitle": "Generate bracket again",
@@ -9994,7 +10147,6 @@
       "removeSlotDescription": "Remove {label}? The slot is gone, not emptied: the seeds below it move up, and matches already naming the team keep it.",
       "reseedDescription": "Distribute {teams} teams across {groups} group(s) of \"{name}\" with a snake SR draft. Every manual assignment in this stage is cleared first.",
       "mergeDescription": "Move the groups, matches and standings of {count} stage(s) into \"{name}\". The merged stages leave the timeline.",
-      "forceActivateDescription": "Upstream stages still have pending encounters. Activating \"{name}\" now freezes its seeds from standings that can still change.",
       "revertDescription": "Revert \"{name}\" back to draft. This only works while none of its matches has been played or reported.",
       "regenerateDescription": "\"{name}\" already has generated matches. Existing matches are left untouched: for a grouped stage, only groups with no matches yet get a new bracket; for a bracket that is still all TBD, the seeded teams are written into it; otherwise this is blocked until you delete its existing matches.",
       "seedCaptain": "Seed by captain rank",
@@ -10006,9 +10158,7 @@
       "phase": "Phase",
       "format": "Format",
       "swissRounds": "Swiss rounds",
-      "teamsAdvancing": "Teams advancing",
       "grandFinal": "Grand final",
-      "toUpperBracket": "To upper bracket",
       "bracketSeeds": "Bracket seeds",
       "standingsPreset": "Standings preset",
       "tiebreakerOrder": "Tiebreaker order",
@@ -10040,11 +10190,7 @@
       "teamsSource": "{count, plural, one {# team} other {# teams}}, {source}",
       "sourceSeeded": "from the teams already seeded into this stage",
       "sourceSlots": "from the empty slots wired into this stage",
-      "sourceProjected": "projected from the preceding group stage's advancing count",
-      "sourceUnknown": "no seeds, slots or upstream group stage yet, so depth falls back to Swiss max rounds",
-      "upstream": "Upstream seeds: {upper} upper · {lower} lower",
-      "advance": "{count, plural, one {# group} other {# groups}}. Top {counts} of each advance ({total} teams).",
-      "autoAdvance": "{count, plural, one {# group} other {# groups}}. The advancing count comes from the bracket wiring.",
+      "sourceUnknown": "no seeds or slots yet, so depth falls back to Swiss max rounds",
       "emptyBracket": "Nothing to draw yet. Wire at least two teams, or set the preceding group stage's advancing count.",
       "emptyFfa": "An FFA stage's lobbies are drawn once they are generated.",
       "emptyGroup": "A group stage's matches are drawn once they are generated."
@@ -10126,27 +10272,9 @@
       "grandFinal": "Grand final",
       "noReset": "No reset",
       "withReset": "With reset",
-      "wireError": "Could not wire this stage from groups",
-      "wireSuccess": "Wired playoff seeds from the selected stage",
-      "advanceError": "Could not change how many teams advance",
-      "upperError": "Could not change this group's upper-bracket share",
-      "wireFrom": "Wire seeds from",
-      "groupStage": "Group stage",
-      "wire": "Wire",
-      "wireHelp": "Which group stage feeds this bracket. Required when two divisions run in parallel.",
       "bracketSeeds": "Bracket seeds",
-      "seedHelp": "Who is seed 1 in the generated bracket. Slot order keeps standings wiring.",
-      "advanceLabel": "Teams advancing to playoff (per group)",
-      "advancePlaceholder": "Auto (derive from bracket)",
-      "advanceHelp": "Top N from each group advance. Leave empty to auto-derive from the bracket wiring.",
-      "advanceUpperLabel": "Of them to upper bracket (per group)",
-      "all": "All",
-      "advanceUpperHelp": "The rest are seeded straight into the playoff's Lower bracket. Empty sends every advancing team to the upper bracket. Applies to a double-elimination playoff.",
-      "advancePerGroup": "Advance count per group",
-      "upper": "upper",
-      "seedSplit": "{name}: {upper} upper, {lower} lower",
-      "overrideHelp": "Overrides the stage's number for one group; set it when groups are uneven. Empty inherits.",
-      "fillHelp": "Fill the slots with Seed by SR or Auto-wire from groups in the stage actions menu, or one team at a time in Items.",
+      "seedHelp": "Who is seed 1 in the generated bracket. Slot order keeps the seats as seeded; the others order the stage's input.",
+      "fillHelp": "The stage seats its flow input when it turns ready; fill the slots yourself with Seed by SR in the stage actions menu, or one team at a time in Items.",
       "standingsPreset": "Standings preset",
       "byePoints": "Swiss bye points",
       "swissHelp": "Stop pairing a team once its result is decided. Qualified and eliminated teams keep their places in the standings.",
@@ -10162,7 +10290,6 @@
       "eliminateBestOfHelp": "A match where a team is one loss from elimination. When both apply, the longer series is played.",
       "regularBestOf": "Regular (default Bo{bo})",
       "swissRoundsShort": "Not every team can reach a verdict: the stage's round cap ({rounds}) is below the {needed} rounds it can take.",
-      "swissHalfMismatch": "With equal thresholds exactly half of a group qualifies, but {group} advances {advance} of {size}.",
       "winOverride": "Win points",
       "drawOverride": "Draw points",
       "lossOverride": "Loss points",
@@ -10210,7 +10337,6 @@
       "cascadeBracketPlace": "Its place in the generated bracket",
       "cascadeManualAssignments": "Manual team assignments in this stage",
       "cascadeStage": "Stage \"{name}\"",
-      "inherit": "Inherit ({value})",
       "statuses": {
         "active": "Active",
         "preview": "Preview"
@@ -10233,9 +10359,12 @@
       },
       "seedRanking": {
         "slot": "Slot order (manual / standings)",
+        "source": "Input order",
         "avg_sr": "Highest team avg SR first",
         "total_sr": "Highest team total SR first",
-        "random": "Random (stable per stage)"
+        "random": "Random (stable per stage)",
+        "cross": "Cross groups (A1–B2)",
+        "snake": "Snake groups (A1, B1, A2, B2)"
       },
       "rankingPresets": {
         "default": "System default",
@@ -10249,8 +10378,7 @@
         "battle_royale": "Battle royale"
       },
       "divisionFallback": "Division {number}",
-      "emptySlot": "Empty slot",
-      "winnerOf": "Winner of {groupName} #{position}"
+      "emptySlot": "Empty slot"
     },
     "bestOfSections": {
       "upper": "Upper bracket",
@@ -10287,6 +10415,8 @@
       "empty": "The table appears once the first round is generated.",
       "place": "Place",
       "player": "Player",
+      "role": "Role",
+      "search": "Search players",
       "points": "Points",
       "record": "W–D–L",
       "mapDiff": "Map diff",
@@ -10314,13 +10444,13 @@
         "teams": "Teams",
         "bracket": "Bracket",
         "matches": "Matches",
-        "settings": "Settings"
+        "settings": "Settings",
+        "flow": "Flow"
       },
       "notFound": "Tournament not found",
       "notFoundDescription": "This tournament does not exist or was deleted.",
       "unauthorized": "Unauthorized",
       "unauthorizedDescription": "You do not have permission to access this tournament workspace.",
-      "league": "League",
       "teamsMetric": "{count, plural, one {# team} other {# teams}}",
       "encountersMetric": "{count, plural, one {# encounter} other {# encounters}}",
       "sections": "Tournament sections",
@@ -10349,18 +10479,17 @@
         "skipped": "Skipped",
         "noAccess": "No access"
       },
-      "title": "Lifecycle checklist",
-      "offTrack": "Off track: {status}"
+      "title": "Lifecycle checklist"
     },
     "hubActions": {
-      "unfinished": "Tournament marked as not finished",
-      "finished": "Tournament marked as finished",
-      "markNotFinished": "Mark not finished",
-      "markFinished": "Mark finished",
-      "finishTitle": "Mark the tournament finished?",
-      "unfinishTitle": "Mark the tournament not finished?",
-      "finishDescription": "Sets the status to {status} and counts its results in player profiles and statistics.",
-      "unfinishDescription": "Sets the status back to {status} and removes its results from player profiles and statistics."
+      "archived": "Tournament archived",
+      "unarchived": "Tournament returned to completed",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "archiveTitle": "Archive the tournament?",
+      "unarchiveTitle": "Unarchive the tournament?",
+      "archiveDescription": "Archiving keeps the results and hides nothing from players; it only marks the tournament as closed for good.",
+      "unarchiveDescription": "The tournament goes back to completed."
     },
     "preview": {
       "added": "Added to preview allowlist",
@@ -10381,7 +10510,6 @@
         "scoring": "Results",
         "schedule": "Schedule",
         "roster": "Roster shape",
-        "draft": "Draft format",
         "registration": "Registration",
         "admission": "Admission",
         "preGame": "Pre-game phase",
@@ -10589,18 +10717,6 @@
       "participantsSummary": "{participants, plural, one {# participant} other {# participants}} · <warn>{unmapped} unmapped</warn>",
       "rowUnit": "teams"
     },
-    "status": {
-      "setTo": "Set status to {status}?",
-      "change": "Change status?",
-      "bypass": "{current} does not normally lead to {next}. Automatic phase transitions will be turned off.",
-      "manual": "Automatic phase transitions will be turned off.",
-      "set": "Set {status}",
-      "setStatus": "Set status",
-      "menu": "Change status",
-      "advance": "Move to {status}",
-      "allowedGroup": "Allowed",
-      "forcedGroup": "Forced"
-    },
     "matches": {
       "unauthorized": "Unauthorized",
       "unauthorizedDescription": "You do not have permission to read matches in this tournament.",
@@ -10636,12 +10752,6 @@
       "slugHint": "Used in the public tournament URL. Changing it keeps the previous link working via a redirect.",
       "descriptionLabel": "Description",
       "descriptionPlaceholder": "Optional tournament description…",
-      "formation": "Team formation",
-      "formationPlaceholder": "Select method",
-      "balancer": "Auto-balance (Balancer)",
-      "liveDraft": "Captain draft",
-      "teamRegistration": "Team registration",
-      "soloRegistration": "Solo registration",
       "divisionGrid": "Division grid version",
       "loadingDivisionGrids": "Loading division grids…",
       "selectVersion": "Select version",
@@ -10669,7 +10779,7 @@
       "dates": "Dates",
       "duration": "Tournament duration range",
       "title": "Phase schedule",
-      "hint": "Each phase starts automatically at its start time when automatic transitions are enabled. An end time only closes that phase's action window early. It never changes the tournament status.",
+      "hint": "When automatic transitions are enabled, a start time moves the node on its own: registration opens or goes to check-in, teams start forming, a stage goes live. An end time only closes that phase's action window early. It never moves the node.",
       "timezone": "Time zone:",
       "timezoneLabel": "{label} {timezone} ({offset})",
       "aria": "Phase schedule",
@@ -10677,18 +10787,20 @@
       "ends": "Ends at (optional)",
       "automation": "Automation",
       "automatic": "Automatic phase transitions",
-      "automaticHint": "Re-enabling immediately catches up any overdue phases. Manual status changes switch this off.",
-      "late": "Allow late registration",
-      "lateHint": "Keeps sign-ups open past the registration window's end time, so the advertised closing date stays on the page. Does not open registration that never started, and never reopens a finished tournament.",
-      "noEnd": "No end time is set on the registration window above, so registration is already open-ended and this changes nothing.",
+      "automaticHint": "Re-enabling immediately catches up any overdue phases. Moving a node by hand does not switch this off.",
       "phaseStartsAt": "{phase} starts at",
       "phaseStartTime": "{phase} start time",
       "phaseEndsAt": "{phase} ends at (optional)",
-      "phaseEndTime": "{phase} end time"
+      "phaseEndTime": "{phase} end time",
+      "phases": {
+        "open": "Opens",
+        "check_in": "Check-in",
+        "start": "Start"
+      },
+      "noNodes": "This tournament has no registration, formation or stage to schedule yet."
     },
     "scoring": {
       "results": "Results",
-      "league": "Treat as league season",
       "finished": "Mark tournament as finished",
       "logsOfficial": "Accept match logs as official results",
       "logsOfficialDescription": "An uploaded log decides a game that has no accepted result yet, from the placements it shows. Accepted, confirmed or admin results are never overwritten; reopen a game to correct it."
@@ -10797,8 +10909,7 @@
       }
     },
     "screenDescriptions": {
-      "preGame": "Map veto and hero pick/ban per scope. Child scopes inherit until overridden.",
-      "draft": "The pick order every draft of this tournament follows. Timers and autopick are set per draft."
+      "preGame": "Map veto and hero pick/ban per scope. Child scopes inherit until overridden."
     },
     "logsExtra": {
       "titleHint": "{filename}\\n{source} by {uploader}{attempts, plural, =0 {} other {\\n# processing attempts}}",
@@ -10883,6 +10994,134 @@
       "ready": "Ready",
       "live": "Live",
       "done": "Done"
+    },
+    "flow": {
+      "canvasLabel": "Tournament flow",
+      "toolbar": {
+        "presets": "Presets",
+        "arrange": "Arrange",
+        "save": "Save flow",
+        "discard": "Discard",
+        "unsaved": "Unsaved changes"
+      },
+      "palette": {
+        "title": "Nodes",
+        "lifecycle": "Lifecycle",
+        "transitions": "Transitions",
+        "hint": "Drag onto the canvas or click to add",
+        "add": "Add {kind}"
+      },
+      "issues": {
+        "title": "Issues",
+        "none": "No issues",
+        "error": "Error",
+        "warning": "Warning",
+        "serverChanged": "“{name}” changed on the server while you were editing. Your edit is kept and replaces the server's version on Save."
+      },
+      "confirmDelete": {
+        "title": "Delete these steps?",
+        "description": "Saving removes the steps below, with everything attached to them. This cannot be undone.",
+        "confirm": "Save and delete",
+        "registration": "{name} (registration): its entries",
+        "formation": "{name} (formation): its balancer config, saved balances and draft sessions",
+        "stage": "{name} (stage): its groups, seats, bracket layout and matches"
+      },
+      "presets": {
+        "title": "Start from a preset",
+        "apply": "Apply",
+        "days": "Days",
+        "best": "Best results counted",
+        "ids": {
+          "single": "Single stage",
+          "groups_playoff": "Groups → playoff",
+          "groups_reformation_playoff": "Groups → re-formation → playoff",
+          "swiss_draft_playoff": "Individual Swiss → draft → playoff",
+          "league": "League season (N days, best K)"
+        },
+        "names": {
+          "playoff": "Playoff",
+          "groups": "Groups",
+          "topPerGroup": "Top {n} per group",
+          "top": "Top {n}",
+          "playoffTeams": "Playoff teams",
+          "swiss": "Swiss",
+          "qualifiers": "Qualifiers",
+          "day": "Day {i}",
+          "dayTeams": "Day {i} teams",
+          "season": "Season",
+          "seasonTable": "Season table"
+        }
+      },
+      "inspector": {
+        "close": "Close",
+        "name": "Name",
+        "saveFirst": "Save the flow to configure this node.",
+        "saveOrDiscard": "Save or discard the graph first.",
+        "stageType": "Stage type",
+        "mode": "Team formation",
+        "openBalancer": "Open the balancer",
+        "openRegisteredTeams": "Open registered teams",
+        "openRoster": "Open the roster",
+        "modes": {
+          "balancer": "Balancer",
+          "draft": "Draft",
+          "registered": "Registered teams",
+          "manual": "Manual"
+        }
+      },
+      "pure": {
+        "mode": "Mode",
+        "keep": "Participants to keep",
+        "upper": "Upper bracket per group",
+        "from": "From",
+        "to": "To",
+        "status": "Status",
+        "qualified": "Qualified",
+        "eliminated": "Eliminated",
+        "filterModes": {
+          "top": "Top N",
+          "range": "Range",
+          "per_item_top": "Top N per group",
+          "swiss_status": "Swiss status",
+          "manual": "Manual pick"
+        },
+        "mergeHint": "Inputs keep edge order; later duplicates drop.",
+        "buckets": "Buckets",
+        "bucketName": "Bucket name",
+        "bucketSize": "Bucket size",
+        "rest": "Rest",
+        "removeBucket": "Remove bucket",
+        "addBucket": "Add bucket",
+        "bucketDefault": "Bucket {n}",
+        "serpentine": "Snake order",
+        "unit": "Unit",
+        "score": "Score",
+        "scores": {
+          "stage_points": "Stage points",
+          "placement_table": "Points by place",
+          "formula": "Formula"
+        },
+        "place": "Place",
+        "points": "Points",
+        "removePlace": "Remove place {place}",
+        "addPlace": "Add place",
+        "formula": "Formula",
+        "variables": "Variables: {list}",
+        "aggregateModes": {
+          "sumAll": "Sum of all",
+          "lastN": "Last N",
+          "bestN": "Best N",
+          "average": "Average"
+        },
+        "count": "Count",
+        "preview": "Preview",
+        "previewTentative": "Preview (tentative)",
+        "pins": "Pins",
+        "participant": "Participant",
+        "position": "Position",
+        "removePin": "Remove pin",
+        "addPin": "Add pin"
+      }
     }
   },
   "adminTournaments": {
@@ -10899,9 +11138,6 @@
         "finished": "Finished",
         "live": "Live",
         "registration": "Registration"
-      },
-      "type": {
-        "league": "League"
       },
       "title": "Tournaments",
       "create": "Create tournament",
@@ -10932,26 +11168,23 @@
       "challongePlaceholder": "e.g. my-tournament or https://challonge.com/my-tournament",
       "challongeHelp": "The Challonge bracket must have group stages enabled (two-stage).",
       "dateRange": "Date range",
-      "teamFormation": "Team formation",
-      "formation": {
-        "balancer": "Auto-balance (Balancer)",
-        "draft": "Captain draft",
-        "registration": "Team registration",
-        "solo": "Solo registration"
-      },
-      "teamFormationHelp": "How teams are formed. It decides which phases the tournament has.",
+      "preset": "Starting format",
+      "presetHelp": "The stages and teams the tournament starts with. Change them later in the Flow tab.",
       "submit": "Create tournament",
       "submitting": "Creating…",
       "validation": {
         "nameRequired": "Enter a tournament name.",
         "challongeRequired": "Enter a Challonge URL or slug.",
-        "datesRequired": "Pick a start and an end date."
+        "datesRequired": "Pick a start and an end date.",
+        "presetInvalid": "A league needs 2 to 10 days, and the counted results cannot exceed the days."
       },
       "created": "Tournament created",
       "createdDescription": "It stays Unpublished until you publish it in Settings › Preview allowlist.",
       "createError": "Could not create the tournament",
       "importHideWarning": "Imported from Challonge, but hiding it failed",
-      "importHideDescription": "The tournament is temporarily public. Hide it in Settings › Preview allowlist if needed."
+      "importHideDescription": "The tournament is temporarily public. Hide it in Settings › Preview allowlist if needed.",
+      "presetWarning": "Created, but the starting format could not be applied",
+      "presetWarningDescription": "Open the Flow tab and pick a preset there, or build the graph by hand."
     },
     "arrange": {
       "empty": "No standings to arrange yet. Recalculate to build them first.",
@@ -11762,8 +11995,6 @@
       "isNewcomer": "Is newcomer",
       "countTournaments": "Count tournaments",
       "any": "Any",
-      "league": "League",
-      "notLeague": "Not league",
       "anyRound": "Any round",
       "final": "Final",
       "winnerOnly": "Winner only",
@@ -11804,7 +12035,6 @@
       "newcomerMode": "Newcomer mode",
       "tournamentCountOperator": "Tournament count operator",
       "tournamentCount": "Tournament count",
-      "tournamentType": "Tournament type",
       "roundType": "Round type",
       "whichSideCounts": "Which side counts",
       "sortOrder": "Sort order",
@@ -13946,15 +14176,13 @@
       "nextDeadline": "Next deadline {when}",
       "phase": {
         "preparation": "Preparation",
-        "registration": "Registration",
-        "formation": "Team formation",
+        "registration": "Registration and teams",
         "live": "In play",
         "wrap_up": "Wrap-up"
       },
       "action": {
         "preparation": "Set up",
         "registration": "Registrations",
-        "formation": "Teams",
         "live": "Matches",
         "wrap_up": "Checklist"
       },
@@ -14664,6 +14892,9 @@
       "character": "Champion",
       "map": "Map"
     }
+  },
+  "unlinkedRegistrationsNotice": {
+    "message": "{count, plural, one {# registration is not linked to a workspace member — excluded from the balance and the draft pool.} other {# registrations are not linked to a workspace member — excluded from the balance and the draft pool.}}"
   },
   "balancerTool": {
     "title": "Balancer: {tournament}",

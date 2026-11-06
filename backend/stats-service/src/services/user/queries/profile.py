@@ -9,8 +9,10 @@ from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.core import enums, pagination
+from shared.core.chrono import tournament_chrono_key
 from shared.disciplines import discipline
 from shared.models.stats.match import mv_entity_global_stats
+from shared.repository.participant_result import is_member_tournament_row
 from shared.schemas.role import RoleRef
 from shared.services.division_grid.access import tournament_effective_version_id_expr
 from src.services.discipline_queries import DisciplineQueries
@@ -84,7 +86,7 @@ class UserProfileQueries(DisciplineQueries):
         params: pagination.PaginationSortParams,
         workspace_id: int | None = None,
     ) -> tuple[typing.Sequence[models.Team], int]:
-        """Paginated teams a user has played for, plus the total count.
+        """Paginated teams a user has played for, one per tournament (the member's final team, §11.2), plus the total.
 
         Scoped exactly like ``get_tournaments_with_stats`` (which powers the
         Tournaments tab): a tournament belongs to a user's history as soon as the
@@ -98,6 +100,7 @@ class UserProfileQueries(DisciplineQueries):
             models.Player.is_substitution.is_(False),
             models.Tournament.is_hidden.is_(False),
             played_encounter,
+            is_member_tournament_row(),
         )
 
         total_query = (
@@ -130,6 +133,24 @@ class UserProfileQueries(DisciplineQueries):
         result_total = await session.execute(total_query)
         return teams, result_total.scalar_one()
 
+    async def get_placements(
+        self, session: AsyncSession, user_id: int, workspace_id: int | None = None
+    ) -> dict[int, int]:
+        """``{tournament_id: placement}`` over the user's ranked ``participant_result`` rows in this game."""
+        query = (
+            sa.select(models.ParticipantResult.tournament_id, models.ParticipantResult.placement)
+            .join(models.WorkspaceMember, models.WorkspaceMember.id == models.ParticipantResult.workspace_member_id)
+            .join(models.Tournament, models.Tournament.id == models.ParticipantResult.tournament_id)
+            .where(
+                models.WorkspaceMember.player_id == user_id,
+                models.ParticipantResult.placement.is_not(None),
+                *self.discipline_filter(models.Tournament.discipline),
+            )
+        )
+        if workspace_id is not None:
+            query = query.where(models.Tournament.workspace_id == workspace_id)
+        return dict((await session.execute(query)).tuples().all())
+
     async def get_roles(
         self, session: AsyncSession, user_id: int, workspace_id: int | None = None
     ) -> typing.Sequence[tuple[RoleRef | None, int, int, list[dict]]]:
@@ -139,12 +160,13 @@ class UserProfileQueries(DisciplineQueries):
         ``division_grid_version_id`` — the tournament's *effective* grid version
         (own pin, else its workspace default, else the system default). The rank
         is raw, so the caller resolves the division against the grid version that
-        tournament was actually played on. Entries come newest event first (start date, undated last, then id):
-        ids follow creation, not play, across workspaces. ``recency`` is that order across ALL of the user's
-        tournaments here (1 = newest), so entries of different roles compare.
+        tournament was actually played on. Entries come newest event first by the tournament chronology (start, end,
+        then id): ids follow creation, not play, across workspaces. ``recency`` is
+        that order across ALL of the user's tournaments here (1 = newest), so entries of different roles compare.
         """
 
         seat = Seat()
+        start, end, _ = tournament_chrono_key()
 
         q = (
             sa.select(
@@ -155,10 +177,9 @@ class UserProfileQueries(DisciplineQueries):
                 seat.maps_lost.label("maps_lost"),
                 models.Team.tournament_id.label("tournament_id"),
                 models.Player.rank.label("rank"),
-                models.Tournament.start_date.label("start_date"),
-                sa.func.dense_rank()
-                .over(order_by=[models.Tournament.start_date.desc().nulls_last(), models.Team.tournament_id.desc()])
-                .label("recency"),
+                start.label("chrono_start"),
+                end.label("chrono_end"),
+                sa.func.dense_rank().over(order_by=[*(c.desc() for c in tournament_chrono_key())]).label("recency"),
                 tournament_effective_version_id_expr(models.Team.tournament_id).label("division_grid_version_id"),
             )
             .join(models.Team, models.Team.id == models.Player.team_id)
@@ -193,7 +214,8 @@ class UserProfileQueries(DisciplineQueries):
                             "recency",
                             sides.c.recency,
                         ),
-                        sides.c.start_date.desc().nulls_last(),
+                        sides.c.chrono_start.desc(),
+                        sides.c.chrono_end.desc(),
                         sides.c.tournament_id.desc(),
                     )
                 ),
@@ -213,8 +235,8 @@ class UserProfileQueries(DisciplineQueries):
         user_id: int,
         workspace_id: int | None = None,
     ) -> typing.Sequence[tuple[models.Team, int, int, int]]:
-        """A user's tournament history as ``(team, maps won, maps lost, average encounter
-        closeness)`` rows.
+        """A user's tournament history as ``(team, maps won, maps lost, average encounter closeness)`` rows: one per
+        tournament, the member's final team (§11.2), so a merged league is one row, not one per day team.
         """
 
         seat = Seat()
@@ -234,6 +256,7 @@ class UserProfileQueries(DisciplineQueries):
             .where(
                 models.WorkspaceMember.player_id == user_id,
                 models.Player.is_substitution.is_(False),
+                is_member_tournament_row(),
                 # Hidden tournaments never appear in a user's public
                 # tournament list. This read is cashews-cached without the viewer,
                 # so exclude unconditionally; admins/allowlisted view hidden
@@ -271,8 +294,8 @@ class UserProfileQueries(DisciplineQueries):
             .join(agg, agg.c.team_id == models.Team.id)
             .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)
             .where(*self.discipline_filter(models.Tournament.discipline))
-            # Newest event first; undated (legacy) tournaments last, by id.
-            .order_by(models.Tournament.start_date.desc().nulls_last(), models.Tournament.id.desc())
+            # Newest event first by the tournament chronology (an undated tournament at its creation time).
+            .order_by(*(c.desc() for c in tournament_chrono_key()))
         )
 
         result = await session.execute(query)

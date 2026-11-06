@@ -25,11 +25,11 @@ const publicReadTimeout = 30 * time.Second
 var PublicReadRoutes = []edge.RouteSpec{
 	// tournament.py
 	{Method: "GET", Pattern: "/api/v1/tournaments", Queue: "rpc.tournament.list_tournaments", AllQuery: true, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
-	{Method: "GET", Pattern: "/api/v1/tournaments/lookup", Queue: "rpc.tournament.lookup_tournaments", Query: []string{"workspace_id", "is_league", "discipline"}, Auth: edge.AuthNone, Timeout: publicReadTimeout},
+	{Method: "GET", Pattern: "/api/v1/tournaments/lookup", Queue: "rpc.tournament.lookup_tournaments", Query: []string{"workspace_id", "discipline"}, Auth: edge.AuthNone, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/statistics/history", Queue: "rpc.tournament.statistics_history", Query: []string{"workspace_id"}, Auth: edge.AuthNone, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/statistics/division", Queue: "rpc.tournament.statistics_division", Query: []string{"workspace_id", "discipline"}, Auth: edge.AuthNone, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/statistics/overall", Queue: "rpc.tournament.statistics_overall", Query: []string{"workspace_id"}, Auth: edge.AuthNone, Timeout: publicReadTimeout},
-	{Method: "GET", Pattern: "/api/v1/tournaments/facets", Queue: "rpc.tournament.tournaments_facets", Query: []string{"workspace_id", "status", "is_league", "discipline", "query"}, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
+	{Method: "GET", Pattern: "/api/v1/tournaments/facets", Queue: "rpc.tournament.tournaments_facets", Query: []string{"workspace_id", "status", "discipline", "query"}, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}", Queue: "rpc.tournament.get_tournament", IDParam: "id", Query: []string{"entities"}, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/stages", Queue: "rpc.tournament.get_stages", IDParam: "id", Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/standings", Queue: "rpc.tournament.get_standings", IDParam: "id", Query: []string{"entities"}, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
@@ -37,6 +37,8 @@ var PublicReadRoutes = []edge.RouteSpec{
 	// AuthOptional like standings; same gate, viewer-agnostic body. Not in cacheable.go: the gateway's invalidation
 	// table maps resources to URL substrings, and the backend's own versioned cache already serves these.
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/player-standings", Queue: "rpc.tournament.get_player_standings", IDParam: "id", Auth: edge.AuthOptional, Timeout: publicReadTimeout},
+	// The flow graph (nodes with ports, edges, results). AuthOptional like standings; same hidden-tournament gate.
+	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/flow", Queue: "rpc.tournament.get_flow", IDParam: "id", Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 	{Method: "GET", Pattern: "/api/v1/tournaments/{id}/stages/{stage_id}/individual-rounds", Queue: "rpc.tournament.get_individual_rounds", IDParam: "id", Path: []string{"stage_id"}, Auth: edge.AuthOptional, Timeout: publicReadTimeout},
 	// Every hero ban a spectator may see and every picked/banned map of the
 	// tournament's pick-ban rooms, in one read (the tournament page's ban and

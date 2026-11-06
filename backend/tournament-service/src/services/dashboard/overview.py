@@ -4,7 +4,7 @@ A card is every tournament that is not finished, plus a ``completed`` one inside
 its wrap-up window (14 days after ``finished_at``) whose wrap-up is not done.
 Round trips: the candidates (their per-tournament extras, the granted readiness
 counts included, ride as correlated scalar subqueries), one GROUP BY over their
-encounters, the backlog (newest rows plus window totals in one statement) and
+encounters, their nodes' schedule rows, the backlog (newest rows plus window totals in one statement) and
 the roster's identity count. A card costs no statement of its own: its readiness
 is assembled from the candidate row and the encounter counts.
 
@@ -26,10 +26,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core import enums
-from shared.core.tournament_state import FINISHED_STATUSES, PHASE_ORDER
+from shared.core.chrono import tournament_chrono_key
+from shared.core.enums import FlowNodeKind, FlowNodeStatus
+from shared.core.flow_state import SCHEDULE_TRANSITIONS
+from shared.core.tournament_state import FINISHED_STATUSES
 from src import schemas
 from src.services.dashboard.readiness import (
     build_readiness,
+    formation_modes,
     has_enabled_achievement_rules,
     latest_evaluation_run_status,
     setup_counts,
@@ -43,7 +47,7 @@ _TS = enums.TournamentStatus
 
 WRAP_UP_WINDOW = timedelta(days=14)
 TIMELINE_WINDOW = timedelta(days=7)
-#: A phase start this late without the status having moved is overdue (the worker tick needs a moment).
+#: A phase start this late without its node having moved is overdue (the worker tick needs a moment).
 OVERDUE_GRACE = timedelta(minutes=10)
 #: Pending registrations turn critical when registration closes sooner than this.
 REGISTRATION_URGENT = timedelta(hours=24)
@@ -51,11 +55,7 @@ BACKLOG_ROWS = 20
 
 _PHASES: dict[enums.TournamentStatus, schemas.DashboardPhase] = {
     _TS.ANNOUNCEMENT: "preparation",
-    _TS.REGISTRATION: "registration",
-    _TS.CHECK_IN: "formation",
-    _TS.DRAFT: "formation",
     _TS.LIVE: "live",
-    _TS.PLAYOFFS: "live",
     _TS.COMPLETED: "wrap_up",
 }
 _ACHIEVEMENTS_SETTLED = frozenset({"done", "not_configured"})
@@ -97,24 +97,42 @@ def _live_condition(now: datetime) -> sa.ColumnElement[bool]:
     )
 
 
-def _timeline_events(tournament: models.Tournament, now: datetime) -> list[schemas.DashboardTimelineEvent]:
-    """The tournament's schedule boundaries inside ``[now, now + 7d]``, plus every overdue phase start."""
+@dataclass(frozen=True)
+class _ScheduleRow:
+    """One ``flow_node_schedule`` row with the node it moves."""
+
+    node_id: int
+    node_name: str
+    kind: FlowNodeKind
+    node_status: FlowNodeStatus
+    phase: str
+    starts_at: datetime
+    ends_at: datetime | None
+
+
+def _timeline_events(
+    tournament: models.Tournament, schedule: list[_ScheduleRow], now: datetime
+) -> list[schemas.DashboardTimelineEvent]:
+    """The nodes' schedule boundaries inside ``[now, now + 7d]``, plus every overdue phase start."""
     events = []
-    for entry in tournament.phase_schedule:
+    for entry in schedule:
+        source_target = SCHEDULE_TRANSITIONS.get((entry.kind, entry.phase))
         for edge, at in (("start", entry.starts_at), ("end", entry.ends_at)):
             if at is None:
                 continue
             overdue = (
                 edge == "start"
                 and at <= now - OVERDUE_GRACE
-                and PHASE_ORDER[tournament.status] < PHASE_ORDER[entry.status]
+                and source_target is not None
+                and entry.node_status == source_target[0]
             )
             if overdue or now <= at <= now + TIMELINE_WINDOW:
                 events.append(
                     schemas.DashboardTimelineEvent(
                         tournament_id=tournament.id,
                         tournament_name=tournament.name,
-                        status=entry.status.value,
+                        phase=entry.phase,
+                        node_name=entry.node_name,
                         edge=edge,
                         at=at,
                         overdue=overdue,
@@ -167,19 +185,22 @@ def _card_issues(
         found.append(("phase_overdue", "critical", None))
 
     readiness = card.readiness
-    if card.phase in ("registration", "formation"):
+    if card.phase == "live":
         if readiness.registrations_pending:
             closes = card.registration_closes_at
             severity = "critical" if closes is not None and closes - now < REGISTRATION_URGENT else "warning"
             found.append(("registrations_pending", severity, readiness.registrations_pending))
-        if card.team_formation == "balancer" and readiness.pool_need_fix:
+        if "balancer" in readiness.formation_modes and readiness.pool_need_fix:
             found.append(("pool_need_fix", "warning", readiness.pool_need_fix))
         if readiness.registrations_approved is not None:
             unranked = readiness.registrations_approved - (readiness.registrations_ranked or 0)
             if unranked > 0:
                 found.append(("ranks_missing", "warning", unranked))
-    if card.phase in ("formation", "live"):
-        if card.team_formation == "balancer" and readiness.balance_saved and readiness.balance_exported_at is None:
+        if (
+            "balancer" in readiness.formation_modes
+            and readiness.balance_saved
+            and readiness.balance_exported_at is None
+        ):
             found.append(("balance_not_exported", "warning", None))
         if slots_empty:
             found.append(("stage_slots_empty", "warning", slots_empty))
@@ -213,7 +234,9 @@ class AdminDashboardService:
         now: datetime,
     ) -> schemas.AdminDashboard:
         candidates = await self._candidates(session, workspace_id, permissions, now)
-        encounters = await self._encounter_counts(session, [row.Tournament.id for row in candidates], now)
+        ids = [row.Tournament.id for row in candidates]
+        encounters = await self._encounter_counts(session, ids, now)
+        schedules = await self._schedules(session, ids)
 
         built: list[
             tuple[
@@ -232,7 +255,7 @@ class AdminDashboardService:
                 wrap_up = _wrap_up(row, counts, permissions)
                 if wrap_up.done:
                     continue
-            schedule = tournament.phase_schedule
+            schedule = schedules.get(tournament.id, [])
             deadline = min(
                 (at for entry in schedule for at in (entry.starts_at, entry.ends_at) if at is not None and at > now),
                 default=None,
@@ -246,24 +269,33 @@ class AdminDashboardService:
                 is_hidden=tournament.is_hidden,
                 logo_url=tournament.logo_url,
                 cover_image_url=tournament.cover_image_url,
-                team_formation=tournament.team_formation,
                 start_date=tournament.start_date,
                 end_date=tournament.end_date,
                 finished_at=row.finished_at if phase == "wrap_up" else None,
-                phase_schedule=[
+                schedule=[
                     schemas.DashboardScheduleEntry(
-                        status=entry.status.value, starts_at=entry.starts_at, ends_at=entry.ends_at
+                        node_id=entry.node_id,
+                        node_name=entry.node_name,
+                        phase=entry.phase,
+                        starts_at=entry.starts_at,
+                        ends_at=entry.ends_at,
                     )
                     for entry in schedule
                 ]
                 if permissions.tournament_read
                 else [],
                 next_deadline_at=deadline if permissions.tournament_read else None,
-                registration_closes_at=next(
-                    (entry.ends_at for entry in schedule if entry.status == _TS.REGISTRATION), None
-                )
-                if tournament.status == _TS.REGISTRATION
-                else None,
+                registration_closes_at=min(
+                    (
+                        entry.ends_at
+                        for entry in schedule
+                        if entry.kind == FlowNodeKind.REGISTRATION
+                        and entry.phase == "open"
+                        and entry.node_status == FlowNodeStatus.OPEN
+                        and entry.ends_at is not None
+                    ),
+                    default=None,
+                ),
                 registrations_last_24h=row.registrations_last_24h if permissions.team_read else None,
                 has_challonge_source=row.has_challonge_source,
                 readiness=build_readiness(
@@ -289,7 +321,7 @@ class AdminDashboardService:
             # Ordered on the unmasked deadline: the order is not a secret, the schedule fields are masked.
             group = 0 if phase == "live" else 2 if phase == "wrap_up" else 1
             key = (group, deadline is None, deadline.timestamp() if deadline else 0.0, -tournament.id)
-            events = _timeline_events(tournament, now)
+            events = _timeline_events(tournament, schedule, now)
             card_issues = _card_issues(
                 card,
                 phase_overdue=permissions.tournament_read and any(event.overdue for event in events),
@@ -366,6 +398,7 @@ class AdminDashboardService:
                     "has_achievement_rules"
                 ),
                 standings_recalc_pending(tournament.id).label("recalc_pending"),
+                formation_modes(tournament.id),
                 *(setup_counts(tournament.id) if permissions.tournament_read else ()),
                 *(team_counts(tournament.id) if permissions.team_read else ()),
             ).where(
@@ -412,6 +445,33 @@ class AdminDashboardService:
         )
         return {row.tournament_id: Counter(row._asdict()) for row in rows}
 
+    async def _schedules(self, session: AsyncSession, tournament_ids: list[int]) -> dict[int, list[_ScheduleRow]]:
+        """Every candidate's node schedule rows, earliest first."""
+        if not tournament_ids:
+            return {}
+        node, schedule = models.FlowNode, models.FlowNodeSchedule
+        rows = await session.execute(
+            sa.select(
+                node.tournament_id,
+                node.id,
+                node.name,
+                node.kind,
+                node.status,
+                schedule.phase,
+                schedule.starts_at,
+                schedule.ends_at,
+            )
+            .join(schedule, schedule.node_id == node.id)
+            .where(node.tournament_id.in_(tournament_ids))
+            .order_by(schedule.starts_at, node.id)
+        )
+        by_tournament: dict[int, list[_ScheduleRow]] = {}
+        for tournament_id, node_id, name, kind, node_status, phase, starts_at, ends_at in rows:
+            by_tournament.setdefault(tournament_id, []).append(
+                _ScheduleRow(node_id, name, FlowNodeKind(kind), FlowNodeStatus(node_status), phase, starts_at, ends_at)
+            )
+        return by_tournament
+
     async def _backlog(
         self,
         session: AsyncSession,
@@ -424,6 +484,7 @@ class AdminDashboardService:
         """Workspace tournaments without a card that have a visible data-quality issue (counts ``NULL`` when
         masked): the newest ``BACKLOG_ROWS`` of them, with the totals over all of them as window aggregates."""
         tournament = models.Tournament
+        start, end, _ = tournament_chrono_key()
         encounter = models.Encounter
         team = models.Team
         stage = models.Stage
@@ -454,7 +515,8 @@ class AdminDashboardService:
                 tournament.id,
                 tournament.name,
                 tournament.discipline,
-                tournament.start_date,
+                start.label("chrono_start"),
+                end.label("chrono_end"),
                 gated(permissions.match_read, missing_logs.scalar_subquery(), sa.BigInteger).label("missing_logs"),
                 gated(permissions.team_read, teams_without_players.scalar_subquery(), sa.BigInteger).label(
                     "teams_without_players"
@@ -485,7 +547,7 @@ class AdminDashboardService:
                         scan.c.has_stages.is_(False),
                     )
                 )
-                .order_by(scan.c.start_date.desc().nulls_last(), scan.c.id.desc())
+                .order_by(scan.c.chrono_start.desc(), scan.c.chrono_end.desc(), scan.c.id.desc())
                 .limit(BACKLOG_ROWS)
             )
         ).all()

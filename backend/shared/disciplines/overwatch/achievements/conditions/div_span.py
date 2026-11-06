@@ -17,6 +17,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.core.chrono import tournament_chrono_key
 from shared.domain.achievements.context import EvalContext
 from shared.models.achievements.achievement import AchievementGrain
 
@@ -57,8 +58,7 @@ async def execute_div_span(
             models.Player.role,
             models.Player.rank,
             models.Tournament.division_grid_version_id,
-            models.Tournament.start_date,
-            models.Tournament.id,
+            *tournament_chrono_key(),
         )
         .select_from(models.Player)
         .join(
@@ -78,17 +78,17 @@ async def execute_div_span(
     result = await session.execute(query)
 
     series: dict[tuple[int, str], list[tuple]] = defaultdict(list)
-    for user_id, role, rank, source_version_id, start_date, tournament_id in result:
+    for user_id, role, rank, source_version_id, start, end, tournament_id in result:
         division = context.resolve_division(rank, source_version_id=source_version_id)
         if division is not None:
-            series[(user_id, str(role))].append((start_date, tournament_id, division.number))
+            series[(user_id, str(role))].append((start, end, tournament_id, division.number))
 
     qualifying: ResultSet = set()
     for (user_id, _role), points in series.items():
         if len(points) < 2:
             continue
-        points.sort(key=lambda item: (item[0] is None, item[0] or 0, item[1]))
-        climb = points[-1][2] - points[0][2]
+        points.sort()
+        climb = points[-1][3] - points[0][3]
         if op_fn(climb, value):
             qualifying.add((user_id,))
     return qualifying

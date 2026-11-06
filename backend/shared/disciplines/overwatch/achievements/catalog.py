@@ -748,7 +748,7 @@ RULES: tuple[RuleDef, ...] = (
             "AND": [
                 {"type": "is_newcomer"},
                 {"type": "standing_position", "params": {"op": "==", "value": 1}},
-                {"type": "tournament_type", "params": {"is_league": False}},
+                {"type": "tournament_type"},
             ]
         },
     ),

@@ -25,7 +25,7 @@ from src import schemas
 from src.core import db
 from src.core.caching import canonical_entities
 from src.core.workspace import get_division_grid
-from src.rpc._helpers import _bool, _path_int, _q, _q1, _read, _require_id, _require_q1
+from src.rpc._helpers import _path_int, _q, _q1, _read, _require_id, _require_q1
 from src.services import visibility_resolvers
 from src.services.admin.stage import stage_service as admin_stage_service
 from src.services.encounter import flows as encounter_flows
@@ -97,7 +97,6 @@ def register(broker: Any, logger: Any) -> None:
             return await tournament_flows.flows_service.lookup(
                 session,
                 workspace_id=q_workspace_id(data),
-                is_league=_q1(data, "is_league", _bool),
                 # One game's tournaments: absent is every game, a code nobody installed is 422.
                 discipline=build_query_model(DisciplineFilterQuery, data.get("query")).discipline,
             )
@@ -324,7 +323,6 @@ def register(broker: Any, logger: Any) -> None:
                 viewer=rehydrate_user_optional(data.get("identity")),
                 workspace_id=qp.workspace_id,
                 status=qp.status,
-                is_league=qp.is_league,
                 discipline=qp.discipline,
                 query=qp.query,
             )

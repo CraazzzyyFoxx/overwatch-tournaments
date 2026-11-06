@@ -42,8 +42,8 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
-from shared.core import enums
 from shared.core.social import SocialProvider
+from shared.repository.participant_result import is_member_tournament_row
 
 __all__ = (
     "SelfDeclaredChannelRow",
@@ -123,9 +123,9 @@ class StreamTargetRepository:
     async def list_active_tournaments(
         self,
         session: AsyncSession,
-        statuses: Sequence[enums.TournamentStatus],
+        active: sa.ColumnElement[bool],
     ) -> Sequence[TournamentPollTarget]:
-        """Tournaments in any of ``statuses``, id ascending.
+        """Tournaments matching the ``active`` clause (a predicate over ``Tournament``), id ascending.
 
         Only three columns are loaded (not the full ``Tournament`` row): this
         runs on a 30s heartbeat and the poller needs nothing else.
@@ -136,7 +136,7 @@ class StreamTargetRepository:
                 models.Tournament.workspace_id,
                 models.Tournament.is_hidden,
             )
-            .where(models.Tournament.status.in_(statuses))
+            .where(active)
             .order_by(models.Tournament.id)
         )
         rows = (await session.execute(stmt)).all()
@@ -151,10 +151,12 @@ class StreamTargetRepository:
         shared by both channel sources so a change to what counts as
         participation cannot drift between them."""
         registration = models.Registration
+        entry = models.RegistrationEntry
         return [
             registration.tournament_id.in_(tournament_ids),
             registration.deleted_at.is_(None),
-            registration.status == "approved",
+            # Approved at ANY registration node of the tournament.
+            registration.entries.any(sa.and_(entry.status == "approved", entry.deleted_at.is_(None))),
         ]
 
     @staticmethod
@@ -281,7 +283,8 @@ class StreamTargetRepository:
 
         The join walks the anchor the roster actually uses. A caller's user id is
         a ``players.user.id``, and ``tournament.player`` carries none, so the
-        only path to a roster row is through ``workspace_member``.
+        only path to a roster row is through ``workspace_member``. One row per user
+        even when the user played for two teams.
         """
         if not user_ids:
             return []
@@ -307,7 +310,14 @@ class StreamTargetRepository:
             )
             .select_from(user)
             .outerjoin(member, member.player_id == user.id)
-            .outerjoin(player, sa.and_(player.workspace_member_id == member.id, player.tournament_id == tournament_id))
+            .outerjoin(
+                player,
+                sa.and_(
+                    player.workspace_member_id == member.id,
+                    player.tournament_id == tournament_id,
+                    is_member_tournament_row(player),
+                ),
+            )
             .outerjoin(team, team.id == player.team_id)
             .where(user.id.in_(user_ids))
         )

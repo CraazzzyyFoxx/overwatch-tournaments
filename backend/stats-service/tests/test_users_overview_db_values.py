@@ -33,6 +33,7 @@ from shared.models.tournament import Player, Standing, Team, Tournament
 from shared.models.tournament.player_role import assignment_of
 from shared.schemas.role import RoleRef
 from shared.services.ontology import rated_leaf
+from shared.services.participant_result import write_participant_results
 from src import schemas
 from src.core import db as app_db
 from src.services.user.queries.overview import UserOverviewQueries
@@ -129,7 +130,6 @@ async def _seed(session: Any) -> _Seed:
             slug=f"{slug}-{suffix}",
             status=enums.TournamentStatus.COMPLETED if finished else enums.TournamentStatus.LIVE,
             is_finished=finished,
-            is_league=False,
             start_date=start,
             end_date=end,
         )
@@ -220,6 +220,8 @@ async def _seed(session: Any) -> _Seed:
             )
         )
     await session.flush()
+    for tournament in (t1, t2, t5):
+        await write_participant_results(session, tournament.id)
 
     encounters = [
         (t1, "A", "B", 2, 1),
@@ -574,7 +576,6 @@ async def _two_rank_scales(session: Any) -> None:
                 slug=f"cn-{key}-{suffix}",
                 status=enums.TournamentStatus.COMPLETED,
                 is_finished=True,
-                is_league=False,
                 division_grid_version_id=version.id,
             )
             session.add(tournament)

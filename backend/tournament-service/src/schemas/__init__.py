@@ -6,6 +6,9 @@ from .division_grid import *
 from .user_base import *
 from shared.schemas.roster_slots import RosterShapeRead
 from .stage import *
+
+# flow.py (pulled in by .tournament) reads StageCreate off this facade, so it must be flattened first.
+from .admin.stage import *
 from .tournament import *
 from .team import *
 from .encounter import *
@@ -20,7 +23,6 @@ from .admin.encounter import *
 from .admin.encounter_reports import *
 from .admin.matches import *
 from .admin.player_sub_role import *
-from .admin.stage import *
 from .admin.standing import *
 from .admin.team import *
 from .admin.tournament import *

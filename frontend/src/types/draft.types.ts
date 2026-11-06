@@ -11,8 +11,8 @@ export type DraftStatus = "setup" | "ready" | "live" | "paused" | "completed" | 
 export type DraftFormat = "snake" | "linear" | "custom";
 
 /**
- * The tournament's draft format rule (`Tournament.draft_format_json`); `null` on
- * the tournament = snake. Normalized server-side: only `custom` keeps rules.
+ * A draft formation node's draft format rule (`config.draft_format`); `null`
+ * on the node = snake. Normalized server-side: only `custom` keeps rules.
  */
 export interface DraftFormatSettings {
   format: DraftFormat;
@@ -32,6 +32,8 @@ export type DraftLifecycleAction = "start" | "pause" | "resume" | "cancel" | "ro
 export interface DraftSession {
   id: number;
   tournament_id: number | null;
+  /** The formation node a tournament's draft forms teams for; null for a mix's draft. */
+  formation_node_id?: number | null;
   /** The mix owning this draft and its lobby (0 = A); both null for a tournament's draft (spec §9.1). */
   custom_game_id: number | null;
   lobby_index: number | null;
@@ -315,6 +317,8 @@ export interface DraftEventData {
 
 // Request bodies.
 export interface DraftSessionCreateRequest {
+  /** The formation node whose teams the draft forms. */
+  formation_node_id: number;
   pool_source?: DraftPoolSource;
   source_balance_id?: number | null;
   pick_time_seconds?: number;

@@ -42,14 +42,22 @@ def _hero(hero_id: int, slug: str, hero_type: enums.HeroClass) -> SimpleNamespac
     )
 
 
-def _team(tournament_id: int, *, placement: int | None, is_league: bool = False) -> SimpleNamespace:
+def _team(
+    tournament_id: int,
+    *,
+    placement: int | None,
+    start: datetime.datetime | None = None,
+    end: datetime.datetime | None = None,
+    created: datetime.datetime = datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC),
+) -> SimpleNamespace:
     return SimpleNamespace(
         tournament_id=tournament_id,
         tournament=SimpleNamespace(
             id=tournament_id,
             name=f"OWT Mix #{tournament_id}",
-            is_league=is_league,
-            start_date=datetime.datetime(2026, 1, tournament_id, tzinfo=datetime.UTC),
+            start_date=start or datetime.datetime(2026, 1, tournament_id, tzinfo=datetime.UTC),
+            end_date=end,
+            created_at=created,
         ),
         standings=[SimpleNamespace(overall_position=placement or 0)],
     )
@@ -74,6 +82,17 @@ def _queries(
         patch.object(users.profile, "get_overall_statistics", AsyncMock(return_value=overall)),
         patch.object(users.profile, "get_roles", AsyncMock(return_value=roles or [])),
         patch.object(users.profile, "get_teams", AsyncMock(return_value=(teams or [], len(teams or [])))),
+        patch.object(
+            users.profile,
+            "get_placements",
+            AsyncMock(
+                return_value={
+                    team.tournament_id: team.standings[0].overall_position
+                    for team in teams or []
+                    if team.standings[0].overall_position > 0
+                }
+            ),
+        ),
         patch.object(
             users.encounters,
             "get_user_hero_records",
@@ -162,19 +181,21 @@ class UserDraftCardTests(IsolatedAsyncioTestCase):
             [entry.model_dump() for entry in card.roles],
         )
 
-    async def test_leagues_never_reach_the_card(self) -> None:
-        """A league has no bracket and no placement; counting it would make the
-        card's tournament and placement numbers disagree with each other."""
-        with _queries(
-            104,
-            overall=(10, 5, 0.5),
-            teams=[_team(2, placement=3), _team(9, placement=None, is_league=True)],
-            teams_counts={2: 16},
-        ):
-            card = await users.get_draft_card(object(), 104, workspace_id=1)
+    async def test_recency_follows_the_tournament_chronology(self) -> None:
+        """An undated tournament sits at its creation date, and a start tie goes to the later end date."""
+        jan = datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC)
+        undated = _team(3, placement=1, created=jan + datetime.timedelta(days=5))
+        undated.tournament.start_date = None
+        teams = [
+            _team(1, placement=1, start=jan, end=jan + datetime.timedelta(days=9)),
+            _team(2, placement=1, start=jan, end=jan + datetime.timedelta(days=2)),
+            undated,
+            _team(4, placement=1, start=jan - datetime.timedelta(days=30)),
+        ]
+        with _queries(105, overall=(4, 4, 1.0), teams=teams, teams_counts=dict.fromkeys(range(1, 5), 8)):
+            card = await users.get_draft_card(object(), 105, workspace_id=1)
 
-        self.assertEqual(1, card.tournaments)
-        self.assertEqual([2], [entry.id for entry in card.recent_tournaments])
+        self.assertEqual([3, 1, 2, 4], [entry.id for entry in card.recent_tournaments])
 
 
 class DraftCardQueryScopeTests(IsolatedAsyncioTestCase):

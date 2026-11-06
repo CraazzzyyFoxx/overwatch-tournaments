@@ -126,7 +126,6 @@ class UserTournamentSummary(BaseModel):
     name: str
     #: The tournament's game: a cross-game profile tags every card with it.
     discipline: str
-    is_league: bool
     is_finished: bool = False
     status: enums.TournamentStatus | None = None
 
@@ -162,7 +161,6 @@ class UserEncounterTournament(BaseModel):
 
     id: int
     name: str
-    is_league: bool
     is_finished: bool = False
     status: enums.TournamentStatus | None = None
 
@@ -270,7 +268,6 @@ class UserTournament(BaseModel):
     name: str
     workspace_id: int
     discipline: str
-    is_league: bool
     team_id: int
     team: str
     players: list[UserTournamentPlayer]

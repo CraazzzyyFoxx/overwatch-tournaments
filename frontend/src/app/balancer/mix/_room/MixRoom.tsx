@@ -418,9 +418,8 @@ export function MixRoom({ initialGame, lobbyIndex }: Readonly<{ initialGame: Cus
               <LobbyCodeStrip
                 lobbyCode={lobby?.lobby_code ?? null}
                 canWrite={canWrite}
-                saving={mix.setLobbyCode.isPending}
                 className="border-b-0"
-                onLobbyCodeChange={(lobbyCode) => mix.setLobbyCode.mutate({ lobbyIndex, lobbyCode })}
+                onLobbyCodeChange={(lobbyCode) => mix.setLobbyCode.mutateAsync({ lobbyIndex, lobbyCode })}
               />
             </Card>
           ) : null}

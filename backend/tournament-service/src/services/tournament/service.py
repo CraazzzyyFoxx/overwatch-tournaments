@@ -7,6 +7,7 @@ from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared import models
 from shared.core import enums, pagination, utils
+from shared.core.chrono import tournament_chrono_key
 from shared.repository import TournamentRepository
 from shared.services.tournament.visibility import completed_encounters_clauses, visible_tournaments_predicate
 from src import schemas
@@ -22,6 +23,19 @@ __all__ = (
 def _is_desc(order: typing.Any) -> bool:
     """``PaginationSortParams.order`` is either the enum or the bare literal."""
     return order == pagination.SortOrder.DESC or order == "desc"
+
+
+def registering_tournament() -> sa.ColumnElement[bool]:
+    """The tournament has a registration node in ``open`` or ``check_in``: a player can sign up or check in (§9)."""
+    return (
+        sa.exists()
+        .where(
+            models.FlowNode.tournament_id == models.Tournament.id,
+            models.FlowNode.kind == enums.FlowNodeKind.REGISTRATION.value,
+            models.FlowNode.status.in_((enums.FlowNodeStatus.OPEN.value, enums.FlowNodeStatus.CHECK_IN.value)),
+        )
+        .correlate(models.Tournament)
+    )
 
 
 def tournament_entities(in_entities: list[str], child: typing.Any | None = None) -> list[_AbstractLoad]:
@@ -92,10 +106,6 @@ class TournamentService:
         query = params.apply_search(query, models.Tournament)
         total_query = params.apply_search(total_query, models.Tournament)
 
-        if params.is_league is not None:
-            query = query.where(models.Tournament.is_league.is_(params.is_league))
-            total_query = total_query.where(models.Tournament.is_league.is_(params.is_league))
-
         if params.workspace_id is not None:
             query = query.where(models.Tournament.workspace_id == params.workspace_id)
             total_query = total_query.where(models.Tournament.workspace_id == params.workspace_id)
@@ -111,6 +121,10 @@ class TournamentService:
             # from exactly that comparison.
             query = query.where(models.Tournament.status.in_(params.status))
             total_query = total_query.where(models.Tournament.status.in_(params.status))
+
+        if params.registration_open:
+            query = query.where(registering_tournament())
+            total_query = total_query.where(registering_tournament())
 
         # Hidden-tournament visibility filter: applied to BOTH the page and count
         # query so hidden tournaments never leak into results OR totals.
@@ -137,7 +151,7 @@ class TournamentService:
         session: AsyncSession,
         workspace_id: int | None = None,
     ) -> typing.Sequence[tuple[models.Tournament, int, float, float]]:
-        """Return (tournament, players_count, avg team SR, avg encounter closeness) per non-league tournament."""
+        """Return (tournament, players_count, avg team SR, avg encounter closeness) per tournament."""
         # Grouped subqueries LEFT JOINed on tournament_id: one pass, not a
         # correlated subquery per tournament row.
         players_sq = (
@@ -178,8 +192,8 @@ class TournamentService:
             .join(players_sq, players_sq.c.tournament_id == models.Tournament.id, isouter=True)
             .join(teams_sq, teams_sq.c.tournament_id == models.Tournament.id, isouter=True)
             .join(encounters_sq, encounters_sq.c.tournament_id == models.Tournament.id, isouter=True)
-            .where(models.Tournament.is_league.is_(False), visible_tournaments_predicate(None))
-            .order_by(models.Tournament.start_date.nulls_last(), models.Tournament.id)
+            .where(visible_tournaments_predicate(None))
+            .order_by(*tournament_chrono_key())
         )
         if workspace_id is not None:
             query = query.where(models.Tournament.workspace_id == workspace_id)
@@ -220,14 +234,13 @@ class TournamentService:
                 models.Player.tournament_id == models.Tournament.id,
                 # An unranked player has no division to average.
                 models.Player.rank.is_not(None),
-                models.Tournament.is_league.is_(False),
                 visible_tournaments_predicate(None),
                 models.Tournament.discipline == discipline,
             )
             # Grouping by the Tournament PK lets Postgres project the whole
             # tournament row (functional dependency).
             .group_by(models.Tournament.id, models.Player.role, models.Player.rank)
-            .order_by(models.Tournament.start_date.nulls_last(), models.Tournament.id)
+            .order_by(*tournament_chrono_key())
         )
         if workspace_id is not None:
             query = query.where(models.Tournament.workspace_id == workspace_id)
@@ -240,7 +253,7 @@ class TournamentService:
         """Return tournament/team/player/champion counts and played volume (encounters, maps, days, hours).
 
         ``workspace_id`` restricts every count to one workspace; None means the platform. Every count is over the
-        tournaments an anonymous viewer may see, leagues included: the set ``/tournaments`` lists and
+        tournaments an anonymous viewer may see: the set ``/tournaments`` lists and
         ``/encounters`` counts, so the platform totals never disagree with them.
         """
         ws_filter = [models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []

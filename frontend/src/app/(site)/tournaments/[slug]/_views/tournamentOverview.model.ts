@@ -1,15 +1,11 @@
 import type { RoundGroup } from "@/lib/bracket/view";
 import { getEncounterWinner, isEncounterCompleted } from "@/lib/encounter/status";
-import { reachedAtLeast } from "@/lib/tournament/lifecycle";
+import { hasPlayStarted } from "@/lib/tournament/stages";
+import { displayStatus, reachedCheckIn } from "@/lib/tournament/status";
 import type { Encounter } from "@/types/encounter.types";
 import type { Registration } from "@/types/registration.types";
 import type { Team } from "@/types/team.types";
-import type {
-  StageSummary,
-  Standings,
-  Tournament,
-  TournamentStatus
-} from "@/types/tournament.types";
+import type { StageSummary, Standings, Tournament } from "@/types/tournament.types";
 import type { PersonDisplay } from "@/types/user.types";
 
 // ---------------------------------------------------------------------------
@@ -19,22 +15,12 @@ import type { PersonDisplay } from "@/types/user.types";
 export type OverviewVariant = "registration" | "live" | "completed";
 
 /**
- * Exhaustive over `TournamentStatus` on purpose: a status added on the backend
- * then fails the build here instead of silently landing on a fallback branch.
+ * The overview a tournament gets: the finished one, the one once play has started, and the registration view for
+ * everything before — announcing, signing up, checking in and forming the teams.
  */
-const VARIANT_BY_STATUS: Record<TournamentStatus, OverviewVariant> = {
-  announcement: "registration",
-  draft: "registration",
-  registration: "registration",
-  check_in: "registration",
-  live: "live",
-  playoffs: "live",
-  completed: "completed",
-  archived: "completed"
-};
-
-export function overviewVariant(status: TournamentStatus): OverviewVariant {
-  return VARIANT_BY_STATUS[status];
+export function overviewVariant(tournament: Pick<Tournament, "status" | "stages">): OverviewVariant {
+  if (tournament.status === "completed" || tournament.status === "archived") return "completed";
+  return hasPlayStarted(tournament.status, tournament.stages) ? "live" : "registration";
 }
 
 /**
@@ -44,8 +30,10 @@ export function overviewVariant(status: TournamentStatus): OverviewVariant {
  * and the overview shows the teams themselves. A team-registration tournament
  * has teams during registration, and they are still sign-ups then.
  */
-export function hasTeamLineup(tournament: Pick<Tournament, "status" | "teams_count">): boolean {
-  return (tournament.teams_count ?? 0) > 0 && reachedAtLeast(tournament.status, "check_in");
+export function hasTeamLineup(
+  tournament: Pick<Tournament, "status" | "flow_nodes" | "teams_count">
+): boolean {
+  return (tournament.teams_count ?? 0) > 0 && reachedCheckIn(displayStatus(tournament));
 }
 
 /** Stage types with a bracket to draw, and with a standings table instead. */
@@ -84,16 +72,14 @@ export type StageFact =
   | { kind: "finalBestOf"; n: number }
   | { kind: "qualify"; count: number }
   | { kind: "eliminate"; count: number }
-  | { kind: "advance"; count: number }
   | { kind: "grandFinal"; reset: boolean };
 
 /**
  * What a reader needs to follow a stage, read off its regulation: how long it
  * runs, how long a series is, how a team gets through. Only what applies — an
- * FFA lobby plays no series, and the last wave advances nobody, whatever its
- * `advance_count` says.
+ * FFA lobby plays no series.
  */
-export function stageFacts(stage: StageSummary, hasNextWave: boolean): StageFact[] {
+export function stageFacts(stage: StageSummary): StageFact[] {
   const facts: StageFact[] = [];
   const isFfa = stage.stage_type === "ffa_league";
   if ((stage.stage_type === "swiss" || isFfa) && stage.max_rounds > 0) {
@@ -113,9 +99,6 @@ export function stageFacts(stage: StageSummary, hasNextWave: boolean): StageFact
     if (stage.swiss_eliminate_losses != null) {
       facts.push({ kind: "eliminate", count: stage.swiss_eliminate_losses });
     }
-  }
-  if (hasNextWave && stage.advance_count != null && stage.advance_count > 0) {
-    facts.push({ kind: "advance", count: stage.advance_count });
   }
   if (stage.stage_type === "double_elimination") {
     facts.push({ kind: "grandFinal", reset: stage.de_grand_final_type === "with_reset" });
@@ -257,8 +240,6 @@ export interface GroupRow {
   team: Team | null;
   groupKey: string;
   groupName: string | null;
-  /** How many of this group go through: the group's own count, else the stage's. */
-  advance: number | null;
   position: number;
   points: number;
   /** Maps won minus maps lost over the finished series. */
@@ -272,7 +253,6 @@ export interface GroupRow {
  * the map difference come from the stage's finished series.
  */
 export function buildGroupRows(
-  stage: Pick<StageSummary, "advance_count">,
   stageStandings: readonly Standings[],
   stageEncounters: readonly Encounter[]
 ): GroupRow[] {
@@ -303,7 +283,6 @@ export function buildGroupRows(
         team: row.team,
         groupKey: group.key,
         groupName: group.name,
-        advance: row.stage_item?.advance_count ?? stage.advance_count,
         position: row.position,
         points: row.points,
         mapDiff: own?.mapDiff ?? 0,

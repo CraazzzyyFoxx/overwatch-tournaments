@@ -38,6 +38,7 @@ from shared.domain.roster_shape import FLEX_SLOT_CODE, RosterShape
 from shared.domain.team_subscription import SUBSCRIPTION_SCOPE_TEAM, team_subscription_is_current
 from shared.models.registration.registration import (
     Registration,
+    RegistrationEntry,
     RegistrationForm,
     RegistrationTeam,
 )
@@ -109,20 +110,22 @@ async def build_registered_export(
     session: AsyncSession,
     tournament_id: int,
     shape: RosterShape,
+    registration_node_ids: Sequence[int],
     *,
     team_ids: Sequence[int] | None = None,
 ) -> RegisteredExportPayload:
-    """Turn this tournament's complete registered teams into an export payload.
+    """Turn the complete registered teams of the given registration nodes into an export payload.
 
-    ``team_ids`` narrows to a subset (one organizer exporting one team); omitted,
-    every complete team is taken. Incomplete and terminal teams are reported in
-    ``skipped`` rather than silently dropped: the people in a stuck team must be
-    told.
+    ``registration_node_ids`` are the registration nodes feeding the exporting formation (its input): the teams of
+    any other intake are not this formation's to materialize. ``team_ids`` narrows to a subset (one organizer
+    exporting one team); omitted, every complete team is taken. Incomplete and terminal teams are reported in
+    ``skipped`` rather than silently dropped: the people in a stuck team must be told.
     """
     payload = RegisteredExportPayload()
 
     conditions = [
         RegistrationTeam.tournament_id == tournament_id,
+        RegistrationTeam.registration_node_id.in_(list(registration_node_ids)),
         RegistrationTeam.deleted_at.is_(None),
     ]
     if team_ids is not None:
@@ -136,22 +139,34 @@ async def build_registered_export(
     # One query for every roster row across every team, carrying everything the
     # roster engine reads: the per-member fan would otherwise be O(members)
     # round-trips, and a lazy load under async raises ``MissingGreenlet``.
-    registrations = list(
-        await session.scalars(
-            sa.select(Registration)
+    # A member's participation is the entry in the node their team signs up through.
+    rows = (
+        await session.execute(
+            sa.select(Registration, RegistrationEntry)
+            .join(RegistrationEntry, RegistrationEntry.registration_id == Registration.id)
+            .join(
+                RegistrationTeam,
+                sa.and_(
+                    RegistrationTeam.id == Registration.registration_team_id,
+                    RegistrationTeam.registration_node_id == RegistrationEntry.registration_node_id,
+                ),
+            )
             .where(
                 Registration.registration_team_id.in_([team.id for team in teams]),
                 Registration.deleted_at.is_(None),
-                Registration.status.notin_(_RELEASED_STATUSES),
+                RegistrationEntry.deleted_at.is_(None),
+                RegistrationEntry.status.notin_(_RELEASED_STATUSES),
             )
             .options(*registration_load_options())
         )
-    )
+    ).all()
+    registrations = [registration for registration, _ in rows]
+    entries = {registration.id: entry for registration, entry in rows}
     workspace_id = await session.scalar(sa.select(Tournament.workspace_id).where(Tournament.id == tournament_id))
     form = await session.scalar(sa.select(RegistrationForm).where(RegistrationForm.tournament_id == tournament_id))
     team_scope = getattr(form, "subscription_scope", None) or "player"
     rosters = await roster_engine.resolve(
-        session, registrations, workspace_id=workspace_id, tournament_id=tournament_id
+        session, registrations, workspace_id=workspace_id, tournament_id=tournament_id, entries=entries
     )
     members_by_team: dict[int, list[Registration]] = {}
     for registration in registrations:
@@ -199,7 +214,7 @@ async def build_registered_export(
                     sub_role=_sub_role_for(roster, role),
                     handle=roster.handle,
                     workspace_member_id=registration.workspace_member_id,
-                    is_substitute=bool(registration.is_substitute),
+                    is_substitute=bool(entries[registration.id].is_substitute),
                     non_rated_roles=tuple(
                         entry.catalog_role
                         for entry in registration.roles

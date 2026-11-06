@@ -1,6 +1,20 @@
 import { BRACKET_STAGE_TYPES } from "@/lib/bracket/projection";
-import { reachedAtLeast } from "@/lib/tournament/lifecycle";
-import type { StageSummary, Tournament, TournamentStatus } from "@/types/tournament.types";
+import type { StageSummary, Tournament, TournamentDisplayStatus } from "@/types/tournament.types";
+
+/**
+ * Whether play has started: a stage is `live` or already `completed`, or the tournament is over. Until then the
+ * tournament is announcing, signing up or forming its teams, whatever its status says.
+ */
+export function hasPlayStarted(
+  status: TournamentDisplayStatus,
+  stages: readonly Pick<StageSummary, "status">[] | undefined
+): boolean {
+  return (
+    status === "completed" ||
+    status === "archived" ||
+    (stages ?? []).some((stage) => stage.status === "live" || stage.status === "completed")
+  );
+}
 
 /**
  * The tournament's current stage: the one answer to "which stage do we open",
@@ -18,13 +32,13 @@ import type { StageSummary, Tournament, TournamentStatus } from "@/types/tournam
  */
 export function pickCurrentStage<T extends StageSummary>(
   stages: readonly T[],
-  status: TournamentStatus
+  status: TournamentDisplayStatus
 ): T | null {
   const ordered = [...stages].sort((left, right) => left.order - right.order || left.id - right.id);
-  const visible = ordered.filter((stage) => stage.is_published || stage.is_completed);
+  const visible = ordered.filter((stage) => stage.is_published || stage.status === "completed");
   const pool = visible.length > 0 ? visible : ordered;
 
-  if (reachedAtLeast(status, "completed")) {
+  if (status === "completed" || status === "archived") {
     return (
       pool.filter((stage) => BRACKET_STAGE_TYPES.includes(stage.stage_type)).at(-1) ??
       pool.at(-1) ??
@@ -32,8 +46,8 @@ export function pickCurrentStage<T extends StageSummary>(
     );
   }
   return (
-    pool.find((stage) => stage.is_active) ??
-    pool.find((stage) => !stage.is_completed) ??
+    pool.find((stage) => stage.status === "live") ??
+    pool.find((stage) => stage.status !== "completed") ??
     pool.at(-1) ??
     null
   );
