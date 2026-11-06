@@ -109,6 +109,27 @@ class _ResultCase(EncounterWriterCase):
             )
         )
 
+    async def leaderboard(self, s, *rows: tuple[str, int, int | None, str]) -> int:
+        """A leaderboard sink of ``(participant key, rank, tie_group, state)`` rows: ``m*`` keys are members, else teams."""
+        node = models.FlowNode(tournament_id=self.ids["t"], kind="leaderboard", name="LB", status="final", config={})
+        s.add(node)
+        await s.flush()
+        for key, rank, tie, state in rows:
+            member = key.startswith("m")
+            s.add(
+                models.FlowNodeResult(
+                    node_id=node.id,
+                    port="ranking",
+                    rank=rank,
+                    workspace_member_id=self.ids[key] if member else None,
+                    team_id=None if member else self.ids[key],
+                    tie_group=tie,
+                    state=state,
+                )
+            )
+        await s.flush()
+        return node.id
+
 
 class WriteParticipantResultsTests(_ResultCase):
     async def test_a_member_on_two_teams_gets_one_row_of_the_later_team(self) -> None:
@@ -213,6 +234,65 @@ class WriteParticipantResultsTests(_ResultCase):
             await s.commit()
             self.assertEqual(0, written)
             self.assertEqual({}, await self.results(s))
+
+    async def test_a_player_leaderboard_sink_wins_over_team_standings(self) -> None:
+        async with self.Session() as s:
+            await self.roster(s, "m0", "team0")
+            await self.roster(s, "m1", "team1")
+            self.standing(s, "team0", 2)  # rule 2 would rank team0 below team1
+            self.standing(s, "team1", 1)
+            sink = await self.leaderboard(s, ("m0", 1, None, "final"), ("m1", 2, None, "final"))
+            await self.finish(s)
+            await write_participant_results(s, self.ids["t"])
+            await s.commit()
+            self.assertEqual(
+                {self.ids["m0"]: (self.ids["team0"], 1, 2), self.ids["m1"]: (self.ids["team1"], 2, 2)},
+                await self.results(s),
+            )
+            sources = set(await s.scalars(sa.select(PR.source_node_id).where(PR.tournament_id == self.ids["t"])))
+            self.assertEqual({sink}, sources)
+
+    async def test_team_rows_expand_to_non_substitute_members_at_the_team_rank(self) -> None:
+        async with self.Session() as s:
+            await self.roster(s, "m0", "team0")
+            await self.roster(s, "m1", "team0")
+            await self.roster(s, "m2", "team0", substitute=True)
+            await self.roster(s, "m3", "team1")
+            await self.leaderboard(s, ("team0", 1, None, "final"), ("team1", 2, None, "final"))
+            await self.finish(s)
+            await write_participant_results(s, self.ids["t"])
+            await s.commit()
+            self.assertEqual(
+                {
+                    self.ids["m0"]: (self.ids["team0"], 1, 2),
+                    self.ids["m1"]: (self.ids["team0"], 1, 2),
+                    self.ids["m3"]: (self.ids["team1"], 2, 2),
+                },
+                await self.results(s),
+            )
+
+    async def test_tied_rows_share_the_head_place(self) -> None:
+        async with self.Session() as s:
+            for member, team in (("m0", "team0"), ("m1", "team1"), ("m2", "team2")):
+                await self.roster(s, member, team)
+            await self.leaderboard(s, ("m0", 1, None, "final"), ("m1", 2, 2, "final"), ("m2", 3, 2, "final"))
+            await self.finish(s)
+            await write_participant_results(s, self.ids["t"])
+            await s.commit()
+            placements = {member: placement for member, (_, placement, _) in (await self.results(s)).items()}
+            self.assertEqual({self.ids["m0"]: 1, self.ids["m1"]: 2, self.ids["m2"]: 2}, placements)
+
+    async def test_tentative_leaderboard_rows_are_not_written(self) -> None:
+        async with self.Session() as s:
+            await self.roster(s, "m0", "team0")
+            await self.roster(s, "m1", "team1")
+            self.standing(s, "team0", 1)
+            self.standing(s, "team1", 2)
+            await self.leaderboard(s, ("m0", 1, None, "final"), ("m1", 2, None, "tentative"))
+            await self.finish(s)
+            await write_participant_results(s, self.ids["t"])
+            await s.commit()
+            self.assertEqual({self.ids["m0"]}, set(await self.results(s)))
 
 
 class MemberTournamentRowTests(_ResultCase):

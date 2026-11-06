@@ -2,6 +2,7 @@
 
 Lifecycle nodes read their rows from the registration, team and standings tables; the pure nodes compute them from
 their inputs. Rows are updated in place so ids stay stable (plan Decision 5). Lifecycle statuses are never written here.
+A moved leaderboard sink of a finished tournament rewrites ``participant_result`` (spec §4.7 rule 1).
 """
 
 from collections import defaultdict
@@ -33,6 +34,8 @@ from shared.models.tournament.player_standing import PlayerStanding
 from shared.models.tournament.stage import Stage, StageItem
 from shared.models.tournament.standings import Standing
 from shared.models.tournament.team import Player, Team
+from shared.models.tournament.tournament import Tournament
+from shared.services.participant_result import write_participant_results
 from src.domain.flow.aggregate import AggregateInput, compute_aggregate
 from src.domain.flow.compute import (
     PureOutput,
@@ -93,8 +96,14 @@ class FlowEngine:
         for e in edges:
             incoming[e.target_node_id].append(e)
         item_order = await self._item_order(session, tournament_id) if any(n.kind == "filter" for n in nodes) else {}
+        has_successor = {e.source_node_id for e in edges}
+        # The same sink ``write_participant_results`` reads: a leaderboard with no outgoing edge, the highest id.
+        sink_id = max(
+            (n.id for n in nodes if n.kind == FlowNodeKind.LEADERBOARD and n.id not in has_successor), default=None
+        )
 
         outputs: dict[tuple[int, str], tuple[list[ResultRow], FlowResultState]] = {}
+        board_moved = False
         changed: list[int] = []
         for node_id in order:
             node = by_id[node_id]
@@ -125,13 +134,19 @@ class FlowEngine:
             moved = False
             for port, rows in ports.items():
                 outputs[(node_id, port)] = (rows, state)
-                moved |= await self._write_results(session, node_id, port, rows, state)
+                written = await self._write_results(session, node_id, port, rows, state)
+                moved |= written
+                board_moved |= written and node_id == sink_id
             if status is not None and status != node.status:
                 await session.execute(sa.update(FlowNode).where(FlowNode.id == node_id).values(status=status.value))
                 moved = True
             if moved:
                 changed.append(node_id)
         await session.flush()
+        if board_moved and await session.scalar(
+            sa.select(Tournament.is_finished).where(Tournament.id == tournament_id)
+        ):
+            await write_participant_results(session, tournament_id)
         return FlowRecomputeReport(tuple(changed))
 
     def _compute_pure(

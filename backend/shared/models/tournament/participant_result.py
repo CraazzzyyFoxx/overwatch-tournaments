@@ -13,7 +13,8 @@ class ParticipantResult(db.Base):
     """One row per member per finished tournament: the member's final team, final placement and the field size.
 
     Written only by ``shared.services.participant_result.write_participant_results``. ``placement`` NULL means the
-    final team has no positive place; ``source_node_id`` is the formation node the member came from, cleared with it.
+    final team has no positive place; ``source_node_id`` is the leaderboard node the row copies (NULL for rule 2),
+    cleared with it.
     """
 
     __tablename__ = "participant_result"
