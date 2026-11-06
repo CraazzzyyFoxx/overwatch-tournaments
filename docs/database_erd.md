@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`flowP4_01_source_result`** (179 revisions in `backend/migrations/versions/`).
+Alembic head: **`flowP6_01_deferrable_fks`** (180 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**

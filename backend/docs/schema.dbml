@@ -128,7 +128,6 @@ Enum pickbansessionstatus {
 
 Enum stageiteminputtype {
   final
-  tentative
   empty
 }
 
@@ -1808,8 +1807,8 @@ Table division_grid_tier {
   native_rank_max bigint
   canonical_number bigint
   indexes {
-    (version_id, sort_order) [unique]
     (version_id, slug) [unique]
+    (version_id, sort_order) [unique]
     (version_id) [name: "ix_division_grid_tier_version_id"]
   }
 }
@@ -2233,8 +2232,8 @@ Table registration.google_sheet_binding {
   row_hash VARCHAR(128)
   last_seen_at timestamptz
   indexes {
-    (feed_id, source_record_key) [unique, name: "uq_registration_google_sheet_binding_key"]
     (registration_id) [unique, name: "uq_registration_google_sheet_binding_registration"]
+    (feed_id, source_record_key) [unique, name: "uq_registration_google_sheet_binding_key"]
     (feed_id) [name: "ix_registration_google_sheet_binding_feed_id"]
   }
 }
@@ -2273,8 +2272,8 @@ Table registration.identity {
   handle VARCHAR(255) [not null]
   handle_normalized VARCHAR(255) [not null]
   indexes {
-    (registration_id, provider, position) [unique, name: "uq_registration_identity_position"]
     (registration_id, provider, handle_normalized) [unique, name: "uq_registration_identity_handle"]
+    (registration_id, provider, position) [unique, name: "uq_registration_identity_position"]
     (provider, handle_normalized) [name: "ix_registration_identity_handle"]
     (registration_id) [name: "ix_registration_identity_registration_id"]
   }
@@ -2362,8 +2361,8 @@ Table registration.role_entity {
   entity_kind VARCHAR(16) [not null, default: `character`]
   priority int [not null]
   indexes {
-    (role_id, entity_id) [unique, name: "uq_reg_role_entity_role_entity"]
     (role_id, priority) [unique, name: "uq_reg_role_entity_role_priority"]
+    (role_id, entity_id) [unique, name: "uq_reg_role_entity_role_entity"]
     (role_id) [name: "ix_registration_role_entity_role_id"]
   }
 }
@@ -2642,8 +2641,8 @@ Table stats.match {
   mode_entity_id bigint
   mode_kind VARCHAR(16) [not null, default: `mode`]
   indexes {
-    (encounter_game_id) [unique, name: "uq_stats_match_game"]
     (id, encounter_id) [unique, name: "uq_stats_match_owner"]
+    (encounter_game_id) [unique, name: "uq_stats_match_game"]
     (encounter_id) [name: "ix_stats_match_encounter"]
     (ingest_job_id) [name: "ix_stats_match_ingest_job"]
     (workspace_id) [name: "ix_stats_match_workspace"]
@@ -3000,8 +2999,8 @@ Table tournament.encounter_link {
   target_encounter_id bigint [not null]
   target_slot int [not null]
   indexes {
-    (source_encounter_id, source_position) [unique, name: "uq_link_source_position"]
     (target_encounter_id, target_slot) [unique, name: "uq_link_target_slot"]
+    (source_encounter_id, source_position) [unique, name: "uq_link_source_position"]
   }
 }
 
@@ -3271,8 +3270,8 @@ Table tournament.scrim_room {
   created_by_auth_user_id bigint [not null]
   closed_at timestamptz
   indexes {
-    (token) [unique, name: "uq_scrim_room_token"]
     (encounter_id) [unique, name: "uq_scrim_room_encounter"]
+    (token) [unique, name: "uq_scrim_room_token"]
     (created_by_auth_user_id) [name: "ix_scrim_room_open_by_creator"]
     (created_by_auth_user_id) [name: "ix_tournament_scrim_room_created_by_auth_user_id"]
     (stage_id) [name: "ix_tournament_scrim_room_stage_id"]
@@ -3356,10 +3355,10 @@ Table tournament.stage_item_input {
   slot int [not null]
   input_type stageiteminputtype [not null]
   team_id bigint
-  source_stage_item_id bigint
-  source_position int
+  source_result_id bigint
   indexes {
     (stage_item_id, slot) [unique, name: "uq_stage_item_input_item_slot"]
+    (source_result_id) [name: "ix_tournament_stage_item_input_source_result_id"]
     (stage_item_id) [name: "ix_tournament_stage_item_input_stage_item_id"]
     (team_id) [name: "ix_tournament_stage_item_input_team_id"]
   }
@@ -3939,13 +3938,13 @@ Ref: roster.team_format.discipline > mix.custom_game.discipline [delete: cascade
 Ref: roster.team_format.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: roster.team_format.custom_game_id > mix.custom_game.id [delete: cascade]
 Ref: roster.team_format_dimension.team_format_id > roster.team_format.id [delete: cascade]
-Ref: roster.team_format_dimension.discipline > catalog.role_dimension.discipline
 Ref: roster.team_format_dimension.discipline > roster.team_format.discipline [delete: cascade]
+Ref: roster.team_format_dimension.discipline > catalog.role_dimension.discipline
 Ref: roster.team_format_dimension.dimension_id > catalog.role_dimension.id
 Ref: stats.discord_channel.tournament_id > tournament.tournament.id [delete: cascade]
+Ref: stats.event.match_id > stats.match.id [delete: cascade]
 Ref: stats.event.match_id > stats.match_player.match_id
 Ref: stats.event.match_id > stats.match_team.match_id
-Ref: stats.event.match_id > stats.match.id [delete: cascade]
 Ref: stats.event.match_id > stats.match_player.match_id
 Ref: stats.event.match_id > stats.match_team.match_id
 Ref: stats.event.type_id > stats.event_type.id
@@ -4084,7 +4083,7 @@ Ref: tournament.stage.scoring_rule_id > encounter.scoring_rule.id
 Ref: tournament.stage_item.stage_id > tournament.stage.id [delete: cascade]
 Ref: tournament.stage_item_input.stage_item_id > tournament.stage_item.id [delete: cascade]
 Ref: tournament.stage_item_input.team_id > tournament.team.id [delete: set null]
-Ref: tournament.stage_item_input.source_stage_item_id > tournament.stage_item.id [delete: set null]
+Ref: tournament.stage_item_input.source_result_id > tournament.flow_node_result.id [delete: set null]
 Ref: tournament.stage_round_best_of.stage_id > tournament.stage.id [delete: cascade]
 Ref: tournament.standing.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: tournament.standing.team_id > tournament.team.id [delete: cascade]

@@ -42,7 +42,7 @@ CREATE TYPE tournament.pickbanfirstpickrule AS ENUM ('higher_seed');
 CREATE TYPE tournament.pickbanrotation AS ENUM ('fixed', 'alternate', 'result_winner_first', 'result_loser_first', 'result_loser_choice');
 CREATE TYPE tournament.stagetype AS ENUM ('round_robin', 'single_elimination', 'double_elimination', 'swiss', 'ffa_league', 'individual_swiss');
 CREATE TYPE tournament.stageitemtype AS ENUM ('group', 'bracket_upper', 'bracket_lower', 'single_bracket');
-CREATE TYPE tournament.stageiteminputtype AS ENUM ('final', 'tentative', 'empty');
+CREATE TYPE tournament.stageiteminputtype AS ENUM ('final', 'empty');
 CREATE TYPE tournament.tournamentstatus AS ENUM ('announcement', 'live', 'completed', 'archived');
 
 CREATE TABLE achievements.evaluation_result (
@@ -1400,8 +1400,8 @@ CREATE TABLE encounter.team (
 	PRIMARY KEY (id),
 	CONSTRAINT uq_team_id_encounter UNIQUE (id, encounter_id),
 	CONSTRAINT uq_team_id_encounter_active UNIQUE (id, encounter_id, active),
-	CONSTRAINT fk_team_encounter_tournament FOREIGN KEY(encounter_id, tournament_id) REFERENCES encounter.encounter (id, tournament_id) ON DELETE CASCADE,
-	CONSTRAINT fk_team_source FOREIGN KEY(team_id, tournament_id) REFERENCES tournament.team (id, tournament_id) ON DELETE SET NULL (team_id),
+	CONSTRAINT fk_team_encounter_tournament FOREIGN KEY(encounter_id, tournament_id) REFERENCES encounter.encounter (id, tournament_id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
+	CONSTRAINT fk_team_source FOREIGN KEY(team_id, tournament_id) REFERENCES tournament.team (id, tournament_id) ON DELETE SET NULL (team_id) DEFERRABLE INITIALLY IMMEDIATE,
 	CONSTRAINT ck_team_slot CHECK (slot >= 1),
 	CONSTRAINT ck_team_placement CHECK (placement IS NULL OR placement >= 1),
 	CONSTRAINT ck_team_score_finite CHECK (score NOT IN ('NaN', 'Infinity', '-Infinity')),
@@ -3170,8 +3170,8 @@ CREATE TABLE tournament.bracket_encounter (
 	stage_item_id BIGINT,
 	round INTEGER NOT NULL,
 	PRIMARY KEY (encounter_id),
-	CONSTRAINT fk_bracket_encounter FOREIGN KEY(encounter_id, tournament_id) REFERENCES encounter.encounter (id, tournament_id) ON DELETE CASCADE,
-	CONSTRAINT fk_bracket_stage FOREIGN KEY(stage_id, tournament_id) REFERENCES tournament.stage (id, tournament_id) ON DELETE SET NULL (stage_id),
+	CONSTRAINT fk_bracket_encounter FOREIGN KEY(encounter_id, tournament_id) REFERENCES encounter.encounter (id, tournament_id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
+	CONSTRAINT fk_bracket_stage FOREIGN KEY(stage_id, tournament_id) REFERENCES tournament.stage (id, tournament_id) ON DELETE SET NULL (stage_id) DEFERRABLE INITIALLY IMMEDIATE,
 	CONSTRAINT fk_bracket_stage_item FOREIGN KEY(stage_item_id, stage_id) REFERENCES tournament.stage_item (id, stage_id) ON DELETE SET NULL (stage_item_id)
 );
 
@@ -3312,8 +3312,8 @@ CREATE TABLE tournament.encounter_link (
 	PRIMARY KEY (id),
 	CONSTRAINT uq_link_source_position UNIQUE (source_encounter_id, source_position),
 	CONSTRAINT uq_link_target_slot UNIQUE (target_encounter_id, target_slot),
-	CONSTRAINT fk_link_source FOREIGN KEY(source_encounter_id, tournament_id) REFERENCES encounter.encounter (id, tournament_id) ON DELETE CASCADE,
-	CONSTRAINT fk_link_target FOREIGN KEY(target_encounter_id, tournament_id) REFERENCES encounter.encounter (id, tournament_id) ON DELETE CASCADE,
+	CONSTRAINT fk_link_source FOREIGN KEY(source_encounter_id, tournament_id) REFERENCES encounter.encounter (id, tournament_id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
+	CONSTRAINT fk_link_target FOREIGN KEY(target_encounter_id, tournament_id) REFERENCES encounter.encounter (id, tournament_id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE,
 	CONSTRAINT ck_link_not_self CHECK (source_encounter_id <> target_encounter_id),
 	CONSTRAINT ck_link_positions CHECK (source_position >= 1 AND target_slot >= 1)
 );
@@ -3714,7 +3714,7 @@ CREATE TABLE tournament.stage (
 	qualification_locked_at TIMESTAMP WITH TIME ZONE,
 	PRIMARY KEY (id),
 	CONSTRAINT ck_stage_de_grand_final_type CHECK (de_grand_final_type IN ('no_reset', 'with_reset')),
-	CONSTRAINT ck_stage_seed_ranking CHECK (seed_ranking IN ('slot', 'avg_sr', 'total_sr', 'random')),
+	CONSTRAINT ck_stage_seed_ranking CHECK (seed_ranking IN ('slot', 'source', 'avg_sr', 'total_sr', 'random', 'cross', 'snake')),
 	CONSTRAINT ck_stage_best_of_default CHECK (best_of_default >= 1),
 	CONSTRAINT ck_stage_best_of_final CHECK (best_of_final IS NULL OR best_of_final >= 1),
 	CONSTRAINT ck_stage_swiss_qualify_wins CHECK (swiss_qualify_wins IS NULL OR swiss_qualify_wins >= 1),
@@ -3755,14 +3755,15 @@ CREATE TABLE tournament.stage_item_input (
 	slot INTEGER NOT NULL,
 	input_type tournament.stageiteminputtype NOT NULL,
 	team_id BIGINT,
-	source_stage_item_id BIGINT,
-	source_position INTEGER,
+	source_result_id BIGINT,
 	PRIMARY KEY (id),
 	CONSTRAINT uq_stage_item_input_item_slot UNIQUE (stage_item_id, slot),
 	FOREIGN KEY(stage_item_id) REFERENCES tournament.stage_item (id) ON DELETE CASCADE,
 	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE SET NULL,
-	FOREIGN KEY(source_stage_item_id) REFERENCES tournament.stage_item (id) ON DELETE SET NULL
+	FOREIGN KEY(source_result_id) REFERENCES tournament.flow_node_result (id) ON DELETE SET NULL
 );
+
+CREATE INDEX ix_tournament_stage_item_input_source_result_id ON tournament.stage_item_input (source_result_id);
 
 CREATE INDEX ix_tournament_stage_item_input_stage_item_id ON tournament.stage_item_input (stage_item_id);
 
