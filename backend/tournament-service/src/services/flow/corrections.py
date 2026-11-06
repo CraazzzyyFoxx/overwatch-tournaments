@@ -76,9 +76,11 @@ async def assert_stage_correction_allowed(session: AsyncSession, stage_id: int) 
 
 async def assert_encounter_correction_allowed(session: AsyncSession, encounter: models.Encounter) -> None:
     """The stage rule for the stage ``encounter`` belongs to; no-op for an encounter outside a stage."""
-    position = await session.get(models.BracketEncounter, encounter.id)
-    if position is not None and position.stage_id is not None:
-        await assert_stage_correction_allowed(session, position.stage_id)
+    stage_id = await session.scalar(
+        select(models.BracketEncounter.stage_id).where(models.BracketEncounter.encounter_id == encounter.id)
+    )
+    if stage_id is not None:
+        await assert_stage_correction_allowed(session, stage_id)
 
 
 async def started_cut(session: AsyncSession, stage_item_id: int) -> int | None:
