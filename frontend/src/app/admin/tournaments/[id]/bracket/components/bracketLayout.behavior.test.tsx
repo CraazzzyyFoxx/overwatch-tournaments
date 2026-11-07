@@ -394,6 +394,39 @@ describe("Bracket layout editor", () => {
     expect(parseFloat(addedLower!.style.top)).toBeGreaterThan(parseFloat(lowerHeader.style.top));
   });
 
+  it("deletes a match from its card menu", async () => {
+    // The menu is portaled, yet React bubbles its pointerdown to the canvas.
+    // Taken as the start of a pan, the canvas captured the pointer and the
+    // browser never delivered the click to "Delete".
+    const capture = vi.fn();
+    const original = Element.prototype.setPointerCapture;
+    Element.prototype.setPointerCapture = capture;
+    try {
+      await mount();
+      const pointerDown = (element: Element) =>
+        act(async () => {
+          element.dispatchEvent(
+            new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0, pointerType: "mouse" })
+          );
+        });
+
+      await pointerDown(container.querySelector('[aria-label="Match 3 actions"]')!);
+      await settle();
+      const remove = Array.from(document.body.querySelectorAll('[role="menuitem"]')).find(
+        (item) => item.textContent?.trim() === "Delete"
+      );
+      expect(remove).toBeDefined();
+
+      await pointerDown(remove!);
+      expect(capture).not.toHaveBeenCalled();
+      await click(remove);
+
+      expect(container.querySelector('[data-match-id="3"]')).toBeNull();
+    } finally {
+      Element.prototype.setPointerCapture = original;
+    }
+  });
+
   it("asks before throwing a custom layout away", async () => {
     getStageBracketTemplate.mockResolvedValue({ ...generatedTemplate(), custom: true });
 

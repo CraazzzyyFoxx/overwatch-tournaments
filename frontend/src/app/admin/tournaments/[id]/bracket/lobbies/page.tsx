@@ -14,10 +14,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { FFA_STAGE_TYPES } from "@/lib/bracket/projection";
+import { standingsCuts, type StandingsCuts } from "@/lib/flow/standingsCuts";
 import { notify } from "@/lib/notify";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import ffaService from "@/services/ffa.service";
+import flowService from "@/services/flow.service";
 import type { FfaLobby } from "@/types/ffa.types";
 import type { Stage } from "@/types/tournament.types";
 
@@ -79,6 +82,11 @@ function StageLobbies({ tournamentId, stage }: Readonly<{ tournamentId: number; 
     queryKey: tournamentQueryKeys.ffaStageAdmin(tournamentId, stage.id),
     queryFn: () => ffaService.getStageAdmin(tournamentId, stage.id)
   });
+  // The same read as the Flow tab: its filters after this stage are the lobbies' cut lines.
+  const flowQuery = useQuery({
+    queryKey: adminQueryKeys.tournamentFlow(tournamentId),
+    queryFn: () => flowService.getAdmin(tournamentId)
+  });
   const lobbies = lobbiesQuery.data ?? [];
 
   return (
@@ -98,13 +106,19 @@ function StageLobbies({ tournamentId, stage }: Readonly<{ tournamentId: number; 
           {t("empty")}
         </p>
       ) : (
-        lobbies.map((lobby) => <LobbyCard key={lobby.encounter_id} lobby={lobby} />)
+        lobbies.map((lobby) => (
+          <LobbyCard
+            key={lobby.encounter_id}
+            lobby={lobby}
+            cuts={standingsCuts(flowQuery.data, stage, lobby.stage_item_id)}
+          />
+        ))
       )}
     </section>
   );
 }
 
-function LobbyCard({ lobby }: Readonly<{ lobby: FfaLobby }>) {
+function LobbyCard({ lobby, cuts }: Readonly<{ lobby: FfaLobby; cuts: StandingsCuts }>) {
   const t = useTranslations("adminBracket.lobbies");
   const [entering, setEntering] = useState<number | null>(null);
   const [voiding, setVoiding] = useState<number | null>(null);
@@ -130,7 +144,7 @@ function LobbyCard({ lobby }: Readonly<{ lobby: FfaLobby }>) {
           <p className="text-sm text-muted-foreground">{t("noTeams")}</p>
         ) : (
           <>
-            <FfaLobbyTable lobby={lobby} />
+            <FfaLobbyTable lobby={lobby} cuts={cuts} />
             <div className="flex flex-wrap items-center gap-2">
               <span className={eyebrowClass("muted")}>{t("games")}</span>
               {positions.map((position) => (
