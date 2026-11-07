@@ -25613,6 +25613,22 @@
           ],
           "default": null,
           "description": "Optional configuration overrides"
+        },
+        "registration_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Balance only these registrations of the pool (the panel's 'skip invalid players'). It narrows, never widens: an id the pool does not hold is ignored. Omitted, the whole pool is balanced.",
+          "title": "Registration Ids"
         }
       },
       "title": "TournamentBalanceRequest",
