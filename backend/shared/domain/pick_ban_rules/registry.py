@@ -204,6 +204,8 @@ class ItemCtx:
     target_role: str | None = None
     round: int | None = None
     history: History = History()
+    #: ``{item_id: group}`` of the pool, for leaves that compare an item with the history's items.
+    groups: Mapping[int, str | None] = field(default_factory=dict)
 
 
 # ── leaves ──────────────────────────────────────────────────────────────────
@@ -288,6 +290,26 @@ def _picked_by(params: Mapping[str, Any], ctx: ItemCtx) -> bool:
         actor=ctx.actor,
         scope=str(params["scope"]),
         round=ctx.round,
+    )
+
+
+@leaf(type="group_picked_by", contexts=("item", "pool"), params=(_BY, _SCOPE), relative=True)
+def _group_picked_by(params: Mapping[str, Any], ctx: ItemCtx) -> bool:
+    """An item of this item's group (a map's gamemode) was already picked or decided."""
+    group = normalize_group(ctx.group)
+    if group is None:
+        return False
+    return any(
+        normalize_group(ctx.groups.get(applied.item_id)) == group
+        and ctx.history.contains(
+            item_id=applied.item_id,
+            actions=("pick", "decider"),
+            by=str(params["by"]),
+            actor=ctx.actor,
+            scope=str(params["scope"]),
+            round=ctx.round,
+        )
+        for applied in ctx.history.items
     )
 
 

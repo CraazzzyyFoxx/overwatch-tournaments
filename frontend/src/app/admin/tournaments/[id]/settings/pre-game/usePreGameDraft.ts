@@ -171,9 +171,9 @@ export function usePreGameDraft({
    *
    * The two map generators are mode-specific (`bracket` reads a flat pool,
    * `slot_veto` reads groups), so a generator phase follows the mode rather
-   * than becoming a ruleset the server refuses. A map-by-map pool has no
-   * generator and settles one map per phase, so entering or leaving it starts
-   * over from that mode's default rules.
+   * than becoming a ruleset the server refuses. A map-by-map pool settles one
+   * map per phase (a `slot_veto` phase bans that round's pool down to one), so
+   * entering or leaving it starts over from that mode's default rules.
    */
   const changeMode = (mode: MapVetoMode) => {
     const ruleset =

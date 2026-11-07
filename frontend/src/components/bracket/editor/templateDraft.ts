@@ -40,6 +40,8 @@ export type DraftAction =
   | { type: "connect"; source: number; role: "winner" | "loser"; target: number; slot: DuelSlot }
   | { type: "seed"; target: number; slot: DuelSlot; seed: string }
   | { type: "clear"; target: number; slot: DuelSlot }
+  /** Exchange two slots' contents; refused across rounds (a seed belongs to its round's column). */
+  | { type: "swap"; a: { match: number; slot: DuelSlot }; b: { match: number; slot: DuelSlot } }
   /** `beforeFinal` renumbers the final out one round and takes its place. */
   | { type: "addMatch"; round: number; beforeFinal?: boolean }
   | { type: "deleteMatch"; id: number }
@@ -104,10 +106,37 @@ export function draftReducer(draft: Draft, action: DraftAction): Draft {
         ...draft,
         matches: draft.matches.map((match) =>
           match.id === action.target
-            ? { ...match, slots: match.slots.map((slot, index) => (index + 1 === action.slot ? null : slot)) }
+            ? {
+                ...match,
+                slots: match.slots.map((slot, index) => (index + 1 === action.slot ? null : slot))
+              }
             : match
         )
       };
+
+    case "swap": {
+      const { a, b } = action;
+      const first = draft.matches.find((match) => match.id === a.match);
+      const second = draft.matches.find((match) => match.id === b.match);
+      if (!first || !second || first.round !== second.round) return draft;
+      const valueA = first.slots[a.slot - 1] ?? null;
+      const valueB = second.slots[b.slot - 1] ?? null;
+      return {
+        ...draft,
+        matches: draft.matches.map((match) =>
+          match.id !== a.match && match.id !== b.match
+            ? match
+            : {
+                ...match,
+                slots: match.slots.map((current, index) => {
+                  if (match.id === a.match && index + 1 === a.slot) return valueB;
+                  if (match.id === b.match && index + 1 === b.slot) return valueA;
+                  return current;
+                })
+              }
+        )
+      };
+    }
 
     case "addMatch": {
       const id = Math.max(0, ...draft.matches.map((match) => match.id)) + 1;
@@ -143,9 +172,7 @@ export function draftReducer(draft: Draft, action: DraftAction): Draft {
       // swapping across them would move nothing on the canvas.
       const neighbour =
         action.direction === -1
-          ? draft.matches.findLastIndex(
-              (match, at) => at < index && match.round === round
-            )
+          ? draft.matches.findLastIndex((match, at) => at < index && match.round === round)
           : draft.matches.findIndex((match, at) => at > index && match.round === round);
       if (neighbour < 0) return draft;
       const matches = [...draft.matches];
@@ -204,7 +231,13 @@ export function draftToBracketMatches(draft: Draft): BracketMatch[] {
   return draft.matches.map((match) => {
     const sources = match.slots.flatMap<EncounterSlotSource>((slot, index) =>
       slot?.source_match != null
-        ? [{ encounter_id: slot.source_match, source_position: slot.source_position, slot: index + 1 }]
+        ? [
+            {
+              encounter_id: slot.source_match,
+              source_position: slot.source_position,
+              slot: index + 1
+            }
+          ]
         : []
     );
     return {

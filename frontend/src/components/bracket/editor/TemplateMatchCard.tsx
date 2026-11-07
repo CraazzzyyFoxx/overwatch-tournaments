@@ -1,6 +1,8 @@
 "use client";
 
-import { ArrowDown, ArrowUp, MoreHorizontal, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
+import { useDndContext, useDraggable, useDroppable } from "@dnd-kit/core";
+import { ArrowDown, ArrowUp, GripVertical, MoreHorizontal, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,73 @@ import type { DraftMatch } from "./templateDraft";
 export interface ConnectSource {
   source: number;
   role: "winner" | "loser";
+}
+
+/** dnd-kit payload of one template slot: what a seed drag carries and what it lands on. */
+export interface TemplateSlotDrag {
+  match: number;
+  slot: DuelSlot;
+  round: number;
+  label: string;
+}
+
+/**
+ * One slot as a drop target, with a grip on a seed slot to pick it up. The grip
+ * is its own handle because the row itself opens the slot menu on pointer down.
+ * Only slots of the dragged seed's round accept it (`swap` refuses the rest).
+ */
+function SlotDnd({
+  data,
+  draggable,
+  children
+}: Readonly<{ data: TemplateSlotDrag; draggable: boolean; children: ReactNode }>) {
+  const t = useTranslations("bracket");
+  const id = `template-slot-${data.match}-${data.slot}`;
+  const from = useDndContext().active?.data.current as TemplateSlotDrag | undefined;
+  // Destructured: the refs lint reads any field of an object holding a ref setter as a ref access.
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id,
+    data,
+    disabled: from !== undefined && from.round !== data.round
+  });
+  const {
+    setNodeRef: setDragRef,
+    isDragging,
+    attributes,
+    listeners
+  } = useDraggable({
+    id,
+    data,
+    disabled: !draggable
+  });
+  return (
+    <div
+      ref={setDropRef}
+      className={cn(
+        "flex min-w-0",
+        isDragging && "opacity-40",
+        isOver && !isDragging && "ring-2 ring-inset ring-[color:var(--aqt-teal)]"
+      )}
+    >
+      {draggable ? (
+        <button
+          ref={setDragRef}
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={t("dragTeam", { team: data.label })}
+          className={cn(
+            "flex shrink-0 cursor-grab items-center pl-1 text-[color:var(--aqt-fg-faint)] hover:text-[color:var(--aqt-fg)]",
+            data.slot === 1 && "border-b border-[color:var(--aqt-border)]"
+          )}
+          style={{ height: CARD_ROW_HEIGHT }}
+        >
+          <GripVertical aria-hidden className="size-3.5" />
+        </button>
+      ) : null}
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
 }
 
 interface TemplateMatchCardProps {
@@ -77,17 +146,20 @@ export function TemplateMatchCard({
     // On screen the card's gutter says which match this row belongs to; an
     // accessible name has to carry it itself, so a listener hears
     // "M3 slot 1: L1" rather than a bare "L1".
-    const name = t("slotLabel", { id: match.id, slot: slotNumber, state: slot === null ? t("empty").toLowerCase() : label });
+    const name = t("slotLabel", {
+      id: match.id,
+      slot: slotNumber,
+      state: slot === null ? t("empty").toLowerCase() : label
+    });
     const rowClass = cn(
       "flex items-center justify-between gap-2 px-2.5 text-caption",
       slotNumber === 1 && "border-b border-[color:var(--aqt-border)]",
-      slot === null
-        ? "italic text-[color:var(--aqt-fg-faint)]"
-        : "text-[color:var(--aqt-fg)]"
+      slot === null ? "italic text-[color:var(--aqt-fg-faint)]" : "text-[color:var(--aqt-fg)]"
     );
 
+    let control: ReactNode;
     if (targeting) {
-      return (
+      control = (
         <RowButton
           aria-label={`${name} — ${t("connectHere")}`}
           data-template-slot={`${match.id}-${slotNumber}`}
@@ -100,32 +172,43 @@ export function TemplateMatchCard({
           onClick={() => onConnect(slotNumber)}
         >
           <span className="truncate">{label}</span>
-          <span className="shrink-0 text-label uppercase text-[color:var(--aqt-teal)]">{t("drop")}</span>
+          <span className="shrink-0 text-label uppercase text-[color:var(--aqt-teal)]">
+            {t("drop")}
+          </span>
         </RowButton>
+      );
+    } else {
+      control = (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <RowButton
+              aria-label={name}
+              data-template-slot={`${match.id}-${slotNumber}`}
+              className={rowClass}
+              style={{ height: CARD_ROW_HEIGHT }}
+            >
+              <span className="truncate">{label}</span>
+            </RowButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
+            {availableSeeds.map((seed) => (
+              <DropdownMenuItem key={seed} onSelect={() => onSeed(slotNumber, seed)}>
+                {seed}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuItem onSelect={() => onClear(slotNumber)}>{t("clear")}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       );
     }
 
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <RowButton
-            aria-label={name}
-            data-template-slot={`${match.id}-${slotNumber}`}
-            className={rowClass}
-            style={{ height: CARD_ROW_HEIGHT }}
-          >
-            <span className="truncate">{label}</span>
-          </RowButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
-          {availableSeeds.map((seed) => (
-            <DropdownMenuItem key={seed} onSelect={() => onSeed(slotNumber, seed)}>
-              {seed}
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuItem onSelect={() => onClear(slotNumber)}>{t("clear")}</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <SlotDnd
+        data={{ match: match.id, slot: slotNumber, round: match.round, label }}
+        draggable={!targeting && slot?.seed != null}
+      >
+        {control}
+      </SlotDnd>
     );
   };
 

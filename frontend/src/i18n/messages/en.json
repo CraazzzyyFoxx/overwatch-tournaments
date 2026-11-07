@@ -5856,7 +5856,8 @@
         "item_group": "Item group",
         "target_role_match": "Matches the player's role",
         "banned_by": "Already banned",
-        "picked_by": "Already picked"
+        "picked_by": "Already picked",
+        "group_picked_by": "Its mode was already played"
       },
       "param": {
         "op": "Comparison",
@@ -5899,7 +5900,7 @@
         "duplicate_step_id": "Two steps share an id.",
         "generator_map_only": "A generated order only exists in a map veto.",
         "generator_requires_pool_mode": "The map veto generator needs one shared pool.",
-        "generator_requires_slots_mode": "The group veto generator needs map groups.",
+        "generator_requires_slots_mode": "The group veto generator needs map groups or a map-by-map pool.",
         "generator_with_steps": "A generated phase cannot carry its own steps.",
         "invalid_id": "Ids may use a-z, 0-9, - and _, up to 32 characters.",
         "invalid_param": "This setting's value is not allowed.",
@@ -5940,6 +5941,7 @@
         "map_bracket": "Standard map veto",
         "map_slot_veto": "Veto per map group",
         "map_by_map": "Map by map: one ban each, then the loser picks",
+        "map_veto_loser_new_mode": "Ban down to one map, then the loser picks a map of a new mode",
         "lol_side_selection": "Side selection: higher seed, then previous loser",
         "deadlock_hero_bans": "Two bans each, A-B-A-B",
         "valorant_vct_bo1": "VCT Bo1: six bans, side, decider",

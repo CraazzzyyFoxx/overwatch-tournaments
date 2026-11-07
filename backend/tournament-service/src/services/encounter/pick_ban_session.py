@@ -1210,13 +1210,20 @@ class PickBanSessionService:
         carried = pbr.carried_bans(steps, submissions, next_round)
         carried_ids = {ban.item_id for ban in carried}
 
-        groups = await load_item_groups(session, PickBanKind(pick_ban.kind), candidate_item_ids, encounter.discipline)
+        history = pbr.history_of(steps, submissions)
+        # The history's items too: `group_picked_by` compares a candidate's group with the groups already played.
+        groups = await load_item_groups(
+            session,
+            PickBanKind(pick_ban.kind),
+            sorted({*candidate_item_ids, *(applied.item_id for applied in history.items)}),
+            encounter.discipline,
+        )
         pool_ctx = pbr.RuntimeCtx(
             kind=str(pick_ban.kind),
             round=next_round,
             best_of=encounter.best_of,
             groups=groups,
-            history=pbr.history_of(steps, submissions),
+            history=history,
         )
         filtered = (
             pbr.filter_pool(phase.pool_filter, candidate_item_ids, pool_ctx)

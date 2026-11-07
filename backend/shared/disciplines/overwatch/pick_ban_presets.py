@@ -1,11 +1,11 @@
-"""Overwatch's built-in hero pick/ban rulesets (``DisciplineSpec.pick_ban_presets``).
+"""Overwatch's built-in pick/ban rulesets (``DisciplineSpec.pick_ban_presets``).
 
-The preset schema and the game-neutral map presets live in ``shared.domain.pick_ban_rules.presets``; the five
+The preset schema and the game-neutral map presets live in ``shared.domain.pick_ban_rules.presets``; the hero
 rulesets below only make sense against a hero pool whose ``attrs.class`` is one of this module's
 ``character_classes`` (``tank``/``damage``/``support``), so they travel with the module. A class is a hero's
-class, never a player's assigned role.
+class, never a player's assigned role. The map ruleset reads a map's gamemode, which only this game's maps have.
 
-Each one validates clean for ``kind="hero"`` ``mode="pool"``; ``test_pick_ban_rules_presets`` is the guard.
+Each one validates clean for its kind and modes; ``test_pick_ban_rules_presets`` is the guard.
 """
 
 from __future__ import annotations
@@ -141,12 +141,39 @@ HERO_ANTI_ONE_TRICK: dict[str, Any] = {
     ],
 }
 
+#: Map 1: the sides ban in turn until one map is left, and that map is played. Every later map: the previous game's
+#: loser picks it, never on a gamemode the series already played. Map-1 bans last that map only.
+MAP_VETO_LOSER_PICKS_NEW_MODE: dict[str, Any] = {
+    "version": 2,
+    "timer_seconds": 60,
+    "on_timeout": "random_fill",
+    "phases": [
+        {
+            "id": "first_map",
+            "name": None,
+            "when": {"type": "map_index", "params": {"op": "==", "value": 1}},
+            "pool_filter": {},
+            "generator": "slot_veto",
+            "steps": [],
+        },
+        {
+            "id": "next_maps",
+            "name": None,
+            "when": {},
+            "pool_filter": {"NOT": {"type": "group_picked_by", "params": {"by": "any", "scope": "series"}}},
+            "generator": None,
+            "steps": [{"id": "pick_loser", "action": "pick", "actors": "loser_prev"}],
+        },
+    ],
+}
+
 PRESETS: tuple[Preset, ...] = (
     Preset("hero_classic", "hero", ("pool",), parse_ruleset(HERO_CLASSIC)),
     Preset("hero_protect_ban", "hero", ("pool",), parse_ruleset(HERO_PROTECT_BAN)),
     Preset("hero_blind_2", "hero", ("pool",), parse_ruleset(HERO_BLIND_2)),
     Preset("hero_role_bans", "hero", ("pool",), parse_ruleset(HERO_ROLE_BANS)),
     Preset("hero_anti_one_trick", "hero", ("pool",), parse_ruleset(HERO_ANTI_ONE_TRICK)),
+    Preset("map_veto_loser_new_mode", "map", ("progressive",), parse_ruleset(MAP_VETO_LOSER_PICKS_NEW_MODE)),
 )
 
 
