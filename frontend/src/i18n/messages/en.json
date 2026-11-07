@@ -500,7 +500,74 @@
       "cascade": "This also removes:",
       "typeToConfirm": "Type <code>{name}</code> to confirm"
     },
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "flowPath": {
+      "title": "Tournament steps",
+      "next": "Next step",
+      "needs": "First:",
+      "run": "Do it",
+      "done": "Nothing to do here; the next step starts on its own as the tournament plays.",
+      "exportTeams": "Next: put the teams into the tournament (export the balance or the draft); then forming can be completed.",
+      "blocked": "This step cannot move further right now: check the tournament flow.",
+      "status": {
+        "registration": {
+          "draft": "Draft",
+          "open": "Open",
+          "check_in": "Check-in",
+          "closed": "Closed"
+        },
+        "formation": {
+          "draft": "Not started",
+          "forming": "Forming",
+          "completed": "Formed"
+        },
+        "stage": {
+          "draft": "Draft",
+          "ready": "Ready",
+          "live": "Live",
+          "completed": "Completed"
+        }
+      },
+      "step": {
+        "registration": {
+          "open": "Open registration “{name}”",
+          "check_in": "Start check-in for “{name}”",
+          "closed": "Close registration “{name}”"
+        },
+        "formation": {
+          "forming": "Start forming “{name}”",
+          "completed": "Complete forming “{name}”",
+          "draft": "Move “{name}” back to draft"
+        },
+        "stage": {
+          "ready": "Mark “{name}” ready (seat the teams)",
+          "live": "Start “{name}”",
+          "completed": "Complete “{name}”",
+          "draft": "Move “{name}” back to draft"
+        }
+      },
+      "consequence": {
+        "registration": {
+          "open": "Players can sign up; the community is notified.",
+          "check_in": "Players are asked to confirm.",
+          "closed": "Nobody can sign up or check in anymore."
+        },
+        "formation": {
+          "forming": "Teams can be exported to the tournament.",
+          "completed": "Rosters freeze; export closes.",
+          "draft": "Forming goes back to draft."
+        },
+        "stage": {
+          "ready": "Teams are seated in the bracket.",
+          "live": "Matches are created and players see them.",
+          "completed": "The stage ends.",
+          "draft": "The stage goes back to draft."
+        }
+      },
+      "exportConfirmTitle": "Export needs {count, plural, one {# step} other {# steps}} first",
+      "exportConfirmLabel": "Do them and export",
+      "waitStage": "Next comes after “{name}” ends: the stage completes on its own once every match is played."
+    }
   },
   "registration": {
     "edit": {
@@ -10055,8 +10122,8 @@
       "reorder": "Reorder {name}",
       "phase": "Phase {number}",
       "phaseMenu": "Phase of {name}",
-      "inParallel": "In parallel with \u201c{name}\u201d",
-      "after": "After \u201c{name}\u201d",
+      "inParallel": "In parallel with “{name}”",
+      "after": "After “{name}”",
       "progress": "{completed} of {total} matches complete",
       "pairingMode": "Lobby pairing",
       "pairingScore": "By points",
@@ -10190,7 +10257,7 @@
       "readOnly": "You can view this but not change it.",
       "frozen": "This stage is already past draft, so who advances into it is locked.",
       "formationFrozen": "Team formation has already started, so who goes into it is locked.",
-      "advanceFrom": "Who advances from \u201c{stage}\u201d",
+      "advanceFrom": "Who advances from “{stage}”",
       "filterName": "Who advances",
       "source": "Takes participants from",
       "sourcePick": "Pick a stage",
@@ -10214,7 +10281,7 @@
       "formationModeLocked": "Locked: team formation has already started, so its method can no longer change.",
       "draftFormat": "Draft format",
       "draftFormatHint": "The pick order every draft of this step starts with.",
-      "complexHint": "This stage\u2019s input is wired in a way that can only be edited in Flow.",
+      "complexHint": "This stage’s input is wired in a way that can only be edited in Flow.",
       "editInFlow": "Edit in Flow",
       "kinds": {
         "stage": "Stage",

@@ -472,6 +472,8 @@ export function useBalancerMutations({
 
       return { savedBalance, exportResult };
     },
+    // The export dialog shows the failure, translated (BalancerMainPageClient.startTournamentExport).
+    meta: { suppressErrorToast: true },
     onSuccess: ({ savedBalance, exportResult }) => {
       applySavedBalanceVariant(savedBalance);
       const showResult = exportResult.advisories.length ? notify.warning : notify.success;

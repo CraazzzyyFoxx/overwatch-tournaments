@@ -8,7 +8,9 @@ import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { Button } from "@/components/ui/button";
 import type { Tone } from "@/components/ui/tone";
-import { useFlowErrorNotifier } from "@/hooks/useFlowErrorNotifier";
+import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";
+import { useFlowPath } from "@/hooks/useFlowPath";
+import { notify } from "@/lib/notify";
 import { nodesOfKind } from "@/lib/tournament/flow-nodes";
 import { NODE_TRANSITIONS } from "@/lib/tournament/lifecycle";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
@@ -62,7 +64,8 @@ export function FlowNodeControls({
 }: Readonly<{ tournament: Tournament; node?: TournamentFlowNode; canUpdate: boolean }>) {
   const t = useTranslations("common.flowNode");
   const queryClient = useQueryClient();
-  const notifyFlowError = useFlowErrorNotifier();
+  const flowMessage = useFlowErrorMessage();
+  const flowPath = useFlowPath(tournament.id);
   const [moving, setMoving] = useState<number | null>(null);
   const [asking, setAsking] = useState<{ node: TournamentFlowNode; target: FlowNodeStatus; move: Move } | null>(null);
 
@@ -75,7 +78,14 @@ export function FlowNodeControls({
       setAsking(null);
     },
     onSuccess: () => invalidateTournamentWorkspace(queryClient, tournament.id),
-    onError: (error) => notifyFlowError(error, t("error"))
+    onError: (error, { nodeId, status }) => {
+      const known = flowMessage(error);
+      // A refusal names one blocked step; the plan lists every move it waits on, in order.
+      if (known) notify.error(known, { description: flowPath.prerequisites(nodeId, status) ?? undefined });
+      else notify.apiError(error, { title: t("error") });
+    },
+    // Toasted above, with this control's title; the global toast would say it twice.
+    meta: { suppressErrorToast: true }
   });
 
   const nodes = (

@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { MasterDetail } from "@/components/kit/MasterDetail";
+import { FlowPathPanel } from "@/components/tournaments/FlowPathPanel";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryParams } from "@/hooks/useQueryParams";
@@ -33,7 +34,7 @@ export default function BracketTabPage() {
   const params = useParams<{ id: string }>();
   const tournamentId = Number(params.id);
   const queryClient = useQueryClient();
-  const { isSuperuser } = usePermissions();
+  const { isSuperuser, canAccessPermission } = usePermissions();
   const { searchParams, setParams } = useQueryParams({ mode: "push" });
   const isMobile = useIsMobile();
 
@@ -86,19 +87,28 @@ export default function BracketTabPage() {
       }
       detail={
         selectedStage ? (
-          <StageEditor
-            key={selectedStage.id}
-            stage={selectedStage}
-            stages={orderedStages}
-            tournament={tournament}
-            teams={teams}
-            isTeamsLoading={isTeamsLoading}
-            progress={progressByStageId.get(selectedStage.id)}
-            isSuperuser={isSuperuser}
-            encountersHref={`/admin/tournaments/${tournamentId}/matches/encounters?stage=${selectedStage.id}`}
-            onChanged={() => void invalidateTournamentWorkspace(queryClient, tournamentId)}
-            onSelect={(stageId) => setParams({ stage: stageId, section: null })}
-          />
+          <div className="space-y-3">
+            {tournament ? (
+              <FlowPathPanel
+                tournamentId={tournamentId}
+                focusNodeId={selectedStage.node_id}
+                canUpdate={canAccessPermission("tournament.update", tournament.workspace_id)}
+              />
+            ) : null}
+            <StageEditor
+              key={selectedStage.id}
+              stage={selectedStage}
+              stages={orderedStages}
+              tournament={tournament}
+              teams={teams}
+              isTeamsLoading={isTeamsLoading}
+              progress={progressByStageId.get(selectedStage.id)}
+              isSuperuser={isSuperuser}
+              encountersHref={`/admin/tournaments/${tournamentId}/matches/encounters?stage=${selectedStage.id}`}
+              onChanged={() => void invalidateTournamentWorkspace(queryClient, tournamentId)}
+              onSelect={(stageId) => setParams({ stage: stageId, section: null })}
+            />
+          </div>
         ) : null
       }
       emptyDetail={

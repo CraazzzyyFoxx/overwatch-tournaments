@@ -3,6 +3,8 @@ import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import type { ConfirmIntent } from "@/components/kit/ConfirmDialog";
+import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";
+import { useFlowPath } from "@/hooks/useFlowPath";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { Stage, StageItem, StageNodeStatus } from "@/types/tournament.types";
@@ -45,6 +47,8 @@ export function useStageOperations({
   const intentT = t as unknown as (key: string, values?: Record<string, unknown>) => string;
   const intentRootT = tRoot as unknown as (key: string, values?: Record<string, unknown>) => string;
   const [pendingOp, setPendingOp] = useState<PendingOp | null>(null);
+  const flowMessage = useFlowErrorMessage();
+  const flowPath = useFlowPath(stage.tournament_id);
 
   // Every lifecycle move is one `NODE_TRANSITIONS.stage` step of the stage's node; the server runs its side effects.
   const transitionMutation = useMutation({
@@ -56,8 +60,12 @@ export function useStageOperations({
     },
     onError: (error, target) => {
       setPendingOp(null);
-      notify.apiError(error, { title: target === "draft" ? t("revertError") : t("transitionError") });
-    }
+      const known = flowMessage(error);
+      // A refused start names one blocked step; the plan lists every move it waits on, in order.
+      if (known) notify.error(known, { description: flowPath.prerequisites(stage.node_id, target) ?? undefined });
+      else notify.apiError(error, { title: target === "draft" ? t("revertError") : t("transitionError") });
+    },
+    meta: { suppressErrorToast: true }
   });
 
   const generateMutation = useMutation({

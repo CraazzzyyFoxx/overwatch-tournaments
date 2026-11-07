@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import en from "@/i18n/messages/en.json";
 import ru from "@/i18n/messages/ru.json";
 
-import { NODE_TRANSITIONS, SCHEDULE_PHASES, TOURNAMENT_PHASES } from "./lifecycle";
+import { FINAL_STATUSES, NODE_TRANSITIONS, SCHEDULE_PHASES, TOURNAMENT_PHASES } from "./lifecycle";
 
 /**
  * The lifecycle machine exists twice — once in Python, once in TypeScript —
@@ -110,5 +110,13 @@ describe("node lifecycle parity with backend/shared/core/flow_state.py", () => {
     );
 
     expect(typescript).toEqual(python);
+  });
+
+  it("treats exactly FINAL_STATUSES as a final output", () => {
+    const statuses = enumWire("FlowNodeStatus");
+    const block = section(FLOW_STATE_PY, /^FINAL_STATUSES/m);
+    const python = [...block.matchAll(/FlowNodeStatus\.(\w+)/g)].map((entry) => statuses[entry[1]]).sort();
+
+    expect([...FINAL_STATUSES].sort()).toEqual(python);
   });
 });

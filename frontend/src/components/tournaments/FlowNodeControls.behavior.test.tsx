@@ -136,7 +136,7 @@ describe("FlowNodeControls", () => {
 
     await click(document.querySelector("button"));
     await click([...document.querySelectorAll("button")].filter((button) => button.textContent?.trim() === "Reopen").at(-1));
-    expect(notifyError).toHaveBeenCalledWith(expect.stringContaining("can no longer be reopened"));
+    expect(notifyError).toHaveBeenCalledWith(expect.stringContaining("can no longer be reopened"), expect.anything());
   });
 
   it("limits itself to the given node", async () => {
@@ -158,6 +158,9 @@ describe("FlowNodeControls", () => {
     await mount(tournament([node(22, "formation", "draft")]));
 
     await click(document.querySelector("button"));
-    expect(notifyError).toHaveBeenCalledWith(expect.stringContaining("close registration before forming teams"));
+    expect(notifyError).toHaveBeenCalledWith(
+      expect.stringContaining("close registration before forming teams"),
+      expect.anything()
+    );
   });
 });

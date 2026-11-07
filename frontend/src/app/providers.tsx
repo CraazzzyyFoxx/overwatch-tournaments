@@ -11,8 +11,19 @@ import React from "react";
 
 import AuthBootstrap from "@/components/auth/AuthBootstrap";
 import WorkspaceBootstrap from "@/components/workspace/WorkspaceBootstrap";
+import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";
 import { ApiError, isDivisionGridRequired } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
+
+/** The translated message of a known flow refusal; set by `Providers`, which sits under the intl provider. */
+const flowMessageRef: { current: ((error: unknown) => string | null) | null } = { current: null };
+
+/** A known flow refusal reads translated and actionable; any other error as the API reports it. */
+function toastError(error: unknown) {
+  const known = flowMessageRef.current?.(error);
+  if (known) notify.error(known);
+  else notify.apiError(error);
+}
 
 export function makeQueryClient() {
   return new QueryClient({
@@ -25,13 +36,13 @@ export function makeQueryClient() {
         // 401s are owned by the token-refresh / login flow — don't spam logged-out users.
         if (error instanceof ApiError && error.status === 401) return;
         // Only the initial load (no cached data) — avoids spamming on background refetches.
-        if (query.state.data === undefined) notify.apiError(error);
+        if (query.state.data === undefined) toastError(error);
       }
     }),
     mutationCache: new MutationCache({
       onError: (error, _variables, _context, mutation) => {
         if (mutation.options.meta?.suppressErrorToast) return;
-        notify.apiError(error);
+        toastError(error);
       }
     }),
     defaultOptions: {
@@ -67,6 +78,10 @@ function getQueryClient() {
 
 export function Providers({ children }: Readonly<{ children: React.ReactNode }>) {
   const queryClient = getQueryClient();
+  const flowMessage = useFlowErrorMessage();
+  React.useEffect(() => {
+    flowMessageRef.current = flowMessage;
+  }, [flowMessage]);
 
   return (
     <QueryClientProvider client={queryClient}>

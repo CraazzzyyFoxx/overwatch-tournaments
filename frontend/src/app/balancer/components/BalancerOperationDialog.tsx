@@ -135,7 +135,7 @@ export function BalancerOperationDialog({
           </div>
 
           {error ? (
-            <div className="rounded-lg border border-destructive/35 bg-destructive/5 p-3 text-sm text-destructive">
+            <div className="whitespace-pre-line rounded-lg border border-destructive/35 bg-destructive/5 p-3 text-sm text-destructive">
               {error}
             </div>
           ) : null}

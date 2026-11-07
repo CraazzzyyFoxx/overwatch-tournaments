@@ -17,7 +17,7 @@ import { TeamDistributionPanel } from "@/app/balancer/components/TeamDistributio
 import { VariantSelector } from "@/app/balancer/components/VariantSelector";
 import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTournamentId";
 import { FlowNodeSelect } from "@/components/kit/FlowNodeSelect";
-import { FlowNodeControls } from "@/components/tournaments/FlowNodeControls";
+import { FlowPathPanel } from "@/components/tournaments/FlowPathPanel";
 import {
   UnlinkedRegistrationsNotice,
   countUnlinkedRegistrations
@@ -43,6 +43,9 @@ import { ratedDimension, slotCodeOrder } from "@/lib/roster/ontology";
 import { slotCodesOf } from "@/lib/roster/shape";
 import { tournamentOverviewQueryOptions } from "@/lib/tournament/overview-query";
 import { notify } from "@/lib/notify";
+import { useFlowPath } from "@/hooks/useFlowPath";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import type { FlowStep } from "@/lib/tournament/flow-path";
 import balancerAdminService from "@/services/balancer-admin.service";
 import balancerService from "@/services/balancer.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -127,6 +130,8 @@ export function BalancerMainPageClient() {
   );
   const { canAccessPermission } = usePermissions();
   const flowErrorMessage = useFlowErrorMessage();
+  const flowPath = useFlowPath(tournamentId);
+  const tPath = useTranslations("common.flowPath");
   const currentUserId = useAuthProfileStore((state) => state.user?.id ?? null);
   const queryClient = useQueryClient();
   const sidebarRef = useRef<BalancingPoolSidebarHandle>(null);
@@ -159,6 +164,9 @@ export function BalancerMainPageClient() {
   );
   const [tournamentExportSummary, setTournamentExportSummary] = useState<string | null>(null);
   const [tournamentExportError, setTournamentExportError] = useState<string | null>(null);
+  // The flow moves an export needs first, awaiting the organizer's go-ahead.
+  const [exportPrerequisites, setExportPrerequisites] = useState<FlowStep[] | null>(null);
+  const [isPreparingExport, setIsPreparingExport] = useState(false);
   const [isJsonImportOpen, setIsJsonImportOpen] = useState(false);
   const [jsonImportSteps, setJsonImportSteps] = useState<BalancerOperationStep[]>(() =>
     createOperationSteps(IMPORT_JSON_STEPS)
@@ -646,7 +654,7 @@ export function BalancerMainPageClient() {
     []
   );
 
-  const startTournamentExport = useCallback(() => {
+  const runTournamentExport = useCallback(() => {
     setTournamentExportSteps(createOperationSteps(EXPORT_TO_TOURNAMENT_STEPS));
     setTournamentExportSummary(null);
     setTournamentExportError(null);
@@ -663,11 +671,36 @@ export function BalancerMainPageClient() {
           );
         },
         onError: (error) => {
-          setTournamentExportError(flowErrorMessage(error) ?? getErrorMessage(error, t("errors.exportFailed")));
+          const known = flowErrorMessage(error);
+          // A refusal names one blocked step; the plan names all of them, in the order the server takes them.
+          const steps = formationNodeId !== null ? flowPath.describeSteps(flowPath.plan(formationNodeId, "forming")) : null;
+          setTournamentExportError(
+            known ? [known, steps].filter(Boolean).join("\n\n") : getErrorMessage(error, t("errors.exportFailed"))
+          );
         }
       }
     );
-  }, [exportToTournamentMutation, handleTournamentExportStageChange, flowErrorMessage, t]);
+  }, [exportToTournamentMutation, handleTournamentExportStageChange, flowErrorMessage, flowPath, formationNodeId, t]);
+
+  // Export writes teams only while the formation is forming: the moves that get it there are confirmed, run, then exported.
+  const startTournamentExport = useCallback(() => {
+    const steps = formationNodeId !== null ? flowPath.plan(formationNodeId, "forming") : [];
+    if (steps.length > 0) setExportPrerequisites(steps);
+    else runTournamentExport();
+  }, [flowPath, formationNodeId, runTournamentExport]);
+
+  const confirmExportPrerequisites = async (steps: FlowStep[]) => {
+    setIsPreparingExport(true);
+    try {
+      await flowPath.run(steps);
+      setExportPrerequisites(null);
+      runTournamentExport();
+    } catch (error) {
+      notify.error(flowErrorMessage(error) ?? getErrorMessage(error, t("errors.exportFailed")));
+    } finally {
+      setIsPreparingExport(false);
+    }
+  };
 
   const savedBalanceId = savedBalanceQuery.data?.id ?? null;
   const startRanksExport = useCallback(() => {
@@ -799,11 +832,12 @@ export function BalancerMainPageClient() {
         value={formationNodeId}
         onChange={(nodeId) => setParams({ [FLOW_NODE_PARAM]: nodeId })}
       />
-      {formationNode && tournamentQuery.data ? (
-        <FlowNodeControls
-          tournament={tournamentQuery.data}
-          node={formationNode}
+      {formationNode && tournamentId !== null ? (
+        <FlowPathPanel
+          tournamentId={tournamentId}
+          focusNodeId={formationNode.id}
           canUpdate={canAccessPermission("tournament.update", workspaceId)}
+          teamsExported={savedBalanceQuery.data?.exported_at != null}
         />
       ) : null}
       <UnlinkedRegistrationsNotice count={countUnlinkedRegistrations(registrations)} />
@@ -940,6 +974,30 @@ export function BalancerMainPageClient() {
         retryLabel={t("operation.retryExport")}
         onRetry={startTournamentExport}
       />
+
+      {exportPrerequisites ? (
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => !open && setExportPrerequisites(null)}
+          intent={{
+            title: tPath("exportConfirmTitle", { count: exportPrerequisites.length }),
+            description: (
+              <ol className="list-decimal space-y-1 pl-5">
+                {exportPrerequisites.map((step) => (
+                  <li key={`${step.node.id}-${step.to}`}>
+                    {flowPath.stepLabel(step)}.{" "}
+                    {tPath(`consequence.${step.node.kind}.${step.to}` as never)}
+                  </li>
+                ))}
+              </ol>
+            ),
+            confirmLabel: tPath("exportConfirmLabel"),
+            tone: "warning"
+          }}
+          pending={isPreparingExport}
+          onConfirm={() => confirmExportPrerequisites(exportPrerequisites)}
+        />
+      ) : null}
 
       <BalancerOperationDialog
         open={isJsonImportOpen}
