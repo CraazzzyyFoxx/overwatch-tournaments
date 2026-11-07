@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import { starterRead } from "@/test/flow-fixtures";
+
 import { arrangeDraft, arrangeIfOverlapping, autoLayout, hasOverlap } from "./autoLayout";
 import { draftFromRead } from "./flowDraft";
-import { starterRead } from "./fixtures";
 
 const node = (key: string, y = 0) => ({ key, x: 0, y });
 const link = (source: string, target: string) => ({ source, target });

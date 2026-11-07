@@ -8,8 +8,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import { starterRead } from "@/lib/flow/fixtures";
 import type { DraftNode } from "@/lib/flow/flowDraft";
+import { starterRead } from "@/test/flow-fixtures";
 
 import { NodeInspector } from "./NodeInspector";
 

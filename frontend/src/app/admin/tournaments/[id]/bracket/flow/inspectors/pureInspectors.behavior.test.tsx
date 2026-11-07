@@ -5,8 +5,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import { leagueFlow, roleFlow, starterRead } from "@/lib/flow/fixtures";
 import type { DraftNode } from "@/lib/flow/flowDraft";
+import { leagueFlow, roleFlow, starterRead } from "@/test/flow-fixtures";
 import type { FlowRead } from "@/types/flow.types";
 
 import { PureInspector } from "./PureInspectors";

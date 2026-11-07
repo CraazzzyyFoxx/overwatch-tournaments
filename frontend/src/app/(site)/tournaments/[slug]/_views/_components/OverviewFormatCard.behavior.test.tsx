@@ -11,7 +11,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import { leagueFlow } from "@/lib/flow/fixtures";
+import { leagueFlow } from "@/test/flow-fixtures";
 import type { Tournament } from "@/types/tournament.types";
 
 import { OverviewFormatCard } from "./OverviewSideCards";
