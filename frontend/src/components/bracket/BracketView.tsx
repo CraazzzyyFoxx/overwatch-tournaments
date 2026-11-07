@@ -99,7 +99,7 @@ const ARROW_DIRECTION: Record<string, readonly [number, number]> = {
   ArrowDown: [0, 1]
 };
 
-const slotKeyboardCoordinates: KeyboardCoordinateGetter = (
+export const slotKeyboardCoordinates: KeyboardCoordinateGetter = (
   event,
   { context: { active, collisionRect, droppableRects, droppableContainers } }
 ) => {
@@ -131,7 +131,7 @@ const slotKeyboardCoordinates: KeyboardCoordinateGetter = (
 
 // Pointer drags drop only on the row under the cursor; a keyboard drag has no
 // cursor, so it takes the row its rect was moved onto.
-const slotCollision: CollisionDetection = (args) =>
+export const slotCollision: CollisionDetection = (args) =>
   args.pointerCoordinates ? pointerWithin(args) : closestCenter(args);
 
 export function BracketView<M extends BracketMatch>({

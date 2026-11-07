@@ -24,7 +24,14 @@ function seDraft(): Draft {
     matches: [
       { id: 1, round: 1, slots: [{ seed: "U1" }, { seed: "U4" }] },
       { id: 2, round: 1, slots: [{ seed: "U2" }, { seed: "U3" }] },
-      { id: 3, round: 2, slots: [{ source_match: 1, source_position: 1 }, { source_match: 2, source_position: 1 }] }
+      {
+        id: 3,
+        round: 2,
+        slots: [
+          { source_match: 1, source_position: 1 },
+          { source_match: 2, source_position: 1 }
+        ]
+      }
     ]
   };
 }
@@ -56,7 +63,10 @@ describe("draftReducer · connect", () => {
   });
 
   it("writes a loser drop as `loser_of`, which is a different source from the winner", () => {
-    const start = { ...seDraft(), matches: [...seDraft().matches, { id: 4, round: -1, slots: [null, null] }] };
+    const start = {
+      ...seDraft(),
+      matches: [...seDraft().matches, { id: 4, round: -1, slots: [null, null] }]
+    };
     const draft = draftReducer(start, {
       type: "connect",
       source: 1,
@@ -74,7 +84,11 @@ describe("draftReducer · connect", () => {
 describe("draftReducer · seeds", () => {
   it("places a seed", () => {
     const draft = draftReducer(
-      { ...seDraft(), lower_seeds: 2, matches: [...seDraft().matches, { id: 4, round: -1, slots: [null, null] }] },
+      {
+        ...seDraft(),
+        lower_seeds: 2,
+        matches: [...seDraft().matches, { id: 4, round: -1, slots: [null, null] }]
+      },
       { type: "seed", target: 4, slot: 1, seed: "L1" }
     );
 
@@ -92,6 +106,37 @@ describe("draftReducer · seeds", () => {
     const draft = draftReducer(seDraft(), { type: "clear", target: 1, slot: 2 });
 
     expect(matchOf(draft, 1).slots[1]).toBeNull();
+  });
+
+  it("swaps two seeds across matches of one round", () => {
+    const draft = draftReducer(seDraft(), {
+      type: "swap",
+      a: { match: 1, slot: 2 },
+      b: { match: 2, slot: 1 }
+    });
+
+    expect(matchOf(draft, 1).slots).toEqual([{ seed: "U1" }, { seed: "U2" }]);
+    expect(matchOf(draft, 2).slots).toEqual([{ seed: "U4" }, { seed: "U3" }]);
+  });
+
+  it("moves a seed into an empty slot of the round, leaving its own empty", () => {
+    const start = draftReducer(seDraft(), { type: "clear", target: 2, slot: 2 });
+    const draft = draftReducer(start, {
+      type: "swap",
+      a: { match: 1, slot: 1 },
+      b: { match: 2, slot: 2 }
+    });
+
+    expect(matchOf(draft, 1).slots[0]).toBeNull();
+    expect(matchOf(draft, 2).slots[1]).toEqual({ seed: "U1" });
+  });
+
+  it("refuses a swap across rounds", () => {
+    const start = seDraft();
+
+    expect(
+      draftReducer(start, { type: "swap", a: { match: 1, slot: 1 }, b: { match: 3, slot: 1 } })
+    ).toBe(start);
   });
 });
 
@@ -139,7 +184,10 @@ describe("draftReducer · matches", () => {
 describe("draftReducer · bounds", () => {
   // The server's model rejects anything past these, so the editor never offers it.
   it("does not add a match past the id or round bound", () => {
-    const maxId = { ...seDraft(), matches: [...seDraft().matches, { id: 10_000, round: 1, slots: [null, null] }] };
+    const maxId = {
+      ...seDraft(),
+      matches: [...seDraft().matches, { id: 10_000, round: 1, slots: [null, null] }]
+    };
     expect(draftReducer(maxId, { type: "addMatch", round: 1 })).toBe(maxId);
 
     const deep = seDraft();
@@ -147,9 +195,14 @@ describe("draftReducer · bounds", () => {
   });
 
   it("does not push the final past the round bound", () => {
-    const atBound = { ...seDraft(), matches: seDraft().matches.map((match) => ({ ...match, round: 256 })) };
+    const atBound = {
+      ...seDraft(),
+      matches: seDraft().matches.map((match) => ({ ...match, round: 256 }))
+    };
 
-    expect(draftReducer(atBound, { type: "addMatch", round: 256, beforeFinal: true })).toBe(atBound);
+    expect(draftReducer(atBound, { type: "addMatch", round: 256, beforeFinal: true })).toBe(
+      atBound
+    );
   });
 
   it("clamps the seed counts", () => {
@@ -176,8 +229,22 @@ describe("draftToTemplate", () => {
       upper_seeds: 4,
       lower_seeds: 0,
       matches: [
-        { id: 1, round: 1, slots: [{ slot: 1, seed: "U1" }, { slot: 2, seed: "U4" }] },
-        { id: 2, round: 1, slots: [{ slot: 1, seed: "U2" }, { slot: 2, seed: "U3" }] },
+        {
+          id: 1,
+          round: 1,
+          slots: [
+            { slot: 1, seed: "U1" },
+            { slot: 2, seed: "U4" }
+          ]
+        },
+        {
+          id: 2,
+          round: 1,
+          slots: [
+            { slot: 1, seed: "U2" },
+            { slot: 2, seed: "U3" }
+          ]
+        },
         {
           id: 3,
           round: 2,
@@ -238,11 +305,14 @@ describe("unusedSeeds", () => {
   it("offers a match only the seeds of its own half", () => {
     // The validator refuses `L1` in an upper-round match and `U1` in a lower
     // one, so a menu offering both offers a draft that cannot be saved.
-    const draft = draftReducer({ ...seDraft(), lower_seeds: 2 }, {
-      type: "clear",
-      target: 1,
-      slot: 1
-    });
+    const draft = draftReducer(
+      { ...seDraft(), lower_seeds: 2 },
+      {
+        type: "clear",
+        target: 1,
+        slot: 1
+      }
+    );
 
     expect(unusedSeeds(draft, 1)).toEqual(["U1"]);
     expect(unusedSeeds(draft, -1)).toEqual(["L1", "L2"]);
