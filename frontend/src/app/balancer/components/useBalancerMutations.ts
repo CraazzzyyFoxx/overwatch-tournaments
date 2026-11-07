@@ -400,8 +400,9 @@ export function useBalancerMutations({
         throw new Error(t("errors.unresolvedIssues"));
       }
       // The pool the server balances is the tournament's own, resolved by the
-      // roster engine. The client only decides whether the run is allowed and
-      // which config to send.
+      // roster engine. The client decides whether the run is allowed, which
+      // config to send and, when skipping invalid players, which of the pool's
+      // registrations to keep (the server only ever narrows its pool by them).
       const playersForBalance = excludeInvalidPlayers ? readyPlayers : poolPlayers;
       if (playersForBalance.length === 0) throw new Error(t("errors.noPlayers"));
       const sanitizedDraftConfig = sanitizeBalancerConfig(draftConfig);
@@ -421,7 +422,8 @@ export function useBalancerMutations({
         job: await balancerService.createTournamentBalanceJob({
           tournament_id: tournamentId,
           formation_node_id: formationNodeId,
-          config_overrides: (config as BalancerConfig | undefined) ?? null
+          config_overrides: (config as BalancerConfig | undefined) ?? null,
+          registration_ids: excludeInvalidPlayers ? readyPlayers.map((player) => player.id) : undefined
         }),
         skipped,
         config: config as BalancerConfig | undefined

@@ -15402,8 +15402,8 @@
         "quality": "Quality {score}",
         "stdDevHint": "Standard deviation of team MMR — lower means the teams are closer together.",
         "stdDev": "StdDev {value}",
-        "benchedHint": "{count} players did not make a team.",
-        "benched": "Benched {count}",
+        "benchedHint": "{count, plural, =1 {# player} other {# players}} didn't fit a team: the pool is short of one more full team. They are not excluded and stay in the pool.",
+        "benched": "Spare {count}",
         "collisionsHint": "{count} teams pair players with the same sub-role.",
         "collisions": "Collisions {count}",
         "poolAria": "Pool diagnostics: role supply, off-role floor, flex headroom",
@@ -15418,7 +15418,7 @@
         "offRoleFloorHint": "Forced by the pool — no balancer can go below this.",
         "flexPlayers": "Flex players",
         "collisionsLabel": "Sub-role collisions",
-        "benchedLabel": "Benched",
+        "benchedLabel": "Spare (didn't fit a team)",
         "roleSupply": "Role supply",
         "flexSupply": "+{count}f",
         "short": "short {count}",
@@ -15475,6 +15475,12 @@
         "invalidJson": "Selected file is not valid JSON.",
         "missingTeams": "Balance JSON must contain a \"teams\" array. {hint}",
         "noTeams": "Balance JSON contains no teams."
+      },
+      "poolMismatch": {
+        "title": "This balance was not built from the pool on screen",
+        "missing": "Ready but not in the balance ({count}): {names}",
+        "outside": "In the balance but not in the pool ({count}): {names}",
+        "hint": "Run the balance again before exporting."
       }
     },
     "playerEdit": {
@@ -15735,7 +15741,7 @@
     },
     "editor": {
       "empty": "Run the balancer to edit teams.",
-      "unassigned": "Unassigned",
+      "unassigned": "Didn't fit a team — spare",
       "teamHeader": {
         "total": "Total:",
         "average": "Avg:"

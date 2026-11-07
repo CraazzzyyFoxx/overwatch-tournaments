@@ -79,7 +79,8 @@ import {
   replaceVariantPayload,
   toggleCollapsedTeamId,
   upsertSavedVariant,
-  buildBalancerPageCollections
+  buildBalancerPageCollections,
+  poolMismatch
 } from "./balancer-page-selectors";
 import {
   buildTeamNamesText,
@@ -357,6 +358,12 @@ export function BalancerMainPageClient() {
   const activeVariant = useMemo(
     () => variants.find((variant) => variant.id === activeVariantId) ?? null,
     [activeVariantId, variants]
+  );
+  // Only once the pool has loaded: an empty pool would put every placed player "outside" it.
+  const activeMismatch = useMemo(
+    () =>
+      activeVariant && registrationsQuery.data ? poolMismatch(activeVariant.payload, readyPlayers, poolPlayers) : null,
+    [activeVariant, registrationsQuery.data, readyPlayers, poolPlayers]
   );
   // The persisted balance is only "current" while the active variant is the saved
   // one and nobody has edited it since. Any editor change or a regenerated variant
@@ -872,6 +879,32 @@ export function BalancerMainPageClient() {
 
       {activeVariant ? (
         <TeamDistributionPanel variant={activeVariant} variantSelector={variantSelector} />
+      ) : null}
+
+      {activeMismatch ? (
+        <Alert tone="warning">
+          <AlertTriangle aria-hidden />
+          <AlertTitle>{t("poolMismatch.title")}</AlertTitle>
+          <AlertDescription className="space-y-1">
+            {activeMismatch.missing.length > 0 ? (
+              <p>
+                {t("poolMismatch.missing", {
+                  count: activeMismatch.missing.length,
+                  names: activeMismatch.missing.map((player) => player.identity).join(", ")
+                })}
+              </p>
+            ) : null}
+            {activeMismatch.outside.length > 0 ? (
+              <p>
+                {t("poolMismatch.outside", {
+                  count: activeMismatch.outside.length,
+                  names: activeMismatch.outside.join(", ")
+                })}
+              </p>
+            ) : null}
+            <p>{t("poolMismatch.hint")}</p>
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       <BalancerEditorPanel

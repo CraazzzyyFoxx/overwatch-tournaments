@@ -176,3 +176,28 @@ export function upsertSavedVariant(
 ): BalanceVariant[] {
   return [savedVariant, ...variants.filter((variant) => variant.source !== "saved")];
 }
+
+export type PoolMismatch = {
+  /** Ready pool players the balance holds nowhere (no team, not spare). */
+  missing: BalancerPlayerRecord[];
+  /** Players the balance holds that the pool does not (excluded or gone since), by their name in the balance. */
+  outside: string[];
+};
+
+/**
+ * Where a balance and the pool on screen disagree, or null when they agree. A ready player missing from it, or a player
+ * in it the pool no longer holds, means the balance was built from another pool (an older run, or a stale server read):
+ * worth saying before it is exported. Players with blocking issues may be skipped on purpose, so they never count.
+ */
+export function poolMismatch(
+  payload: InternalBalancePayload,
+  readyPlayers: readonly BalancerPlayerRecord[],
+  poolPlayers: readonly BalancerPlayerRecord[]
+): PoolMismatch | null {
+  const placed = [...payload.teams.flatMap((team) => Object.values(team.roster).flat()), ...(payload.benched_players ?? [])];
+  const placedIds = new Set(placed.map((player) => Number(player.uuid)));
+  const poolIds = new Set(poolPlayers.map((player) => player.id));
+  const missing = readyPlayers.filter((player) => !placedIds.has(player.id));
+  const outside = placed.filter((player) => !poolIds.has(Number(player.uuid))).map((player) => player.name);
+  return missing.length > 0 || outside.length > 0 ? { missing, outside } : null;
+}

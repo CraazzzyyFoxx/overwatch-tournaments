@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, BarChart2, CheckCircle2, ChevronDown, Shuffle, Sparkles, UserX } from "lucide-react";
+import { AlertCircle, Armchair, BarChart2, CheckCircle2, ChevronDown, Shuffle, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
@@ -71,8 +71,8 @@ export function BalanceStatsRow({ stats }: Readonly<{ stats: VariantStats }>) {
       <OffRoleChip stats={stats} />
 
       {benched != null && benched > 0 ? (
-        <Badge shape="pill" tone="danger" title={t("benchedHint", { count: benched })} className="tabular-nums">
-          <UserX className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+        <Badge shape="pill" tone="warning" title={t("benchedHint", { count: benched })} className="tabular-nums">
+          <Armchair className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t("benched", { count: benched })}
         </Badge>
       ) : null}

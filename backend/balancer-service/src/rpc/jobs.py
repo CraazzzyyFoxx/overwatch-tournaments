@@ -131,6 +131,7 @@ def register(broker: Any, logger: Any) -> None:
                 broker=broker,
                 tournament_id=tournament_id,
                 formation_node_id=node_id,
+                registration_ids=payload.registration_ids,
             )
 
         return await c.envelope(logger, "jobs.create_for_tournament", op, session_factory=_SF)

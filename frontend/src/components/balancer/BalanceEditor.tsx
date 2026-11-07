@@ -13,7 +13,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useQuery } from "@tanstack/react-query";
-import { UserX } from "lucide-react";
+import { Armchair } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
@@ -204,13 +204,14 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
     >
       <div ref={ref} className="space-y-4">
         {benchedPlayers.length > 0 ? (
-          <div className={cn("flex flex-wrap items-center gap-2 rounded-xl border px-4 py-3", TONE_CLASS.danger)}>
+          // Spare, not excluded: the pool is short of one more full team. Amber says "notice", not "error".
+          <div className={cn("flex flex-wrap items-center gap-2 rounded-xl border px-4 py-3", TONE_CLASS.warning)}>
             <span className="inline-flex items-center gap-1.5 text-label font-medium uppercase tracking-label">
-              <UserX className="h-3.5 w-3.5" aria-hidden />
+              <Armchair className="h-3.5 w-3.5" aria-hidden />
               {t("unassigned")}
             </span>
             {benchedPlayers.map((player) => (
-              <Badge key={player.uuid} shape="pill" tone="danger">
+              <Badge key={player.uuid} shape="pill" tone="warning">
                 {player.name}
               </Badge>
             ))}

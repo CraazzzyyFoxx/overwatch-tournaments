@@ -24,6 +24,15 @@ left over instead of 10). Exporting teams and starting a stage also failed with 
   registration → formation → stage chain with each node's status, the planned moves and a *Next step* button (one
   confirmation per move). It does not offer to complete a live stage (standings do that) or a formation before its
   teams are exported.
+- **"Skip invalid players" reaches the server.** `POST /balancer/tournaments/{id}/balance` takes optional
+  `registration_ids`: the job balances only those pool registrations (it narrows the server's pool, never widens it).
+  The panel sends its ready players when the switch is on; before, the server balanced the whole pool while the panel
+  reported the invalid ones as skipped.
+- **Leftover players read as spare, not excluded.** The players a balance cannot seat (the pool is short of one more
+  full team) were a red "Unassigned" block with a crossed-out person; they are now an amber "Didn't fit a team — spare"
+  with a bench icon, in the editor, the stats badge and the variant card.
+- **Pool mismatch warning.** A balance that lacks a ready pool player, or holds a player the pool no longer does, shows
+  a warning above the editor naming them, so a balance built from another pool is caught before export.
 
 ## Rollout
 
