@@ -31,8 +31,6 @@ import {
 
 export interface StageForm {
   name: string;
-  /** Phase number. Same value = parallel brackets. */
-  order: number;
   stageType: StageType;
   /** Kept as strings: an empty field is "inherit", which `0` cannot express. */
   maxRounds: string;
@@ -71,7 +69,6 @@ const ffaColumnsOf = (stage: Stage) => stage.scoring.columns ?? defaultRule.colu
 export function stageFormFromStage(stage: Stage): StageForm {
   return {
     name: stage.name,
-    order: stage.order,
     stageType: stage.stage_type,
     maxRounds: String(stage.max_rounds ?? 5),
     deGrandFinalType: stage.de_grand_final_type,
@@ -105,7 +102,6 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
 
   return {
     name: form.name.trim() || stage.name,
-    order: form.order,
     stage_type: form.stageType,
     max_rounds: normalizeMaxRounds(form.maxRounds, stage.max_rounds ?? 5),
     // Both exist only on an individual Swiss stage; the server clears them elsewhere.
@@ -176,7 +172,6 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
  */
 const FIELD_LABELS: Record<keyof StageForm, string> = {
   name: "name",
-  order: "phase",
   stageType: "format",
   maxRounds: "swissRounds",
   deGrandFinalType: "grandFinal",

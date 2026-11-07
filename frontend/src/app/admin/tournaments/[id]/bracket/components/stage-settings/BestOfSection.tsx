@@ -18,7 +18,7 @@ import {
 import { BEST_OF_OPTIONS, stageBestOfRoundSections } from "@/lib/tournament/best-of";
 import type { StageBestOfConfig } from "@/types/tournament.types";
 
-import { FFA_STAGE_TYPES, normalizeMaxRounds } from "@/lib/bracket/projection";
+import { BRACKET_STAGE_TYPES, FFA_STAGE_TYPES, normalizeMaxRounds } from "@/lib/bracket/projection";
 import type { SectionProps } from "./types";
 
 export function BestOfSection({
@@ -98,7 +98,8 @@ export function BestOfSection({
         </Select>
       </SettingRow>
 
-      {isFfa ? null : (
+      {/* Only an elimination bracket has a final (`persist_skeleton` resolves it there alone); every round of a group, Swiss or FFA stage is alike. */}
+      {!BRACKET_STAGE_TYPES.includes(form.stageType) ? null : (
         <SettingRow htmlFor={`${ids}-final`} label={isDoubleElimination ? t("grandFinalCap") : t("final")}>
           <Select
             value={form.bestOf.final != null ? String(form.bestOf.final) : "none"}

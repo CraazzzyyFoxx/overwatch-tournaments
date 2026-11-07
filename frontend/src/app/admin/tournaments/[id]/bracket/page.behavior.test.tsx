@@ -60,7 +60,7 @@ vi.mock("@/services/encounter.service", () => ({
 
 let isSuperuser = true;
 vi.mock("@/hooks/usePermissions", () => ({
-  usePermissions: () => ({ isSuperuser })
+  usePermissions: () => ({ canAccessPermission: () => true, isSuperuser })
 }));
 
 let isMobile = false;

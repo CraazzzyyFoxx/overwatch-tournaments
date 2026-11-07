@@ -3,9 +3,12 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { FlowCanvas } from "@/components/flow/FlowCanvas";
+import { flowNodeTypes } from "@/components/flow/FlowNodeCard";
+import { CanvasPanel, GraphCanvas } from "@/components/graph-canvas/GraphCanvas";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { SaveBar } from "@/components/kit/SaveBar";
 import { Button } from "@/components/ui/button";
+import { floatingPanelClass } from "@/components/ui/popover";
 import { FLOW_NODE_PARAM } from "@/hooks/useFlowNodeParam";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
@@ -20,26 +23,29 @@ import {
   reconnect,
   removeEdge,
   removeNode,
+  toChanges,
   updateNode
 } from "@/lib/flow/flowDraft";
+import { LIFECYCLE_KINDS, PURE_KINDS } from "@/lib/flow/kinds";
 import { applyPreset, hasOnlyStarterNodes } from "@/lib/flow/presets";
 import { usePresetLabels } from "@/lib/flow/usePresetLabels";
+import { cn } from "@/lib/utils";
 import type { FlowNodeKind, FlowStageCreate } from "@/types/flow.types";
 
-import { tabError, tabFallback, useHubTournamentQuery } from "../hubQueries";
+import { tabError, tabFallback, useHubTournamentQuery } from "../../hubQueries";
 import { FlowIssues } from "./FlowIssues";
 import { NodeInspector } from "./inspectors/NodeInspector";
-import { FlowPalette } from "./FlowPalette";
 import { PresetDialog } from "./PresetDialog";
 import { useFlowEditor } from "./useFlowEditor";
 
 /** A palette click lands this far right of the right-most node's card (`min-w-44`, 176 px, plus a gap). */
 const CLICK_OFFSET = 176 + 40;
 
-/** The Flow tab: palette, canvas, issues and Save. A viewer without `tournament.update` gets the canvas read-only. */
+/** The Flow tab: canvas (with its palette) and its issues, and the save bar. A viewer without `tournament.update` gets the canvas read-only. */
 export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>) {
   const t = useTranslations("adminTournament.flow");
   const tKind = useTranslations("common.flow.kind");
+  const tPalette = useTranslations("adminTournament.flow.palette");
   const labels = usePresetLabels();
   const { canAccessPermission } = usePermissions();
   const { searchParams, setParams } = useQueryParams({ shallow: true, resetOnChange: [] });
@@ -50,26 +56,36 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
   const tournament = useHubTournamentQuery(tournamentId).data;
   const workspaceId = tournament?.workspace_id ?? null;
   const canUpdate = canAccessPermission("tournament.update", workspaceId);
-  const { read, draft, keyed, dirty, apply } = editor;
+  const { read, draft, keyed, dirty, changes, apply } = editor;
 
   if (editor.isError) return tabError(() => editor.refetch());
   if (!read || !draft || !keyed) return tabFallback;
 
   const readOnly = !canUpdate;
   const selected = draft.nodes.find((n) => n.key === searchParams?.get(FLOW_NODE_PARAM));
-  // Palette (editable only), canvas, inspector (a node is selected).
-  const columns = readOnly
-    ? selected
-      ? "lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
-      : ""
-    : selected
-      ? "lg:grid-cols-[11rem_minmax(0,3fr)_minmax(0,2fr)]"
-      : "lg:grid-cols-[11rem_minmax(0,1fr)]";
+  // Canvas, and the narrow inspector beside it while a node is selected.
+  const columns = selected ? "lg:grid-cols-[minmax(0,1fr)_20rem]" : "";
   const select = (key: string | null) => setParams({ [FLOW_NODE_PARAM]: key });
   const issueCounts = new Map([...keyed.nodeIssues].map(([key, list]) => [key, list.length]));
   const { nodes, edges } = toCanvas(draft, keyed.ports, issueCounts, new Set(keyed.edgeIssues.keys()), readOnly);
   const savedOrders = new Map((tournament?.stages ?? []).map((stage) => [stage.id, stage.order] as const));
   const doomed = deletedLifecycleNodes(draft);
+  // The opening arrangement goes out with Save, but it is not the admin's change to count.
+  const arranged = new Set(editor.opened ? toChanges(editor.opened).nodes.map((n) => JSON.stringify(n)) : []);
+  const summary = changes
+    ? (
+        [
+          ["nodesAdded", changes.nodes.filter((n) => n.id === undefined).length],
+          ["nodesChanged", changes.nodes.filter((n) => n.id !== undefined && !arranged.has(JSON.stringify(n))).length],
+          ["nodesRemoved", changes.delete_node_ids.length],
+          ["linksAdded", changes.edges.length],
+          ["linksRemoved", changes.delete_edge_ids.length]
+        ] as const
+      )
+        .filter(([, count]) => count > 0)
+        .map(([key, count]) => t(`changes.${key}`, { count }))
+        .join(" · ")
+    : "";
 
   const add = (kind: FlowNodeKind, at?: { x: number; y: number }) =>
     apply((d) => {
@@ -89,47 +105,28 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
         savedOrders
       );
     });
+  const palette = readOnly
+    ? undefined
+    : {
+        groups: [
+          { label: tPalette("lifecycle"), items: LIFECYCLE_KINDS.map((kind) => ({ key: kind, label: tKind(kind) })) },
+          { label: tPalette("transitions"), items: PURE_KINDS.map((kind) => ({ key: kind, label: tKind(kind) })) }
+        ],
+        onAdd: (kind: string, at?: { x: number; y: number }) => add(kind as FlowNodeKind, at)
+      };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {canUpdate && hasOnlyStarterNodes(read) && !dirty ? (
-          <Button type="button" variant="outline" onClick={() => setPresetsOpen(true)}>
-            {t("toolbar.presets")}
-          </Button>
-        ) : null}
-        {canUpdate ? (
-          <Button type="button" variant="outline" disabled={editor.saving} onClick={() => apply(arrangeDraft)}>
-            {t("toolbar.arrange")}
-          </Button>
-        ) : null}
-        {canUpdate && dirty ? (
-          <>
-            <span className="text-caption text-muted-foreground">{t("toolbar.unsaved")}</span>
-            <Button type="button" disabled={editor.saving} onClick={() => (doomed.length > 0 ? setConfirmingDelete(true) : editor.save())}>
-              {t("toolbar.save")}
-            </Button>
-            <Button type="button" variant="outline" disabled={editor.saving} onClick={editor.discard}>
-              {t("toolbar.discard")}
-            </Button>
-          </>
-        ) : null}
-      </div>
-
       <div className={`grid gap-4 ${columns}`}>
-        {readOnly ? null : (
-          <div className="hidden lg:block">
-            <FlowPalette onAdd={(kind) => add(kind)} />
-          </div>
-        )}
         <section aria-label={t("canvasLabel")}>
-          <FlowCanvas
+          <GraphCanvas
             nodes={nodes}
             edges={edges}
+            nodeTypes={flowNodeTypes}
             readOnly={readOnly}
             heightClass="h-[70vh]"
             onNodeClick={select}
-            onDropKind={add}
+            palette={palette}
             onConnect={({ source, sourceHandle, target, targetHandle }) => {
               if (sourceHandle && targetHandle)
                 apply((d) => assignStageOrders(connect(d, { source, sourceHandle, target, targetHandle }), savedOrders));
@@ -151,7 +148,20 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
             onEdgesChange={(changes) =>
               apply((d) => changes.reduce((acc, change) => (change.type === "remove" ? removeEdge(acc, change.id) : acc), d))
             }
-          />
+            onArrange={readOnly ? undefined : () => apply(arrangeDraft)}
+          >
+            {canUpdate && hasOnlyStarterNodes(read) && !dirty ? (
+              <CanvasPanel position="top-center">
+                <div className={cn(floatingPanelClass, "flex items-center gap-3 px-3 py-2")}>
+                  <p className="hidden text-caption text-muted-foreground sm:block">{t("presets.hint")}</p>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setPresetsOpen(true)}>
+                    {t("presets.open")}
+                  </Button>
+                </div>
+              </CanvasPanel>
+            ) : null}
+            <FlowIssues keyed={keyed} draft={draft} onSelect={select} />
+          </GraphCanvas>
         </section>
         {selected && tournament ? (
           <NodeInspector
@@ -160,7 +170,6 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
             tournament={tournament}
             read={read}
             node={selected}
-            dirty={dirty}
             readOnly={readOnly}
             onChange={(patch) => apply((d) => updateNode(d, selected.key, patch))}
             onDelete={() => {
@@ -172,7 +181,15 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
         ) : null}
       </div>
 
-      <FlowIssues keyed={keyed} draft={draft} onSelect={select} />
+      <SaveBar
+        dirty={dirty}
+        summary={summary}
+        error={editor.error}
+        saving={editor.saving}
+        primaryLabel={t("save")}
+        onDiscard={editor.discard}
+        onSave={() => (doomed.length > 0 ? setConfirmingDelete(true) : editor.save())}
+      />
 
       <PresetDialog
         open={presetsOpen}

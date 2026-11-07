@@ -2,7 +2,7 @@ A live draft builds teams by letting captains take turns picking players from a 
 
 ## Before you start
 
-A draft is only available when the tournament's flow has a **Formation** box in **Draft** mode (**Admin → Tournaments → Flow**, select the box, field **Team formation**). The **Teams → Draft** tab then appears, and everything happens there. The pick order below — snake, linear or custom — is set in the same side panel of that box, under **Draft format**, and every draft of the box starts with it. Roster size and the number of rounds come from the tournament's roster shape — see [Balancer and teams](/docs/organizers/team-formation). The player pool is the balancer's pool, so it is easier to fix ranks and roles there beforehand.
+A draft is only available when the tournament's team formation is set to **Draft**: in the **General** card of the stage the formation feeds (**Admin → Tournaments → Bracket → Stages**, row **Teams formed by**), or on the formation box in **Bracket → Flow**. The **Teams → Draft** tab then appears, and everything happens there. The pick order below — snake, linear or custom — is set in the same place, under **Draft format**, and every draft of the tournament starts with it. The format is locked while a draft holds the roster, and the method is locked once team formation has started. Roster size and the number of rounds come from the tournament's roster shape — see [Balancer and teams](/docs/organizers/team-formation). The player pool is the balancer's pool, so it is easier to fix ranks and roles there beforehand.
 
 ## Setup, step by step
 
@@ -136,7 +136,7 @@ Deleting a session erases its teams, the player pool, every pick and the audit t
 
 | Problem | What to do |
 | --- | --- |
-| There is no **Draft** tab | The **Flow** tab must have a **Formation** box in **Draft** mode. |
+| There is no **Draft** tab | Set **Teams formed by** to **Draft** in the stage's **General** card (**Bracket → Stages**), or on the formation box in **Bracket → Flow**. |
 | Stuck on the **Pool** step | Clear the blockers: add players, set missing ranks in the balancer, cover the short roles. |
 | A captain cannot see their board | Check how many captains are online in the control room, and that the captain has a linked account — one of the **Review** checks. |
 | The draft paused by itself | Find the system pause reason in the table above and resume manually. |

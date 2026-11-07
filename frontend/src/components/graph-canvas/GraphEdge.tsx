@@ -6,8 +6,12 @@ import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 
-/** xyflow's default bezier edge, plus a remove button at its midpoint while selected. */
-export function FlowEdge({
+/**
+ * The one edge every canvas draws: a 2px bezier in the colour its `style.stroke` names, rose and moving while
+ * `data.invalid`, and a remove button at its midpoint while selected and deletable. Selection thickens the stroke,
+ * since an inline stroke colour outranks xyflow's selected colour.
+ */
+export function GraphEdge({
   id,
   sourceX,
   sourceY,
@@ -19,14 +23,24 @@ export function FlowEdge({
   markerEnd,
   interactionWidth,
   selected,
-  deletable
+  deletable,
+  data
 }: EdgeProps) {
-  const t = useTranslations("common.flow");
+  const t = useTranslations("common.graphCanvas");
   const { deleteElements } = useReactFlow();
   const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+  const invalid = data?.invalid === true;
   return (
     <>
-      <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} interactionWidth={interactionWidth} />
+      <BaseEdge
+        id={id}
+        path={path}
+        markerEnd={markerEnd}
+        interactionWidth={interactionWidth}
+        // `dashdraw` is xyflow's own keyframe for `animated` edges, which ignore reduced motion.
+        className={invalid ? "[stroke-dasharray:5] motion-safe:animate-[dashdraw_0.5s_linear_infinite]" : undefined}
+        style={{ ...style, strokeWidth: selected ? 3 : 2, ...(invalid ? { stroke: "var(--aqt-rose)" } : null) }}
+      />
       {selected && deletable !== false ? (
         <EdgeLabelRenderer>
           <Button

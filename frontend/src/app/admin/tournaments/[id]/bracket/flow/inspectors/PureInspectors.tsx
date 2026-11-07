@@ -200,7 +200,7 @@ function Preview({ node, read }: Pick<Props, "node" | "read">) {
   );
 }
 
-function AggregateInspector({ node, read, readOnly, onChange }: Props) {
+function AggregateInspector({ node, readOnly, onChange }: Props) {
   const t = useTranslations("adminTournament.flow.pure");
   const tUnit = useTranslations("common.flow.unit");
   const config = node.config;
@@ -272,7 +272,6 @@ function AggregateInspector({ node, read, readOnly, onChange }: Props) {
         onChange={(next) => set({ mode: next, n: needsN(next) ? ((config.n as number | null) ?? 1) : null })}
       />
       {needsN(mode) ? <NumberField label={t("count")} min={1} value={(config.n as number | null) ?? null} disabled={readOnly} onChange={(n) => set({ n })} /> : null}
-      <Preview node={node} read={read} />
     </div>
   );
 }

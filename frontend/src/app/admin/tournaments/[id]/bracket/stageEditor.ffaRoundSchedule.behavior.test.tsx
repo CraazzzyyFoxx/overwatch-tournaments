@@ -66,7 +66,7 @@ vi.mock("@/services/ffa.service", () => ({
 }));
 
 vi.mock("@/hooks/usePermissions", () => ({
-  usePermissions: () => ({ isSuperuser: true })
+  usePermissions: () => ({ canAccessPermission: () => true, isSuperuser: true })
 }));
 
 vi.mock("@/hooks/useMobile", () => ({ useIsMobile: () => false }));

@@ -129,6 +129,27 @@ describe("RegistrationNodeSettingsForm", () => {
     });
   });
 
+  it("switches check-in off and saves it into the node's config", async () => {
+    await render(makeNode());
+    expect(container.querySelector("label[for$='-check-in']")?.textContent).toBe("Require check-in");
+    expect(toggle("check-in").getAttribute("aria-checked")).toBe("true");
+
+    await act(async () => {
+      toggle("check-in").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    await act(async () => {
+      [...document.querySelectorAll("button")]
+        .find((button) => button.textContent?.trim() === "Save changes")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+
+    expect(applyChanges).toHaveBeenCalledWith(64, {
+      nodes: [{ id: 21, kind: "registration", name: "Day 3", config: { check_in: false, intake: "team", max_participants: 60 } }]
+    });
+  });
+
   it("warns that the override changes nothing while the sign-up window is open-ended", async () => {
     await render(makeNode());
     expect(container.textContent).toContain("this changes nothing");

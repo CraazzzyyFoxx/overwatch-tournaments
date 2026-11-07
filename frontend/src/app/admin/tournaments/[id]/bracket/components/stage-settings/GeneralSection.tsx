@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
@@ -19,12 +19,14 @@ import type { StagePairingMode, StageType } from "@/types/tournament.types";
 import { defaultTiebreakOrder, STAGE_TYPE_LABELS } from "@/lib/bracket/projection";
 import type { SectionProps } from "./types";
 
+/** `children`: more rows of the stage's basics, after its own (where its participants come from). */
 export function GeneralSection({
   stage,
   form,
   onChange,
-  isSuperuser
-}: SectionProps & { isSuperuser: boolean }) {
+  isSuperuser,
+  children
+}: SectionProps & { isSuperuser: boolean; children?: ReactNode }) {
   const t = useTranslations("adminBracket.settings");
   const tRoot = useTranslations("adminBracket");
   const ids = useId();
@@ -42,18 +44,6 @@ export function GeneralSection({
           id={`${ids}-name`}
           value={form.name}
           onChange={(event) => onChange({ name: event.target.value })}
-        />
-      </SettingRow>
-
-      <SettingRow htmlFor={`${ids}-phase`} label={t("phase")} hint={t("phaseHelp")}>
-        <NumberInput
-          id={`${ids}-phase`}
-          integer
-          min={0}
-          size="sm"
-          className="w-24"
-          value={form.order}
-          onValueChange={(next) => onChange({ order: next ?? 0 })}
         />
       </SettingRow>
 
@@ -162,6 +152,7 @@ export function GeneralSection({
           </Select>
         </SettingRow>
       ) : null}
+      {children}
     </SettingGroup>
   );
 }

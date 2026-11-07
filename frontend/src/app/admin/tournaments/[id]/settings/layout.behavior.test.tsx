@@ -99,7 +99,8 @@ beforeEach(() => {
   pathname = "/admin/tournaments/14/settings/rules";
   getTournament.mockReset().mockResolvedValue({
     id: 14,
-    workspace_id: 3
+    workspace_id: 3,
+    flow_nodes: [{ id: 5, kind: "formation", name: "Teams", status: "draft", config: { mode: "manual" } }]
   });
 });
 

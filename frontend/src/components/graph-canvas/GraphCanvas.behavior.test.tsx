@@ -8,9 +8,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { FlowNodeData } from "@/lib/flow/flowCanvas";
-
-import { FlowCanvas } from "./FlowCanvas";
+import { GraphCanvas } from "./GraphCanvas";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -18,9 +16,10 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 type Handed = {
-  nodes: Node<FlowNodeData>[];
+  nodes: Node[];
   edges: Edge[];
-  onNodesChange: (changes: NodeChange<Node<FlowNodeData>>[]) => void;
+  nodesDraggable: boolean;
+  onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
 };
 let handed: Handed;
@@ -35,19 +34,24 @@ vi.mock("@xyflow/react", async (importOriginal) => ({
   useReactFlow: () => ({ screenToFlowPosition: (point: { x: number; y: number }) => point })
 }));
 
-const data: FlowNodeData = { kind: "filter", name: "Filter", status: null, ports: [], issueCount: 0, readOnly: false };
-const makeNodes = (x = 0): Node<FlowNodeData>[] => [
-  { id: "a", type: "flowNode", position: { x, y: 0 }, data },
-  { id: "b", type: "flowNode", position: { x: 300, y: 0 }, data }
+const makeNodes = (x = 0): Node[] => [
+  { id: "a", type: "card", position: { x, y: 0 }, data: {} },
+  { id: "b", type: "card", position: { x: 300, y: 0 }, data: {} }
 ];
 const makeEdges = (): Edge[] => [{ id: "e", source: "a", target: "b" }];
 
 let root: Root;
 let container: HTMLDivElement;
-function render(props: { nodes: Node<FlowNodeData>[]; edges: Edge[]; readOnly?: boolean; onNodesChange?: Handed["onNodesChange"]; onEdgesChange?: Handed["onEdgesChange"] }) {
+function render(props: {
+  nodes: Node[];
+  edges: Edge[];
+  readOnly?: boolean;
+  onNodesChange?: Handed["onNodesChange"];
+  onEdgesChange?: Handed["onEdgesChange"];
+}) {
   container ??= document.body.appendChild(document.createElement("div"));
   root ??= createRoot(container);
-  act(() => root.render(<FlowCanvas readOnly={false} heightClass="h-10" {...props} />));
+  act(() => root.render(<GraphCanvas nodeTypes={{}} readOnly={false} heightClass="h-10" {...props} />));
 }
 
 afterEach(() => {
@@ -57,7 +61,7 @@ afterEach(() => {
   container = undefined as never;
 });
 
-describe("FlowCanvas", () => {
+describe("GraphCanvas", () => {
   it("applies select, dimensions and position changes, handing only the position back", () => {
     const onNodesChange = vi.fn();
     render({ nodes: makeNodes(), edges: makeEdges(), onNodesChange });
@@ -112,5 +116,13 @@ describe("FlowCanvas", () => {
 
     expect(handed.nodes[1]?.measured).toEqual({ width: 100, height: 40 });
     expect(onNodesChange).not.toHaveBeenCalled();
+  });
+
+  it("lets nodes be dragged only where the parent keeps their positions", () => {
+    render({ nodes: makeNodes(), edges: makeEdges() });
+    expect(handed.nodesDraggable).toBe(false);
+
+    render({ nodes: makeNodes(), edges: makeEdges(), onNodesChange: vi.fn() });
+    expect(handed.nodesDraggable).toBe(true);
   });
 });

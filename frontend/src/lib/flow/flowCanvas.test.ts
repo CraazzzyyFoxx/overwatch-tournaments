@@ -40,6 +40,6 @@ describe("flow canvas", () => {
       ["1", 0, false],
       ["2", 2, false]
     ]);
-    expect(edges[0]).toMatchObject({ className: "flow-edge-invalid", animated: true });
+    expect(edges[0]).toMatchObject({ data: { invalid: true } });
   });
 });

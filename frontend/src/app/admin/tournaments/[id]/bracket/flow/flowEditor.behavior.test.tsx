@@ -6,7 +6,7 @@
 // file pins the editor's state, not xyflow's drawing.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -36,7 +36,9 @@ const getAdmin = vi.fn(async () => adminRead);
 const validate = vi.fn(async () => ({ issues: [], ports: [], ref_ids: {}, new_edge_ids: [] }));
 const applyChanges = vi.fn(async () => starterRead());
 let savedStages: { id: number; order: number }[] = [];
-let canvas: { onNodesChange: (changes: unknown[]) => void };
+type Palette = { groups: { items: { key: string; label: string }[] }[]; onAdd: (key: string) => void };
+let canvas: { onNodesChange: (changes: unknown[]) => void; onArrange: () => void };
+const focus = vi.fn();
 
 vi.mock("@/services/flow.service", () => ({
   default: {
@@ -45,19 +47,32 @@ vi.mock("@/services/flow.service", () => ({
     applyChanges: (...a: unknown[]) => applyChanges(...(a as []))
   }
 }));
-vi.mock("@/components/flow/FlowCanvas", () => ({
-  FlowCanvas: (props: { nodes: { id: string; data: { name: string } }[]; onNodesChange: (changes: unknown[]) => void }) => {
+// The canvas' own palette is stubbed with the rows it would offer, so a click adds through the editor's `onAdd`.
+vi.mock("@/components/graph-canvas/GraphCanvas", () => ({
+  GraphCanvas: (
+    props: typeof canvas & { nodes: { id: string; data: { name: string } }[]; palette?: Palette; children: ReactNode }
+  ) => {
     canvas = props;
     return (
-      <ul aria-label="canvas">
-        {props.nodes.map((n) => (
-          <li key={n.id}>{n.data.name}</li>
-        ))}
-      </ul>
+      <div>
+        {props.palette?.groups.flatMap((group) =>
+          group.items.map((item) => (
+            <button key={item.key} type="button" aria-label={`Add ${item.label}`} onClick={() => props.palette?.onAdd(item.key)} />
+          ))
+        )}
+        <ul aria-label="canvas">
+          {props.nodes.map((n) => (
+            <li key={n.id}>{n.data.name}</li>
+          ))}
+        </ul>
+        {props.children}
+      </div>
     );
-  }
+  },
+  CanvasPanel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  useFocusNode: () => focus
 }));
-vi.mock("../hubQueries", () => ({
+vi.mock("../../hubQueries", () => ({
   useHubTournamentQuery: () => ({ data: { id: 7, workspace_id: 3, flow_nodes: [], stages: savedStages }, isLoading: false }),
   tabFallback: null
 }));
@@ -65,7 +80,7 @@ vi.mock("@/hooks/usePermissions", () => ({ usePermissions: () => ({ canAccessPer
 vi.mock("@/lib/notify", () => ({ notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() } }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  usePathname: () => "/admin/tournaments/7/flow",
+  usePathname: () => "/admin/tournaments/7/bracket/flow",
   useSearchParams: () => new URLSearchParams()
 }));
 
@@ -123,11 +138,18 @@ describe("Flow tab", () => {
     expect(button("Save flow")).toBeUndefined();
   });
 
-  it("lists server issues with the name of the node they belong to", async () => {
-    adminRead = { ...adminRead, issues: [{ code: "missing_input", severity: "warning", message: "Teams has no input", node_id: 2, edge_id: null }] };
+  it("lists a server issue in its own words under the node's name, and the row brings that node into view", async () => {
+    adminRead = { ...adminRead, issues: [{ code: "missing_input", severity: "warning", message: "formation node has no input", node_id: 2, edge_id: null }] };
     await mount();
-    expect(container.textContent).toContain("Teams has no input");
-    expect(button("Teams")).toBeDefined();
+    // A warning alone leaves the panel folded to its counts.
+    expect(container.textContent).not.toContain("No players come in");
+    await act(async () => [...container.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Issues"))!.click());
+
+    const row = [...container.querySelectorAll("button")].find((b) => b.textContent?.includes("Teams"))!;
+    expect(row.textContent).toContain("No players come in. Connect a registration to it.");
+    expect(container.textContent).not.toContain("formation node has no input");
+    await act(async () => row.click());
+    expect(focus).toHaveBeenCalledWith("2");
   });
 
   it("a palette stage takes the phase after the saved stages", async () => {
@@ -166,18 +188,25 @@ describe("Flow tab", () => {
   it("Arrange moves the nodes into columns as an unsaved change that Save sends", async () => {
     await mount();
     expect(button("Save flow")).toBeUndefined();
-    await act(async () => button("Arrange").click());
+    await act(async () => canvas.onArrange());
     expect(button("Save flow")).toBeDefined();
     await act(async () => button("Save flow").click());
     const [, changes] = applyChanges.mock.calls.at(-1) as unknown as [number, { nodes: { id: number; position_x: number }[] }];
     expect(changes.nodes).toEqual([expect.objectContaining({ id: 2, position_x: 336, position_y: 0 })]);
   });
 
-  it("opens a flow with overlapping nodes already arranged, leaving the saved layout to Save", async () => {
+  it("opens overlapping nodes arranged without an unsaved change, and the next Save sends that layout", async () => {
     const read = starterRead();
     read.nodes[1].position_x = 100;
     adminRead = { ...adminRead, ...read };
     await mount();
-    expect(button("Save flow")).toBeDefined();
+    expect(button("Save flow")).toBeUndefined();
+
+    await act(async () => button("Add Filter").click());
+    await act(async () => button("Save flow").click());
+    const [, changes] = applyChanges.mock.calls.at(-1) as unknown as [number, { nodes: { id?: number }[] }];
+    expect(changes.nodes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 2, position_x: 336, position_y: 0 }), expect.objectContaining({ kind: "filter" })])
+    );
   });
 });

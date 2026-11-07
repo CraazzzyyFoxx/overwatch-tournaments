@@ -164,7 +164,7 @@ describe("draft config step", () => {
     expect(html).toContain("formats.snake.title");
     // The other formats are never offered here: the wizard does not edit it.
     expect(html).not.toContain("formats.linear.title");
-    expect(html).toContain('href="/admin/tournaments/5/flow?node=9"');
+    expect(html).toContain('href="/admin/tournaments/5/bracket/flow?node=9"');
   });
 });
 

@@ -10,7 +10,7 @@ import { eyebrowClass } from "@/components/ui/eyebrow";
 import { Switch } from "@/components/ui/switch";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { tabFallback } from "../../hubQueries";
-import { RegistrationNodeScope } from "../RegistrationNodeScope";
+import { FlowNodeScope } from "../FlowNodeScope";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useRegistrationFormSection } from "../useRegistrationFormSection";
 import { RegistrationNodeSettingsForm } from "./RegistrationNodeSettingsForm";
@@ -37,9 +37,9 @@ export default function RegistrationSettingsPage() {
       {({ tournament, tournamentId, canTeamCreate }) => (
         <>
           <div>
-            <RegistrationNodeScope tournament={tournament}>
+            <FlowNodeScope kind="registration" tournament={tournament}>
               {(node) => <RegistrationNodeSettingsForm tournament={tournament} node={node} />}
-            </RegistrationNodeScope>
+            </FlowNodeScope>
           </div>
           <div>
             <PublicPageForm tournamentId={tournamentId} disabled={!canTeamCreate} />

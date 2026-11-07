@@ -6,6 +6,7 @@ import {
   groupTournamentStageFlow,
   nextStageOrder,
   phaseOrderForArrangement,
+  phasesBesideAbove,
   pickCurrentStage
 } from "./stages";
 
@@ -99,5 +100,21 @@ describe("stage phases", () => {
     ]);
 
     expect([...phases.values()]).toEqual([0, 5, 9]);
+  });
+
+  it("joins a stage to the phase above, and splits it off without landing on a later wave", () => {
+    const list = [
+      { id: 1, order: 0 },
+      { id: 2, order: 1 },
+      { id: 3, order: 1 },
+      { id: 4, order: 2 }
+    ];
+    expect([...phasesBesideAbove(list, 2, "parallel")]).toEqual([[2, 0]]);
+    // Low division (3) leaves High's phase: it and the final after it each move one phase later.
+    expect([...phasesBesideAbove(list, 3, "after")]).toEqual([
+      [3, 2],
+      [4, 3]
+    ]);
+    expect(phasesBesideAbove(list, 1, "parallel").size).toBe(0);
   });
 });

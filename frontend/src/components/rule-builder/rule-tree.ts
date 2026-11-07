@@ -13,6 +13,8 @@
  */
 import type { Edge, Node } from "@xyflow/react";
 
+import { HANDLE_COLOR } from "@/components/graph-canvas/tokens";
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 /**
@@ -30,7 +32,10 @@ export const LOGICAL_COLORS: Record<string, string> = {
 
 /** Leaf conditions are the satisfied/valid end of the tree → success tone. */
 export const LEAF_COLOR = "var(--aqt-emerald)";
-export const HANDLE_COLOR = "hsl(var(--muted-foreground))";
+
+/** A node's frame colour: its operator's, or the leaf tone. */
+export const accentOf = (node: FlatNode): string =>
+  node.type === "logical" ? (LOGICAL_COLORS[node.logicalOp ?? "AND"] ?? HANDLE_COLOR) : LEAF_COLOR;
 
 export const LOGICAL_OPS = ["AND", "OR", "NOT"] as const;
 
@@ -281,20 +286,18 @@ export function layoutNodes(flatNodes: FlatNode[]): { nodes: Node[]; edges: Edge
       position: { x, y },
       data: { ...fn },
       style: { width: NODE_WIDTH },
+      // Removal is the node's own trash button, which takes the subtree with it; the Delete key would orphan it.
+      deletable: false,
     });
 
     if (fn.parentId) {
+      const parent = flatNodes.find((n) => n.id === fn.parentId);
       edges.push({
         id: `${fn.parentId}-${fn.id}`,
         source: fn.parentId,
         target: fn.id,
-        style: {
-          stroke:
-            LOGICAL_COLORS[flatNodes.find((n) => n.id === fn.parentId)?.logicalOp ?? "AND"] ??
-            HANDLE_COLOR,
-          strokeWidth: 2,
-        },
-        animated: true,
+        style: { stroke: parent ? accentOf(parent) : HANDLE_COLOR },
+        deletable: false,
       });
     }
 

@@ -20,7 +20,7 @@ import { PageStateCard } from "@/components/ui/page-state-card";
 import { registrationIntake } from "@/lib/tournament/flow-nodes";
 import { tabFallback } from "../../hubQueries";
 import { SettingsSectionPage } from "../SettingsSection";
-import { RegistrationNodeScope } from "../RegistrationNodeScope";
+import { FlowNodeScope } from "../FlowNodeScope";
 import { useRegistrationFormSection } from "../useRegistrationFormSection";
 import { useRegistrationNodeConfig } from "../useRegistrationNodeConfig";
 import type { TournamentFlowNode } from "@/types/flow.types";
@@ -37,7 +37,7 @@ export default function AdmissionSettingsPage() {
   return (
     <SettingsSectionPage section="admission">
       {({ tournament, tournamentId, canTeamCreate, canUpdateTournament }) => (
-        <RegistrationNodeScope tournament={tournament}>
+        <FlowNodeScope kind="registration" tournament={tournament}>
           {(node) => (
             <AdmissionForm
               tournamentId={tournamentId}
@@ -47,7 +47,7 @@ export default function AdmissionSettingsPage() {
               nodeDisabled={!canUpdateTournament}
             />
           )}
-        </RegistrationNodeScope>
+        </FlowNodeScope>
       )}
     </SettingsSectionPage>
   );

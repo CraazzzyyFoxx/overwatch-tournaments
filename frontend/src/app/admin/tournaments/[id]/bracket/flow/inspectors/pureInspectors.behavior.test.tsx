@@ -95,12 +95,6 @@ describe("pure node inspectors", () => {
     expect(onChange).toHaveBeenLastCalledWith({ config: { unit: "players", score: { preset: "stage_points" }, mode: "sum_best_n", n: 1 } });
   });
 
-  it("an aggregate previews its tentative rows with names", async () => {
-    await render(node({ key: "20", id: 20, kind: "aggregate", config: { unit: "players", score: { preset: "stage_points" }, mode: "sum_all", n: null } }), leagueFlow({ state: "tentative" }));
-    expect(container.textContent).toContain("Preview (tentative)");
-    expect([...container.querySelectorAll("tbody tr")].map((r) => r.children[1]?.textContent)).toEqual(["Ann", "Bob", "Cid"]);
-  });
-
   it("a leaderboard pin writes participant and position", async () => {
     await render(node({ key: "21", id: 21, kind: "leaderboard", config: { pins: [] } }), leagueFlow());
     await click(only("Add pin"));

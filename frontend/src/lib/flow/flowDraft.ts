@@ -290,6 +290,9 @@ export const isDirty = (draft: FlowDraft): boolean => {
   return c.nodes.length + c.edges.length + c.delete_node_ids.length + c.delete_edge_ids.length > 0;
 };
 
+/** Whether two drafts would save the same changes. */
+export const sameChanges = (a: FlowDraft, b: FlowDraft): boolean => sameValue(toChanges(a), toChanges(b));
+
 /**
  * A clean (or missing) draft is replaced by the read. A dirty one takes the read's statuses and, per saved node, every field
  * the admin has not touched, and the read becomes its new base, so Save sends only what the admin changed. A name or config the

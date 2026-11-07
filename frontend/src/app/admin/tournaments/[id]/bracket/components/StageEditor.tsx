@@ -69,7 +69,10 @@ import { GeneralSection } from "./stage-settings/GeneralSection";
 import { SeedingSection } from "./stage-settings/SeedingSection";
 import { SwissSection } from "./stage-settings/SwissSection";
 import { TiebreakersSection } from "./stage-settings/TiebreakersSection";
+import { AdvancementRows } from "./stage-settings/AdvancementRows";
+import { useStageFeed } from "./stage-settings/useStageFeed";
 import { tabFallback } from "../../hubQueries";
+import { useTabAccess } from "../../sub-tabs";
 import { useStageOperations } from "./stage-editor/useStageOperations";
 import { MatchesView } from "../../matches/MatchesView";
 
@@ -250,6 +253,16 @@ export function StageEditor({
     plannedRounds,
     onChanged
   });
+  // Who advances into this stage lives in the flow graph, but is edited and saved here with the rest of the stage.
+  const { canUpdateTournament } = useTabAccess(tournament);
+  const advancement = useStageFeed({
+    stage,
+    stages,
+    stageType: form.stageType,
+    tournament,
+    canUpdate: canUpdateTournament,
+    onChanged
+  });
   const tSchedule = useTranslations("adminBracket.roundSchedule");
   const [confirmingSchedule, setConfirmingSchedule] = useState(false);
   const movedRounds = [...new Set(schedule.moved.map((write) => write.round))].join(", ");
@@ -281,6 +294,7 @@ export function StageEditor({
         return; // `onError` already said why.
       }
     }
+    if (advancement.dirty && !(await advancement.save())) return; // its error is in the `SaveBar`.
     // `onError` reports a refused match write; the round drafts stay to retry.
     if (schedule.dirty) await schedule.save(overwriteMoved ?? false).catch(() => undefined);
   };
@@ -439,43 +453,33 @@ export function StageEditor({
 
       <div className="pt-4">
         {activeSection === "settings" ? (
-          // The settings rail's rhythm: a stack of `SettingGroup` cards, each
-          // section building its own. The preview stays unframed between them:
-          // the bracket draws its own panel, and a card around it would be a
-          // second frame.
-          <div className="flex flex-col gap-4">
-            <GeneralSection stage={stage} form={form} onChange={patchForm} isSuperuser={isSuperuser} />
-
-            {/* Right under the fields that shape it: format and grand final. */}
+          // The settings rail's rhythm: `SettingGroup` cards, each section building its own. From a 72rem panel (a
+          // Full HD screen) they flow over two balanced columns, so whatever cards this format has pack without holes;
+          // the preview closes the tab at full width. It stays unframed: the bracket draws its own panel, and a card
+          // around it would be a second frame. Each card's own bottom margin spaces it from the next one and the preview.
+          <div className="@container">
+            <div className="gap-4 @6xl:columns-2 *:mb-4 *:break-inside-avoid">
+              <GeneralSection stage={stage} form={form} onChange={patchForm} isSuperuser={isSuperuser}>
+                <AdvancementRows stage={stage} stageType={form.stageType} advancement={advancement} />
+              </GeneralSection>
+              <SeedingSection form={form} onChange={patchForm} />
+              {isFfaForm ? <FfaScoringSection form={form} onChange={patchForm} saveError={saveError} /> : null}
+              {/* Under the advance count it checks, over the Points group's bye. */}
+              {form.stageType === "swiss" ? <SwissSection stage={stage} form={form} onChange={patchForm} /> : null}
+              {ranksTable ? <TiebreakersSection stage={stage} form={form} onChange={patchForm} /> : null}
+              <BestOfSection
+                stage={stage}
+                form={form}
+                onChange={patchForm}
+                bracketTeamCount={projection.bracketTeams.count}
+                lowerBracketTeamCount={projection.lowerBracketTeamCount}
+                plannedRounds={plannedRounds}
+                onApplyToExisting={() => applyBestOfMutation.mutate()}
+                applying={applyBestOfMutation.isPending}
+              />
+              <RoundScheduleSection schedule={schedule} />
+            </div>
             <BracketPreview projection={projection} stage={stage} teams={teams} className="px-1 py-2" />
-
-            <SeedingSection form={form} onChange={patchForm} />
-
-            {isFfaForm ? (
-              <FfaScoringSection form={form} onChange={patchForm} saveError={saveError} />
-            ) : null}
-
-            {/* Under the advance count it checks, over the Points group's bye. */}
-            {form.stageType === "swiss" ? (
-              <SwissSection stage={stage} form={form} onChange={patchForm} />
-            ) : null}
-
-            {ranksTable ? (
-              <TiebreakersSection stage={stage} form={form} onChange={patchForm} />
-            ) : null}
-
-            <BestOfSection
-              stage={stage}
-              form={form}
-              onChange={patchForm}
-              bracketTeamCount={projection.bracketTeams.count}
-              lowerBracketTeamCount={projection.lowerBracketTeamCount}
-              plannedRounds={plannedRounds}
-              onApplyToExisting={() => applyBestOfMutation.mutate()}
-              applying={applyBestOfMutation.isPending}
-            />
-
-            <RoundScheduleSection schedule={schedule} />
           </div>
         ) : null}
 
@@ -513,13 +517,15 @@ export function StageEditor({
         ) : null}
 
         <SaveBar
-          dirty={changes.length > 0 || schedule.dirty}
+          dirty={changes.length > 0 || schedule.dirty || advancement.dirty}
           summary={
             <Fragment>
               {t("unsaved")}{" "}
               <span className="text-foreground">
                 {[
                   ...changes.map((key) => tr(`changes.${key}`)),
+                  ...(advancement.ruleDirty ? [tr("changes.advancement")] : []),
+                  ...(advancement.formationDirty ? [tr("changes.formation")] : []),
                   ...(schedule.dirty ? [tr("changes.roundSchedule")] : [])
                 ].join(", ")}
               </span>
@@ -528,9 +534,11 @@ export function StageEditor({
           onDiscard={() => {
             setForm(stageFormFromStage(stage));
             schedule.discard();
+            advancement.discard();
           }}
           onSave={() => void save()}
-          saving={updateMutation.isPending || schedule.saving}
+          saving={updateMutation.isPending || schedule.saving || advancement.saving}
+          error={advancement.error}
           // The tabs above are `?section=` links of THIS form, so the anchor
           // guard would demand a discard just to look at another one. The
           // stage list beside it is buttons, which the guard never saw.

@@ -9,7 +9,6 @@ export {
   type RuleLeafOption,
 } from "./RuleNodes";
 export {
-  HANDLE_COLOR,
   LEAF_COLOR,
   LOGICAL_COLORS,
   LOGICAL_OPS,

@@ -9,7 +9,7 @@ The admin panel is English-only, so section, tab and button names below are give
 The most common format: players sign up individually and the balancer builds the teams.
 
 1. **Admin → Tournaments → New tournament**. On the **Basics** step enter a name and the dates. From there you can press **Save as draft** — the tournament is created hidden and nobody sees it yet.
-2. **Flow**: the formation box's **Team formation** is **Balancer** from the start. **Settings → General**: pick a **Division grid version** if this tournament needs its own.
+2. Teams are formed by the **Balancer** from the start; the method can be changed in **Bracket → Stages**, **General** card, row **Teams formed by**. **Settings → General**: pick a **Division grid version** if this tournament needs its own.
 3. **Settings → Roster shape**: leave **Inherit from the workspace** or choose **Overwatch 5v5 · 1/2/2**.
 4. **Settings → Schedule**: set the windows for the **Registration**, **Check-in** and **Live** phases and turn on **Automatic phase transitions**. See [Phases and schedule](/docs/organizers/schedule).
 5. **Settings → Registration**: decide whether you want **Auto-approve**, and build the questionnaire through **Open the form builder**. See [Registration and entries](/docs/organizers/registration).
@@ -25,7 +25,7 @@ The most common format: players sign up individually and the balancer builds the
 
 The same tournament, except captains build the teams live instead of the balancer.
 
-1. Steps 1–7 of the previous scenario, but on the **Flow** tab select the formation box and set **Team formation** to **Draft**; choose the pick order under **Draft format** there.
+1. Steps 1–7 of the previous scenario, but in the stage's **General** card (**Bracket → Stages**) set **Teams formed by** to **Draft**; choose the pick order under **Draft format** there.
 2. **Settings → Schedule**: add a window for the **Team formation** phase — it only appears in the schedule for draft tournaments.
 3. **Settings → Roster shape** decides how many rounds the draft has: one fewer than the players per team. The shape cannot be changed once a draft session exists.
 4. When the pool is ready, open **Teams → Draft** and walk the wizard: **Parameters**, **Pool**, **Captains**, **Order**, **Review**, **Ready**.
@@ -42,7 +42,7 @@ While a draft session is alive you cannot change the roster shape or the draft f
 Captains assemble their rosters in advance; the platform only checks and admits them.
 
 1. **Admin → Tournaments → New tournament**, as in the first scenario.
-2. **Flow**: in the registration box set **Who registers** to **Teams (captains register)**, and in the formation box set **Team formation** to **Registered teams**.
+2. **Settings → Registration**: set **Who registers** to **Teams (captains register)**. In the stage's **General** card (**Bracket → Stages**), set **Teams formed by** to **Registered teams**.
 3. **Settings → Roster shape**: set the shape and, if you want a bench, **Substitutes per team**. That field exists only on team-registration tournaments.
 4. **Settings → Admission**, the **Registered teams** group: **Minimum starter rank**, **Maximum starter rank**, **Maximum rank spread**, **Unique Discord identity**, **Require Discord server membership**. The rank rules apply to starters only; substitutes are ignored.
 5. If the tournament is paid, choose **Who pays** in the same area: **Each player** or **The team (captain pays)**.
@@ -60,11 +60,11 @@ In this format neither the balancer nor the draft runs. A player who registered 
 A Swiss group phase, then a knockout bracket.
 
 1. Build the teams by any of the methods above.
-2. **Bracket → Add stage**: create the first stage with the **Swiss** format. In **General** leave **Phase** at 1 and set **Swiss max rounds** — how many rounds get played.
+2. **Bracket → Add stage**: create the first stage with the **Swiss** format. In **General** set **Swiss max rounds** — how many rounds get played.
 3. In that stage's **Items** tab create a group and fill it with teams. The **Seed by SR** menu item spreads teams across groups with a snake SR draft.
 4. **Tiebreakers**: choose a **Standings preset**. In **Points** you can also set **Swiss bye points** — what a team scores for a round it sits out.
-5. **Add stage** again: format **Double Elimination**, **Phase** 2 — the next wave.
-6. Open the **Flow** tab and wire the stages through a filter. Add a **Top N per group** filter (**Top N** if the stage is one table), draw the group stage's **ranking** output into it and its **passed** output into the playoff stage's **participants** input, then **Save flow**. Set **Upper bracket per group** on the filter if some of the passed teams should start in the lower bracket — the **Lower bracket** item is created for you. The **Groups → playoff** preset builds this wiring for you. See [The Flow tab](/docs/organizers/flow).
+5. **Add stage** again with the **Double Elimination** format; it lands in the next phase. It asks **Who advances from “‹first stage›”**: choose **Top N overall** (or **Top N from each group** if the first stage has several groups) and the number of teams; the new stage is wired to the first one for you.
+6. In the playoff stage's **General** card you can change **Takes participants from**, the **Rule** and the number later, while the stage is in **Draft**. With **Top N from each group**, set **Start in the upper bracket, per group** if some of the passed teams should start in the lower bracket — the **Lower bracket** item is created for you. Wiring that **Bracket** cannot express (a range, a manual pick, merges) goes in **Bracket → Flow** — see [The Flow tab](/docs/organizers/flow).
 7. In the playoff stage, **General** block of **Settings**: **Grand final** — **No reset** or **With reset**. With a reset, the extra match is created only if the lower-bracket team wins the grand final.
 8. Start the Swiss stage: **Generate bracket**, then **Mark ready** and **Start**.
 9. Play the first round; the next one appears on its own as soon as every encounter of the round is closed, and so on up to **Swiss max rounds** — or sooner, once the **Qualification & elimination** thresholds have decided every team. You do not add rounds by hand.
