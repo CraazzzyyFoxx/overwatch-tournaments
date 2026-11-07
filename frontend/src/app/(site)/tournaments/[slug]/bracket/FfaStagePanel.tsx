@@ -12,9 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
+import { standingsCuts } from "@/lib/flow/standingsCuts";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { cn } from "@/lib/utils";
 import ffaService from "@/services/ffa.service";
+import type { FlowRead } from "@/types/flow.types";
 import type { Stage } from "@/types/tournament.types";
 
 import { isStagePreview } from "./bracketData";
@@ -32,10 +34,13 @@ import type { BracketTabs } from "./bracketStages.model";
 export function FfaStagePanel({
   tournamentId,
   stage,
+  flow,
   bracketTabs
 }: Readonly<{
   tournamentId: number;
   stage: Stage;
+  /** The tournament's flow: the filters after this stage draw each lobby's cut lines. */
+  flow?: FlowRead;
   bracketTabs?: BracketTabs;
 }>) {
   const t = useTranslations();
@@ -149,7 +154,7 @@ export function FfaStagePanel({
                     {t("ffa.lobbyEmpty")}
                   </p>
                 ) : (
-                  <FfaLobbyTable lobby={lobby} />
+                  <FfaLobbyTable lobby={lobby} cuts={standingsCuts(flow, stage, lobby.stage_item_id)} />
                 )}
               </section>
             );

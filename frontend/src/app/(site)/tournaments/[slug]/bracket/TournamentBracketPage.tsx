@@ -11,6 +11,7 @@ import { EncounterEditDialog } from "@/components/tournaments/EncounterEditDialo
 import { MatchReportDialog } from "@/components/tournaments/MatchReportDialog";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { bracketBranches, branchOf } from "@/lib/flow/branches";
+import { standingsCuts } from "@/lib/flow/standingsCuts";
 import { pickCurrentStage } from "@/lib/tournament/stages";
 import { isTournamentStatusEnded } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
@@ -224,6 +225,7 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
                       key={panel.key}
                       tournamentId={tournament.id}
                       stage={panel.stage}
+                      flow={flowQuery.data}
                       bracketTabs={index === 0 ? bracketTabs : undefined}
                     />
                   ) : INDIVIDUAL_SWISS_STAGE_TYPES.includes(panel.stage.stage_type) ? (
@@ -241,6 +243,11 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
                       encounters={panel.encounters}
                       standings={panel.standings}
                       stages={stages}
+                      cuts={standingsCuts(
+                        flowQuery.data,
+                        panel.stage,
+                        panel.stageItem?.id ?? panel.standings[0]?.stage_item_id
+                      )}
                       onEdit={actions.handleEdit}
                       onReport={actions.handleReport}
                       canEdit={actions.canEdit}

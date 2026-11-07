@@ -17,6 +17,9 @@ import { EntityWorkspace } from "@/components/workspace/EntityWorkspace";
 import { SITE_NAME, SITE_URL } from "@/config/site";
 import encounterService from "@/services/encounter.service";
 import ffaService from "@/services/ffa.service";
+import flowService from "@/services/flow.service";
+import tournamentService from "@/services/tournament.service";
+import { standingsCuts } from "@/lib/flow/standingsCuts";
 import pickBanService from "@/services/pickBan.service";
 import captainService from "@/services/captain.service";
 import FfaLobbyTable from "@/components/ffa/FfaLobbyTable";
@@ -434,7 +437,14 @@ const EncounterPage = async (props: {
  * only the chat.
  */
 const FfaLobbyPage = async ({ encounter }: Readonly<{ encounter: Encounter }>) => {
-  const lobby = await ffaService.getLobby(encounter.id);
+  // The cut lines are the only use of the flow and stages: a failed read drops the lines, not the lobby page.
+  const [lobby, flow, stages] = await Promise.all([
+    ffaService.getLobby(encounter.id),
+    flowService.get(encounter.tournament_id).catch(() => undefined),
+    tournamentService.getStages(encounter.tournament_id).catch(() => [])
+  ]);
+  const lobbyStage = stages.find((stage) => stage.id === lobby.stage_id);
+  const cuts = lobbyStage ? standingsCuts(flow, lobbyStage, lobby.stage_item_id) : undefined;
   const t = await getTranslations();
   const format = await getFormatter();
 
@@ -527,7 +537,7 @@ const FfaLobbyPage = async ({ encounter }: Readonly<{ encounter: Encounter }>) =
           {lobby.rows.length === 0 ? (
             <p className="p-4.5">{t("ffa.lobbyEmpty")}</p>
           ) : (
-            <FfaLobbyTable lobby={lobby} />
+            <FfaLobbyTable lobby={lobby} cuts={cuts} />
           )}
         </Card>
       </section>

@@ -152,6 +152,7 @@
     "groups": "Groups",
     "playoff": "Playoff",
     "playoffStandings": "Playoff standings",
+    "topAdvance": "TOP {count} ADVANCE",
     "buchholz": "Buchholz",
     "headToHead": "Head-to-Head",
     "scoreDiff": "Score differential",
@@ -4580,7 +4581,10 @@
     "priority": "Priority {n}",
     "buchholzMedianFull": "median / full",
     "tieCluster": "Equal on every tiebreaker. Order assigned, not earned.",
-    "pinnedPlace": "Place set by the organizer"
+    "pinnedPlace": "Place set by the organizer",
+    "tieDecidesAdvance": "Tied on every tiebreaker. The assigned order, not the results, decides whether this team advances.",
+    "upperBracketCut": "Top {count} → upper bracket",
+    "tieDecidesUpper": "Tied on every tiebreaker. The assigned order, not the results, decides whether this team starts in the upper bracket."
   },
   "bracket": {
     "round": "Round {n}",
@@ -9738,6 +9742,8 @@
     "tableLabel": "{lobby} standings",
     "tieCluster": "Equal on every tiebreaker. Order assigned, not earned.",
     "pinnedPlace": "Place set by the organizer",
+    "tieDecidesAdvance": "Tied on every tiebreaker. The assigned order, not the lobby results, decides whether this team advances.",
+    "tieDecidesUpper": "Tied on every tiebreaker. The assigned order, not the lobby results, decides whether this team starts in the upper bracket.",
     "gamesPerLobby": "Games per lobby",
     "gamesProgress": "{played} of {total, plural, one {# game} other {# games}} played",
     "legendFormula": "Points = <code>{formula}</code>",

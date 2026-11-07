@@ -10,6 +10,7 @@ import type { BracketSlotRef } from "@/components/bracket/BracketView";
 import type { Encounter } from "@/types/encounter.types";
 import type { StreamEntry } from "@/types/stream.types";
 import type { Stage, StageItem, Standings } from "@/types/tournament.types";
+import type { StandingsCuts } from "@/lib/flow/standingsCuts";
 
 import { isStagePreview } from "./bracketData";
 import type { BracketTabs } from "./bracketStages.model";
@@ -23,6 +24,8 @@ type GroupStagePanelProps = {
   encounters: Encounter[];
   standings: Standings[];
   stages: Stage[];
+  /** Where the filters after this stage cut the table (`standingsCuts`). */
+  cuts?: StandingsCuts;
   onEdit?: (encounter: Encounter) => void;
   onReport?: (encounter: Encounter) => void;
   canEdit?: (encounter: Encounter) => boolean;
@@ -45,6 +48,7 @@ export function GroupStagePanel({
   encounters,
   standings,
   stages,
+  cuts,
   onEdit,
   onReport,
   canEdit,
@@ -94,7 +98,7 @@ export function GroupStagePanel({
         {hasStandings && (
           <TabsContent value="standings" className="mt-0">
             <div className="min-w-0 overflow-x-auto">
-              <StandingsTable standings={standings} stages={stages} is_groups />
+              <StandingsTable standings={standings} stages={stages} cuts={cuts} is_groups />
             </div>
           </TabsContent>
         )}
