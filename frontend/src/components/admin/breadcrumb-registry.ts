@@ -107,6 +107,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   "registration-forms": "breadcrumbRegistrationForms",
   scoring: "breadcrumbScoring",
   admission: "breadcrumbAdmission",
+  flow: "breadcrumbFlow",
   "game-content": "breadcrumbContent",
   new: "breadcrumbNew",
 };

@@ -125,10 +125,10 @@ export function DraftConfigStep({
             </p>
           )}
           <Link
-            href={`/admin/tournaments/${tournamentId}/flow?${FLOW_NODE_PARAM}=${formationNodeId}`}
+            href={`/admin/tournaments/${tournamentId}/bracket/flow?${FLOW_NODE_PARAM}=${formationNodeId}`}
             className="inline-flex items-center text-xs font-medium text-primary hover:underline"
           >
-            {t("changeFormatInFlow")}
+            {t("changeFormat")}
             <ArrowUpRight className="ml-1 h-3.5 w-3.5" aria-hidden />
           </Link>
         </div>

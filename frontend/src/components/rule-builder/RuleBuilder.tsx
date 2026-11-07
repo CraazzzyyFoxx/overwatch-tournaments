@@ -1,22 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import {
-  ReactFlow,
-  ReactFlowProvider,
-  Background,
-  Controls,
-  MiniMap,
-  useNodesState,
-  useEdgesState,
-  Panel,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
+import { GraphCanvas } from "@/components/graph-canvas/GraphCanvas";
 
-import { RulePalette, RULE_NODE_MIME } from "./RulePalette";
 import { RuleTreeOutline } from "./RuleTreeOutline";
 import {
   LeafNode,
@@ -30,7 +17,7 @@ import {
 } from "./RuleNodes";
 import {
   LEAF_COLOR,
-  LOGICAL_COLORS,
+  accentOf,
   appendChild,
   appendPaletteItem,
   buildNodePaths,
@@ -51,8 +38,8 @@ interface RuleBuilderCommonProps {
   labelForLeaf: (type: string | undefined) => string;
   /** One-line read-only summary, for the outline and read-only nodes. */
   summarizeLeaf: (type: string, params: Record<string, unknown>) => string;
-  /** Canvas height class; defaults to the editor/viewer heights. */
-  heightClass?: string;
+  /** The canvas' height utility, e.g. `h-125`. */
+  heightClass: string;
 }
 
 /**
@@ -82,23 +69,15 @@ export type RuleBuilderProps = RuleBuilderCommonProps &
       }
   );
 
-/** xyflow chrome repainted in the app's shadcn tokens (see the `colorMode` note below). */
-const XY_THEME = {
-  "--xy-background-color": "transparent",
-  "--xy-background-pattern-color": "hsl(var(--muted-foreground) / 0.22)",
-  "--xy-edge-stroke": "hsl(var(--muted-foreground) / 0.55)",
-  "--xy-controls-box-shadow": "none",
-  "--xy-controls-button-background-color": "hsl(var(--card))",
-  "--xy-controls-button-background-color-hover": "hsl(var(--accent))",
-  "--xy-controls-button-color": "hsl(var(--muted-foreground))",
-  "--xy-controls-button-color-hover": "hsl(var(--foreground))",
-  "--xy-controls-button-border-color": "hsl(var(--border))",
-  "--xy-minimap-background-color": "hsl(var(--card))"
-} as CSSProperties;
+// Module-level: xyflow remounts every node when `nodeTypes` changes identity.
+const nodeTypes = { logicalNode: LogicalNode, leafNode: LeafNode };
+
+/** A palette row's key: what it adds, which is unique even where two groups offer the same leaf. */
+const paletteKey = (item: RulePaletteItem) => `${item.type}:${item.logicalOp ?? item.leafType ?? ""}`;
 
 /**
- * The shared condition-tree canvas: React Flow over a flat parent-pointer
- * graph, a palette, and a screen-reader outline.
+ * The shared condition-tree canvas: the shared graph canvas over a flat
+ * parent-pointer graph laid out as a tree, plus a screen-reader outline.
  *
  * Engine-agnostic by construction — the leaf registry, the palette and the
  * parameter form all arrive as props, so the achievement rule editor and the
@@ -124,14 +103,11 @@ export function RuleBuilder(props: Readonly<RuleBuilderProps>) {
     ]
   );
 
-  const editor = props.readOnly ? (
-    <RuleBuilderInner {...props} />
-  ) : (
-    <ReactFlowProvider>
+  return (
+    <RuleBuilderContext.Provider value={config}>
       <RuleBuilderInner {...props} />
-    </ReactFlowProvider>
+    </RuleBuilderContext.Provider>
   );
-  return <RuleBuilderContext.Provider value={config}>{editor}</RuleBuilderContext.Provider>;
 }
 
 function RuleBuilderInner({
@@ -153,17 +129,18 @@ function RuleBuilderInner({
     setFlatNodes(treeToFlat(value, defaultLeafType));
   }
 
-  /** Applies a pure edit to the flat tree and publishes the rebuilt DSL. */
+  /**
+   * Applies a pure edit to the flat tree and publishes the rebuilt DSL. Publishing happens here, in the edit's event:
+   * a state updater runs while React renders this component, and `onChange` sets the parent's state.
+   */
   const applyEdit = useCallback(
     (edit: (prev: FlatNode[]) => FlatNode[]) => {
-      setFlatNodes((prev) => {
-        const updated = edit(prev);
-        const root = updated.find((n) => !n.parentId);
-        if (root && onChange) onChange(flatToTree(updated, root.id, defaultLeafType));
-        return updated;
-      });
+      const updated = edit(flatNodes);
+      setFlatNodes(updated);
+      const root = updated.find((n) => !n.parentId);
+      if (root && onChange) onChange(flatToTree(updated, root.id, defaultLeafType));
     },
-    [onChange, defaultLeafType]
+    [flatNodes, onChange, defaultLeafType]
   );
 
   const handleChangeOp = useCallback((nodeId: string, op: string) => {
@@ -190,26 +167,30 @@ function RuleBuilderInner({
 
   const nodePaths = useMemo(() => buildNodePaths(flatNodes), [flatNodes]);
 
-  // Build React Flow nodes/edges with callbacks injected into data
-  const { nodes: flowNodes, edges: flowEdges } = useMemo(() => {
-    const enriched = flatNodes.map((fn) => ({
-      ...fn,
-      path: nodePaths[fn.id],
-      readOnly,
-      onChangeOp: readOnly ? undefined : handleChangeOp,
-      onChangeType: readOnly ? undefined : handleChangeType,
-      onChangeParam: readOnly ? undefined : handleChangeParam,
-      onAddChild: readOnly ? undefined : handleAddChild,
-      onDelete: readOnly ? undefined : handleDelete,
-    }));
-
+  // The laid-out nodes, each carrying its frame colour and the callbacks in `data`.
+  const { nodes, edges } = useMemo(() => {
     const layout = layoutNodes(flatNodes);
-
+    const byId = new Map(flatNodes.map((fn) => [fn.id, fn]));
     return {
-      nodes: layout.nodes.map((n) => ({
-        ...n,
-        data: enriched.find((fn) => fn.id === n.id) ?? n.data,
-      })),
+      nodes: layout.nodes.map((n) => {
+        const fn = byId.get(n.id);
+        return fn
+          ? {
+              ...n,
+              data: {
+                ...fn,
+                path: nodePaths[fn.id],
+                accent: accentOf(fn),
+                readOnly,
+                onChangeOp: readOnly ? undefined : handleChangeOp,
+                onChangeType: readOnly ? undefined : handleChangeType,
+                onChangeParam: readOnly ? undefined : handleChangeParam,
+                onAddChild: readOnly ? undefined : handleAddChild,
+                onDelete: readOnly ? undefined : handleDelete,
+              },
+            }
+          : n;
+      }),
       edges: layout.edges,
     };
   }, [
@@ -223,74 +204,37 @@ function RuleBuilderInner({
     handleDelete,
   ]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(flowNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(flowEdges);
-
-  // Sync when flow layout changes
-  useEffect(() => {
-    setNodes(flowNodes);
-    setEdges(flowEdges);
-  }, [flowNodes, flowEdges, setNodes, setEdges]);
-
-  const nodeTypes = useMemo(() => ({ logicalNode: LogicalNode, leafNode: LeafNode }), []);
-
-  // ─── Adding nodes from the palette ────────────────────────────────────────
-
-  const onDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  }, []);
-
-  /** Appends a palette item to the root group. Shared by drop and click. */
-  const addPaletteItem = useCallback(
-    (item: RulePaletteItem) => {
-      applyEdit((prev) => appendPaletteItem(prev, item, defaultLeafType));
-    },
-    [applyEdit, defaultLeafType]
-  );
-
-  const onDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      const raw = e.dataTransfer.getData(RULE_NODE_MIME);
-      if (!raw) return;
-      // Serialised by RulePalette a moment ago, so the shape is ours.
-      addPaletteItem(JSON.parse(raw) as RulePaletteItem);
-    },
-    [addPaletteItem]
-  );
-
-  // ─── Fullscreen ──────────────────────────────────────────────────────────────
-
-  const [fullscreen, setFullscreen] = useState(false);
-
-  useEffect(() => {
-    if (!fullscreen) return;
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setFullscreen(false);
+  // Every palette row (a click or a drop) lands in the root group, wherever it was dropped.
+  const canvasPalette = useMemo(() => {
+    if (readOnly || !palette) return undefined;
+    const items = new Map(palette.flatMap((group) => group.items).map((item) => [paletteKey(item), item]));
+    return {
+      groups: palette.map((group) => ({
+        label: group.label,
+        items: group.items.map((item) => ({
+          key: paletteKey(item),
+          label: item.label,
+          description: item.description,
+          color: item.color ?? LEAF_COLOR,
+        })),
+      })),
+      onAdd: (key: string) => {
+        const item = items.get(key);
+        if (item) applyEdit((prev) => appendPaletteItem(prev, item, defaultLeafType));
+      },
     };
-    document.addEventListener("keydown", handleEsc);
-    return () => document.removeEventListener("keydown", handleEsc);
-  }, [fullscreen]);
+  }, [readOnly, palette, applyEdit, defaultLeafType]);
 
-  // Lock body scroll when fullscreen
-  useEffect(() => {
-    if (fullscreen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => { document.body.style.overflow = ""; };
-  }, [fullscreen]);
-
-  // ─── Render ─────────────────────────────────────────────────────────────────
-
-  const containerClass = fullscreen
-    ? "fixed inset-0 z-50 bg-background flex"
-    : `${heightClass ?? (readOnly ? "h-75" : "h-125")} w-full rounded-lg border bg-background flex`;
-
+  // The outline is `sr-only`: inside the canvas it takes no room beside it and follows it into fullscreen.
   return (
-    <div className={containerClass}>
+    <GraphCanvas
+      nodes={nodes}
+      edges={edges}
+      nodeTypes={nodeTypes}
+      readOnly={readOnly}
+      heightClass={heightClass}
+      palette={canvasPalette}
+    >
       <RuleTreeOutline
         nodes={flatNodes}
         paths={nodePaths}
@@ -299,66 +243,6 @@ function RuleBuilderInner({
         labelForLeaf={labelForLeaf}
         summarizeLeaf={summarizeLeaf}
       />
-      {!readOnly && palette && (
-        // Only the editable variant carries a palette, and with it the editing
-        // strings the palette renders.
-        <RulePalette
-          groups={palette}
-          labels={labels as RuleBuilderEditLabels}
-          onAdd={addPaletteItem}
-        />
-      )}
-      <div className="flex-1 relative">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={readOnly ? undefined : onNodesChange}
-          onEdgesChange={readOnly ? undefined : onEdgesChange}
-          nodeTypes={nodeTypes}
-          nodesDraggable={!readOnly}
-          nodesConnectable={false}
-          elementsSelectable={!readOnly}
-          onDragOver={readOnly ? undefined : onDragOver}
-          onDrop={readOnly ? undefined : onDrop}
-          fitView
-          fitViewOptions={{ padding: 0.3 }}
-          minZoom={0.3}
-          maxZoom={1.5}
-          proOptions={{ hideAttribution: true }}
-          // The app is dark-only (`<body className="dark">`). `colorMode` flips
-          // xyflow's own chrome to dark; the `--xy-*` overrides then repaint it in
-          // the app's tokens, since xyflow's dark palette is a neutral grey that
-          // clashes with the blue-tinted surfaces around it.
-          colorMode="dark"
-          style={XY_THEME}
-        >
-          <Background gap={20} size={1} />
-          <Controls showInteractive={false} />
-          {!readOnly && (
-            <MiniMap
-              nodeColor={(node) => {
-                if (node.type === "logicalNode") {
-                  return LOGICAL_COLORS[(node.data as unknown as FlatNode).logicalOp ?? "AND"];
-                }
-                return LEAF_COLOR;
-              }}
-              maskColor="rgba(0,0,0,0.2)"
-            />
-          )}
-          <Panel position="top-right">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 bg-background/80 backdrop-blur"
-              onClick={() => setFullscreen((v) => !v)}
-              title={fullscreen ? labels.exitFullscreen : labels.fullscreen}
-              aria-label={fullscreen ? labels.exitFullscreenLabel : labels.fullscreenLabel}
-            >
-              {fullscreen ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}
-            </Button>
-          </Panel>
-        </ReactFlow>
-      </div>
-    </div>
+    </GraphCanvas>
   );
 }

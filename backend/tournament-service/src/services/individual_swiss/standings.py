@@ -123,8 +123,8 @@ async def recalculate_individual_stage(
 ) -> bool:
     """Rebuild the stage's personal table from its confirmed encounters; whether any row changed.
 
-    A stage that was never started (no pool rows) has nothing to compute. Hidden ratings and player ranks are not
-    read or written: ``rank`` is the value frozen when the stage started.
+    A stage that was never started (no pool rows) has nothing to compute. ``rank`` is derived like every total:
+    ``start_rank`` moved by the stage's per-result deltas, never below 1 (a rank of 0 or less means "unranked").
     """
     # Imported here: ``standings.service`` imports this module for its stage-type branch.
     from src.services.standings.service import _scoring
@@ -141,12 +141,22 @@ async def recalculate_individual_stage(
         draw=draw,
         loss=loss,
     )
+    win_delta, loss_delta = stage.rank_win_delta or 0, stage.rank_loss_delta or 0
+    ranks = {
+        row.workspace_member_id: max(
+            1,
+            row.start_rank
+            + totals[row.workspace_member_id].wins * win_delta
+            - totals[row.workspace_member_id].losses * loss_delta,
+        )
+        for row in rows
+    }
     pins = await stage_pins(session, stage.id)
     lines = [
         StandingLine(
             row.workspace_member_id,
             row.role,
-            row.rank,
+            ranks[row.workspace_member_id],
             totals[row.workspace_member_id].points,
             totals[row.workspace_member_id].map_diff,
             totals[row.workspace_member_id].buchholz,
@@ -157,7 +167,9 @@ async def recalculate_individual_stage(
     k = stage.playoff_team_count or DEFAULT_PLAYOFF_TEAMS
     qualified = qualify(order, shape, k)
     pool = [
-        PoolPlayer(row.workspace_member_id, row.registration_id, row.display_name, row.role, row.rank)
+        PoolPlayer(
+            row.workspace_member_id, row.registration_id, row.display_name, row.role, ranks[row.workspace_member_id]
+        )
         for row in rows
         if row.workspace_member_id in qualified
     ]
@@ -172,6 +184,7 @@ async def recalculate_individual_stage(
         member_id = row.workspace_member_id
         total = totals[member_id]
         wanted = {
+            "rank": ranks[member_id],
             "points": total.points,
             "wins": total.wins,
             "draws": total.draws,

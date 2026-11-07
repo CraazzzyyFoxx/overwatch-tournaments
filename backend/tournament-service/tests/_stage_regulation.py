@@ -72,6 +72,8 @@ def stage_regulation(*, by_round: dict[int, int] | None = None, **overrides: Any
         "scoring_rule_id": 1,
         "challonge_group_id": None,
         "bracket_template": None,
+        "rank_win_delta": None,
+        "rank_loss_delta": None,
     }
     values.update(overrides)
     if by_round:

@@ -87,11 +87,17 @@ const nextConfig = {
   },
   async redirects() {
     // The developer articles lived at /docs/<slug> before /docs gained the
-    // player and organizer sections.
+    // player and organizer sections; the tournament Flow tab became a Bracket
+    // sub-tab (the query, e.g. `?node=12`, rides along).
     return [
       {
         source: "/docs/:slug(workspaces|identity|tournaments|registration|matches|balancer|realtime|api|schema)",
         destination: "/docs/dev/:slug",
+        permanent: true
+      },
+      {
+        source: "/admin/tournaments/:id(\\d+)/flow",
+        destination: "/admin/tournaments/:id/bracket/flow",
         permanent: true
       }
     ];

@@ -23,7 +23,7 @@ export function nodeNamed(flow: AdminFlow, kind: string, name: string): FlowNode
 
 /** The Flow tab's Presets dialog: pick `preset` by its name, fill the league's numbers, apply and save the graph. */
 export async function applyPreset(page: Page, tournamentId: number, preset: string, params?: { days: number; best: number }) {
-  await openPage(page, `/admin/tournaments/${tournamentId}/flow`);
+  await openPage(page, `/admin/tournaments/${tournamentId}/bracket/flow`);
   await page.getByRole("button", { name: "Presets", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("radio", { name: preset, exact: true }).click();

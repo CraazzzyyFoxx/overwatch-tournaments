@@ -13,7 +13,8 @@ class PlayerStanding(db.TimeStampIntegerMixin):
 
     The pool is frozen when the stage starts: one row per player per stage, rebuilt
     by the standings job. ``position`` is 1-based and counted inside the player's
-    ``role``; ``rank`` is the player's rank at that moment (higher = stronger).
+    ``role``; ``start_rank`` is the player's rank when the stage started (higher = stronger) and ``rank`` the
+    current one: ``start_rank`` moved by the stage's ``rank_win_delta`` / ``rank_loss_delta`` per result.
     """
 
     __tablename__ = "player_standing"
@@ -31,6 +32,7 @@ class PlayerStanding(db.TimeStampIntegerMixin):
     display_name: Mapped[str] = mapped_column(String(255))
     #: Role code, e.g. ``tank``.
     role: Mapped[str] = mapped_column(String(32))
+    start_rank: Mapped[int] = mapped_column(Integer())
     rank: Mapped[int] = mapped_column(Integer())
     points: Mapped[float] = mapped_column(Float(), default=0, server_default="0")
     wins: Mapped[int] = mapped_column(Integer(), default=0, server_default="0")

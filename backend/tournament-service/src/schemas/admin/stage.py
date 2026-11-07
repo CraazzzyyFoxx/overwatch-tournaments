@@ -16,6 +16,9 @@ __all__ = (
     "SeedTeamsRequest",
 )
 
+#: Same ceiling as a mix's ``points_per_win``.
+MAX_RANK_DELTA = 1000
+
 
 class StageCreate(BaseModel):
     name: str
@@ -33,6 +36,8 @@ class StageCreate(BaseModel):
     seed_ranking: SeedRankingValue = "slot"
     pairing_mode: StagePairingMode | None = None
     playoff_team_count: int | None = Field(default=None, ge=1)
+    rank_win_delta: int | None = Field(default=None, ge=0, le=MAX_RANK_DELTA)
+    rank_loss_delta: int | None = Field(default=None, ge=0, le=MAX_RANK_DELTA)
     best_of: StageBestOf = Field(default_factory=StageBestOf)
     challonge_id: int | None = None
     challonge_slug: str | None = None
@@ -59,6 +64,8 @@ class StageUpdate(BaseModel):
     seed_ranking: SeedRankingValue = "slot"
     pairing_mode: StagePairingMode | None = None
     playoff_team_count: int | None = Field(default=None, ge=1)
+    rank_win_delta: int | None = Field(default=None, ge=0, le=MAX_RANK_DELTA)
+    rank_loss_delta: int | None = Field(default=None, ge=0, le=MAX_RANK_DELTA)
     best_of: StageBestOf = Field(default_factory=StageBestOf)
 
 

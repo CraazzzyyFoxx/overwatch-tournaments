@@ -38,23 +38,14 @@ const ALL_PERMS = {
 } as const;
 
 describe("hub tabs", () => {
-  test("is the lifecycle, seven entries, structure first", () => {
-    expect(TAB_KEYS).toEqual([
-      "overview",
-      "flow",
-      "registration",
-      "teams",
-      "bracket",
-      "matches",
-      "settings"
-    ]);
+  test("is the lifecycle, six entries; the flow graph is a bracket sub-tab", () => {
+    expect(TAB_KEYS).toEqual(["overview", "registration", "teams", "bracket", "matches", "settings"]);
   });
 
   // Configuration used to be three tabs of its own; the gates it carried moved
   // to `allowedSettingsSection`, so only two tabs still gate themselves.
   test.each<[TabKey, boolean]>([
     ["overview", true],
-    ["flow", true],
     ["registration", false],
     ["teams", true],
     ["bracket", true],
@@ -128,7 +119,7 @@ describe("sub-tabs", () => {
     expect(MATCHES_SUB_TABS as readonly string[]).not.toContain("report-form");
     // Standings rank one stage, so they are a section of the stage editor, not
     // a view of the whole tournament.
-    expect(BRACKET_SUB_TABS).toEqual(["stages", "lobbies"]);
+    expect(BRACKET_SUB_TABS).toEqual(["stages", "lobbies", "flow"]);
   });
 
   test("bracket offers lobbies only where an FFA stage exists", () => {
@@ -137,11 +128,13 @@ describe("sub-tabs", () => {
     expect(allowedBracketSubTab("lobbies", { hasFfaStage: false })).toBe(false);
     expect(allowedBracketSubTab("lobbies", { hasFfaStage: true })).toBe(true);
     expect(allowedBracketSubTab("stages", { hasFfaStage: false })).toBe(true);
+    // The graph editor is the advanced view: every viewer of Bracket may open it.
+    expect(allowedBracketSubTab("flow", { hasFfaStage: false })).toBe(true);
   });
 });
 
 describe("settings sections", () => {
-  test("carries the fifteen sections in navigation order", () => {
+  test("carries the fourteen sections in navigation order", () => {
     expect(SETTINGS_SECTIONS).toEqual([
       "general",
       // Authoring the published document and setting what a win is worth are

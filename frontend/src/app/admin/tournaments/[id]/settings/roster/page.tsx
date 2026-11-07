@@ -19,7 +19,7 @@ import { PageStateCard } from "@/components/ui/page-state-card";
 import { tabFallback } from "../../hubQueries";
 import type { Tournament } from "@/types/tournament.types";
 import { SettingsSectionPage } from "../SettingsSection";
-import { RegistrationNodeScope } from "../RegistrationNodeScope";
+import { FlowNodeScope } from "../FlowNodeScope";
 import { useRegistrationNodeConfig } from "../useRegistrationNodeConfig";
 import type { TournamentFlowNode } from "@/types/flow.types";
 
@@ -37,9 +37,9 @@ export default function RosterSettingsPage() {
           />
         );
         return hasTeamIntake(tournament) ? (
-          <RegistrationNodeScope tournament={tournament} fallback={form(null)}>
+          <FlowNodeScope kind="registration" tournament={tournament} fallback={form(null)}>
             {form}
-          </RegistrationNodeScope>
+          </FlowNodeScope>
         ) : (
           form(null)
         );

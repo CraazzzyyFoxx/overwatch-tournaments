@@ -11,7 +11,6 @@
  */
 export const TAB_KEYS = [
   "overview",
-  "flow",
   "registration",
   "teams",
   "bracket",
@@ -66,9 +65,11 @@ export type TeamsSubTab = (typeof TEAMS_SUB_TABS)[number];
  * — hidden AND bounced, never hidden-but-reachable.
  *
  * Standings are not a sub-tab: they belong to one stage, and the stage editor
- * shows them as its own `?section=standings`.
+ * shows them as its own `?section=standings`. `flow` is the graph editor — the
+ * advanced view of what Stages and Settings edit — and is always open to
+ * whoever sees Bracket.
  */
-export const BRACKET_SUB_TABS = ["stages", "lobbies"] as const;
+export const BRACKET_SUB_TABS = ["stages", "lobbies", "flow"] as const;
 export type BracketSubTab = (typeof BRACKET_SUB_TABS)[number];
 
 export function allowedBracketSubTab(

@@ -4,9 +4,9 @@ import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
+import { GraphCanvasSkeleton } from "@/components/graph-canvas/GraphCanvasSkeleton";
 import { RuleBuilder, type RuleLeafFieldsProps } from "@/components/rule-builder";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { achievementQueryKeys } from "@/lib/achievements/query-keys";
@@ -49,11 +49,6 @@ export function ConditionFlowEditor({ value, onChange, readOnly, discipline }: R
     outlineTitle: t("condition.treeOutline"),
     outlineGroup: (path: string, op: string) =>
       t("condition.outlineGroup", { path, operator: op }),
-    paletteSearchPlaceholder: t("condition.searchNodes"),
-    paletteSearchLabel: t("condition.searchLabel"),
-    paletteHint: t("condition.hint"),
-    paletteEmpty: (query: string) => t("condition.empty", { query }),
-    paletteAdd: (item: string) => t("condition.addToTree", { item }),
     groupName: (path: string) => t("condition.group", { path }),
     operatorLabel: (group: string) => t("condition.operatorFor", { group }),
     addLeaf: t("condition.addCondition"),
@@ -64,10 +59,6 @@ export function ConditionFlowEditor({ value, onChange, readOnly, discipline }: R
     deleteLeafLabel: (label: string, path: string) => t("condition.deleteCondition", { label, path }),
     leafTypeLabel: (path: string) => t("condition.typeFor", { path }),
     leafFieldLabel: (field: string, label: string, path: string) => t("condition.fieldFor", { field, label, path }),
-    fullscreen: t("condition.fullscreen"),
-    fullscreenLabel: t("condition.fullscreenLabel"),
-    exitFullscreen: t("condition.exitFullscreen"),
-    exitFullscreenLabel: t("condition.exitFullscreenLabel"),
   }), [t]);
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const emptyTree = Object.keys(value).length === 0;
@@ -122,10 +113,11 @@ export function ConditionFlowEditor({ value, onChange, readOnly, discipline }: R
     []
   );
 
+  const heightClass = readOnly ? "h-75" : "h-125";
   if (needsRegistry && isPending) {
     return (
       <div role="status" aria-busy="true" aria-label={t("condition.loadingTypes")}>
-        <Skeleton className={`${readOnly ? "h-75" : "h-125"} w-full rounded-lg`} />
+        <GraphCanvasSkeleton heightClass={heightClass} />
       </div>
     );
   }
@@ -145,6 +137,7 @@ export function ConditionFlowEditor({ value, onChange, readOnly, discipline }: R
       labelForLeaf={leafLabel}
       summarizeLeaf={leafLine}
       labels={labels}
+      heightClass={heightClass}
     />
   ) : (
     <RuleBuilder
@@ -157,6 +150,7 @@ export function ConditionFlowEditor({ value, onChange, readOnly, discipline }: R
       labelForLeaf={leafLabel}
       summarizeLeaf={leafLine}
       labels={labels}
+      heightClass={heightClass}
     />
   );
 }

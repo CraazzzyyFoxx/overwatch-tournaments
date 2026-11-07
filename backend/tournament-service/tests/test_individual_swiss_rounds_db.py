@@ -253,6 +253,49 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
         self.assertEqual({2}, {row.matches_played for row in final.values()})
         self.assertEqual(20.0, sum(row.points for row in final.values()))
 
+    async def test_the_rank_moves_by_the_stage_deltas_and_pairs_the_next_round(self) -> None:
+        await self._seed_pool(ROLES)
+        stage_id = await self._start(rank_win_delta=50, rank_loss_delta=30)
+        self.assertTrue(all(row.rank == row.start_rank for row in (await self._table(stage_id)).values()))
+
+        round_one = await self._round(stage_id, 1)
+        await self._confirm(round_one[0], 2, 0)
+        await self._confirm(round_one[1], 2, 1)
+        await self._recalculate_and_generate(stage_id)
+        table = await self._table(stage_id)
+        self.assertEqual(
+            {member: row.start_rank + (50 if row.wins else -30) for member, row in table.items()},
+            {member: row.rank for member, row in table.items()},
+        )
+        # Round 2 is paired (and snapshotted) on the moved ranks.
+        async with self.Session() as s:
+            seat_ranks = dict(
+                (
+                    await s.execute(
+                        sa.select(
+                            models.EncounterTeamMember.workspace_member_id, models.EncounterTeamMember.rank
+                        ).where(models.EncounterTeamMember.encounter_id.in_(await self._round(stage_id, 2)))
+                    )
+                ).all()
+            )
+        self.assertEqual({member: row.rank for member, row in table.items()}, seat_ranks)
+
+        # A corrected result re-derives the rank: round 1's first seat now lost it.
+        await self._confirm(round_one[0], 0, 2)
+        await self._recalculate_and_generate(stage_id)
+        corrected = await self._table(stage_id)
+        first_seat = {m for m, _ in (await self._seats(round_one[0]))[0][2]}
+        self.assertEqual(
+            {m: corrected[m].start_rank - 30 for m in first_seat}, {m: corrected[m].rank for m in first_seat}
+        )
+
+        # Deltas edited to 0 put every rank back to where the stage started.
+        async with self.Session() as s:
+            await stage_service.update_stage(s, stage_id, schemas.StageUpdate(rank_win_delta=0, rank_loss_delta=0))
+        async with self.Session() as s:
+            await standings_service.recalculate_for_tournament(s, self.tournament_id)
+        self.assertTrue(all(row.rank == row.start_rank for row in (await self._table(stage_id)).values()))
+
     async def test_a_pool_that_does_not_split_into_teams_is_refused_without_writes(self) -> None:
         await self._seed_pool({"tank": 4, "damage": 8, "support": 7})
         with self.assertRaises(BaseAPIException) as raised:

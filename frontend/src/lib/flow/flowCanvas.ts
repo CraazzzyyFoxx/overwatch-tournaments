@@ -1,6 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 
-import { HANDLE_COLOR } from "@/components/rule-builder/rule-tree";
+import { HANDLE_COLOR } from "@/components/graph-canvas/tokens";
 import type {
   FlowNodeKind,
   FlowNodeStatus as FlowNodeStatusValue,
@@ -11,11 +11,6 @@ import type {
 
 import { canDelete, type FlowDraft } from "./flowDraft";
 import { UNIT_COLOR } from "./kinds";
-
-/** The drag MIME of a palette row: the node kind being dropped. */
-export const FLOW_NODE_MIME = "application/flow-node-kind";
-
-export { HANDLE_COLOR };
 
 export type FlowNodeData = {
   kind: FlowNodeKind;
@@ -66,7 +61,7 @@ export function toCanvas(
       target: edge.target,
       targetHandle: edge.targetPort,
       style: { stroke: (unit && UNIT_COLOR[unit]) || HANDLE_COLOR },
-      ...(invalid ? { className: "flow-edge-invalid", animated: true } : {})
+      ...(invalid ? { data: { invalid: true } } : {})
     };
   });
   return { nodes, edges };

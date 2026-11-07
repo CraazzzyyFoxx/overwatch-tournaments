@@ -65,7 +65,6 @@
     "flow": {
       "counted": "counted",
       "notCounted": "not counted",
-      "deleteEdge": "Remove connection",
       "kind": {
         "registration": "Registration",
         "formation": "Formation",
@@ -95,6 +94,20 @@
       },
       "port": "{port} · {unit}",
       "serverChanged": "Changed on server"
+    },
+    "graphCanvas": {
+      "fullscreen": "Fullscreen",
+      "exitFullscreen": "Exit fullscreen (Esc)",
+      "arrange": "Arrange nodes",
+      "deleteEdge": "Remove connection",
+      "palette": {
+        "searchPlaceholder": "Search nodes…",
+        "searchLabel": "Search nodes",
+        "hint": "Drag onto the canvas or click to add",
+        "empty": "Nothing matches “{query}”.",
+        "add": "Add {item}",
+        "addMenu": "Add node"
+      }
     },
     "matches": "Matches",
     "heroes": "Heroes",
@@ -2953,11 +2966,7 @@
       },
       "diagram": {
         "outlineTitle": "Condition tree outline",
-        "outlineGroup": "{path} {op} group",
-        "fullscreen": "Fullscreen",
-        "fullscreenLabel": "Show the condition diagram fullscreen",
-        "exitFullscreen": "Exit fullscreen (Esc)",
-        "exitFullscreenLabel": "Exit fullscreen, or press Escape"
+        "outlineGroup": "{path} {op} group"
       },
       "leaf": {
         "stat_threshold": "{stat} on a single map: {amount}",
@@ -3649,6 +3658,30 @@
       "place": "#",
       "participant": "Participant",
       "total": "Total",
+      "caption": "{name}. Use the column headings to sort.",
+      "role": "Role",
+      "noRole": "No role",
+      "roleTabs": "Ranking by role",
+      "byRoleHint": "Each role is ranked separately.",
+      "search": "Search player",
+      "found": "Found {n} of {total}",
+      "noResults": "No players match “{query}”.",
+      "sortBy": "Sort by {column}",
+      "legend": {
+        "counted": "Counted toward the total",
+        "notCounted": "Played, not counted",
+        "missing": "Did not play"
+      },
+      "day": {
+        "team": "Team",
+        "role": "Role",
+        "record": "W–D–L",
+        "buchholz": "Buchholz",
+        "place": "Place",
+        "score": "Score",
+        "counted": "Counted",
+        "notCounted": "Not counted"
+      },
       "formula": {
         "mode": {
           "sumAll": "Every result counts.",
@@ -5869,11 +5902,6 @@
         "noLeaves": "No condition applies here.",
         "outlineTitle": "Condition tree outline",
         "outlineGroup": "{path} group {op}",
-        "searchPlaceholder": "Search…",
-        "searchLabel": "Search conditions",
-        "paletteHint": "Drag onto the canvas, or click to append to the top-level group.",
-        "paletteEmpty": "Nothing matches “{query}”.",
-        "paletteAdd": "Add {item} to the condition tree",
         "groupName": "group {path}",
         "operatorLabel": "Logic operator for {group}",
         "addLeaf": "Add condition",
@@ -5883,11 +5911,7 @@
         "deleteGroupLabel": "Delete {group} and everything inside it",
         "deleteLeafLabel": "Delete the {leaf} condition {path}",
         "leafTypeLabel": "Condition type for condition {path}",
-        "leafFieldLabel": "{field} for {leaf} condition {path}",
-        "fullscreen": "Fullscreen",
-        "fullscreenLabel": "Show the condition tree fullscreen",
-        "exitFullscreen": "Exit fullscreen (Esc)",
-        "exitFullscreenLabel": "Exit fullscreen, or press Escape"
+        "leafFieldLabel": "{field} for {leaf} condition {path}"
       },
       "rowMenu": {
         "lastPhase": "A ruleset needs at least one phase.",
@@ -6795,7 +6819,7 @@
     "teamCountMax": "Max",
     "teamCountMaxHint": "The pool supports up to {count, plural, one {# team} other {# teams}}.",
     "teamCountLocked": "The session has already been created, so the team count is locked. Cancel it to change the count.",
-    "changeFormatInFlow": "Change in the Flow tab",
+    "changeFormat": "Change on the node in Flow",
     "formatLockedByDraft": "A draft of this tournament is in progress, so its format is locked. Finish or cancel the draft to change it.",
     "rounds": "Rounds",
     "roundsDerived": "{rounds, plural, one {# pick per team} other {# picks per team}}. The captain fills the first slot.",
@@ -8041,7 +8065,9 @@
       "autoApproveHint": "Skip manual review. Registrations are approved instantly and players are added to the pool automatically.",
       "late": "Allow late registration",
       "lateHint": "Keeps sign-ups open past the sign-up window's end time, so the advertised closing date stays on the page. Does not open registration that never started, and never reopens a finished tournament.",
-      "noEnd": "No end time is set on this node's sign-up window, so registration is already open-ended and this changes nothing."
+      "noEnd": "No end time is set on this node's sign-up window, so registration is already open-ended and this changes nothing.",
+      "checkInLabel": "Require check-in",
+      "checkInHint": "Only approved entries that have checked in move on to team formation or the first stage."
     }
   },
   "subscriptionRequirement": {
@@ -10007,13 +10033,15 @@
     "layout": {
       "stages": "Stages",
       "lobbies": "Lobbies",
+      "flow": "Flow",
       "views": "Bracket views"
     },
     "list": {
       "reorderError": "Could not reorder the stages",
+      "phaseError": "Could not change the stage's phase",
       "flow": "Stages",
       "add": "Add stage",
-      "drag": "Drag to reorder. Stages with the same phase number run in parallel.",
+      "drag": "Drag to reorder. A stage's menu runs it in parallel with the stage above, or after it.",
       "dialogTitle": "Add stage",
       "submit": "Add stage",
       "submitting": "Adding…",
@@ -10026,6 +10054,9 @@
       "withReset": "With reset · LB champion can force a rematch",
       "reorder": "Reorder {name}",
       "phase": "Phase {number}",
+      "phaseMenu": "Phase of {name}",
+      "inParallel": "In parallel with \u201c{name}\u201d",
+      "after": "After \u201c{name}\u201d",
       "progress": "{completed} of {total} matches complete",
       "pairingMode": "Lobby pairing",
       "pairingScore": "By points",
@@ -10154,9 +10185,52 @@
       "reseedCaptainTitle": "Reseed stage by captain rank",
       "reseedCaptainDescription": "Seed {teams} teams of \"{name}\" in the order of their captains' ranks: the strongest captain is seed 1. Every manual assignment in this stage is cleared first."
     },
+    "feed": {
+      "help": "Which participants of an earlier stage this stage takes in.",
+      "readOnly": "You can view this but not change it.",
+      "frozen": "This stage is already past draft, so who advances into it is locked.",
+      "formationFrozen": "Team formation has already started, so who goes into it is locked.",
+      "advanceFrom": "Who advances from \u201c{stage}\u201d",
+      "filterName": "Who advances",
+      "source": "Takes participants from",
+      "sourcePick": "Pick a stage",
+      "rule": "Rule",
+      "modes": {
+        "all": "Everyone",
+        "top": "Top N overall",
+        "per_item_top": "Top N from each group",
+        "swiss_status": "By Swiss status"
+      },
+      "countTop": "How many advance",
+      "countPerGroup": "How many advance from each group",
+      "upper": "Start in the upper bracket, per group",
+      "upperHint": "Empty means everyone starts in the upper bracket.",
+      "swissStatus": "Status",
+      "qualified": "Qualified",
+      "eliminated": "Eliminated",
+      "fedBy": "Fed by",
+      "formedBy": "Teams formed by",
+      "formedByHint": "How the teams are put together: by the balancer, a draft, teams that registered as teams, or by hand.",
+      "formationModeLocked": "Locked: team formation has already started, so its method can no longer change.",
+      "draftFormat": "Draft format",
+      "draftFormatHint": "The pick order every draft of this step starts with.",
+      "complexHint": "This stage\u2019s input is wired in a way that can only be edited in Flow.",
+      "editInFlow": "Edit in Flow",
+      "kinds": {
+        "stage": "Stage",
+        "filter": "Filter",
+        "merge": "Merge",
+        "split": "Split",
+        "aggregate": "Aggregate",
+        "leaderboard": "Leaderboard",
+        "registration": "Registration",
+        "formation": "Team formation"
+      }
+    },
     "changes": {
       "name": "Name",
-      "phase": "Phase",
+      "advancement": "Who advances",
+      "formation": "Team formation",
       "format": "Format",
       "swissRounds": "Swiss rounds",
       "grandFinal": "Grand final",
@@ -10175,7 +10249,9 @@
       "pointsFormula": "Points formula",
       "roundSchedule": "Round schedule",
       "pairingMode": "Lobby pairing",
-      "playoffTeams": "Playoff teams"
+      "playoffTeams": "Playoff teams",
+      "rankWinDelta": "Rank per win",
+      "rankLossDelta": "Rank per loss"
     },
     "preview": {
       "swapSuccess": "Teams swapped",
@@ -10264,8 +10340,6 @@
     },
     "settings": {
       "name": "Name",
-      "phase": "Phase",
-      "phaseHelp": "Stages sharing a number run in parallel: give the High and Low divisions the same one. A higher number is a later wave, fed by the ones before it.",
       "format": "Format",
       "resetCustom": "Reset the custom bracket (Bracket layout) to change the format.",
       "superuserOnly": "Only superusers can modify stage type after creation.",
@@ -10322,7 +10396,10 @@
       "pairingScore": "By points",
       "pairingBalance": "Whole-pool balance",
       "playoffTeams": "Playoff teams",
-      "playoffTeamsHelp": "Each role sends its best players to the draft: this many teams times the role's slots."
+      "playoffTeamsHelp": "Each role sends its best players to the draft: this many teams times the role's slots.",
+      "rankWinDelta": "Rank per win",
+      "rankLossDelta": "Rank per loss",
+      "rankDeltaHelp": "A player's rank in this stage gains this much for every won match and loses the other value for every lost one (draws change nothing; never below 1). Later rounds are balanced on the moved rank. 0 and 0 = off. A change re-applies to every result already confirmed."
     },
     "extra": {
       "matches": "matches",
@@ -10421,6 +10498,7 @@
       "points": "Points",
       "record": "W–D–L",
       "mapDiff": "Map diff",
+      "rank": "Rank",
       "buchholz": "Buchholz",
       "pin": "Pin",
       "pinLabel": "Pinned place of {name}",
@@ -10445,8 +10523,7 @@
         "teams": "Teams",
         "bracket": "Bracket",
         "matches": "Matches",
-        "settings": "Settings",
-        "flow": "Flow"
+        "settings": "Settings"
       },
       "notFound": "Tournament not found",
       "notFoundDescription": "This tournament does not exist or was deleted.",
@@ -10998,26 +11075,46 @@
     },
     "flow": {
       "canvasLabel": "Tournament flow",
-      "toolbar": {
-        "presets": "Presets",
-        "arrange": "Arrange",
-        "save": "Save flow",
-        "discard": "Discard",
-        "unsaved": "Unsaved changes"
+      "save": "Save flow",
+      "saveFailed": "Could not save the flow",
+      "changes": {
+        "nodesAdded": "{count, plural, one {# node added} other {# nodes added}}",
+        "nodesChanged": "{count, plural, one {# node changed} other {# nodes changed}}",
+        "nodesRemoved": "{count, plural, one {# node removed} other {# nodes removed}}",
+        "linksAdded": "{count, plural, one {# connection added} other {# connections added}}",
+        "linksRemoved": "{count, plural, one {# connection removed} other {# connections removed}}"
       },
       "palette": {
-        "title": "Nodes",
         "lifecycle": "Lifecycle",
-        "transitions": "Transitions",
-        "hint": "Drag onto the canvas or click to add",
-        "add": "Add {kind}"
+        "transitions": "Transitions"
       },
       "issues": {
         "title": "Issues",
         "none": "No issues",
         "error": "Error",
         "warning": "Warning",
-        "serverChanged": "“{name}” changed on the server while you were editing. Your edit is kept and replaces the server's version on Save."
+        "errors": "{count, plural, one {# error} other {# errors}}",
+        "warnings": "{count, plural, one {# warning} other {# warnings}}",
+        "codes": {
+          "invalid_config": "Some of its settings are invalid. Open the node to fix them.",
+          "invalid_node_config": "Some of its settings are invalid. Open the node to fix them.",
+          "stage_without_stage_id": "This node has lost its stage. Delete it and add the stage again.",
+          "unknown_node": "A connection leads to a node that no longer exists. Remove it.",
+          "unknown_port": "A connection uses an input or output the node no longer has. Connect it again.",
+          "port_taken": "This input already has a connection. Remove one of them.",
+          "cycle": "The flow loops back on itself here. Remove one of the connections in the loop.",
+          "unit_mismatch": "A connection brings {source, select, players {players} teams {teams} other {participants}}, but this input takes {target, select, players {players} teams {teams} other {something else}}.",
+          "aggregate_n_exceeds_inputs": "Counts {n, plural, one {# result} other {# results}}, but {inputs, plural, =0 {no inputs are} one {only # input is} other {only # inputs are}} connected.",
+          "team_intake_target": "Team registration can only feed a formation that takes registered teams.",
+          "aggregate_by_role_target": "A by-role ranking can only feed a leaderboard",
+          "missing_input": "{kind, select, stage {Nothing feeds this stage. Connect formed teams or another stage's result to it.} formation {No players come in. Connect a registration to it.} other {Nothing is connected to its input.}}",
+          "sink_not_terminal": "{kind, select, registration {Its players go nowhere. Connect it to a formation.} formation {Its teams go nowhere. Connect it to a stage.} other {Its result goes nowhere. Connect it to the next step.}}",
+          "node_frozen": "A later step has already started, so this one can no longer change.",
+          "node_has_dependents": "This step still has data attached to it (teams, registrations or sheet feeds). Remove or move that data first, then delete the step.",
+          "stage_node_managed_by_stage": "A stage node comes and goes with its stage and cannot change kind.",
+          "draft_session_active": "A draft is running, so its mode and format cannot change.",
+          "changed_on_server": "Changed on the server while you were editing. Your edit is kept and replaces the server's version on Save."
+        }
       },
       "confirmDelete": {
         "title": "Delete these steps?",
@@ -11029,6 +11126,8 @@
       },
       "presets": {
         "title": "Start from a preset",
+        "hint": "Start from a common tournament shape.",
+        "open": "Choose a preset",
         "apply": "Apply",
         "days": "Days",
         "best": "Best results counted",
@@ -11058,13 +11157,14 @@
         "delete": "Delete node",
         "deleteLocked": "This node has already started and can no longer be deleted.",
         "name": "Name",
-        "saveFirst": "Save the flow to configure this node.",
-        "saveOrDiscard": "Save or discard the graph first.",
         "stageType": "Stage type",
         "mode": "Team formation",
+        "openRegistration": "All registration settings",
         "openBalancer": "Open the balancer",
+        "openDraft": "Open the draft",
         "openRegisteredTeams": "Open registered teams",
         "openRoster": "Open the roster",
+        "openStage": "Open in the stage editor",
         "modes": {
           "balancer": "Balancer",
           "draft": "Draft",
@@ -11123,7 +11223,11 @@
         "participant": "Participant",
         "position": "Position",
         "removePin": "Remove pin",
-        "addPin": "Add pin"
+        "addPin": "Add pin",
+        "byRole": "Ranking by role",
+        "byRoleHint": "Each role ranks separately; a player who played several roles gets a separate row per role.",
+        "positionInRole": "Place in role",
+        "noRole": "No role"
       }
     }
   },
@@ -11172,7 +11276,7 @@
       "challongeHelp": "The Challonge bracket must have group stages enabled (two-stage).",
       "dateRange": "Date range",
       "preset": "Starting format",
-      "presetHelp": "The stages and teams the tournament starts with. Change them later in the Flow tab.",
+      "presetHelp": "The stages and teams the tournament starts with. Change them later in Bracket; the full graph is under Bracket › Flow.",
       "submit": "Create tournament",
       "submitting": "Creating…",
       "validation": {
@@ -11187,7 +11291,7 @@
       "importHideWarning": "Imported from Challonge, but hiding it failed",
       "importHideDescription": "The tournament is temporarily public. Hide it in Settings › Preview allowlist if needed.",
       "presetWarning": "Created, but the starting format could not be applied",
-      "presetWarningDescription": "Open the Flow tab and pick a preset there, or build the graph by hand."
+      "presetWarningDescription": "Open Bracket › Flow and pick a preset there, or build the graph by hand."
     },
     "arrange": {
       "empty": "No standings to arrange yet. Recalculate to build them first.",
@@ -11895,11 +11999,6 @@
       "logicalOr": "OR",
       "logicalNot": "NOT",
       "treeOutline": "Condition tree outline",
-      "searchNodes": "Search nodes…",
-      "searchLabel": "Search condition nodes",
-      "hint": "Drag onto the canvas, or click to append to the top-level group.",
-      "empty": "No nodes match “{query}”. Try a shorter word such as “stat” or “div”.",
-      "addToTree": "Add {item} to the condition tree",
       "outlineGroup": "{path} {operator} group",
       "group": "group {path}",
       "operatorFor": "Logic operator for {group}",
@@ -11911,10 +12010,6 @@
       "deleteCondition": "Delete {label} condition {path}",
       "typeFor": "Condition type for condition {path}",
       "fieldFor": "{field} for {label} condition {path}",
-      "fullscreen": "Fullscreen",
-      "fullscreenLabel": "Show the condition tree fullscreen",
-      "exitFullscreen": "Exit fullscreen (Esc)",
-      "exitFullscreenLabel": "Exit fullscreen, or press Escape",
       "stat": "Stat…",
       "field": "Field…",
       "any": "Any",
@@ -14085,6 +14180,7 @@
       "breadcrumbRegistrationForms": "Registration forms",
       "breadcrumbScoring": "Results",
       "breadcrumbAdmission": "Admission",
+      "breadcrumbFlow": "Flow",
       "breadcrumbUnknown": "Unknown section",
       "breadcrumbNew": "New"
     },

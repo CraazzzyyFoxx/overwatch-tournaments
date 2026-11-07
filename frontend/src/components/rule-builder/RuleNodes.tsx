@@ -4,6 +4,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { FolderPlus, Plus, Trash2 } from "lucide-react";
 
+import { GraphNodeCard } from "@/components/graph-canvas/GraphNodeCard";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -13,13 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import {
-  HANDLE_COLOR,
-  LEAF_COLOR,
-  LOGICAL_COLORS,
-  LOGICAL_OPS,
-  type FlatNode,
-} from "./rule-tree";
+import { LOGICAL_OPS, type FlatNode } from "./rule-tree";
 
 /** One leaf type the builder offers, as the type `<Select>` renders it. */
 export interface RuleLeafOption {
@@ -48,19 +43,10 @@ export interface RuleBuilderViewLabels {
   outlineTitle: string;
   /** How the outline names one group row, e.g. "1.2 AND group". */
   outlineGroup: (path: string, op: string) => string;
-  fullscreen: string;
-  fullscreenLabel: string;
-  exitFullscreen: string;
-  exitFullscreenLabel: string;
 }
 
 /** Everything above plus the strings only an editable canvas renders. */
 export interface RuleBuilderEditLabels extends RuleBuilderViewLabels {
-  paletteSearchPlaceholder: string;
-  paletteSearchLabel: string;
-  paletteHint: string;
-  paletteEmpty: (query: string) => string;
-  paletteAdd: (item: string) => string;
   /** "group 1.2" — the noun the group-scoped names below are built from. */
   groupName: (path: string) => string;
   operatorLabel: (group: string) => string;
@@ -114,9 +100,10 @@ export function useRuleBuilderConfig(): RuleBuilderConfig {
   return config;
 }
 
-/** The flat node plus the callbacks and view flags React Flow carries in `data`. */
+/** The flat node plus its frame colour, the callbacks and the view flags React Flow carries in `data`. */
 type LogicalNodeData = FlatNode & {
   path?: string;
+  accent: string;
   readOnly?: boolean;
   onChangeOp?: (id: string, op: string) => void;
   onAddChild?: (id: string, type: string) => void;
@@ -125,29 +112,28 @@ type LogicalNodeData = FlatNode & {
 
 type LeafNodeData = FlatNode & {
   path?: string;
+  accent: string;
   readOnly?: boolean;
   onChangeType?: (id: string, type: string) => void;
   onChangeParam?: (id: string, key: string, value: unknown) => void;
   onDelete?: (id: string) => void;
 };
 
-export function LogicalNode({ data, id }: NodeProps) {
+export function LogicalNode({ data, id, selected }: NodeProps) {
   const config = useRuleBuilderConfig();
   const d = data as unknown as LogicalNodeData;
   const op = d.logicalOp ?? "AND";
-  const color = LOGICAL_COLORS[op];
   const path = d.path ?? "1";
+  const handles = (
+    <>
+      <Handle type="target" position={Position.Left} aria-hidden />
+      <Handle type="source" position={Position.Right} aria-hidden />
+    </>
+  );
 
   if (d.readOnly) {
     return (
-      <div className="rounded-lg border-2 px-4 py-2 bg-card shadow-md" style={{ borderColor: color }}>
-        <Handle type="target" position={Position.Left} aria-hidden style={{ background: HANDLE_COLOR }} />
-        <div className="flex items-center gap-2">
-          <span className="text-xs tabular-nums text-muted-foreground">{path}</span>
-          <span className="text-xs font-bold px-2" style={{ color }}>{op}</span>
-        </div>
-        <Handle type="source" position={Position.Right} aria-hidden style={{ background: HANDLE_COLOR }} />
-      </div>
+      <GraphNodeCard accent={d.accent} eyebrow={path} title={<span style={{ color: d.accent }}>{op}</span>} handles={handles} />
     );
   }
 
@@ -157,20 +143,14 @@ export function LogicalNode({ data, id }: NodeProps) {
   const groupName = labels.groupName(path);
 
   return (
-    <div
-      className="rounded-lg border-2 px-4 py-2 bg-card shadow-md"
-      style={{ borderColor: color }}
-    >
-      <Handle type="target" position={Position.Left} aria-hidden style={{ background: HANDLE_COLOR }} />
-      <div className="flex items-center gap-2">
-        <span className="text-xs tabular-nums text-muted-foreground">{path}</span>
+    <GraphNodeCard
+      accent={d.accent}
+      selected={selected}
+      eyebrow={path}
+      handles={handles}
+      title={
         <Select value={op} onValueChange={(val) => d.onChangeOp?.(id, val)}>
-          <SelectTrigger
-            size="sm"
-            className="w-20"
-            style={{ color }}
-            aria-label={labels.operatorLabel(groupName)}
-          >
+          <SelectTrigger size="sm" className="w-20" style={{ color: d.accent }} aria-label={labels.operatorLabel(groupName)}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -181,66 +161,61 @@ export function LogicalNode({ data, id }: NodeProps) {
             ))}
           </SelectContent>
         </Select>
-        <div className="flex-1" />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={() => d.onAddChild?.(id, "leaf")}
-          title={labels.addLeaf}
-          aria-label={labels.addLeafLabel(groupName)}
-        >
-          <Plus className="h-3.5 w-3.5" aria-hidden />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={() => d.onAddChild?.(id, "logical")}
-          title={labels.addGroup}
-          aria-label={labels.addGroupLabel(groupName)}
-        >
-          <FolderPlus className="h-3.5 w-3.5" aria-hidden />
-        </Button>
-        {d.parentId && (
+      }
+      actions={
+        <>
           <Button
             variant="ghost"
             size="icon"
             className="h-6 w-6"
-            onClick={() => d.onDelete?.(id)}
-            aria-label={labels.deleteGroupLabel(groupName)}
+            onClick={() => d.onAddChild?.(id, "leaf")}
+            title={labels.addLeaf}
+            aria-label={labels.addLeafLabel(groupName)}
           >
-            <Trash2 className="h-3.5 w-3.5 text-destructive" aria-hidden />
+            <Plus className="h-3.5 w-3.5" aria-hidden />
           </Button>
-        )}
-      </div>
-      <Handle type="source" position={Position.Right} aria-hidden style={{ background: HANDLE_COLOR }} />
-    </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => d.onAddChild?.(id, "logical")}
+            title={labels.addGroup}
+            aria-label={labels.addGroupLabel(groupName)}
+          >
+            <FolderPlus className="h-3.5 w-3.5" aria-hidden />
+          </Button>
+          {d.parentId && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => d.onDelete?.(id)}
+              aria-label={labels.deleteGroupLabel(groupName)}
+            >
+              <Trash2 className="h-3.5 w-3.5 text-destructive" aria-hidden />
+            </Button>
+          )}
+        </>
+      }
+    />
   );
 }
 
-export function LeafNode({ data, id }: NodeProps) {
+export function LeafNode({ data, id, selected }: NodeProps) {
   const config = useRuleBuilderConfig();
   const d = data as unknown as LeafNodeData;
   const leafType = d.leafType ?? config.defaultLeafType;
   const params = d.params ?? {};
   const label = config.labelForLeaf(d.leafType);
   const path = d.path ?? "1";
+  const handle = <Handle type="target" position={Position.Left} aria-hidden style={{ background: d.accent }} />;
 
   if (d.readOnly) {
     const summary = config.summarizeLeaf(leafType, params);
     return (
-      <div
-        className="rounded-lg border-2 px-3 py-2 bg-card shadow-md"
-        style={{ borderColor: LEAF_COLOR }}
-      >
-        <Handle type="target" position={Position.Left} aria-hidden style={{ background: LEAF_COLOR }} />
-        <p className="text-xs font-medium">
-          <span className="mr-1.5 tabular-nums text-muted-foreground">{path}</span>
-          {label}
-        </p>
-        {summary && <p className="text-xs text-muted-foreground mt-0.5">{summary}</p>}
-      </div>
+      <GraphNodeCard accent={d.accent} eyebrow={path} title={label} handles={handle}>
+        {summary ? <p className="text-caption text-muted-foreground">{summary}</p> : null}
+      </GraphNodeCard>
     );
   }
 
@@ -253,15 +228,14 @@ export function LeafNode({ data, id }: NodeProps) {
       : [{ value: leafType, label: config.labelForLeaf(leafType) }];
 
   return (
-    <div
-      className="rounded-lg border-2 px-3 py-2 bg-card shadow-md space-y-2"
-      style={{ borderColor: LEAF_COLOR }}
-    >
-      <Handle type="target" position={Position.Left} aria-hidden style={{ background: LEAF_COLOR }} />
-      <div className="flex items-center gap-2">
-        <span className="text-xs tabular-nums text-muted-foreground">{path}</span>
+    <GraphNodeCard
+      accent={d.accent}
+      selected={selected}
+      eyebrow={path}
+      handles={handle}
+      title={
         <Select value={leafType} onValueChange={(val) => d.onChangeType?.(id, val)}>
-          <SelectTrigger size="sm" className="h-7 flex-1" aria-label={labels.leafTypeLabel(path)}>
+          <SelectTrigger size="sm" className="h-7 w-full" aria-label={labels.leafTypeLabel(path)}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -272,7 +246,9 @@ export function LeafNode({ data, id }: NodeProps) {
             ))}
           </SelectContent>
         </Select>
-        {d.parentId && (
+      }
+      actions={
+        d.parentId ? (
           <Button
             variant="ghost"
             size="icon"
@@ -282,9 +258,9 @@ export function LeafNode({ data, id }: NodeProps) {
           >
             <Trash2 className="h-3.5 w-3.5 text-destructive" aria-hidden />
           </Button>
-        )}
-      </div>
-
+        ) : null
+      }
+    >
       {config.renderLeafFields?.({
         nodeId: id,
         leafType: d.leafType,
@@ -292,6 +268,6 @@ export function LeafNode({ data, id }: NodeProps) {
         setParam: (key, value) => d.onChangeParam?.(id, key, value),
         controlName: (field) => labels.leafFieldLabel(field, label, path),
       })}
-    </div>
+    </GraphNodeCard>
   );
 }

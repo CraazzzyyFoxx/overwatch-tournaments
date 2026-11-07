@@ -24,23 +24,27 @@ interface DraftFormatFieldsProps {
   /** Off the tournament's roster shape: one rule per drafted round. */
   rounds: number;
   disabled?: boolean;
+  /** The id of a label already drawn around the fields (a settings row); the fields then skip their own. */
+  labelledBy?: string;
 }
 
 const FORMATS: DraftFormat[] = ["snake", "linear", "custom"];
 
 /**
  * A draft formation node's draft format rule: snake, linear, or a rule per round. It
- * lives in the node's config (Flow tab), not the wizard — every draft of the
+ * lives in the node's config (the stage editor's General card, or the Flow inspector), not the wizard — every draft of the
  * node is seeded with it server-side.
  */
 export function DraftFormatFields({
   value,
   onChange,
   rounds,
-  disabled = false
+  disabled = false,
+  labelledBy
 }: Readonly<DraftFormatFieldsProps>) {
   const t = useTranslations("draftAdmin");
-  const formatLabelId = useId();
+  const ownLabelId = useId();
+  const formatLabelId = labelledBy ?? ownLabelId;
   const roundRulesLabelId = useId();
 
   const patch = (next: Partial<DraftFormatSettings>) => onChange({ ...value, ...next });
@@ -50,9 +54,11 @@ export function DraftFormatFields({
 
   return (
     <div className="space-y-3">
-      <span id={formatLabelId} className="block text-sm font-medium leading-none">
-        {t("format")}
-      </span>
+      {labelledBy ? null : (
+        <span id={formatLabelId} className="block text-sm font-medium leading-none">
+          {t("format")}
+        </span>
+      )}
       <ToggleGroup
         variant="pill"
         size="sm"

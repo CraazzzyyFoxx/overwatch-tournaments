@@ -1,7 +1,7 @@
-A tournament is a graph of steps. Registrations, team formations and stages are boxes; arrows between them say who moves on to the next step. The graph lives on the **Flow** tab of the tournament's admin section. A single-day event needs none of it: every tournament starts with a **Registration** and a **Formation** box already connected, and the other tabs keep working as before. Use the **Flow** tab when you want groups, a re-formation before the playoff, an individual Swiss with a draft, or a league season that runs over several days.
+A tournament is a graph of steps. Registrations, team formations and stages are boxes; arrows between them say who moves on to the next step. The graph lives in the **Flow** sub-tab of **Bracket** (**Bracket → Flow**, after **Stages** and, for FFA, **Lobbies**). It is the advanced tool, and most tournaments never need it: every tournament starts with a **Registration** and a **Formation** box already connected, and you build ordinary shapes in **Bracket** — **Add stage** wires a new stage to the previous one, and the **Who advances** block of a stage sets who goes through (see [Stages and brackets](/docs/organizers/brackets)). The team formation method is set in the **General** card of a stage the formation feeds (row **Teams formed by**), or on the formation box here. Open **Flow** for what **Bracket** cannot express: a re-formation before the playoff, an individual Swiss with a draft, a league season that runs over several days, or a custom filter such as a range or a manual pick.
 
 <Callout type="warning">
-Everything that changes a node needs the workspace permission to update tournaments: saving the graph, a node's settings and schedule, and moving a node between statuses. A role that may only create tournaments or teams can see the **Flow** tab only if it can also read tournaments, and cannot change anything on it. See [Roles and permissions](/docs/organizers/roles).
+Everything that changes a node needs the workspace permission to update tournaments: saving the graph, a node's settings and schedule, and moving a node between statuses. A role that may only create tournaments or teams can see **Bracket → Flow** only if it can also read tournaments, and cannot change anything on it. See [Roles and permissions](/docs/organizers/roles).
 </Callout>
 
 ## Nodes
@@ -23,23 +23,25 @@ The pure nodes show **Pending** (an input has no results yet), **Tentative** (re
 
 ## Building
 
-Open **Admin → Tournaments →** your tournament **→ Flow**.
+Open **Admin → Tournaments →** your tournament **→ Bracket → Flow**.
 
-1. Add a node from the **Nodes** palette: drag it onto the canvas, or click it. The palette has two groups, **Lifecycle** and **Transitions**.
+1. Add a node from the **Nodes** palette: drag it onto the canvas, or click it. The palette has two groups, **Lifecycle** and **Transitions**. On a narrow screen the palette is the **Add node** menu at the top left of the canvas.
 2. Draw an arrow by dragging from a dot on the right side of one node to a dot on the left side of another. Dots have a colour: blue carries players, amber carries teams. You can connect dots of the same colour; the one exception is a team list into a **Formation**, which dissolves the teams back into players.
 3. Click a node to open its settings in the side panel.
-4. Watch the **Issues** list: it re-checks the graph while you work. An **Error** blocks saving (an arrow loop, mismatched colours, two arrows into a one-input dot, an aggregate that needs more inputs than it has). A **Warning** only points something out.
-5. Press **Save flow**. The whole change is saved at once, or not at all. **Discard** drops the unsaved changes.
+4. Watch the **Issues** panel in the top right corner of the canvas: it re-checks the graph while you work. An error blocks saving (an arrow loop, mismatched colours, two arrows into a one-input dot, an aggregate that needs more inputs than it has); a warning only points something out. The panel stays folded to its counts until an error appears. Click a row to select its node and bring it into view.
+5. Press **Save flow** in the bar at the bottom of the page, which sums up what you changed. The whole change is saved at once, or not at all; a save that fails says why in the same bar. **Discard** drops the unsaved changes.
+
+**Arrange nodes**, the last button under the zoom controls, lays the graph out in columns from left to right. A flow whose boxes overlap opens already arranged; that layout is saved with your next change.
 
 If your save would delete a registration, formation or stage box that was already saved, you are asked to confirm first: the dialog lists what goes with each box (entries, balancer config and draft sessions, stage groups and matches). A box that still owns teams, entries or sheet feeds cannot be deleted until you remove those. If someone else changes a box on the server while you are editing, your edit is kept, the box shows **Changed on server** and the **Issues** list says so; boxes you did not touch simply take the new server settings.
 
-While the graph has unsaved changes, the settings of registration, formation and stage nodes ask you to save or discard first, because those forms save on their own.
+Everything in the side panel is part of the graph: a change there is saved with **Save flow**, together with the arrows.
 
 A node you added appears with the status **Draft**. A stage needs its groups or brackets: add them in the stage's settings under **Items** before you start it.
 
 ## Presets
 
-On a tournament that still has only its starting boxes, **Presets** offers a ready-made graph. The preset reuses the starting **Registration** and **Formation**, so nothing is duplicated.
+On a tournament that still has only its starting boxes, **Choose a preset** at the top of the canvas offers a ready-made graph. The preset reuses the starting **Registration** and **Formation**, so nothing is duplicated.
 
 | Preset | What it builds |
 |---|---|
@@ -55,14 +57,14 @@ A preset adds stages, not their contents. Open each stage's settings and add the
 
 ## Running nodes
 
-Each node is moved by its own status control in the side panel: a registration opens, closes and runs check-in on its own schedule; a formation goes **Forming**, then **Completed** when you export the teams; a stage goes **Ready** (inputs are seated), **Live** (matches are generated), then **Completed** by itself when every match is finished. Several stages may be live at the same time, which is how the days of a league run.
+Each node is moved on its own screen: a registration and a formation from the status controls at the top of the tournament page, a stage from its actions in **Bracket → Stages**. A registration opens, closes and runs check-in on its own schedule; a formation goes **Forming**, then **Completed** when you export the teams; a stage goes **Ready** (inputs are seated), **Live** (matches are generated), then **Completed** by itself when every match is finished. Several stages may be live at the same time, which is how the days of a league run.
 
-What each kind shows in the panel:
+The side panel keeps only what shapes the graph, plus one button to the node's own screen:
 
-- **Registration**: its settings, its sign-up schedule and its entries, filtered to this node.
-- **Formation**: the mode, with a button to the matching screen: the draft dashboard for **Draft**, a link to **Open the balancer** for **Balancer**, **Open registered teams** for **Registered teams**, **Open the roster** for **Manual**. The mode can be changed while the node is **Draft**.
-- **Stage**: the stage settings and its **Items**, as on the **Bracket** tab.
-- **Filter, Merge, Split, Aggregate, Leaderboard**: their settings; the aggregate also shows a preview table of the tentative results.
+- **Registration**: **Who registers** and **Require check-in**; **All registration settings** opens the rest (approval, late sign-ups, capacity) in **Settings → Registration**. The sign-up schedule is in **Settings → Schedule**, the entries on the **Registration** tab.
+- **Formation**: the mode (and the draft format in **Draft** mode), changeable while the node is **Draft**, with a button to the matching screen: **Open the draft**, **Open the balancer**, **Open registered teams** or **Open the roster**.
+- **Stage**: its format, and **Open in the stage editor** for everything else (items, seeding, best-of, standings).
+- **Filter, Merge, Split, Aggregate, Leaderboard**: their settings; the leaderboard also shows its table, where you pin places.
 
 What freezes:
 
@@ -86,11 +88,13 @@ The **Aggregate** node adds up what each participant scored on each day. With K 
 
 A day the participant did not play counts as 0 in **Sum of all** and **Last N**, is skipped in **Best N**, and is left out of the divisor in **Average**. Participants are ordered by the total; a tie goes to the one with more best places (most firsts, then most seconds), then to the better place on the latest day. A tie that remains can be settled with a pin on the **Leaderboard**.
 
+**Ranking by role** (players only) ranks every role on its own: Tank, Damage and Support become separate rankings with their own places and their own best K days. A player who tanked on some days and supported on others gets a row in each, and the days of one role never add to the other. The role of a day is the player's role in that day's team. A ranking by role can only feed a **Leaderboard**; a pin there places the player inside the chosen role.
+
 The **Table** tab shows the result live while the season runs, and the **Aggregate** node shows the same numbers as a preview.
 
 ## What players see
 
-- **Table** — the **Leaderboard**: one column per day, the results that count highlighted, and above it the rule in words ("Only the best 2 results count."). The tab exists only for tournaments with a leaderboard node.
+- **Table** — the **Leaderboard**: one column per day, the results that count highlighted and marked, and above it the rule in words ("Only the best 2 results count."). Search by player name, sort by any column (places stay the official ones), and hover or tap a day for its team, role, wins–draws–losses and Buchholz. With **Ranking by role** the table has one tab per role. The tab exists only for tournaments with a leaderboard node.
 - **Format** — the graph itself, read-only: each box is a step with its status, arrows show who moves on.
 - **Bracket** — when the tournament has several branches (for example several league days), the stages are grouped by the registrations upstream of them. With one branch, nothing changes.
 - **Registration cards** — a tournament with two or more registration nodes shows one card per open intake, for example **Register for Day 3**. With one intake the usual register button stays.

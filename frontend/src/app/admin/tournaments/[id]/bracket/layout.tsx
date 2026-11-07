@@ -13,14 +13,14 @@ import { allowedBracketSubTab, BRACKET_SUB_TABS, type BracketSubTab } from "../t
 const DEFAULT_SUB_TAB: BracketSubTab = BRACKET_SUB_TABS[0];
 
 /**
- * Sub-tab bar of the Bracket hub tab: Stages · Lobbies.
+ * Sub-tab bar of the Bracket hub tab: Stages · Lobbies · Flow.
  *
  * Navigation only. `Stages` is the bare `/bracket` container, so every link
  * that already points there keeps landing on the stage editor. `?stage=` rides
- * along on a switch, so the editor's selected stage survives it.
+ * along on a switch to Stages or Lobbies, so the editor's selected stage
+ * survives it; Flow selects by its own `?node=`.
  *
- * A duel tournament has no lobby, which leaves `Stages` alone — and `LinkTabs`
- * draws no bar for a single tab.
+ * A duel tournament has no lobby, which leaves `Stages` and `Flow`.
  */
 export default function BracketLayout({ children }: Readonly<{ children: ReactNode }>) {
   const t = useTranslations("adminBracket.layout");
@@ -55,7 +55,7 @@ export default function BracketLayout({ children }: Readonly<{ children: ReactNo
   const items: LinkTabItem[] = BRACKET_SUB_TABS.map((key) => ({
     key,
     label: t(key),
-    href: `${key === DEFAULT_SUB_TAB ? basePath : `${basePath}/${key}`}${scopeQuery}`,
+    href: `${key === DEFAULT_SUB_TAB ? basePath : `${basePath}/${key}`}${key === "flow" ? "" : scopeQuery}`,
     hidden: !allowedBracketSubTab(key, { hasFfaStage })
   }));
 

@@ -68,7 +68,6 @@ const admin = (file: string, url: PageRoute["url"]): PageRoute => ({
 const ADMIN_TOURNAMENT_PAGES = [
   "",
   "overview",
-  "flow",
   "settings",
   "settings/general",
   "settings/registration",
@@ -96,6 +95,7 @@ const ADMIN_TOURNAMENT_PAGES = [
   "teams/draft",
   "bracket",
   "bracket/lobbies",
+  "bracket/flow",
   "matches",
   "matches/reports",
   "matches/parsed",

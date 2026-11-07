@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`flowP7_01_drop_team_formation`** (184 revisions in `backend/migrations/versions/`).
+Alembic head: **`flowP8_01_result_role`** (186 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1167,6 +1167,7 @@ erDiagram
         int rank
         bigint workspace_member_id FK "nullable"
         bigint team_id FK "nullable"
+        varchar(32) role "nullable"
         bigint stage_item_id FK "nullable"
         int item_rank "nullable"
         numeric score "nullable"
@@ -1258,6 +1259,7 @@ erDiagram
         bigint workspace_member_id FK
         varchar(255) display_name
         varchar(32) role
+        int start_rank
         int rank
         float points
         int wins
@@ -1338,6 +1340,8 @@ erDiagram
         varchar(16) pairing_mode "nullable"
         int playoff_team_count "nullable"
         timestamptz qualification_locked_at "nullable"
+        int rank_win_delta "nullable"
+        int rank_loss_delta "nullable"
     }
     TOURNAMENT_STAGE_ITEM {
         bigint id PK

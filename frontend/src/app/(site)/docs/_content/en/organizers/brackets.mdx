@@ -4,7 +4,7 @@ It all lives in the admin: open **Tournaments**, pick the tournament and go to t
 
 ## Stage formats
 
-**Add stage** creates a stage: **Stage name**, **Stage type**, and a few extra fields for some formats.
+**Add stage** creates a stage: **Stage name**, **Stage type**, and a few extra fields for some formats. When the tournament already has stages, it also asks **Who advances from “‹last stage›”** and wires the new stage to it: the default is **Top N from each group** (2) when that stage has several groups, otherwise **Everyone**. The first stage is wired to the team formation automatically. Next to **Stages** the **Bracket** tab has **Lobbies** (FFA only) and **Flow**, the graph editor for shapes this page does not cover — see [The Flow tab](/docs/organizers/flow).
 
 | Format | What it is |
 | --- | --- |
@@ -48,7 +48,7 @@ Once a stage has matches the button reads **Regenerate**. It leaves played match
 
 ## Parallel stages
 
-The **Phase** field in **General** sets the wave. Stages sharing a number run in parallel — that is how a High and a Low division run side by side. A higher number is a later wave, fed by the ones before it.
+Each stage in the list shows its phase. Stages sharing a phase run in parallel — that is how a High and a Low division run side by side; a higher phase is a later wave, fed by the ones before it. Dragging a stage moves it between the existing phases; its **⋯** menu puts it **In parallel with** the stage listed above it, or **After** it (the stage and everything below it then move one phase later).
 
 A stage wired to earlier stages in the flow cannot be marked ready until they are completed, so its seeds never freeze against standings that can still change.
 
@@ -58,12 +58,13 @@ The **Seeding** block of **Settings**.
 
 - **Bracket seeds** decides who is seed 1 in the generated bracket: **Slot order (manual / standings)**, **Highest team avg SR first**, **Highest team total SR first** or **Random (stable per stage)**.
 - **Seed by SR** (a menu item of the stage actions) spreads teams across the groups with a snake SR draft. Every manual assignment in the stage is cleared first.
-- Who feeds the stage, and how many teams leave each group, are not set here. The arrows into the stage and the filter node before it decide that, in the **Flow** tab: for groups → playoff, put a **Top N per group** filter after the groups and draw its **passed** output into the playoff (or start from the **Groups → playoff** preset). See [The Flow tab](/docs/organizers/flow).
+- Who feeds the stage, and how many teams leave each group, are not set here but in the stage's **Who advances** block. Pick the source stage (**Takes participants from**) and a **Rule**: **Everyone**, **Top N overall**, **Top N from each group** or **By Swiss status**. For groups → playoff, choose **Top N from each group** on the playoff stage. The block is editable while the stage is in **Draft** and you can update the tournament; otherwise it is read-only and says why. A feed **Bracket** cannot express — a range, a manual pick, per-group overrides, merges, aggregates or a re-formation — is shown read-only with **Edit in Flow**. See [The Flow tab](/docs/organizers/flow).
+- A stage fed by the team formation also shows **Teams formed by** in its **General** card: the method — **Balancer**, **Draft**, **Registered teams** or **Manual** — and, for **Draft**, the **Draft format**. They are saved with the stage by the same **Save changes** bar. The method can be changed while the formation is in **Draft**; the draft format is locked while a draft holds the roster.
 - The stage seats its teams from its input when it turns **Ready**; the **Seeding** block's **Bracket seeds** decides the order they are placed in.
 
 ### Lower-bracket seeds in double elimination
 
-On the **Flow** tab, the **Top N per group** filter between the group stage and the playoff has an **Upper bracket per group** field: how many of each group's passed teams start in the upper bracket. Leave it empty and every passed team starts upper. The rest start in the lower bracket.
+In the playoff's **Who advances** block, the rule **Top N from each group** on a double-elimination stage adds **Start in the upper bracket, per group**: how many of each group's passed teams start in the upper bracket. Leave it empty and every passed team starts upper. The rest start in the lower bracket.
 
 The playoff's **Lower bracket** item is created for you when the stages are wired — you do not add it by hand.
 
@@ -85,7 +86,7 @@ Each switch works on its own. Once fewer than two teams are left undecided, no f
 
 Under a switched-on threshold, **Best-of of a qualification match** and **Best-of of an elimination match** set the series length of a match in which a team is one win from qualifying or one loss from elimination. It overrides the round's best-of; a match that is both plays the longer series. **Regular** keeps the usual rule.
 
-Qualified and eliminated teams keep their places in the **Standings**, marked **Qualified** or **Eliminated**. Who goes on to the playoff is decided by a filter node in the **Flow** tab: **Top N**, **Top N per group** or **Swiss status**. See [The Flow tab](/docs/organizers/flow). With equal thresholds exactly half of an even group qualifies, so a **Swiss status** filter set to **Qualified** passes that half.
+Qualified and eliminated teams keep their places in the **Standings**, marked **Qualified** or **Eliminated**. Who goes on to the playoff is set in the playoff's **Who advances** block: **Top N overall**, **Top N from each group** or **By Swiss status**; for shapes the block cannot express see [The Flow tab](/docs/organizers/flow). With equal thresholds exactly half of an even group qualifies, so a **By Swiss status** rule set to **Qualified** passes that half.
 
 ## Points and tiebreakers
 

@@ -82,6 +82,8 @@ class FlowNodeResultRead(BaseModel):
     rank: int
     workspace_member_id: int | None
     team_id: int | None
+    #: The by-role ranking the row belongs to; its ``rank`` and ``tie_group`` count inside this role.
+    role: str | None = None
     stage_item_id: int | None
     item_rank: int | None
     score: float | None

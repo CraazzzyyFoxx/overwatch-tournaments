@@ -45,7 +45,7 @@ vi.mock("@/services/team.service", () => ({
 }));
 
 vi.mock("@/hooks/usePermissions", () => ({
-  usePermissions: () => ({ isSuperuser: true })
+  usePermissions: () => ({ canAccessPermission: () => true, isSuperuser: true })
 }));
 
 vi.mock("@/lib/notify", () => ({

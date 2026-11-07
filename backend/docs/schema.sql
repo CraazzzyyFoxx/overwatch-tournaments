@@ -3407,6 +3407,7 @@ CREATE TABLE tournament.flow_node_result (
 	rank INTEGER NOT NULL, 
 	workspace_member_id BIGINT, 
 	team_id BIGINT, 
+	role VARCHAR(32), 
 	stage_item_id BIGINT, 
 	item_rank INTEGER, 
 	score NUMERIC, 
@@ -3425,7 +3426,7 @@ CREATE TABLE tournament.flow_node_result (
 
 CREATE INDEX ix_flow_node_result_node_id ON tournament.flow_node_result (node_id);
 
-CREATE UNIQUE INDEX uq_flow_node_result_member ON tournament.flow_node_result (node_id, port, workspace_member_id) WHERE workspace_member_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_flow_node_result_member ON tournament.flow_node_result (node_id, port, workspace_member_id, role) NULLS NOT DISTINCT WHERE workspace_member_id IS NOT NULL;
 
 CREATE UNIQUE INDEX uq_flow_node_result_team ON tournament.flow_node_result (node_id, port, team_id) WHERE team_id IS NOT NULL;
 
@@ -3584,6 +3585,7 @@ CREATE TABLE tournament.player_standing (
 	workspace_member_id BIGINT NOT NULL, 
 	display_name VARCHAR(255) NOT NULL, 
 	role VARCHAR(32) NOT NULL, 
+	start_rank INTEGER NOT NULL, 
 	rank INTEGER NOT NULL, 
 	points FLOAT DEFAULT '0' NOT NULL, 
 	wins INTEGER DEFAULT '0' NOT NULL, 
@@ -3710,6 +3712,8 @@ CREATE TABLE tournament.stage (
 	pairing_mode VARCHAR(16), 
 	playoff_team_count INTEGER, 
 	qualification_locked_at TIMESTAMP WITH TIME ZONE, 
+	rank_win_delta INTEGER, 
+	rank_loss_delta INTEGER, 
 	PRIMARY KEY (id), 
 	CONSTRAINT ck_stage_de_grand_final_type CHECK (de_grand_final_type IN ('no_reset', 'with_reset')), 
 	CONSTRAINT ck_stage_seed_ranking CHECK (seed_ranking IN ('slot', 'source', 'avg_sr', 'total_sr', 'random', 'cross', 'snake')), 
@@ -3721,6 +3725,8 @@ CREATE TABLE tournament.stage (
 	CONSTRAINT ck_stage_best_of_swiss_eliminate CHECK (best_of_swiss_eliminate IS NULL OR best_of_swiss_eliminate >= 1), 
 	CONSTRAINT ck_stage_pairing_mode CHECK (pairing_mode IS NULL OR pairing_mode IN ('score', 'balance')), 
 	CONSTRAINT ck_stage_playoff_team_count CHECK (playoff_team_count IS NULL OR playoff_team_count >= 1), 
+	CONSTRAINT ck_stage_rank_win_delta CHECK (rank_win_delta IS NULL OR rank_win_delta >= 0), 
+	CONSTRAINT ck_stage_rank_loss_delta CHECK (rank_loss_delta IS NULL OR rank_loss_delta >= 0), 
 	CONSTRAINT uq_stage_id_tournament UNIQUE (id, tournament_id), 
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE, 
 	FOREIGN KEY(scoring_rule_id) REFERENCES encounter.scoring_rule (id) DEFERRABLE INITIALLY DEFERRED

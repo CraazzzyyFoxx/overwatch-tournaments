@@ -16,8 +16,8 @@ import { useTabAccess } from "../../sub-tabs";
 import { useRegistrationNodeConfig } from "../useRegistrationNodeConfig";
 
 /**
- * How one registration node takes entries: auto-approval, late sign-up and the announced capacity. Saved with the
- * node's config (`PUT /admin/tournaments/{id}/flow`), so the page and a flow inspector can embed it as it is.
+ * How one registration node takes entries: auto-approval, late sign-up, required check-in and the announced capacity.
+ * Saved with the node's config (`PUT /admin/tournaments/{id}/flow`), so the page and a flow inspector can embed it as it is.
  * Remount it per node (`key={node.id}`).
  */
 export function RegistrationNodeSettingsForm({
@@ -68,6 +68,14 @@ export function RegistrationNodeSettingsForm({
               checked={form.allow_late_registration}
               disabled={disabled}
               onCheckedChange={(next) => patch({ allow_late_registration: next })}
+            />
+          </SettingRow>
+          <SettingRow htmlFor={`${ids}-check-in`} label={tStatus("checkInLabel")} hint={tStatus("checkInHint")}>
+            <Switch
+              id={`${ids}-check-in`}
+              checked={form.check_in}
+              disabled={disabled}
+              onCheckedChange={(next) => patch({ check_in: next })}
             />
           </SettingRow>
         </SettingGroup>

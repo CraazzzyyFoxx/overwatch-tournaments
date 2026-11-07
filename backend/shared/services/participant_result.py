@@ -3,7 +3,8 @@
 Rule 1: when the tournament has a ``leaderboard`` sink (no outgoing edge; the highest id when several), its ``final``
 rows: a player row is the member, a team row expands to the team's non-substitute members, all at the row's rank (a
 tie group at its head place); ``field_size`` is the leaderboard's row count and ``source_node_id`` the leaderboard.
-A player row's ``final_team_id`` is rule 2's team.
+A by-role leaderboard ranks each role on its own: a member keeps their best place over their roles, with that role's
+row count as ``field_size``. A player row's ``final_team_id`` is rule 2's team.
 
 Rule 2: per member, the last-formed team the member played for (substitutes never count; the team of the formation
 node completed last, a tournament-wide team after them, then the latest row), the placement being that team's positive
@@ -102,10 +103,16 @@ def _leaderboard_rows(tournament_id: int) -> sa.Select:
         models.Player,
     )
     rule2 = _team_rule_rows(tournament_id).subquery("rule2")
+    # Rank and tie group count inside the row's role (all NULL outside a by-role ranking).
     place = sa.case(
-        (result.tie_group.is_(None), result.rank), else_=sa.func.min(result.rank).over(partition_by=result.tie_group)
+        (result.tie_group.is_(None), result.rank),
+        else_=sa.func.min(result.rank).over(partition_by=(result.role, result.tie_group)),
     )
-    field_size = sa.select(sa.func.count(every.id)).where(every.node_id == sink).scalar_subquery()
+    field_size = (
+        sa.select(sa.func.count(every.id))
+        .where(every.node_id == sink, every.role.is_not_distinct_from(result.role))
+        .scalar_subquery()
+    )
     final = (
         models.Tournament.id == tournament_id,
         models.Tournament.is_finished.is_(True),
@@ -113,14 +120,19 @@ def _leaderboard_rows(tournament_id: int) -> sa.Select:
         result.state == FlowResultState.FINAL.value,
     )
     players = (
-        sa.select(result.workspace_member_id.label("member"), rule2.c.team_id.label("team"), place.label("place"))
+        sa.select(
+            result.workspace_member_id.label("member"),
+            rule2.c.team_id.label("team"),
+            place.label("place"),
+            field_size.label("field_size"),
+        )
         .select_from(result)
         .join(models.Tournament, sa.true())
         .outerjoin(rule2, rule2.c.workspace_member_id == result.workspace_member_id)
         .where(*final, result.workspace_member_id.is_not(None))
     )
     teams = (
-        sa.select(player.workspace_member_id, result.team_id, place)
+        sa.select(player.workspace_member_id, result.team_id, place, field_size)
         .select_from(result)
         .join(models.Tournament, sa.true())
         .join(player, sa.and_(player.team_id == result.team_id, player.is_substitution.is_(False)))
@@ -133,11 +145,12 @@ def _leaderboard_rows(tournament_id: int) -> sa.Select:
             rows.c.member,
             rows.c.team,
             rows.c.place,
-            field_size,
+            rows.c.field_size,
             sink,
         )
         .distinct(rows.c.member)
-        .order_by(rows.c.member, rows.c.place)
+        # A member's best place; between equal places, the larger field.
+        .order_by(rows.c.member, rows.c.place, rows.c.field_size.desc())
     )
 
 

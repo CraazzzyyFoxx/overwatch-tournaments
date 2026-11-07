@@ -75,13 +75,17 @@ def _apply_stage_fields(stage: models.Stage, fields: dict[str, Any]) -> None:
 
 
 def _normalize_individual_swiss(stage: models.Stage) -> None:
-    """The two ``individual_swiss`` settings exist only on that type: defaults there, NULL elsewhere."""
+    """The ``individual_swiss`` settings exist only on that type: defaults there, NULL elsewhere."""
     if stage.stage_type == enums.StageType.INDIVIDUAL_SWISS:
         stage.pairing_mode = stage.pairing_mode or enums.StagePairingMode.SCORE.value
         stage.playoff_team_count = stage.playoff_team_count or 4
+        stage.rank_win_delta = stage.rank_win_delta or 0
+        stage.rank_loss_delta = stage.rank_loss_delta or 0
     else:
         stage.pairing_mode = None
         stage.playoff_team_count = None
+        stage.rank_win_delta = None
+        stage.rank_loss_delta = None
 
 
 def rule_values(stage_type: enums.StageType, block: dict[str, Any]) -> dict[str, Any]:
@@ -336,6 +340,7 @@ class StageCrudMixin(StageServiceBase):
             await self._assert_scoring_editable(session, stage, rule_before, rule_after)
 
         thresholds_before = SwissThresholds.of(stage)
+        rank_deltas_before = (stage.rank_win_delta, stage.rank_loss_delta)
         playoff_count_moved = await self._check_playoff_team_count_edit(session, stage, update_data)
         _apply_stage_fields(stage, update_data)
         _normalize_individual_swiss(stage)
@@ -350,8 +355,14 @@ class StageCrudMixin(StageServiceBase):
         # a changed block has to re-run the standings: nothing else would, and
         # the same signal drops the gateway's cache of the lobby read. A moved
         # Swiss threshold re-decides who is through / out, and whether the
-        # scope is over or owes another round.
-        if rule_after != rule_before or SwissThresholds.of(stage) != thresholds_before or playoff_count_moved:
+        # scope is over or owes another round; moved rank deltas re-derive every
+        # player's rank from the results already confirmed.
+        if (
+            rule_after != rule_before
+            or SwissThresholds.of(stage) != thresholds_before
+            or playoff_count_moved
+            or (stage.rank_win_delta, stage.rank_loss_delta) != rank_deltas_before
+        ):
             await enqueue_tournament_recalculation(session, tournament_id)
         await self._publish_structure_changed(session, tournament_id)
         await session.commit()

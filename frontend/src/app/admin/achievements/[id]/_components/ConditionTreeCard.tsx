@@ -4,10 +4,10 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
 
+import { GraphCanvasSkeleton } from "@/components/graph-canvas/GraphCanvasSkeleton";
 import { LoadErrorNote } from "@/components/kit/EmptyNote";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 
@@ -18,11 +18,11 @@ import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 // lies about its height is a layout shift.
 const ConditionFlowEditor = dynamic(
   () => import("@/components/admin/achievements/ConditionFlowEditor").then((m) => m.ConditionFlowEditor),
-  { ssr: false, loading: () => <Skeleton className="h-125 w-full rounded-lg" /> }
+  { ssr: false, loading: () => <GraphCanvasSkeleton heightClass="h-125" /> }
 );
 const ConditionFlowViewer = dynamic(
   () => import("@/components/admin/achievements/ConditionFlowEditor").then((m) => m.ConditionFlowEditor),
-  { ssr: false, loading: () => <Skeleton className="h-75 w-full rounded-lg" /> }
+  { ssr: false, loading: () => <GraphCanvasSkeleton heightClass="h-75" /> }
 );
 
 /**
@@ -100,7 +100,7 @@ export function ConditionTreeCard({
             </div>
           </div>
         ) : metadata.isPending ? (
-          <Skeleton className="h-75 w-full rounded-lg" />
+          <GraphCanvasSkeleton heightClass="h-75" />
         ) : showStored ? (
           <ConditionFlowViewer value={conditionTree} readOnly discipline={discipline} />
         ) : metadata.isError ? (

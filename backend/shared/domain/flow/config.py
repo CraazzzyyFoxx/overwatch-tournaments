@@ -78,9 +78,11 @@ class MergeNodeConfig(_NodeConfig):
 
 
 class LeaderboardPin(_NodeConfig):
-    """An admin-fixed place on a leaderboard, like ``StandingPin`` on a stage table."""
+    """An admin-fixed place on a leaderboard, like ``StandingPin`` on a stage table; with a by-role ranking the place
+    is inside ``role``."""
 
     participant_id: int
+    role: str | None = None
     position: int = Field(ge=1)
 
 
@@ -89,9 +91,9 @@ class LeaderboardNodeConfig(_NodeConfig):
 
     @model_validator(mode="after")
     def _pins_are_distinct(self) -> LeaderboardNodeConfig:
-        if len({p.participant_id for p in self.pins}) < len(self.pins) or len({p.position for p in self.pins}) < len(
-            self.pins
-        ):
+        if len({(p.participant_id, p.role) for p in self.pins}) < len(self.pins) or len(
+            {(p.role, p.position) for p in self.pins}
+        ) < len(self.pins):
             raise PydanticCustomError(
                 "leaderboard_pin_duplicate", "A participant and a position can each be pinned once"
             )
@@ -149,11 +151,19 @@ class AggregateNodeConfig(_NodeConfig):
     mode: Literal["sum_all", "sum_last_n", "sum_best_n", "average"]
     n: int | None = Field(None, ge=1)
     tiebreak: list[Literal["best_places", "last_input"]] = ["best_places", "last_input"]
+    #: Rank every top-level role on its own: a player's days in one role never count toward another role's total.
+    by_role: bool = False
 
     @model_validator(mode="after")
     def _n_for_windowed_modes(self) -> AggregateNodeConfig:
         if self.mode in ("sum_last_n", "sum_best_n") and self.n is None:
             raise ValueError(f"n is required for mode {self.mode!r}")
+        return self
+
+    @model_validator(mode="after")
+    def _by_role_needs_players(self) -> AggregateNodeConfig:
+        if self.by_role and self.unit != FlowUnit.PLAYERS:
+            raise PydanticCustomError("aggregate_by_role_unit", "Ranking by role needs the players unit")
         return self
 
     @model_validator(mode="after")

@@ -8,6 +8,9 @@ HOSTTAG=${HOSTTAG:-moscow}
 CONTAINER=db_postgres
 PGSUPER=system
 RETENTION=30d
+# The mirror, not Docker Hub: ops/cleanup prunes this unused image every night, so each run pulls it again, and
+# anonymous Docker Hub pulls from this host hit 429 (2026-11-07: the upload failed after a good dump).
+RCLONE=${RCLONE:-dockerhub.timeweb.cloud/rclone/rclone:latest}
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 ENVFILE="${ENVFILE:-$SCRIPT_DIR/s3.env}"
 TMP="${TMP:-$SCRIPT_DIR/tmp}"
@@ -69,9 +72,9 @@ for db in $(docker exec "$CONTAINER" psql -U "$PGSUPER" -d postgres -Atc \
   echo "dumped $db -> $(du -h "$TMP/$db-$STAMP.dump" | cut -f1)"
 done
 BYTES_TOTAL="$(du -sb "$TMP" | cut -f1)"
-docker run --rm --env-file "$ENVFILE" -v "$TMP:/data" rclone/rclone \
+docker run --rm --env-file "$ENVFILE" -v "$TMP:/data" "$RCLONE" \
   copy /data "tw:$BUCKET/pg/$HOSTTAG/$DAY/" --s3-no-check-bucket --stats-one-line
-docker run --rm --env-file "$ENVFILE" rclone/rclone \
+docker run --rm --env-file "$ENVFILE" "$RCLONE" \
   delete "tw:$BUCKET/pg/$HOSTTAG/" --min-age "$RETENTION" --rmdirs --stats-one-line
 LAST_SUCCESS="$(date +%s)"
 STATUS=1

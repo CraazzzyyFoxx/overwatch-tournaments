@@ -19771,6 +19771,8 @@ export interface components {
             port: string;
             /** Rank */
             rank: number;
+            /** Role */
+            role: string | null;
             /** Score */
             score: number | null;
             /** Stage Item Id */
@@ -20493,6 +20495,8 @@ export interface components {
             role: string;
             /** Stage Id */
             stage_id: number;
+            /** Start Rank */
+            start_rank: number;
             /** Wins */
             wins: number;
             /** Workspace Member Id */
@@ -21663,6 +21667,16 @@ export interface components {
              */
             playoff_team_count: number | null;
             /**
+             * Rank Loss Delta
+             * @default null
+             */
+            rank_loss_delta: number | null;
+            /**
+             * Rank Win Delta
+             * @default null
+             */
+            rank_win_delta: number | null;
+            /**
              * Ranking Preset
              * @default null
              */
@@ -21798,6 +21812,16 @@ export interface components {
              * @default null
              */
             playoff_team_count: number | null;
+            /**
+             * Rank Loss Delta
+             * @default null
+             */
+            rank_loss_delta: number | null;
+            /**
+             * Rank Win Delta
+             * @default null
+             */
+            rank_win_delta: number | null;
             /**
              * Ranking Preset
              * @default null
@@ -27344,6 +27368,11 @@ export interface components {
         /** AggregateNodeConfig */
         "tournament.AggregateNodeConfig": {
             /**
+             * By Role
+             * @default false
+             */
+            by_role: boolean;
+            /**
              * Mode
              * @enum {string}
              */
@@ -30255,6 +30284,11 @@ export interface components {
         "tournament.LeaderboardPin": {
             /** Participant Id */
             participant_id: number;
+            /**
+             * Role
+             * @default null
+             */
+            role: string | null;
             /** Position */
             position: number;
         };
@@ -31628,6 +31662,16 @@ export interface components {
              */
             playoff_team_count: number | null;
             /**
+             * Rank Loss Delta
+             * @default null
+             */
+            rank_loss_delta: number | null;
+            /**
+             * Rank Win Delta
+             * @default null
+             */
+            rank_win_delta: number | null;
+            /**
              * Ranking Preset
              * @default null
              */
@@ -31814,6 +31858,16 @@ export interface components {
              * @default null
              */
             playoff_team_count: number | null;
+            /**
+             * Rank Loss Delta
+             * @default null
+             */
+            rank_loss_delta: number | null;
+            /**
+             * Rank Win Delta
+             * @default null
+             */
+            rank_win_delta: number | null;
             /**
              * Ranking Preset
              * @default null

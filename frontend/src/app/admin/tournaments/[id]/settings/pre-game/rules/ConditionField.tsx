@@ -13,9 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { GraphCanvasSkeleton } from "@/components/graph-canvas/GraphCanvasSkeleton";
 import type { RuleLeafFieldsProps, RulePaletteGroup } from "@/components/rule-builder";
 import { LOGICAL_COLORS } from "@/components/rule-builder/rule-tree";
-import { Skeleton } from "@/components/ui/skeleton";
 import type {
   PickBanCondition,
   PickBanConditionContext,
@@ -31,7 +31,7 @@ import { ParamFields } from "./ParamFields";
 // so the canvas is a client-only chunk (same split as the public achievement page).
 const RuleBuilder = dynamic(
   () => import("@/components/rule-builder").then((m) => m.RuleBuilder),
-  { ssr: false, loading: () => <Skeleton className="h-125 w-full rounded-lg" /> }
+  { ssr: false, loading: () => <GraphCanvasSkeleton heightClass="h-125" /> }
 );
 
 /**
@@ -148,11 +148,6 @@ export function ConditionField({
     () => ({
       outlineTitle: t("builder.outlineTitle"),
       outlineGroup: (path: string, op: string) => t("builder.outlineGroup", { path, op }),
-      paletteSearchPlaceholder: t("builder.searchPlaceholder"),
-      paletteSearchLabel: t("builder.searchLabel"),
-      paletteHint: t("builder.paletteHint"),
-      paletteEmpty: (query: string) => t("builder.paletteEmpty", { query }),
-      paletteAdd: (item: string) => t("builder.paletteAdd", { item }),
       groupName: (path: string) => t("builder.groupName", { path }),
       operatorLabel: (group: string) => t("builder.operatorLabel", { group }),
       addLeaf: t("builder.addLeaf"),
@@ -165,10 +160,6 @@ export function ConditionField({
       leafTypeLabel: (path: string) => t("builder.leafTypeLabel", { path }),
       leafFieldLabel: (field: string, leaf: string, path: string) =>
         t("builder.leafFieldLabel", { field, leaf, path }),
-      fullscreen: t("builder.fullscreen"),
-      fullscreenLabel: t("builder.fullscreenLabel"),
-      exitFullscreen: t("builder.exitFullscreen"),
-      exitFullscreenLabel: t("builder.exitFullscreenLabel"),
     }),
     [t]
   );
@@ -224,6 +215,7 @@ export function ConditionField({
             labelForLeaf={leafLabel}
             summarizeLeaf={summarize}
             labels={labels}
+            heightClass="h-125"
           />
         </DialogContent>
       </Dialog>

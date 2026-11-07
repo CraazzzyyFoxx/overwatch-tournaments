@@ -87,6 +87,22 @@ export function phaseOrderForArrangement<T extends { id: number; order: number }
   return new Map(arrangement.map((stage, index) => [stage.id, numbers[index]]));
 }
 
+/**
+ * The phase numbers that change when the stage `stageId` of the list `ordered` runs in parallel with the stage listed
+ * above it (it takes that stage's number) or after it (it and every stage listed below it move one phase later, so a
+ * split never lands on a later wave's number). Empty for the first stage.
+ */
+export function phasesBesideAbove<T extends { id: number; order: number }>(
+  ordered: readonly T[],
+  stageId: number,
+  mode: "parallel" | "after"
+): Map<number, number> {
+  const index = ordered.findIndex((stage) => stage.id === stageId);
+  if (index < 1) return new Map();
+  if (mode === "parallel") return new Map([[stageId, ordered[index - 1].order]]);
+  return new Map(ordered.slice(index).map((stage) => [stage.id, stage.order + 1]));
+}
+
 export function formatTournamentStages(stages: Tournament["stages"]) {
   return stages
     .map((stage) => stage.name.trim())
