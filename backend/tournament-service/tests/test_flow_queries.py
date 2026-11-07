@@ -41,7 +41,9 @@ class FlowQueriesTests(FlowCase):
         m = await self._members(5)
         # First: ``create_stage`` auto-wires the first stage to an existing single formation, and this test draws its own edges.
         target = (await self.stage())[1]
-        source_a = await self.node("registration", "closed")
+        # A filter, not a registration: a registration source is read live (``registration_output_rows``), so its
+        # stored rows would not count here.
+        source_a = await self.node("filter", config={"mode": "top", "n": 2})
         source_b = await self.node("formation", "completed", config={"mode": "manual"})
         async with self.Session() as s:
             team = models.Team(tournament_id=self.tournament_id, name="T", balancer_name="T")
@@ -59,11 +61,11 @@ class FlowQueriesTests(FlowCase):
             )
             await s.commit()
             team_id = team.id
-        await self.edge(source_a, "participants", target, "participants")
+        await self.edge(source_a, "passed", target, "participants")
         await self.edge(source_b, "teams", target, "participants")
         # Second-ranked first on purpose; m[0] reappears under the team and must not repeat.
-        await self._result(source_a, "participants", 2, member=m[1])
-        await self._result(source_a, "participants", 1, member=m[0])
+        await self._result(source_a, "passed", 2, member=m[1])
+        await self._result(source_a, "passed", 1, member=m[0])
         await self._result(source_b, "teams", 1, team=team_id)
         async with self.Session() as s:
             await s.execute(
