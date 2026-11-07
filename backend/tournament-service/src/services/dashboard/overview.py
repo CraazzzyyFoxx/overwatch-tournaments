@@ -30,7 +30,10 @@ from shared.core.chrono import tournament_chrono_key
 from shared.core.enums import FlowNodeKind, FlowNodeStatus
 from shared.core.flow_state import SCHEDULE_TRANSITIONS
 from shared.core.tournament_state import FINISHED_STATUSES
+from shared.services.flow_queries import stage_node_status
 from src import schemas
+from src.domain.bracket import swiss
+from src.services.bracket.swiss_state import stopped_scopes
 from src.services.dashboard.readiness import (
     build_readiness,
     formation_modes,
@@ -236,6 +239,7 @@ class AdminDashboardService:
         candidates = await self._candidates(session, workspace_id, permissions, now)
         ids = [row.Tournament.id for row in candidates]
         encounters = await self._encounter_counts(session, ids, now)
+        swiss_to_come = await self._swiss_encounters_to_come(session, ids)
         schedules = await self._schedules(session, ids)
 
         built: list[
@@ -307,7 +311,7 @@ class AdminDashboardService:
                     can_achievement_read=permissions.achievement_read,
                 ),
                 play=schemas.DashboardPlay(
-                    encounters_total=counts["total"],
+                    encounters_total=counts["total"] + swiss_to_come.get(tournament.id, 0),
                     encounters_completed=counts["completed"],
                     encounters_live=counts["live"],
                     encounters_overdue=counts["overdue"],
@@ -444,6 +448,76 @@ class AdminDashboardService:
             .group_by(encounter.tournament_id)
         )
         return {row.tournament_id: Counter(row._asdict()) for row in rows}
+
+    async def _swiss_encounters_to_come(self, session: AsyncSession, tournament_ids: list[int]) -> dict[int, int]:
+        """The encounters the started scopes of every unfinished Swiss stage have not drawn yet, per tournament.
+
+        A Swiss draws a round at a time, so the stored encounters undercount it: a team Swiss scope plays
+        ``swiss.projected_encounters`` of its seeded teams, an individual Swiss ``max_rounds`` times its round-1
+        lobbies. A scope out of pairings has drawn all it will.
+        """
+        if not tournament_ids:
+            return {}
+        stage, position = models.Stage, models.BracketEncounter
+        swiss_types = (enums.StageType.SWISS, enums.StageType.INDIVIDUAL_SWISS)
+        scopes = (
+            await session.execute(
+                sa.select(
+                    stage.tournament_id,
+                    stage.id,
+                    stage.stage_type,
+                    stage.max_rounds,
+                    stage.swiss_qualify_wins,
+                    stage.swiss_eliminate_losses,
+                    position.stage_item_id,
+                    sa.func.count(position.encounter_id).label("drawn"),
+                    sa.func.count(position.encounter_id).filter(position.round == 1).label("first_round"),
+                )
+                .join(position, position.stage_id == stage.id)
+                .where(
+                    stage.tournament_id.in_(tournament_ids),
+                    stage.stage_type.in_(swiss_types),
+                    stage_node_status(stage.id) != FlowNodeStatus.COMPLETED,
+                )
+                .group_by(stage.id, position.stage_item_id)
+            )
+        ).all()
+        if not scopes:
+            return {}
+        stage_ids = {row.id for row in scopes}
+        item, slot = models.StageItem, models.StageItemInput
+        seeded = (
+            await session.execute(
+                sa.select(item.stage_id, item.id, sa.func.count(slot.id))
+                .join(slot, slot.stage_item_id == item.id)
+                .where(
+                    item.stage_id.in_(stage_ids),
+                    slot.team_id.is_not(None),
+                    slot.input_type != enums.StageItemInputType.EMPTY,
+                )
+                .group_by(item.stage_id, item.id)
+            )
+        ).all()
+        teams_by_item = {item_id: teams for _, item_id, teams in seeded}
+        teams_by_stage: Counter[int] = Counter()
+        for stage_id, _, teams in seeded:
+            teams_by_stage[stage_id] += teams
+        stopped = await stopped_scopes(session, stage_ids)
+
+        to_come: Counter[int] = Counter()
+        for row in scopes:
+            if row.stage_type == enums.StageType.INDIVIDUAL_SWISS:
+                total = row.max_rounds * row.first_round
+            elif (row.id, row.stage_item_id) in stopped:
+                continue
+            else:
+                # A scope without an item pairs the whole stage (``generate_next_swiss_round``).
+                teams = teams_by_stage[row.id] if row.stage_item_id is None else teams_by_item.get(row.stage_item_id, 0)
+                total = swiss.projected_encounters(
+                    teams, row.max_rounds, swiss.SwissThresholds(row.swiss_qualify_wins, row.swiss_eliminate_losses)
+                )
+            to_come[row.tournament_id] += max(0, total - row.drawn)
+        return dict(to_come)
 
     async def _schedules(self, session: AsyncSession, tournament_ids: list[int]) -> dict[int, list[_ScheduleRow]]:
         """Every candidate's node schedule rows, earliest first."""

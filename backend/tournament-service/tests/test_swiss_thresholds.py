@@ -24,7 +24,8 @@ stage_generation = importlib.import_module("src.services.admin.stage.generation"
 standings = importlib.import_module("src.services.standings.service")
 enums = importlib.import_module("shared.core.enums")
 models = importlib.import_module("shared.models")
-SwissStanding = importlib.import_module("src.domain.bracket").SwissStanding
+bracket = importlib.import_module("src.domain.bracket.swiss")
+SwissStanding = bracket.SwissStanding
 
 from tests._stage_regulation import stage_regulation  # noqa: E402
 
@@ -151,3 +152,20 @@ class StandingsStatusTests(TestCase):
             {1: "qualified", 2: "eliminated", 3: None, 4: "qualified"},
             {row.team_id: row.swiss_status for row in rows},
         )
+
+
+class ProjectedEncountersTests(TestCase):
+    def test_without_thresholds_every_round_pairs_the_field_and_a_full_circle_is_a_round_robin(self) -> None:
+        none = bracket.SwissThresholds()
+        self.assertEqual(25, bracket.projected_encounters(10, 5, none))
+        self.assertEqual(20, bracket.projected_encounters(9, 5, none))  # a bye is no encounter
+        self.assertEqual(28, bracket.projected_encounters(8, 10, none))  # capped at the circle's 7 rounds
+        self.assertEqual(21, bracket.projected_encounters(7, 10, none))  # an odd circle takes 7 rounds
+
+    def test_thresholds_replay_the_record_groups(self) -> None:
+        # The Major format: 8 + 8 + 8 + 6 + 3, whatever the results.
+        self.assertEqual(33, bracket.projected_encounters(16, 5, bracket.SwissThresholds(3, 3)))
+        # 2-0 through and 0-2 out after round 2; the 1-1 four play one more.
+        self.assertEqual(10, bracket.projected_encounters(8, 5, bracket.SwissThresholds(2, 2)))
+        # The round limit still ends it.
+        self.assertEqual(24, bracket.projected_encounters(16, 3, bracket.SwissThresholds(3, 3)))

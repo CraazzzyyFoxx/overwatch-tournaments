@@ -112,6 +112,35 @@ class SwissThresholds:
         )
 
 
+def projected_encounters(team_count: int, max_rounds: int, thresholds: SwissThresholds) -> int:
+    """How many encounters a Swiss scope of ``team_count`` teams plays in all.
+
+    Exact without thresholds: a bye is no encounter, and as many rounds as a full
+    circle is a round robin (``_generate_stage_skeleton``). With them the record
+    groups are replayed, a same-record pairing splitting one win and one loss --
+    exact while every group is even. A float down between groups is taken as won
+    by the better record and the bye as going to the last team; a draw never
+    happens. Mirrored by the frontend's ``projectedSwissEncounters``.
+    """
+    if not thresholds:
+        circle = team_count if team_count % 2 else team_count - 1
+        return max(0, min(max_rounds, circle)) * (team_count // 2)
+    records = [[0, 0] for _ in range(team_count)]  # [wins, losses]
+    total = 0
+    for _ in range(max_rounds):
+        # Every undecided team has played as many rounds, so its wins alone rank it.
+        field = sorted((r for r in records if thresholds.status(*r) is None), key=lambda r: -r[0])
+        if len(field) < 2:
+            break
+        if len(field) % 2:
+            field.pop()[0] += 1
+        for winner, loser in zip(field[::2], field[1::2], strict=True):
+            winner[0] += 1
+            loser[1] += 1
+        total += len(field) // 2
+    return total
+
+
 @dataclass(frozen=True)
 class _TeamMeta:
     rank_index: int
