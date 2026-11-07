@@ -90,6 +90,7 @@ class IndividualSwissReadsCase(EncounterLayerCase):
                     workspace_member_id=member.id,
                     display_name=name,
                     role=role,
+                    start_rank=rank,
                     rank=rank,
                     position=position,
                     is_qualified=qualified,

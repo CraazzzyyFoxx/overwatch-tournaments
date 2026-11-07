@@ -89,6 +89,8 @@ class Stage(db.TimeStampIntegerMixin):
         ),
         CheckConstraint("pairing_mode IS NULL OR pairing_mode IN ('score', 'balance')", name="ck_stage_pairing_mode"),
         CheckConstraint("playoff_team_count IS NULL OR playoff_team_count >= 1", name="ck_stage_playoff_team_count"),
+        CheckConstraint("rank_win_delta IS NULL OR rank_win_delta >= 0", name="ck_stage_rank_win_delta"),
+        CheckConstraint("rank_loss_delta IS NULL OR rank_loss_delta >= 0", name="ck_stage_rank_loss_delta"),
         #: Target of ``tournament.bracket_encounter``'s composite FK.
         UniqueConstraint("id", "tournament_id", name="uq_stage_id_tournament"),
         {"schema": "tournament"},
@@ -153,6 +155,10 @@ class Stage(db.TimeStampIntegerMixin):
     #: ``individual_swiss`` only: when the qualification was locked. From then on the qualifier and captain flags of the
     #: personal table no longer move, whatever result is corrected; NULL until the lock.
     qualification_locked_at: Mapped[datetime | None] = mapped_column(db.DateTime(timezone=True), nullable=True)
+    #: ``individual_swiss`` only: rank a player gains per won / loses per lost encounter of the stage (0 = off);
+    #: NULL for every other type.
+    rank_win_delta: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    rank_loss_delta: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
     tournament: Mapped[Tournament] = relationship(back_populates="stages")
     items: Mapped[list[StageItem]] = relationship(

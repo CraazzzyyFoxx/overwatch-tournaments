@@ -116,6 +116,23 @@ export function PlayerStandingsSection({
         meta: columnMeta<PlayerStandingRow>({ searchValue: (row) => row.display_name })
       },
       { accessorKey: "role", header: t("role"), cell: ({ row }) => slotLabel(row.original.role) },
+      {
+        accessorKey: "rank",
+        header: t("rank"),
+        // The stage's rank deltas move it from where the stage started: show both while they differ.
+        cell: ({ row }) => {
+          const { rank, start_rank: start } = row.original;
+          const delta = rank - start;
+          if (delta === 0) return rank;
+          return (
+            <span className="whitespace-nowrap">
+              {start} → {rank}{" "}
+              <span className="text-[color:var(--aqt-fg-dim)]">({delta > 0 ? `+${delta}` : delta})</span>
+            </span>
+          );
+        },
+        meta: numeric
+      },
       { accessorKey: "points", header: t("points"), meta: numeric },
       {
         id: "record",

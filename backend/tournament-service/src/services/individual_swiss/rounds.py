@@ -116,6 +116,7 @@ class IndividualSwissRoundsService:
                     workspace_member_id=player.member_id,
                     display_name=player.display_name,
                     role=player.role,
+                    start_rank=player.rank,
                     rank=player.rank,
                 )
                 for player in pool

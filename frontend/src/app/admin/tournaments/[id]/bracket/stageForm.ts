@@ -39,6 +39,9 @@ export interface StageForm {
   pairingMode: StagePairingMode;
   /** `individual_swiss`: how many teams the playoff takes (each takes its role slots of the table). */
   playoffTeamCount: number;
+  /** `individual_swiss`: rank a player gains per won / loses per lost encounter; 0 = off. */
+  rankWinDelta: number;
+  rankLossDelta: number;
   seedRanking: SeedRanking;
   rankingPreset: string;
   tiebreakOrder: string[];
@@ -74,6 +77,8 @@ export function stageFormFromStage(stage: Stage): StageForm {
     deGrandFinalType: stage.de_grand_final_type,
     pairingMode: stage.pairing_mode ?? "score",
     playoffTeamCount: stage.playoff_team_count ?? 4,
+    rankWinDelta: stage.rank_win_delta ?? 0,
+    rankLossDelta: stage.rank_loss_delta ?? 0,
     seedRanking: stage.seed_ranking,
     rankingPreset: stage.ranking_preset || "default",
     tiebreakOrder:
@@ -104,9 +109,14 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
     name: form.name.trim() || stage.name,
     stage_type: form.stageType,
     max_rounds: normalizeMaxRounds(form.maxRounds, stage.max_rounds ?? 5),
-    // Both exist only on an individual Swiss stage; the server clears them elsewhere.
+    // These exist only on an individual Swiss stage; the server clears them elsewhere.
     ...(isIndividualSwiss
-      ? { pairing_mode: form.pairingMode, playoff_team_count: form.playoffTeamCount }
+      ? {
+          pairing_mode: form.pairingMode,
+          playoff_team_count: form.playoffTeamCount,
+          rank_win_delta: form.rankWinDelta,
+          rank_loss_delta: form.rankLossDelta
+        }
       : {}),
     ranking_preset: form.rankingPreset === "default" ? null : form.rankingPreset || null,
     // A metric switched off in the editor is simply absent from the list — that
@@ -177,6 +187,8 @@ const FIELD_LABELS: Record<keyof StageForm, string> = {
   deGrandFinalType: "grandFinal",
   pairingMode: "pairingMode",
   playoffTeamCount: "playoffTeams",
+  rankWinDelta: "rankWinDelta",
+  rankLossDelta: "rankLossDelta",
   seedRanking: "bracketSeeds",
   rankingPreset: "standingsPreset",
   tiebreakOrder: "tiebreakerOrder",

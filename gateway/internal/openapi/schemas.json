@@ -54056,6 +54056,10 @@
           "title": "Stage Id",
           "type": "integer"
         },
+        "start_rank": {
+          "title": "Start Rank",
+          "type": "integer"
+        },
         "wins": {
           "title": "Wins",
           "type": "integer"
@@ -54071,6 +54075,7 @@
         "registration_id",
         "display_name",
         "role",
+        "start_rank",
         "rank",
         "position",
         "points",
@@ -57897,6 +57902,34 @@
           "default": null,
           "title": "Playoff Team Count"
         },
+        "rank_loss_delta": {
+          "anyOf": [
+            {
+              "maximum": 1000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rank Loss Delta"
+        },
+        "rank_win_delta": {
+          "anyOf": [
+            {
+              "maximum": 1000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rank Win Delta"
+        },
         "ranking_preset": {
           "anyOf": [
             {
@@ -58412,6 +58445,30 @@
           "default": null,
           "title": "Playoff Team Count"
         },
+        "rank_loss_delta": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rank Loss Delta"
+        },
+        "rank_win_delta": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rank Win Delta"
+        },
         "ranking_preset": {
           "anyOf": [
             {
@@ -58839,6 +58896,30 @@
           "default": null,
           "title": "Playoff Team Count"
         },
+        "rank_loss_delta": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rank Loss Delta"
+        },
+        "rank_win_delta": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rank Win Delta"
+        },
         "ranking_preset": {
           "anyOf": [
             {
@@ -59048,6 +59129,34 @@
           ],
           "default": null,
           "title": "Playoff Team Count"
+        },
+        "rank_loss_delta": {
+          "anyOf": [
+            {
+              "maximum": 1000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rank Loss Delta"
+        },
+        "rank_win_delta": {
+          "anyOf": [
+            {
+              "maximum": 1000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rank Win Delta"
         },
         "ranking_preset": {
           "anyOf": [

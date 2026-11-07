@@ -131,6 +131,32 @@ export function GeneralSection({
               onValueChange={(next) => onChange({ playoffTeamCount: next ?? 4 })}
             />
           </SettingRow>
+
+          <SettingRow htmlFor={`${ids}-rank-win`} label={t("rankWinDelta")} hint={t("rankDeltaHelp")}>
+            <NumberInput
+              id={`${ids}-rank-win`}
+              integer
+              min={0}
+              max={1000}
+              size="sm"
+              className="w-24"
+              value={form.rankWinDelta}
+              onValueChange={(next) => onChange({ rankWinDelta: next ?? 0 })}
+            />
+          </SettingRow>
+
+          <SettingRow htmlFor={`${ids}-rank-loss`} label={t("rankLossDelta")}>
+            <NumberInput
+              id={`${ids}-rank-loss`}
+              integer
+              min={0}
+              max={1000}
+              size="sm"
+              className="w-24"
+              value={form.rankLossDelta}
+              onValueChange={(next) => onChange({ rankLossDelta: next ?? 0 })}
+            />
+          </SettingRow>
         </>
       ) : null}
 

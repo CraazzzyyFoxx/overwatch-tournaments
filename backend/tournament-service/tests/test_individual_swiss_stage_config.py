@@ -21,6 +21,8 @@ class IndividualSwissStageConfigTests(EncounterLayerCase):
         stage = await self._create(enums.StageType.INDIVIDUAL_SWISS)
         self.assertEqual("score", stage.pairing_mode)
         self.assertEqual(4, stage.playoff_team_count)
+        # Rank adjustment is off until the organizer sets it.
+        self.assertEqual((0, 0), (stage.rank_win_delta, stage.rank_loss_delta))
         self.assertEqual("wins", stage.scoring_rule.preset)
 
         read = schemas.StageRead.model_validate(stage, from_attributes=True)
@@ -39,12 +41,23 @@ class IndividualSwissStageConfigTests(EncounterLayerCase):
             schemas.StageUpdate(playoff_team_count=0)
         with self.assertRaises(ValidationError):
             schemas.StageCreate(name="S", stage_type=enums.StageType.INDIVIDUAL_SWISS, playoff_team_count=0)
+        with self.assertRaises(ValidationError):
+            schemas.StageUpdate(rank_loss_delta=-50)
 
     async def test_other_types_keep_both_null(self) -> None:
         stage = await self._create(
-            enums.StageType.SWISS, pairing_mode=enums.StagePairingMode.BALANCE, playoff_team_count=3
+            enums.StageType.SWISS,
+            pairing_mode=enums.StagePairingMode.BALANCE,
+            playoff_team_count=3,
+            rank_win_delta=50,
+            rank_loss_delta=50,
         )
-        self.assertEqual((None, None), (stage.pairing_mode, stage.playoff_team_count))
+        self.assertEqual(
+            (None, None, None, None),
+            (stage.pairing_mode, stage.playoff_team_count, stage.rank_win_delta, stage.rank_loss_delta),
+        )
         async with self.Session() as s:
-            updated = await stage_service.update_stage(s, stage.id, schemas.StageUpdate(playoff_team_count=2))
-        self.assertEqual((None, None), (updated.pairing_mode, updated.playoff_team_count))
+            updated = await stage_service.update_stage(
+                s, stage.id, schemas.StageUpdate(playoff_team_count=2, rank_win_delta=50)
+            )
+        self.assertEqual((None, None, None), (updated.pairing_mode, updated.playoff_team_count, updated.rank_win_delta))

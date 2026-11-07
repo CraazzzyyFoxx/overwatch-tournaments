@@ -404,6 +404,8 @@ export interface StageUpdateInput extends Partial<StageRegulation> {
   /** `individual_swiss` only. */
   pairing_mode?: StagePairingMode | null;
   playoff_team_count?: number | null;
+  rank_win_delta?: number | null;
+  rank_loss_delta?: number | null;
   order?: number;
 }
 

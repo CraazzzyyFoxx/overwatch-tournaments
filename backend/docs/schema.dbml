@@ -3218,6 +3218,7 @@ Table tournament.player_standing {
   workspace_member_id bigint [not null]
   display_name VARCHAR(255) [not null]
   role VARCHAR(32) [not null]
+  start_rank int [not null]
   rank int [not null]
   points float [not null, default: 0]
   wins int [not null, default: 0]
@@ -3323,6 +3324,8 @@ Table tournament.stage {
   pairing_mode VARCHAR(16)
   playoff_team_count int
   qualification_locked_at timestamptz
+  rank_win_delta int
+  rank_loss_delta int
   indexes {
     (id, tournament_id) [unique, name: "uq_stage_id_tournament"]
     (tournament_id) [name: "ix_tournament_stage_tournament_id"]

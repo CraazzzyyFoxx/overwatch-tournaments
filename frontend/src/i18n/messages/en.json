@@ -10225,7 +10225,9 @@
       "pointsFormula": "Points formula",
       "roundSchedule": "Round schedule",
       "pairingMode": "Lobby pairing",
-      "playoffTeams": "Playoff teams"
+      "playoffTeams": "Playoff teams",
+      "rankWinDelta": "Rank per win",
+      "rankLossDelta": "Rank per loss"
     },
     "preview": {
       "swapSuccess": "Teams swapped",
@@ -10370,7 +10372,10 @@
       "pairingScore": "By points",
       "pairingBalance": "Whole-pool balance",
       "playoffTeams": "Playoff teams",
-      "playoffTeamsHelp": "Each role sends its best players to the draft: this many teams times the role's slots."
+      "playoffTeamsHelp": "Each role sends its best players to the draft: this many teams times the role's slots.",
+      "rankWinDelta": "Rank per win",
+      "rankLossDelta": "Rank per loss",
+      "rankDeltaHelp": "A player's rank in this stage gains this much for every won match and loses the other value for every lost one (draws change nothing; never below 1). Later rounds are balanced on the moved rank. 0 and 0 = off. A change re-applies to every result already confirmed."
     },
     "extra": {
       "matches": "matches",
@@ -10469,6 +10474,7 @@
       "points": "Points",
       "record": "W–D–L",
       "mapDiff": "Map diff",
+      "rank": "Rank",
       "buchholz": "Buchholz",
       "pin": "Pin",
       "pinLabel": "Pinned place of {name}",

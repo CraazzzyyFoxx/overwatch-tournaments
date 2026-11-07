@@ -20493,6 +20493,8 @@ export interface components {
             role: string;
             /** Stage Id */
             stage_id: number;
+            /** Start Rank */
+            start_rank: number;
             /** Wins */
             wins: number;
             /** Workspace Member Id */
@@ -21663,6 +21665,16 @@ export interface components {
              */
             playoff_team_count: number | null;
             /**
+             * Rank Loss Delta
+             * @default null
+             */
+            rank_loss_delta: number | null;
+            /**
+             * Rank Win Delta
+             * @default null
+             */
+            rank_win_delta: number | null;
+            /**
              * Ranking Preset
              * @default null
              */
@@ -21798,6 +21810,16 @@ export interface components {
              * @default null
              */
             playoff_team_count: number | null;
+            /**
+             * Rank Loss Delta
+             * @default null
+             */
+            rank_loss_delta: number | null;
+            /**
+             * Rank Win Delta
+             * @default null
+             */
+            rank_win_delta: number | null;
             /**
              * Ranking Preset
              * @default null
@@ -31628,6 +31650,16 @@ export interface components {
              */
             playoff_team_count: number | null;
             /**
+             * Rank Loss Delta
+             * @default null
+             */
+            rank_loss_delta: number | null;
+            /**
+             * Rank Win Delta
+             * @default null
+             */
+            rank_win_delta: number | null;
+            /**
              * Ranking Preset
              * @default null
              */
@@ -31814,6 +31846,16 @@ export interface components {
              * @default null
              */
             playoff_team_count: number | null;
+            /**
+             * Rank Loss Delta
+             * @default null
+             */
+            rank_loss_delta: number | null;
+            /**
+             * Rank Win Delta
+             * @default null
+             */
+            rank_win_delta: number | null;
             /**
              * Ranking Preset
              * @default null

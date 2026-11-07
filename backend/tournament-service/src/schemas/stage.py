@@ -227,6 +227,8 @@ class _StageRegulationRead(BaseModel):
     #: ``individual_swiss`` only; ``None`` on every other type.
     pairing_mode: enums.StagePairingMode | None = None
     playoff_team_count: int | None = None
+    rank_win_delta: int | None = None
+    rank_loss_delta: int | None = None
     best_of: StageBestOf = Field(default_factory=StageBestOf)
 
 

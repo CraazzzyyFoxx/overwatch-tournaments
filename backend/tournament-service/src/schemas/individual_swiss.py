@@ -28,6 +28,9 @@ class PlayerStandingRead(BaseModel):
     registration_id: int | None
     display_name: str
     role: str
+    #: Frozen when the stage started.
+    start_rank: int
+    #: ``start_rank`` moved by the stage's rank deltas per result.
     rank: int
     #: 1-based inside the role; ``None`` until the standings job has ranked the table once.
     position: int | None

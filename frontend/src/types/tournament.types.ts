@@ -168,6 +168,9 @@ export interface StageSummary extends StageRegulation {
   /** `individual_swiss` only; `null` on every other stage type. */
   pairing_mode: StagePairingMode | null;
   playoff_team_count: number | null;
+  /** Rank a player gains per won / loses per lost encounter; 0 = off. */
+  rank_win_delta: number | null;
+  rank_loss_delta: number | null;
 }
 
 /** One player's row of an `individual_swiss` stage's personal table. */
