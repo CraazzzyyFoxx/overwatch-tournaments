@@ -11010,6 +11010,7 @@
       "categoryAuto": "Create automatically",
       "staffRoles": "Staff roles",
       "staffRolesHint": "Roles that can see and join every private channel.",
+      "staffRolesNone": "No staff roles",
       "rolesLoading": "Loading roles…",
       "noRoles": "No roles available. Check that the bot is on the server.",
       "save": "Save",

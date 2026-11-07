@@ -10,7 +10,8 @@ import { EmptyNote } from "@/components/kit/EmptyNote";
 import { SettingRow } from "@/components/kit/SettingRow";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { Button } from "@/components/ui/button";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
+import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
+import { CommandGroup, CommandItem } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useDiscordRoles } from "@/hooks/useDiscordEntities";
@@ -154,11 +155,16 @@ function VoiceForm({
   onSave: (settings: VoiceSettings) => void;
 }>) {
   const t = useTranslations("adminTournament.voiceSettings");
+  const tc = useTranslations("common");
   const [draft, setDraft] = useState(settings);
   const rolesQuery = useDiscordRoles(workspaceId);
   const roles = (rolesQuery.data?.roles ?? []).filter((role) => !role.managed);
   const disabled = !canEdit || saving;
   const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
+  const staffLabel = roles
+    .filter((role) => draft.staff_role_ids.includes(role.id))
+    .map((role) => role.name)
+    .join(", ");
 
   return (
     <>
@@ -193,31 +199,41 @@ function VoiceForm({
           />
         </div>
       </SettingRow>
-      <SettingRow label={t("staffRoles")} hint={t("staffRolesHint")}>
+      <SettingRow htmlFor="voice-staff-roles" label={t("staffRoles")} hint={t("staffRolesHint")}>
         <div className="w-full md:max-w-sm">
           {roles.length > 0 ? (
-            <FilterChipGroup label={t("staffRoles")}>
-              {roles.map((role) => {
-                const pressed = draft.staff_role_ids.includes(role.id);
-                return (
-                  <FilterChip
-                    key={role.id}
-                    active={pressed}
-                    disabled={disabled}
-                    onClick={() =>
-                      setDraft({
-                        ...draft,
-                        staff_role_ids: pressed
-                          ? draft.staff_role_ids.filter((id) => id !== role.id)
-                          : [...draft.staff_role_ids, role.id]
-                      })
-                    }
-                  >
-                    {role.name}
-                  </FilterChip>
-                );
-              })}
-            </FilterChipGroup>
+            // Uncontrolled: the popover stays open while roles are toggled.
+            <Combobox
+              id="voice-staff-roles"
+              label={staffLabel}
+              placeholder={t("staffRolesNone")}
+              disabled={disabled}
+              searchPlaceholder={tc("search")}
+              emptyMessage={tc("noResults")}
+            >
+              <CommandGroup>
+                {roles.map((role) => {
+                  const selected = draft.staff_role_ids.includes(role.id);
+                  return (
+                    <CommandItem
+                      key={role.id}
+                      value={`${role.name} ${role.id}`}
+                      onSelect={() =>
+                        setDraft({
+                          ...draft,
+                          staff_role_ids: selected
+                            ? draft.staff_role_ids.filter((id) => id !== role.id)
+                            : [...draft.staff_role_ids, role.id]
+                        })
+                      }
+                    >
+                      <span className="min-w-0 flex-1 truncate">{role.name}</span>
+                      <ComboboxCheck selected={selected} />
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </Combobox>
           ) : (
             <p className="text-xs text-muted-foreground">
               {rolesQuery.isLoading ? t("rolesLoading") : t("noRoles")}
