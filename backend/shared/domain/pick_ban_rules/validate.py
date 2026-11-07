@@ -161,9 +161,14 @@ def _validate_phase(
             issues.append(
                 _error(f"{path}.generator", "generator_requires_pool_mode", "the bracket generator needs pool mode")
             )
-        elif phase.generator == "slot_veto" and mode != "slots":
+        elif phase.generator == "slot_veto" and mode not in ("slots", "progressive"):
+            # Progressive: one round bans its candidates down to the survivor, the map-1 veto of a map-by-map series.
             issues.append(
-                _error(f"{path}.generator", "generator_requires_slots_mode", "the slot generator needs slots mode")
+                _error(
+                    f"{path}.generator",
+                    "generator_requires_slots_mode",
+                    "the slot generator needs slots or progressive mode",
+                )
             )
         if phase.steps:
             issues.append(_error(f"{path}.steps", "generator_with_steps", "a generated phase cannot declare steps"))

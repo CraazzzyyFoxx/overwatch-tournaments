@@ -39,13 +39,14 @@ def test_every_preset_validates_clean_for_its_kind_and_modes_in_its_discipline()
                 assert [issue.to_json() for issue in issues if issue.severity == "error"] == []
 
 
-def test_the_overwatch_presets_are_the_documented_five_then_the_generic_three():
+def test_the_overwatch_presets_are_the_documented_six_then_the_generic_three():
     assert [preset.id for preset in pbr.presets_for("overwatch")] == [
         "hero_classic",
         "hero_protect_ban",
         "hero_blind_2",
         "hero_role_bans",
         "hero_anti_one_trick",
+        "map_veto_loser_new_mode",
         "map_bracket",
         "map_slot_veto",
         "map_by_map",
@@ -141,7 +142,7 @@ def test_catalog_groups_are_what_the_caller_resolved_never_a_built_in_class_list
 def test_catalog_presets_are_the_disciplines_own_plus_the_generic_ones():
     overwatch = [preset["id"] for preset in pbr.catalog(discipline="overwatch")["presets"]]
     lol = [preset["id"] for preset in pbr.catalog(discipline="lol")["presets"]]
-    assert overwatch == [*OVERWATCH, "map_bracket", "map_slot_veto", "map_by_map"]
+    assert overwatch == [*OVERWATCH, "map_veto_loser_new_mode", "map_bracket", "map_slot_veto", "map_by_map"]
     assert not {preset_id for preset_id in lol if preset_id.startswith("hero_")}
     assert {"map_bracket", "map_slot_veto", "map_by_map"} <= set(lol)
 

@@ -368,6 +368,18 @@ def test_pool_filter_drops_candidates_banned_anywhere_in_the_series():
     assert pbr.filter_pool({}, [1, 2, 3], context) == [1, 2, 3]
 
 
+def test_pool_filter_drops_every_map_of_a_mode_the_series_already_played():
+    """Map 1 is the veto's survivor (a decider), map 2 the loser's pick: both their modes are done, while a mode
+    that was only banned stays open."""
+    groups = {1: "control", 2: "control", 3: "escort", 4: "hybrid", 5: "hybrid", 6: "push"}
+    # Rounds do not matter to a series-scoped leaf; one round keeps the step indexes contiguous.
+    steps = open_steps(("ban", [HOME], 1), ("decider", [None], 1), ("pick", [AWAY], 1))
+    rows = [submission(0, HOME, [3]), submission(1, None, [1]), submission(2, AWAY, [4])]
+    pool_filter = {"NOT": {"type": "group_picked_by", "params": {"by": "any", "scope": "series"}}}
+    context = ctx(round=3, steps=steps, submissions=rows, kind="map", groups=groups)
+    assert pbr.filter_pool(pool_filter, [2, 3, 5, 6], context) == [3, 6]
+
+
 def test_a_step_never_sees_its_own_submissions():
     """Otherwise a blind step's two sides would leak into each other's
     eligibility the moment one of them locked."""

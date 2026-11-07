@@ -22,6 +22,9 @@ from tests.test_pregame_room_loop import LoopCase
 MAPS = (1_930_000_001, 1_930_000_002, 1_930_000_003, 1_930_000_004, 1_930_000_005)
 BAN_A, BAN_B, FIRST, SECOND, THIRD = MAPS
 MAP_BY_MAP = pbr.GENERIC_PRESETS_BY_ID["map_by_map"].ruleset.to_json()
+VETO_THEN_NEW_MODE = {preset.id: preset for preset in pbr.presets_for("overwatch")}[
+    "map_veto_loser_new_mode"
+].ruleset.to_json()
 
 
 class ProgressivePoolCase(LoopCase):
@@ -38,14 +41,14 @@ class ProgressivePoolCase(LoopCase):
                 )
             await s.commit()
 
-    async def open_map_room(self, maps: tuple[int, ...] = MAPS) -> None:
+    async def open_map_room(self, maps: tuple[int, ...] = MAPS, ruleset: dict | None = None) -> None:
         async with self.Session() as s:
             config = PickBanConfig(
                 tournament_id=self.tournament_id,
                 kind=enums.PickBanKind.MAP,
                 mode=enums.MapVetoMode.PROGRESSIVE,
                 first_ban_rotation=enums.FirstBanRotation.FIXED,
-                ruleset_json=MAP_BY_MAP,
+                ruleset_json=ruleset or MAP_BY_MAP,
             )
             config.items = [PickBanConfigItem(item_id=map_id, sort_order=index) for index, map_id in enumerate(maps)]
             s.add(config)
@@ -95,6 +98,59 @@ class MapByMapTests(ProgressivePoolCase):
         state = await self.map_state()
         self.assertEqual((3, [self.slot1]), (state["current_round"], state["acting_team_ids"]))
         self.assertEqual({THIRD}, await self.offered(3))
+
+
+class VetoThenLoserPicksANewModeTests(ProgressivePoolCase):
+    """Map 1 is whatever survives the alternating bans; every later map is the loser's pick, never of a mode the
+    series already played."""
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        modes = {
+            "control": (1_930_000_101, MAPS[:2]),
+            "hybrid": (1_930_000_102, MAPS[2:4]),
+            "push": (1_930_000_103, MAPS[4:]),
+        }
+        async with self.Session() as s:
+            for slug, (mode_id, map_ids) in modes.items():
+                await s.execute(
+                    sa.text(
+                        "INSERT INTO catalog.entity (id, discipline, kind, slug, name, attrs)"
+                        " VALUES (:id, :discipline, 'mode', :slug, :slug, CAST('{}' AS JSONB)) ON CONFLICT (id) DO NOTHING"
+                    ),
+                    {"id": mode_id, "discipline": self.discipline, "slug": f"{slug}-{mode_id}"},
+                )
+                await s.execute(
+                    sa.text("UPDATE catalog.entity SET parent_id = :mode WHERE id = ANY(:maps)"),
+                    {"mode": mode_id, "maps": list(map_ids)},
+                )
+            await s.commit()
+
+    async def test_the_veto_survivor_opens_and_each_later_pick_skips_the_played_modes(self) -> None:
+        control_a, control_b, hybrid_a, hybrid_b, push = MAPS
+        await self.open_map_room(ruleset=VETO_THEN_NEW_MODE)
+        self.assertEqual(set(MAPS), await self.offered(1))
+        # Four bans in turn, the opener first; the survivor is map 1.
+        await self.map_act(self.slot1, control_b, "ban")
+        await self.map_act(self.slot2, hybrid_a, "ban")
+        await self.map_act(self.slot1, hybrid_b, "ban")
+        await self.map_act(self.slot2, push, "ban")
+        picked = {entry["item_id"] for entry in (await self.map_state())["pool"] if entry["status"] == "picked"}
+        self.assertEqual({control_a}, picked)
+
+        await self.confirm_position(1, winner=self.slot1)
+        await self.reconcile()
+        state = await self.map_state()
+        self.assertEqual((2, [self.slot2]), (state["current_round"], state["acting_team_ids"]))
+        # Map-1 bans are gone, the played map and every other control map are out.
+        self.assertEqual({hybrid_a, hybrid_b, push}, await self.offered(2))
+        await self.map_act(self.slot2, hybrid_a, "pick")
+
+        await self.confirm_position(2, winner=self.slot2)
+        await self.reconcile()
+        state = await self.map_state()
+        self.assertEqual((3, [self.slot1]), (state["current_round"], state["acting_team_ids"]))
+        self.assertEqual({push}, await self.offered(3))
 
 
 class PoolSizeGateTests(ProgressivePoolCase):

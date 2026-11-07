@@ -430,6 +430,7 @@ def _item_ctx(step: ResolvedStep, actor: int | None, ctx: RuntimeCtx, item_id: i
         target_role=target_role,
         round=ctx.round,
         history=replace(ctx.history, current_step_index=step.index),
+        groups=ctx.groups,
     )
 
 
@@ -450,6 +451,7 @@ def filter_pool(pool_filter: Mapping[str, Any] | None, item_ids: Sequence[int], 
                 target_role=None,
                 round=ctx.round,
                 history=ctx.history,
+                groups=ctx.groups,
             ),
         )
     ]
