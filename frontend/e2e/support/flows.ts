@@ -244,7 +244,8 @@ export async function balanceAndExport(api: Api, tournamentId: number, formation
 export async function formTeams(api: Api, tournamentId: number): Promise<void> {
   const registration = await nodeOf(api, tournamentId, "registration");
   const formation = await nodeOf(api, tournamentId, "formation");
-  if (!(await api.raw("GET", `/api/v1/tournaments/${tournamentId}/registration/form`)).ok()) {
+  const form = await api.raw("GET", `/api/v1/tournaments/${tournamentId}/registration/form`);
+  if (!form.ok() || (await form.json()) === null) {
     await api.put(`/api/v1/admin/balancer/tournaments/${tournamentId}/registration-form`, { form_schema: OW_FORM });
   }
   for (const status of ["open", "closed"]) await transitionNode(api, registration.id, status);

@@ -119,10 +119,10 @@ describe("BalanceEditor", () => {
     });
 
     const text = container.textContent ?? "";
-    for (const copy of ["Без команды", "Сумма:", "Сред.:", "Игрок", "Ранг", "Запустите балансировщик"]) {
+    for (const copy of ["Не влезли в команды", "Сумма:", "Сред.:", "Игрок", "Ранг", "Запустите балансировщик"]) {
       expect(text).toContain(copy);
     }
-    for (const copy of ["Unassigned", "Total:", "Avg:", "Player", "Prefs", "Run the balancer"]) {
+    for (const copy of ["Didn't fit a team", "Total:", "Avg:", "Player", "Prefs", "Run the balancer"]) {
       expect(text).not.toContain(copy);
     }
   });

@@ -61,6 +61,13 @@ class TournamentBalanceRequest(BaseModel):
     """
 
     config_overrides: ConfigOverrides | None = Field(None, description="Optional configuration overrides")
+    registration_ids: list[int] | None = Field(
+        None,
+        description=(
+            "Balance only these registrations of the pool (the panel's 'skip invalid players'). It narrows, never "
+            "widens: an id the pool does not hold is ignored. Omitted, the whole pool is balanced."
+        ),
+    )
 
 
 class PlayerData(BaseModel):

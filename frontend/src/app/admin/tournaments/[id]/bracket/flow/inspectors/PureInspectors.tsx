@@ -90,8 +90,8 @@ function FilterInspector({ node, read, readOnly, onChange }: Props) {
       {mode === "top" || mode === "per_item_top" ? (
         <NumberField label={t("keep")} min={1} value={(config.n as number | null) ?? null} disabled={readOnly} onChange={(n) => set({ n })} />
       ) : null}
-      {mode === "per_item_top" ? (
-        <NumberField label={t("upper")} min={1} value={(config.upper as number | null) ?? null} disabled={readOnly} onChange={(upper) => set({ upper })} />
+      {mode === "top" || mode === "per_item_top" ? (
+        <NumberField label={mode === "top" ? t("upperTop") : t("upper")} min={1} value={(config.upper as number | null) ?? null} disabled={readOnly} onChange={(upper) => set({ upper })} />
       ) : null}
       {mode === "range" ? (
         <div className="grid grid-cols-2 gap-3">

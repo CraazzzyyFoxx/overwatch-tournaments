@@ -37,6 +37,7 @@ from shared.models.tournament import (
     TournamentRecalculationState,
 )
 from shared.models.tournament.flow import FlowNodeSchedule
+from shared.models.tournament.stage import SwissStoppedScope
 from shared.testing.factories import add_entry, registration_node
 from src.schemas import AdminDashboard
 from src.services.dashboard.overview import DashboardPermissions, overview
@@ -208,6 +209,72 @@ def test_a_completed_tournament_is_a_wrap_up_card_for_14_days(db_session) -> Non
     # Past the window it drops to the backlog whatever is still open.
     assert ids["stale"] in [row.tournament_id for row in dashboard.backlog.rows]
     assert _issues(dashboard, ids["stale"]) == []
+
+
+def test_a_live_swiss_counts_its_undrawn_rounds(db_session) -> None:
+    async def seed(session: Any, workspace_id: int, now: datetime) -> dict[str, Any]:
+        rule_id = await seed_scoring_rule(session, workspace_id)
+        tournament = await _tournament(session, workspace_id, TS.LIVE)
+        teams = [Team(tournament_id=tournament.id, name=f"T{i}", balancer_name=f"t{i}") for i in range(14)]
+        session.add_all(teams)
+
+        async def swiss(node_status: str, *field_sizes: int) -> list[StageItem]:
+            stage = Stage(
+                tournament_id=tournament.id, name="Swiss", stage_type=enums.StageType.SWISS, scoring_rule_id=rule_id
+            )
+            session.add(stage)
+            await session.flush()
+            session.add(
+                FlowNode(
+                    tournament_id=tournament.id,
+                    kind="stage",
+                    name="Swiss",
+                    status=node_status,
+                    config={},
+                    stage_id=stage.id,
+                )
+            )
+            items = []
+            for size in field_sizes:
+                item = StageItem(stage_id=stage.id, name="Group", type=enums.StageItemType.GROUP)
+                session.add(item)
+                await session.flush()
+                session.add_all(
+                    StageItemInput(
+                        stage_item_id=item.id, slot=slot, input_type=enums.StageItemInputType.FINAL, team_id=team.id
+                    )
+                    for slot, team in enumerate(teams[:size], start=1)
+                )
+                items.append(item)
+            return items
+
+        async def drawn(item: StageItem, count: int) -> None:
+            for _ in range(count):
+                placed = await _duel(session, tournament, rule_id, completed=False, round_=None)
+                session.add(
+                    BracketEncounter(
+                        encounter_id=placed.id,
+                        tournament_id=tournament.id,
+                        stage_id=item.stage_id,
+                        stage_item_id=item.id,
+                        round=1,
+                    )
+                )
+
+        open_group, stopped_group = await swiss("live", 10, 4)
+        await drawn(open_group, 5)  # round 1 of 5 rounds: 25 in all
+        await drawn(stopped_group, 2)  # out of pairings: what it drew is all
+        session.add(SwissStoppedScope(stage_id=stopped_group.stage_id, stage_item_id=stopped_group.id))
+        (finished,) = await swiss("completed", 4)
+        await drawn(finished, 1)
+        await session.flush()
+        return {"live": tournament.id}
+
+    dashboard, ids, _now = _run(db_session, seed)
+
+    (card,) = dashboard.tournaments
+    assert card.play is not None
+    assert (card.play.encounters_completed, card.play.encounters_total) == (0, 25 + 2 + 1)
 
 
 def test_a_done_wrap_up_drops_the_card(db_session) -> None:

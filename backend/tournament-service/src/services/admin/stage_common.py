@@ -47,7 +47,7 @@ def _pick_ban_config_signature(
     authored in a different field order compare equal, which is what an organizer
     means by "identical rules".
     """
-    rotation = config.first_ban_rotation if config.mode == enums.MapVetoMode.SLOTS else None
+    rotation = config.first_ban_rotation if config.mode != enums.MapVetoMode.POOL else None
     return (
         json.dumps(config.ruleset_json or {}, sort_keys=True, separators=(",", ":")),
         tuple(entry.item_id for entry in config.items),

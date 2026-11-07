@@ -36,7 +36,10 @@ from shared.core.errors import ApiExc
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.disciplines import DISCIPLINES, DisciplineSpec
 from shared.domain import pick_ban_rules as pbr
+from shared.domain.pick_ban_config import has_pool, pick_config
 from shared.models.catalog.entity import CatalogEntity
+from shared.models.encounter.encounter import Encounter
+from shared.models.tournament.bracket_encounter import BracketEncounter
 from shared.models.tournament.pick_ban import (
     PickBanConfig,
     PickBanConfigItem,
@@ -215,6 +218,37 @@ async def assert_pool_in_discipline(
     return modes
 
 
+async def scope_best_of(
+    session: AsyncSession, *, tournament_id: int, kind: PickBanKind, stage_id: int | None, round: int | None
+) -> int | None:
+    """The longest series a config saved at this cascade level would play.
+
+    Read off the generated bracket: every encounter the level covers, minus those a narrower pooled config already
+    serves (they never reach this one). ``None`` before the bracket exists -- the editor's preview is the check then.
+    """
+    query = (
+        select(BracketEncounter.stage_id, BracketEncounter.round, Encounter.best_of)
+        .join(Encounter, Encounter.id == BracketEncounter.encounter_id)
+        .where(BracketEncounter.tournament_id == tournament_id)
+    )
+    if stage_id is not None:
+        query = query.where(BracketEncounter.stage_id == stage_id)
+    if round is not None:
+        query = query.where(BracketEncounter.round == round)
+    level = 0 if stage_id is None else 1 if round is None else 2
+    narrower = [
+        config
+        for config in await pick_ban_config_service.list_configs(session, tournament_id=tournament_id, kind=kind)
+        if has_pool(config) and (0 if config.stage_id is None else 1 if config.round is None else 2) > level
+    ]
+    lengths = [
+        best_of
+        for encounter_stage, encounter_round, best_of in (await session.execute(query)).all()
+        if pick_config(narrower, stage_id=encounter_stage, round=encounter_round) is None
+    ]
+    return max(lengths, default=None)
+
+
 async def validate_config(
     session: AsyncSession,
     *,
@@ -226,10 +260,15 @@ async def validate_config(
     stage_id: int | None,
     round: int | None,
     discipline: str,
+    tournament_id: int | None = None,
 ) -> None:
     """The whole save gate of a config body: the pool's membership in the discipline's catalog, the ruleset against
-    the discipline's group vocabulary, and the pool's shape (its mode items do not count toward a room's demand)."""
+    the discipline's group vocabulary, and the pool's shape (its mode items do not count toward a room's demand).
+    ``tournament_id`` lets a progressive pool be sized against the series its bracket actually plays."""
     modes = await assert_pool_in_discipline(session, kind=kind, discipline=discipline, item_ids=item_ids, slots=slots)
+    best_of = None
+    if mode == MapVetoMode.PROGRESSIVE and tournament_id is not None:
+        best_of = await scope_best_of(session, tournament_id=tournament_id, kind=kind, stage_id=stage_id, round=round)
     validate_config_payload(
         kind=kind,
         mode=mode,
@@ -241,6 +280,7 @@ async def validate_config(
         discipline=discipline,
         groups=await group_vocabulary(session, kind, discipline),
         modes=modes,
+        best_of=best_of,
     )
 
 
@@ -332,6 +372,7 @@ def validate_config_payload(
     discipline: str,
     groups: Sequence[str] | None = None,
     modes: Collection[int] = (),
+    best_of: int | None = None,
 ) -> None:
     """Everything an upsert body must satisfy before it becomes a config row.
 
@@ -352,7 +393,9 @@ def validate_config_payload(
     ``None`` skips map-group name checks. ``discipline`` decides what the actor
     vocabulary may say -- whether the game has sides to pick at all. ``modes``
     are the flat items that are modes, not maps: they restrict logs, never a
-    room, so a pool of only modes is a template to the room.
+    room, so a pool of only modes is a template to the room. ``best_of`` is the
+    longest series the scope plays (progressive mode only): every map of it has
+    to find its maps in what the earlier ones left.
     """
     if round is not None and stage_id is None:
         raise HTTPException(status_code=422, detail="round requires stage_id")
@@ -426,6 +469,21 @@ def validate_config_payload(
             raise HTTPException(
                 status_code=422,
                 detail=f"phase {index} ({phase.id}) consumes {demand} items per map but the pool has only {maps}",
+            )
+    if mode == MapVetoMode.PROGRESSIVE and best_of is not None:
+        preview = pbr.preview_series(
+            ruleset, kind=kind.value, discipline=discipline, mode=mode.value, best_of=best_of, pool_size=maps
+        )
+        exhausted = next((issue for issue in preview["issues"] if issue["code"] == pbr.POOL_EXHAUSTED), None)
+        if exhausted is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=[
+                    ApiExc(
+                        code="pool_too_small",
+                        msg=f"This bracket plays up to best-of-{best_of}: {exhausted['message']}. Add maps or ban fewer.",
+                    )
+                ],
             )
 
 

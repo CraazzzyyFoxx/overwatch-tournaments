@@ -1224,6 +1224,10 @@ class PickBanSessionService:
             else list(candidate_item_ids)
         )
         candidates = [item_id for item_id in filtered if item_id not in carried_ids]
+        if str(pool.get("mode")) == MapVetoMode.PROGRESSIVE.value:
+            # The shared pool loses every map an earlier round already settled: a map is played once per series.
+            played = {entry.item_id for entry in entries if entry.status == MapPoolEntryStatus.PICKED}
+            candidates = [item_id for item_id in candidates if item_id not in played]
 
         new_steps = pbr.resolve_round(
             ruleset,

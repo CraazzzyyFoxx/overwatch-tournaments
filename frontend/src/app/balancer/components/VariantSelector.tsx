@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   AlertCircle,
+  Armchair,
   BarChart2,
   CheckCircle2,
   LayoutGrid,
   Shuffle,
   Sparkles,
-  Trash2,
-  UserX
+  Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -120,10 +120,10 @@ function VariantCard({ variant, isActive, onSelect, onDelete, className }: Reado
               title={t("stats.benchedLabel")}
               className={cn(
                 "flex items-center gap-1 text-label font-semibold tabular-nums",
-                benched > 0 ? "text-rose-300/90" : "text-[color:var(--aqt-fg-dim)]"
+                benched > 0 ? "text-amber-300/90" : "text-[color:var(--aqt-fg-dim)]"
               )}
             >
-              <UserX className="h-3 w-3" />
+              <Armchair className="h-3 w-3" />
               {benched}
             </span>
             {stddev != null ? (

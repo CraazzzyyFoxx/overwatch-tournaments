@@ -28,7 +28,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
 import { catalogEntity, catalogMap, catalogMode } from "@/test/catalog";
-import type { PickBanConfig, PickBanRulesCatalog, PickBanRuleset, Stage } from "@/types/tournament.types";
+import type {
+  PickBanConfig,
+  PickBanRulesCatalog,
+  PickBanRuleset,
+  PickBanRulesetPhase,
+  Stage
+} from "@/types/tournament.types";
 
 import PreGameSettingsPage from "./page";
 
@@ -1430,6 +1436,32 @@ describe("Settings › Pre-game phase authors every round of a stage at once", (
     // filled, rather than an empty list with a validation error under it.
     expect(byName("Add maps")).toHaveLength(6);
     expect(text).toContain("Match 1");
+  });
+
+  it("switches a shared pool to map by map, keeping its maps and starting on the loser-picks rules", async () => {
+    await mount({
+      configs: [{ ...TOURNAMENT_MAP_CONFIG, id: 11, stage_id: 10, round: null }],
+      url: "?scope=stage:10&kind=map&step=pool"
+    });
+
+    await click(only("One shared pool"));
+    await click(option("One shared pool, map by map"));
+    await click(only("Save rules"));
+
+    const saved = upsertConfig.mock.calls[0][1];
+    expect(saved.mode).toBe("progressive");
+    expect(saved.item_ids).toEqual(TOURNAMENT_MAP_CONFIG.item_ids);
+    expect(saved.slots).toEqual([]);
+    // No generator survives: every phase is one map, the later ones the previous loser's pick.
+    expect(
+      saved.ruleset.phases.map((phase: PickBanRulesetPhase) => [
+        phase.generator,
+        phase.steps.map((step) => `${step.action}:${step.actors}`)
+      ])
+    ).toEqual([
+      [null, ["ban:first", "ban:second", "pick:first"]],
+      [null, ["pick:loser_prev"]]
+    ]);
   });
 
   it("reopens on the groups its rounds store, with nothing at the stage level", async () => {

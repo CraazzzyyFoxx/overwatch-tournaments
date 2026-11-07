@@ -64,6 +64,8 @@ def compute_filter(config: FilterNodeConfig, rows: Sequence[ResultRow], *, item_
         case "top":
             n = config.n or 0
             passed, boundary_tie = list(rows[:n]), _straddles(rows, n)
+            if config.upper is not None:
+                passed = passed[: config.upper] + [_lower(r) for r in passed[config.upper :]]
         case "range":
             start, stop = (config.from_ or 1) - 1, config.to or 0
             passed, boundary_tie = list(rows[start:stop]), _straddles(rows, start) or _straddles(rows, stop)
@@ -98,9 +100,14 @@ def _per_item_top(
         upper = config.per_item_upper.get(item, config.upper)
         for r in group[:cut]:
             if upper is not None and (r.item_rank or 0) > upper:
-                r = replace(r, breakdown={**(r.breakdown if isinstance(r.breakdown, dict) else {}), "bracket": "lower"})
+                r = _lower(r)
             kept.append((r.item_rank or 0, item_order.get(item, 0), item or 0, r))
     return [r for *_, r in sorted(kept, key=lambda k: k[:3])], boundary_tie
+
+
+def _lower(r: ResultRow) -> ResultRow:
+    """The row flagged to start in a double elimination's lower bracket."""
+    return replace(r, breakdown={**(r.breakdown if isinstance(r.breakdown, dict) else {}), "bracket": "lower"})
 
 
 def compute_merge(inputs: Sequence[Sequence[ResultRow]]) -> list[ResultRow]:

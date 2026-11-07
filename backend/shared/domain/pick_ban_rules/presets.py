@@ -28,7 +28,7 @@ class UnknownDiscipline(LookupError):
 class Preset:
     id: str
     kind: str
-    #: Pool modes the preset fits (``pool``/``slots``).
+    #: Pool modes the preset fits (``pool``/``slots``/``progressive``).
     modes: tuple[str, ...]
     ruleset: Ruleset
     #: The ``PickBanConfig.first_ban_rotation`` value the preset needs, or ``None`` when it leaves the organizer's
@@ -77,10 +77,41 @@ MAP_SLOT_VETO: dict[str, Any] = {
     "phases": [{"id": "main", "name": None, "when": {}, "pool_filter": {}, "generator": "slot_veto", "steps": []}],
 }
 
+#: Map 1: each side bans one map for the whole series, then the opener picks the first map. Every later map: the
+#: previous game's loser picks out of what is left (played maps drop out of a progressive pool by themselves).
+MAP_BY_MAP: dict[str, Any] = {
+    "version": 2,
+    "timer_seconds": 60,
+    "on_timeout": "random_fill",
+    "phases": [
+        {
+            "id": "first_map",
+            "name": None,
+            "when": {"type": "map_index", "params": {"op": "==", "value": 1}},
+            "pool_filter": {},
+            "generator": None,
+            "steps": [
+                {"id": "ban_a", "action": "ban", "actors": "first"},
+                {"id": "ban_b", "action": "ban", "actors": "second"},
+                {"id": "pick_first", "action": "pick", "actors": "first"},
+            ],
+        },
+        {
+            "id": "next_maps",
+            "name": None,
+            "when": {},
+            "pool_filter": {},
+            "generator": None,
+            "steps": [{"id": "pick_loser", "action": "pick", "actors": "loser_prev"}],
+        },
+    ],
+}
+
 #: The presets every game gets: a map pool needs no game-specific vocabulary.
 GENERIC_PRESETS: tuple[Preset, ...] = (
     Preset("map_bracket", "map", ("pool",), parse_ruleset(MAP_BRACKET)),
     Preset("map_slot_veto", "map", ("slots",), parse_ruleset(MAP_SLOT_VETO)),
+    Preset("map_by_map", "map", ("progressive",), parse_ruleset(MAP_BY_MAP)),
 )
 
 GENERIC_PRESETS_BY_ID: dict[str, Preset] = {preset.id: preset for preset in GENERIC_PRESETS}

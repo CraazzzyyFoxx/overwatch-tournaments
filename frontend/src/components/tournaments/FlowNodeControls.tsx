@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { Check, ClipboardCheck, Lock, Play, RotateCcw, Undo2, Users, type LucideIcon } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { StatusPill } from "@/components/kit/StatusPill";
 import { Button } from "@/components/ui/button";
+import { StatusDot } from "@/components/ui/status-dot";
 import type { Tone } from "@/components/ui/tone";
-import { useFlowErrorNotifier } from "@/hooks/useFlowErrorNotifier";
+import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";
+import { useFlowPath } from "@/hooks/useFlowPath";
+import { notify } from "@/lib/notify";
 import { nodesOfKind } from "@/lib/tournament/flow-nodes";
 import { NODE_TRANSITIONS } from "@/lib/tournament/lifecycle";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
@@ -37,6 +40,16 @@ const MOVES: Record<string, Move> = {
 const CONFIRMED: Partial<Record<Move, true>> = { open: true, checkIn: true, close: true, reopen: true, complete: true };
 const WARNING: Partial<Record<Move, true>> = { close: true, complete: true };
 
+const MOVE_ICON: Record<Move, LucideIcon> = {
+  open: Play,
+  checkIn: ClipboardCheck,
+  close: Lock,
+  reopen: RotateCcw,
+  startForming: Users,
+  backToDraft: Undo2,
+  complete: Check
+};
+
 const STATUS_TONE: Record<string, Tone> = {
   draft: "neutral",
   open: "success",
@@ -62,7 +75,8 @@ export function FlowNodeControls({
 }: Readonly<{ tournament: Tournament; node?: TournamentFlowNode; canUpdate: boolean }>) {
   const t = useTranslations("common.flowNode");
   const queryClient = useQueryClient();
-  const notifyFlowError = useFlowErrorNotifier();
+  const flowMessage = useFlowErrorMessage();
+  const flowPath = useFlowPath(tournament.id);
   const [moving, setMoving] = useState<number | null>(null);
   const [asking, setAsking] = useState<{ node: TournamentFlowNode; target: FlowNodeStatus; move: Move } | null>(null);
 
@@ -75,7 +89,14 @@ export function FlowNodeControls({
       setAsking(null);
     },
     onSuccess: () => invalidateTournamentWorkspace(queryClient, tournament.id),
-    onError: (error) => notifyFlowError(error, t("error"))
+    onError: (error, { nodeId, status }) => {
+      const known = flowMessage(error);
+      // A refusal names one blocked step; the plan lists every move it waits on, in order.
+      if (known) notify.error(known, { description: flowPath.prerequisites(nodeId, status) ?? undefined });
+      else notify.apiError(error, { title: t("error") });
+    },
+    // Toasted above, with this control's title; the global toast would say it twice.
+    meta: { suppressErrorToast: true }
   });
 
   const nodes = (
@@ -93,29 +114,39 @@ export function FlowNodeControls({
       : mutation.mutate({ nodeId: current.id, status: target });
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+    <div className="flex flex-wrap items-center gap-2">
       {nodes.map((current) => {
         const kind = current.kind as ControlledKind;
         const moves = canUpdate ? (NODE_TRANSITIONS[kind][current.status] ?? []) : [];
         return (
-          <div key={current.id} className="flex items-center gap-2">
-            <span className="text-caption font-medium">{label(current)}</span>
-            <StatusPill tone={STATUS_TONE[current.status] ?? "neutral"}>
+          <div
+            key={current.id}
+            role="group"
+            aria-label={label(current)}
+            className="inline-flex h-8 items-center rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] pl-3 pr-0.5 text-caption"
+          >
+            <span className="text-muted-foreground">{label(current)}</span>
+            <span className="ml-2.5 inline-flex items-center gap-1.5 pr-2.5 font-medium text-foreground">
+              <StatusDot tone={STATUS_TONE[current.status] ?? "neutral"} />
               {t(`status.${current.status as ControlledStatus}`)}
-            </StatusPill>
-            {moves.flatMap((target) => {
+            </span>
+            {moves.length > 0 ? <span aria-hidden className="mr-0.5 h-4 w-px bg-[color:var(--aqt-border-2)]" /> : null}
+            {moves.map((target) => {
               const move = MOVES[`${kind}.${current.status}>${target}`];
-              return [
+              const Icon = MOVE_ICON[move];
+              return (
                 <Button
                   key={target}
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
+                  className="h-7 gap-1.5 rounded-md px-2.5 [&_svg]:size-3.5"
                   disabled={moving === current.id}
                   onClick={() => request(current, target as FlowNodeStatus, move)}
                 >
+                  <Icon aria-hidden />
                   {t(move)}
                 </Button>
-              ];
+              );
             })}
           </div>
         );

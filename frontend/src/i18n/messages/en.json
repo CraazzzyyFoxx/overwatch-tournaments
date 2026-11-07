@@ -500,7 +500,74 @@
       "cascade": "This also removes:",
       "typeToConfirm": "Type <code>{name}</code> to confirm"
     },
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "flowPath": {
+      "title": "Tournament steps",
+      "next": "Next step",
+      "needs": "First:",
+      "run": "Do it",
+      "done": "Nothing to do here; the next step starts on its own as the tournament plays.",
+      "exportTeams": "Next: put the teams into the tournament (export the balance or the draft); then forming can be completed.",
+      "blocked": "This step cannot move further right now: check the tournament flow.",
+      "status": {
+        "registration": {
+          "draft": "Draft",
+          "open": "Open",
+          "check_in": "Check-in",
+          "closed": "Closed"
+        },
+        "formation": {
+          "draft": "Not started",
+          "forming": "Forming",
+          "completed": "Formed"
+        },
+        "stage": {
+          "draft": "Draft",
+          "ready": "Ready",
+          "live": "Live",
+          "completed": "Completed"
+        }
+      },
+      "step": {
+        "registration": {
+          "open": "Open registration “{name}”",
+          "check_in": "Start check-in for “{name}”",
+          "closed": "Close registration “{name}”"
+        },
+        "formation": {
+          "forming": "Start forming “{name}”",
+          "completed": "Complete forming “{name}”",
+          "draft": "Move “{name}” back to draft"
+        },
+        "stage": {
+          "ready": "Mark “{name}” ready (seat the teams)",
+          "live": "Start “{name}”",
+          "completed": "Complete “{name}”",
+          "draft": "Move “{name}” back to draft"
+        }
+      },
+      "consequence": {
+        "registration": {
+          "open": "Players can sign up; the community is notified.",
+          "check_in": "Players are asked to confirm.",
+          "closed": "Nobody can sign up or check in anymore."
+        },
+        "formation": {
+          "forming": "Teams can be exported to the tournament.",
+          "completed": "Rosters freeze; export closes.",
+          "draft": "Forming goes back to draft."
+        },
+        "stage": {
+          "ready": "Teams are seated in the bracket.",
+          "live": "Matches are created and players see them.",
+          "completed": "The stage ends.",
+          "draft": "The stage goes back to draft."
+        }
+      },
+      "exportConfirmTitle": "Export needs {count, plural, one {# step} other {# steps}} first",
+      "exportConfirmLabel": "Do them and export",
+      "waitStage": "Next comes after “{name}” ends: the stage completes on its own once every match is played."
+    }
   },
   "registration": {
     "edit": {
@@ -5540,8 +5607,10 @@
       "modeLabel": "Pool shape",
       "modePool": "One shared pool",
       "modeSlots": "One group per match",
+      "modeProgressive": "One shared pool, map by map",
       "modePoolHint": "One pool and one run of steps for the whole series: captains ban and pick out of the same list.",
       "modeSlotsHint": "A separate group of candidates for each match of the series, each banned down to one survivor on its own.",
+      "modeProgressiveHint": "One pool for the whole series, decided one match at a time: bans and the first map before match 1, then each next map after the previous match, out of what is left. Played maps drop out.",
       "poolMapLabel": "Map pool",
       "poolHeroLabel": "Hero pool",
       "poolHint": "Order matters: it is the order the room lists candidates in.",
@@ -5857,7 +5926,10 @@
         "unknown_param": "Unknown setting.",
         "map_not_covered": "No phase covers this map of the series.",
         "previous_round_on_first_map": "There is no previous map on map 1, so this falls back to the opener.",
-        "group_nearly_exhausted": "This group can be banned down to almost nothing."
+        "group_nearly_exhausted": "This group can be banned down to almost nothing.",
+        "progressive_map_only": "A map-by-map pool exists for maps only: heroes are banned per map anyway.",
+        "progressive_phase_one_map": "In a map-by-map pool every phase settles exactly one map: one pick or one decider.",
+        "pool_exhausted": "The pool runs out before the series ends: add maps or ban fewer."
       },
       "preset": {
         "hero_classic": "Classic: one ban each",
@@ -5867,6 +5939,7 @@
         "hero_anti_one_trick": "Anti-one-trick (tournament)",
         "map_bracket": "Standard map veto",
         "map_slot_veto": "Veto per map group",
+        "map_by_map": "Map by map: one ban each, then the loser picks",
         "lol_side_selection": "Side selection: higher seed, then previous loser",
         "deadlock_hero_bans": "Two bans each, A-B-A-B",
         "valorant_vct_bo1": "VCT Bo1: six bans, side, decider",
@@ -10055,8 +10128,8 @@
       "reorder": "Reorder {name}",
       "phase": "Phase {number}",
       "phaseMenu": "Phase of {name}",
-      "inParallel": "In parallel with \u201c{name}\u201d",
-      "after": "After \u201c{name}\u201d",
+      "inParallel": "In parallel with “{name}”",
+      "after": "After “{name}”",
       "progress": "{completed} of {total} matches complete",
       "pairingMode": "Lobby pairing",
       "pairingScore": "By points",
@@ -10190,7 +10263,7 @@
       "readOnly": "You can view this but not change it.",
       "frozen": "This stage is already past draft, so who advances into it is locked.",
       "formationFrozen": "Team formation has already started, so who goes into it is locked.",
-      "advanceFrom": "Who advances from \u201c{stage}\u201d",
+      "advanceFrom": "Who advances from “{stage}”",
       "filterName": "Who advances",
       "source": "Takes participants from",
       "sourcePick": "Pick a stage",
@@ -10204,6 +10277,7 @@
       "countTop": "How many advance",
       "countPerGroup": "How many advance from each group",
       "upper": "Start in the upper bracket, per group",
+      "upperTop": "Start in the upper bracket",
       "upperHint": "Empty means everyone starts in the upper bracket.",
       "swissStatus": "Status",
       "qualified": "Qualified",
@@ -10214,7 +10288,7 @@
       "formationModeLocked": "Locked: team formation has already started, so its method can no longer change.",
       "draftFormat": "Draft format",
       "draftFormatHint": "The pick order every draft of this step starts with.",
-      "complexHint": "This stage\u2019s input is wired in a way that can only be edited in Flow.",
+      "complexHint": "This stage’s input is wired in a way that can only be edited in Flow.",
       "editInFlow": "Edit in Flow",
       "kinds": {
         "stage": "Stage",
@@ -10936,6 +11010,7 @@
       "categoryAuto": "Create automatically",
       "staffRoles": "Staff roles",
       "staffRolesHint": "Roles that can see and join every private channel.",
+      "staffRolesNone": "No staff roles",
       "rolesLoading": "Loading roles…",
       "noRoles": "No roles available. Check that the bot is on the server.",
       "save": "Save",
@@ -11176,6 +11251,7 @@
         "mode": "Mode",
         "keep": "Participants to keep",
         "upper": "Upper bracket per group",
+        "upperTop": "Upper bracket",
         "from": "From",
         "to": "To",
         "status": "Status",
@@ -15335,8 +15411,8 @@
         "quality": "Quality {score}",
         "stdDevHint": "Standard deviation of team MMR — lower means the teams are closer together.",
         "stdDev": "StdDev {value}",
-        "benchedHint": "{count} players did not make a team.",
-        "benched": "Benched {count}",
+        "benchedHint": "{count, plural, =1 {# player} other {# players}} didn't fit a team: the pool is short of one more full team. They are not excluded and stay in the pool.",
+        "benched": "Spare {count}",
         "collisionsHint": "{count} teams pair players with the same sub-role.",
         "collisions": "Collisions {count}",
         "poolAria": "Pool diagnostics: role supply, off-role floor, flex headroom",
@@ -15351,7 +15427,7 @@
         "offRoleFloorHint": "Forced by the pool — no balancer can go below this.",
         "flexPlayers": "Flex players",
         "collisionsLabel": "Sub-role collisions",
-        "benchedLabel": "Benched",
+        "benchedLabel": "Spare (didn't fit a team)",
         "roleSupply": "Role supply",
         "flexSupply": "+{count}f",
         "short": "short {count}",
@@ -15408,6 +15484,12 @@
         "invalidJson": "Selected file is not valid JSON.",
         "missingTeams": "Balance JSON must contain a \"teams\" array. {hint}",
         "noTeams": "Balance JSON contains no teams."
+      },
+      "poolMismatch": {
+        "title": "This balance was not built from the pool on screen",
+        "missing": "Ready but not in the balance ({count}): {names}",
+        "outside": "In the balance but not in the pool ({count}): {names}",
+        "hint": "Run the balance again before exporting."
       }
     },
     "playerEdit": {
@@ -15668,7 +15750,7 @@
     },
     "editor": {
       "empty": "Run the balancer to edit teams.",
-      "unassigned": "Unassigned",
+      "unassigned": "Didn't fit a team — spare",
       "teamHeader": {
         "total": "Total:",
         "average": "Avg:"

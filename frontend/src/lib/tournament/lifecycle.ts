@@ -61,3 +61,6 @@ export const NODE_TRANSITIONS: Record<
     completed: ["live"]
   }
 };
+
+/** `flow_state.FINAL_STATUSES`: the statuses at which a node's output is final (a downstream node may leave `draft`). */
+export const FINAL_STATUSES: readonly string[] = ["closed", "completed", "final"];

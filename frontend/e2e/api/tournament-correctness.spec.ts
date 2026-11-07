@@ -655,6 +655,7 @@ test("ffa: two lobbies scored by a placement table; ties go to game wins, the he
     201
   );
   await adminApi.post(`/api/v1/admin/stages/${playoff.id}/items`, { name: "Bracket", type: "single_bracket", order: 0 }, 201);
+  const filterNodeId = await wireGroupsToPlayoff(adminApi, tournament.id, ffa, playoff);
 
   const stage = await adminApi.get<Stage>(`/api/v1/admin/stages/${ffa.id}`);
   const [itemA, itemB] = [...stage.items].sort((x, y) => x.id - y.id).map((item) => item.id);
@@ -724,7 +725,7 @@ test("ffa: two lobbies scored by a placement table; ties go to game wins, the he
   }
   expect((await adminApi.get<Stage>(`/api/v1/admin/stages/${ffa.id}`)).status, "both lobbies played their card").toBe("completed");
 
-  await startStage(adminApi, playoff);
+  await startPlayoff(adminApi, tournament.id, filterNodeId, playoff);
   const firstRound = (await listEncounters(adminApi, tournament.id, playoff.id)).filter((e) => e.round === 1).map((e) => seats(e).join("-"));
   expect(firstRound.sort(), "A1 vs B2, B1 vs A2").toEqual([`${p2}-${q3}`, `${q4}-${p1}`].sort());
 });

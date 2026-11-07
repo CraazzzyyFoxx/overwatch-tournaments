@@ -87,8 +87,8 @@ export function FeedRuleFields({
         </Field>
       ) : null}
 
-      {rule.mode === "per_item_top" && targetStageType === "double_elimination" ? (
-        <Field id={`${ids}-upper`} label={t("upper")} hint={t("upperHint")}>
+      {counted && targetStageType === "double_elimination" ? (
+        <Field id={`${ids}-upper`} label={rule.mode === "top" ? t("upperTop") : t("upper")} hint={t("upperHint")}>
           <NumberInput
             id={`${ids}-upper`}
             integer

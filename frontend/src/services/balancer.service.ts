@@ -84,6 +84,8 @@ export default class balancerService {
     tournament_id: number;
     formation_node_id: number;
     config_overrides?: BalancerConfig | null;
+    /** Balance only these pool registrations (the skip-invalid switch); omitted, the whole pool. */
+    registration_ids?: number[];
   }): Promise<BalanceJobCreateResponse> {
     try {
       const response = await apiFetch(
@@ -91,7 +93,7 @@ export default class balancerService {
         {
           method: "POST",
           query: { formation_node_id: params.formation_node_id },
-          body: { config_overrides: params.config_overrides ?? null },
+          body: { config_overrides: params.config_overrides ?? null, registration_ids: params.registration_ids },
           timeout: 20_000
         }
       );

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildBalancerPageCollections,
+  poolMismatch,
   replaceVariantPayload,
   upsertSavedVariant,
 } from "./balancer-page-selectors";
+import type { BalancerPlayerRecord, InternalBalancePlayer } from "@/types/balancer-admin.types";
 import type { BalanceVariant } from "@/components/balancer/workspace-helpers";
 import { OW_REFERENCE_GRID } from "@/disciplines/overwatch/ladder/ow-reference-grid";
 import type { AdminRegistration, InternalBalancePayload } from "@/types/balancer-admin.types";
@@ -113,5 +115,31 @@ describe("buildBalancerPageCollections", () => {
     expect(collections.allPlayerValidationStates.map((state) => state.player.id)).toEqual([1]);
     expect(collections.poolPlayers.map((player) => player.id)).toEqual([1]);
     expect([...collections.registrationsById.keys()]).toEqual([1]);
+  });
+});
+
+describe("poolMismatch", () => {
+  const record = (id: number) => ({ id }) as BalancerPlayerRecord;
+  const placed = (id: number, name: string) => ({ uuid: String(id), name }) as InternalBalancePlayer;
+  const payload = (teamIds: [number, string][], benched: [number, string][] = []): InternalBalancePayload => ({
+    teams: [
+      { id: 1, name: "A", average_mmr: 0, roster: { tank: teamIds.map(([id, name]) => placed(id, name)), damage: [], support: [] } }
+    ],
+    benched_players: benched.map(([id, name]) => placed(id, name))
+  });
+
+  it("agrees when every ready player is seated or spare and nobody comes from outside the pool", () => {
+    expect(poolMismatch(payload([[1, "One"]], [[2, "Two"]]), [record(1), record(2)], [record(1), record(2)])).toBeNull();
+  });
+
+  it("names a ready player the balance lost and a player it holds from outside the pool", () => {
+    const mismatch = poolMismatch(payload([[1, "One"], [9, "Excluded"]]), [record(1), record(2)], [record(1), record(2)]);
+
+    expect(mismatch?.missing.map((player) => player.id)).toEqual([2]);
+    expect(mismatch?.outside).toEqual(["Excluded"]);
+  });
+
+  it("does not count a pool player with blocking issues, who may be skipped on purpose", () => {
+    expect(poolMismatch(payload([[1, "One"]]), [record(1)], [record(1), record(3)])).toBeNull();
   });
 });

@@ -39,7 +39,7 @@ def test_every_preset_validates_clean_for_its_kind_and_modes_in_its_discipline()
                 assert [issue.to_json() for issue in issues if issue.severity == "error"] == []
 
 
-def test_the_overwatch_presets_are_the_documented_five_then_the_generic_two():
+def test_the_overwatch_presets_are_the_documented_five_then_the_generic_three():
     assert [preset.id for preset in pbr.presets_for("overwatch")] == [
         "hero_classic",
         "hero_protect_ban",
@@ -48,6 +48,7 @@ def test_the_overwatch_presets_are_the_documented_five_then_the_generic_two():
         "hero_anti_one_trick",
         "map_bracket",
         "map_slot_veto",
+        "map_by_map",
     ]
 
 
@@ -140,9 +141,9 @@ def test_catalog_groups_are_what_the_caller_resolved_never_a_built_in_class_list
 def test_catalog_presets_are_the_disciplines_own_plus_the_generic_ones():
     overwatch = [preset["id"] for preset in pbr.catalog(discipline="overwatch")["presets"]]
     lol = [preset["id"] for preset in pbr.catalog(discipline="lol")["presets"]]
-    assert overwatch == [*OVERWATCH, "map_bracket", "map_slot_veto"]
+    assert overwatch == [*OVERWATCH, "map_bracket", "map_slot_veto", "map_by_map"]
     assert not {preset_id for preset_id in lol if preset_id.startswith("hero_")}
-    assert {"map_bracket", "map_slot_veto"} <= set(lol)
+    assert {"map_bracket", "map_slot_veto", "map_by_map"} <= set(lol)
 
 
 def test_catalog_refuses_a_discipline_nobody_installed_instead_of_substituting_one():
@@ -422,3 +423,18 @@ def test_preview_reports_a_map_no_phase_covers():
 def test_preview_covers_every_supported_series_length(best_of):
     preview = preview_series(ANTI, kind="hero", best_of=best_of, pool_groups=HERO_POOL)
     assert len(preview["maps"]) == best_of
+
+
+MAP_BY_MAP = pbr.GENERIC_PRESETS_BY_ID["map_by_map"].ruleset
+
+
+def test_a_progressive_pool_spends_one_map_per_game_plus_the_series_bans():
+    # Bo3 on 5 maps: two series bans + the first pick, then one pick each from what is left (3 left, 2 left).
+    fits = preview_series(MAP_BY_MAP, kind="map", mode="progressive", best_of=3, pool_size=5)
+    assert [row["phase_id"] for row in fits["maps"]] == ["first_map", "next_maps", "next_maps"]
+    assert fits["issues"] == []
+
+    # Bo5 on 5 maps: map 4 has 5 - 2 series bans - 3 played = no map left to pick.
+    short = preview_series(MAP_BY_MAP, kind="map", mode="progressive", best_of=5, pool_size=5)
+    assert [(issue["code"], issue["severity"]) for issue in short["issues"]] == [("pool_exhausted", "error")]
+    assert "map 4" in short["issues"][0]["message"]

@@ -116,6 +116,20 @@ def test_a_generated_phase_declares_no_steps():
     assert codes(document, kind="map", mode="pool") == ["generator_with_steps"]
 
 
+def test_a_progressive_pool_is_map_only_and_settles_one_map_per_phase():
+    one_map = ruleset(step(id="b"), step(id="p", action="pick"))
+    assert codes(one_map, kind="map", mode="progressive") == []
+    assert codes(ruleset(step()), kind="hero", mode="progressive") == ["progressive_map_only"]
+    assert codes(ruleset(step(action="pick", actors="both")), kind="map", mode="progressive") == [
+        "progressive_phase_one_map"
+    ]
+    assert codes(ruleset(step(action="pick", count=2)), kind="map", mode="progressive") == ["progressive_phase_one_map"]
+    # A generator settles a whole series (bracket) or reads groups (slot veto): neither is one map of a shared pool.
+    assert codes(ruleset(phase={"generator": "bracket", "steps": []}), kind="map", mode="progressive") == [
+        "generator_requires_pool_mode"
+    ]
+
+
 # ── decider ─────────────────────────────────────────────────────────────────
 
 

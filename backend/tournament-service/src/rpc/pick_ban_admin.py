@@ -277,6 +277,7 @@ def register(broker: Any, logger: Any) -> None:
                 stage_id=body.stage_id,
                 round=body.round,
                 discipline=discipline,
+                tournament_id=tournament_id,
             )
             config = await pick_ban_config.pick_ban_config_service.upsert_config(
                 session,

@@ -7,6 +7,9 @@ type Query = Record<string, string | number | boolean | undefined>;
 
 type Nodes = { registration?: number; formation?: number };
 const nodesOfTournament = new Map<number, Nodes>();
+// shortcut: per-registration admin routes carry no tournament id, so they take the last remembered intake; a spec
+// interleaving two tournaments' per-registration calls must pass `registration_node_id` itself.
+let lastRegistrationNode: number | undefined;
 
 /**
  * Records the registration/formation node a helper opened or looked up (`nodeOf`, `openRegistration`). Participation and
@@ -15,10 +18,12 @@ const nodesOfTournament = new Map<number, Nodes>();
  */
 export function rememberNodes(tournamentId: number, nodes: Nodes) {
   nodesOfTournament.set(tournamentId, { ...nodesOfTournament.get(tournamentId), ...nodes });
+  if (nodes.registration !== undefined) lastRegistrationNode = nodes.registration;
 }
 
 const REGISTRATION_ROUTE = /\/tournaments\/(\d+)\/(registration(\/(me|list)|$)|registration-teams)|\/admin\/balancer\/tournaments\/(\d+)\/registrations/;
-const FORMATION_ROUTE = /\/balancer\/(?:draft\/)?tournaments\/(\d+)\/(balance|registered-teams\/export|sessions|draft)/;
+const REGISTRATION_ENTRY_ROUTE = /\/admin\/balancer\/registrations\/\d+/;
+const FORMATION_ROUTE = /\/balancer\/(?:draft\/)?tournaments\/(\d+)\/(balance|config|teams\/import|registered-teams\/export|sessions|draft)/;
 
 function nodeQuery(url: string): Query {
   const path = url.split("?")[0];
@@ -27,6 +32,7 @@ function nodeQuery(url: string): Query {
     const node = nodesOfTournament.get(Number(registration[1] ?? registration[5]))?.registration;
     return node === undefined ? {} : { registration_node_id: node };
   }
+  if (REGISTRATION_ENTRY_ROUTE.test(path)) return lastRegistrationNode === undefined ? {} : { registration_node_id: lastRegistrationNode };
   const formation = FORMATION_ROUTE.exec(path);
   const node = formation ? nodesOfTournament.get(Number(formation[1]))?.formation : undefined;
   return node === undefined ? {} : { formation_node_id: node };

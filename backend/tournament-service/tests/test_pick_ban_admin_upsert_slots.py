@@ -1383,7 +1383,13 @@ class CatalogOp(IsolatedAsyncioTestCase):
 
         self.assertTrue(envelope["ok"], envelope)
         self.assertEqual(
-            {"hero_anti_one_trick": True, "per_player_always": False, "map_bracket": False, "map_slot_veto": False},
+            {
+                "hero_anti_one_trick": True,
+                "per_player_always": False,
+                "map_bracket": False,
+                "map_slot_veto": False,
+                "map_by_map": False,
+            },
             {preset["id"]: preset["mix_eligible"] for preset in envelope["data"]["presets"]},
         )
 

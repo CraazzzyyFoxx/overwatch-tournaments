@@ -26,7 +26,7 @@ from .compile import (
     steps_from_v1_tokens,
 )
 from .presets import GENERIC_PRESETS, GENERIC_PRESETS_BY_ID, Preset, UnknownDiscipline, mix_ban_preset, presets_for
-from .preview import preview_series
+from .preview import POOL_EXHAUSTED, preview_series
 from .registry import (
     CONSTRAINTS,
     LEAVES,
@@ -107,6 +107,7 @@ __all__ = (
     "DRAFT",
     "LOCKED",
     "PICKED",
+    "POOL_EXHAUSTED",
     "PROTECTED",
     "REVEALED",
     "DECIDER_KIND",

@@ -311,8 +311,12 @@ export type VetoUnavailableReason =
    * activates the stage (`Stage.is_published`). */
   | "bracket_preview";
 
-/** Which pool shape a pick-ban config uses. Mirrors the backend `MapVetoMode`. */
-export type MapVetoMode = "pool" | "slots";
+/**
+ * Which pool shape a pick-ban config uses. Mirrors the backend `MapVetoMode`.
+ * `progressive` is one shared map pool played a map at a time: each map is
+ * picked after the previous game, and played maps drop out.
+ */
+export type MapVetoMode = "pool" | "slots" | "progressive";
 
 export interface Standings {
   id: number;
