@@ -11,7 +11,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import { starterRead } from "@/lib/flow/fixtures";
+import { starterRead } from "@/test/flow-fixtures";
 
 import { FlowEditor } from "./FlowEditor";
 import { VALIDATE_DEBOUNCE_MS } from "./useFlowEditor";

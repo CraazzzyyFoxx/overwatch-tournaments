@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { starterRead, port } from "./fixtures";
+import { port, starterRead } from "@/test/flow-fixtures";
+
 import {
   addNode,
   assignStageOrders,

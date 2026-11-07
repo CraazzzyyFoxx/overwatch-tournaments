@@ -10,9 +10,9 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { starterRead } from "@/lib/flow/fixtures";
 import en from "@/i18n/messages/en.json";
 import { LOL_METADATA, OW_METADATA } from "@/test/discipline-metadata";
+import { starterRead } from "@/test/flow-fixtures";
 import type { Tournament } from "@/types/tournament.types";
 
 import { CreateTournamentDialog } from "./CreateTournamentDialog";

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { starterRead } from "./fixtures";
+import { starterRead } from "@/test/flow-fixtures";
+
 import { draftFromRead, toChanges, type FlowChangeSet } from "./flowDraft";
 import { applyPreset, hasOnlyStarterNodes, type PresetLabels } from "./presets";
 

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { starterRead } from "@/test/flow-fixtures";
+
 import { portsFromRead, toCanvas } from "./flowCanvas";
-import { starterRead } from "./fixtures";
 import { draftFromRead, keyedValidation } from "./flowDraft";
 import { UNIT_COLOR } from "./kinds";
 

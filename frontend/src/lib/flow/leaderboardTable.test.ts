@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { leagueFlow, roleFlow } from "./fixtures";
+import { leagueFlow, roleFlow } from "@/test/flow-fixtures";
+
 import {
   buildLeaderboardTable,
   describeAggregate,
