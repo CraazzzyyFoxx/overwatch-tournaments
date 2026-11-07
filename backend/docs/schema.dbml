@@ -3078,6 +3078,7 @@ Table tournament.flow_node_result {
   rank int [not null]
   workspace_member_id bigint
   team_id bigint
+  role VARCHAR(32)
   stage_item_id bigint
   item_rank int
   score NUMERIC
@@ -3086,7 +3087,7 @@ Table tournament.flow_node_result {
   state VARCHAR(16) [not null]
   indexes {
     (node_id) [name: "ix_flow_node_result_node_id"]
-    (node_id, port, workspace_member_id) [unique, name: "uq_flow_node_result_member"]
+    (node_id, port, workspace_member_id, role) [unique, name: "uq_flow_node_result_member"]
     (node_id, port, team_id) [unique, name: "uq_flow_node_result_team"]
   }
 }

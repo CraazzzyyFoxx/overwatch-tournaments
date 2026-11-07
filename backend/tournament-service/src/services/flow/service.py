@@ -128,7 +128,7 @@ class FlowService:
                 sa.select(FlowNodeResult)
                 .join(FlowNode, FlowNode.id == FlowNodeResult.node_id)
                 .where(FlowNode.tournament_id == tournament_id)
-                .order_by(FlowNodeResult.node_id, FlowNodeResult.port, FlowNodeResult.rank)
+                .order_by(FlowNodeResult.node_id, FlowNodeResult.port, FlowNodeResult.role, FlowNodeResult.rank)
             )
         ]
         read = flow_schemas.FlowRead(

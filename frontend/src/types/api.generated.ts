@@ -19771,6 +19771,8 @@ export interface components {
             port: string;
             /** Rank */
             rank: number;
+            /** Role */
+            role: string | null;
             /** Score */
             score: number | null;
             /** Stage Item Id */
@@ -27366,6 +27368,11 @@ export interface components {
         /** AggregateNodeConfig */
         "tournament.AggregateNodeConfig": {
             /**
+             * By Role
+             * @default false
+             */
+            by_role: boolean;
+            /**
              * Mode
              * @enum {string}
              */
@@ -30277,6 +30284,11 @@ export interface components {
         "tournament.LeaderboardPin": {
             /** Participant Id */
             participant_id: number;
+            /**
+             * Role
+             * @default null
+             */
+            role: string | null;
             /** Position */
             position: number;
         };

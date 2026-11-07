@@ -126,6 +126,18 @@ def test_a_team_intake_registration_feeds_only_a_registered_formation() -> None:
     assert codes(validate_flow([reg, node(2, K.FORMATION, {"mode": "registered"})], wired)) == []
 
 
+def test_a_ranking_by_role_feeds_only_a_leaderboard() -> None:
+    agg = node(
+        7, K.AGGREGATE, {"unit": "players", "score": {"preset": "stage_points"}, "mode": "sum_all", "by_role": True}
+    )
+    feed = edge(1, 3, "ranking", 7, "inputs")
+    board, top = node(8, K.LEADERBOARD), node(9, K.FILTER, {"mode": "top", "n": 8})
+    assert codes(validate_flow([GROUPS, agg, board], [feed, edge(2, 7, "ranking", 8, "ranking")])) == []
+    assert codes(validate_flow([GROUPS, agg, top], [feed, edge(2, 7, "ranking", 9, "ranking")])) == [
+        ("aggregate_by_role_target", None, 2)
+    ]
+
+
 def test_warnings_do_not_block() -> None:
     issues = validate_flow(
         [FORM, GROUPS, TOP], [edge(1, 2, "teams", 3, "participants"), edge(2, 3, "ranking", 4, "ranking")]

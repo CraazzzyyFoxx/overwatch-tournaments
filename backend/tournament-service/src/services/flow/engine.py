@@ -39,7 +39,7 @@ from shared.models.tournament.standings import Standing
 from shared.models.tournament.team import Player, Team
 from shared.models.tournament.tournament import Tournament
 from shared.services.participant_result import write_participant_results
-from src.domain.flow.aggregate import AggregateInput, compute_aggregate
+from src.domain.flow.aggregate import AggregateInput, Seat, compute_aggregate
 from src.domain.flow.compute import (
     PureOutput,
     ResultRow,
@@ -213,11 +213,11 @@ class FlowEngine:
             )
             for e, s in zip(edges, sources, strict=True)
         ]
-        members: defaultdict[int, list[int]] = defaultdict(list)
+        members: defaultdict[int, list[Seat]] = defaultdict(list)
         team_ids = {r.team_id for i in inputs for r in i.rows if r.team_id is not None}
         if config.unit == FlowUnit.PLAYERS and team_ids:
             rows = await session.execute(
-                sa.select(Player.team_id, Player.workspace_member_id)
+                sa.select(Player.team_id, Player.workspace_member_id, Player.role)
                 .where(
                     Player.team_id.in_(team_ids),
                     Player.is_substitution.is_(False),
@@ -225,8 +225,24 @@ class FlowEngine:
                 )
                 .order_by(Player.id)
             )
-            for team_id, member_id in rows:
-                members[team_id].append(member_id)
+            for team_id, member_id, role in rows:
+                members[team_id].append(Seat(member_id, role))
+        player_inputs = {i.node_id for i in inputs if any(r.workspace_member_id is not None for r in i.rows)}
+        if config.unit == FlowUnit.PLAYERS and player_inputs:
+            # A player row (an individual Swiss table) plays the role its stage's standing froze.
+            roles: defaultdict[int, dict[int, str]] = defaultdict(dict)
+            for node_id, member_id, role in await session.execute(
+                sa.select(FlowNode.id, PlayerStanding.workspace_member_id, PlayerStanding.role)
+                .join(PlayerStanding, PlayerStanding.stage_id == FlowNode.stage_id)
+                .where(FlowNode.id.in_(player_inputs))
+            ):
+                roles[node_id][member_id] = role
+            inputs = [
+                replace(i, rows=[replace(r, role=roles[i.node_id].get(r.workspace_member_id or 0)) for r in i.rows])
+                if i.node_id in roles
+                else i
+                for i in inputs
+            ]
         return compute_aggregate(config, inputs, members_by_team=members)
 
     def _lifecycle_state(self, node: FlowNode) -> FlowResultState:
@@ -429,22 +445,27 @@ class FlowEngine:
     async def _write_results(
         self, session: AsyncSession, node_id: int, port: str, rows: Sequence[ResultRow], state: FlowResultState
     ) -> bool:
-        """UPDATE changed, INSERT new and DELETE gone rows of one port, keyed by participant; True when any was touched."""
+        """UPDATE changed, INSERT new and DELETE gone rows of one port, keyed by participant and role; True when any
+        was touched. The rank counts inside the row's role (one sequence for a port without roles)."""
         columns = ("rank", "stage_item_id", "item_rank", "score", "tie_group", "breakdown", "state")
         existing = {
-            (r.workspace_member_id, r.team_id): r
+            (r.workspace_member_id, r.team_id, r.role): r
             for r in await session.execute(
                 sa.select(
                     FlowNodeResult.id,
                     FlowNodeResult.workspace_member_id,
                     FlowNodeResult.team_id,
+                    FlowNodeResult.role,
                     *(getattr(FlowNodeResult, c) for c in columns),
                 ).where(FlowNodeResult.node_id == node_id, FlowNodeResult.port == port)
             )
         }
-        wanted = {
-            (r.workspace_member_id, r.team_id): {
-                "rank": rank,
+        ranks: Counter[str | None] = Counter()
+        wanted: dict[tuple[int | None, int | None, str | None], dict[str, Any]] = {}
+        for r in rows:
+            ranks[r.role] += 1
+            wanted[(r.workspace_member_id, r.team_id, r.role)] = {
+                "rank": ranks[r.role],
                 "stage_item_id": r.stage_item_id,
                 "item_rank": r.item_rank,
                 "score": r.score,
@@ -452,8 +473,6 @@ class FlowEngine:
                 "breakdown": r.breakdown,
                 "state": state.value,
             }
-            for rank, r in enumerate(rows, 1)
-        }
         gone = [row.id for key, row in existing.items() if key not in wanted]
         updates = [
             {"id": existing[key].id, **values}
@@ -461,7 +480,14 @@ class FlowEngine:
             if key in existing and any(getattr(existing[key], c) != values[c] for c in columns)
         ]
         inserts = [
-            {"node_id": node_id, "port": port, "workspace_member_id": key[0], "team_id": key[1], **values}
+            {
+                "node_id": node_id,
+                "port": port,
+                "workspace_member_id": key[0],
+                "team_id": key[1],
+                "role": key[2],
+                **values,
+            }
             for key, values in wanted.items()
             if key not in existing
         ]

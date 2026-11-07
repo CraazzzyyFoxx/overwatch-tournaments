@@ -26,6 +26,7 @@ const CODES = [
   "unit_mismatch",
   "aggregate_n_exceeds_inputs",
   "team_intake_target",
+  "aggregate_by_role_target",
   "missing_input",
   "sink_not_terminal",
   "node_frozen",

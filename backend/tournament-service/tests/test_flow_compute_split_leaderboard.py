@@ -56,3 +56,21 @@ def test_duplicate_pins_are_rejected():
         LeaderboardNodeConfig.model_validate(
             {"pins": [{"participant_id": 1, "position": 1}, {"participant_id": 2, "position": 1}]}
         )
+
+
+def test_a_pin_places_its_participant_inside_the_pins_role():
+    # A by-role ranking: member 1 tanks and supports; each role numbers its own ties.
+    rows = [
+        ResultRow(1, None, role="support"),
+        ResultRow(2, None, role="support"),
+        ResultRow(3, None, tie_group=1, role="tank"),
+        ResultRow(1, None, tie_group=1, role="tank"),
+    ]
+    config = LeaderboardNodeConfig(pins=[LeaderboardPin(participant_id=1, role="tank", position=1)])
+    out = compute_leaderboard(config, rows).ports["ranking"]
+    assert [(r.role, r.workspace_member_id, r.tie_group) for r in out] == [
+        ("support", 1, None),
+        ("support", 2, None),
+        ("tank", 1, None),
+        ("tank", 3, None),
+    ]

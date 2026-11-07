@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import { leagueFlow, starterRead } from "@/lib/flow/fixtures";
+import { leagueFlow, roleFlow, starterRead } from "@/lib/flow/fixtures";
 import type { DraftNode } from "@/lib/flow/flowDraft";
 import type { FlowRead } from "@/types/flow.types";
 
@@ -99,5 +99,47 @@ describe("pure node inspectors", () => {
     await render(node({ key: "21", id: 21, kind: "leaderboard", config: { pins: [] } }), leagueFlow());
     await click(only("Add pin"));
     expect(onChange).toHaveBeenLastCalledWith({ config: { pins: [{ participant_id: 1, position: 1 }] } });
+  });
+
+  describe("ranking by role", () => {
+    const aggregate = (config: Record<string, unknown>) => node({ kind: "aggregate", config: { score: { preset: "stage_points" }, mode: "sum_all", n: null, ...config } });
+    const roleSwitch = () => container.querySelector<HTMLElement>('[role="switch"]');
+
+    it("an aggregate of players offers the switch and writes by_role", async () => {
+      await render(aggregate({ unit: "players" }));
+      expect(roleSwitch()).not.toBeNull();
+      expect(container.textContent).toContain("Ranking by role");
+      await click(roleSwitch()!);
+      expect(onChange).toHaveBeenLastCalledWith({ config: expect.objectContaining({ unit: "players", by_role: true }) });
+    });
+
+    it("an aggregate of teams has no switch", async () => {
+      await render(aggregate({ unit: "teams" }));
+      expect(roleSwitch()).toBeNull();
+    });
+
+    it("switching the unit to teams drops by_role", async () => {
+      await render(aggregate({ unit: "players", by_role: true }));
+      await pick("Unit", "Teams");
+      const written = onChange.mock.lastCall![0].config;
+      expect(written).toMatchObject({ unit: "teams" });
+      expect(written).not.toHaveProperty("by_role");
+    });
+
+    it("a pin under a by-role aggregate names a member and a role", async () => {
+      await render(node({ key: "21", id: 21, kind: "leaderboard", config: { pins: [] } }), roleFlow());
+      expect(container.textContent).not.toContain("Place in role");
+      await click(only("Add pin"));
+      expect(onChange).toHaveBeenLastCalledWith({ config: { pins: [{ participant_id: 1, role: "tank", position: 1 }] } });
+    });
+
+    it("offers a (member, role) pair per ranking row and keeps the role when the pin moves", async () => {
+      await render(node({ key: "21", id: 21, kind: "leaderboard", config: { pins: [{ participant_id: 1, role: "tank", position: 2 }] } }), roleFlow());
+      expect(container.textContent).toContain("Place in role");
+      await pick("Participant", "Ann · Damage");
+      expect(onChange).toHaveBeenLastCalledWith({ config: { pins: [{ participant_id: 1, role: "damage", position: 2 }] } });
+      await pick("Participant", "Cid · No role");
+      expect(onChange).toHaveBeenLastCalledWith({ config: { pins: [{ participant_id: 3, role: null, position: 2 }] } });
+    });
   });
 });

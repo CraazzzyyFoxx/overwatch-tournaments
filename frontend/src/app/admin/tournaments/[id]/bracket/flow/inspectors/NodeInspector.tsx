@@ -1,10 +1,12 @@
 "use client";
 
 import { Trash2, X } from "lucide-react";
+import type { ComponentProps } from "react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { STAGE_TYPE_LABELS } from "@/lib/bracket/projection";
 import { isLifecycle } from "@/lib/flow/kinds";
 import { canDelete, type DraftNode } from "@/lib/flow/flowDraft";
@@ -30,6 +32,12 @@ type Props = Readonly<{
   onClose: () => void;
 }>;
 
+/** The config form of a pure node, with the game's role dictionary (role names, glyphs, order) for the by-role views. */
+function PureNodeBody({ tournament, ...props }: Readonly<{ tournament: Tournament } & ComponentProps<typeof PureInspector>>) {
+  const ontology = useDisciplineMetadata(tournament.workspace_id, tournament.discipline).data ?? null;
+  return <PureInspector {...props} ontology={ontology} />;
+}
+
 /**
  * The side panel of the selected node: its name and the settings that shape the graph, all of them draft edits saved with
  * the flow. Everything else about the node (entries, schedules, sessions, the stage itself) is one link away, on its screen.
@@ -44,7 +52,7 @@ export function NodeInspector({ tournamentId, tournament, read, node, readOnly, 
 
   let body = null;
   if (!isLifecycle(node.kind)) {
-    body = <PureInspector node={node} read={read} readOnly={readOnly} onChange={onChange} />;
+    body = <PureNodeBody tournament={tournament} node={node} read={read} readOnly={readOnly} onChange={onChange} />;
   } else if (node.kind === "registration") {
     body = (
       <>

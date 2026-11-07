@@ -260,6 +260,13 @@ def validate_flow(nodes: Sequence[FlowNodeSpec], edges: Sequence[FlowEdgeSpec]) 
         if isinstance(source, RegistrationNodeConfig) and source.intake == "team":
             if not (isinstance(target, FormationNodeConfig) and target.mode == "registered"):
                 error("team_intake_target", "team intake feeds only a formation with mode 'registered'", edge_id=e.id)
+        # A by-role ranking repeats a member once per role; only a leaderboard reads its rows per role.
+        if (
+            isinstance(source, AggregateNodeConfig)
+            and source.by_role
+            and by_id[e.target_node_id].kind != FlowNodeKind.LEADERBOARD
+        ):
+            error("aggregate_by_role_target", "a ranking by role feeds only a leaderboard", edge_id=e.id)
 
     has_in = {e.target_node_id for e in known}
     has_out = {e.source_node_id for e in known}

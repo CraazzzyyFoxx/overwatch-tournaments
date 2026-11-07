@@ -6,7 +6,7 @@ A tournament's structure is a directed graph stored in three tables and read and
 | --- | --- |
 | `tournament.flow_node` | A step of the graph: `kind` (`registration`, `formation`, `stage`, `filter`, `merge`, `split`, `aggregate`, `leaderboard`), `name`, `status`, per-kind `config` (jsonb, validated on write), `stage_id` (unique, set exactly when `kind = 'stage'`), editor position, `started_at` and `completed_at`. |
 | `tournament.flow_edge` | An arrow: `source_node_id` + `source_port` → `target_node_id` + `target_port`. Both ends cascade on node delete. Whether a target port takes one edge or many is decided by the validator, not by an index. |
-| `tournament.flow_node_result` | The ranked output of a node port: `node_id`, `port`, 1-based `rank`, exactly one of `workspace_member_id` / `team_id`, `stage_item_id` and `item_rank` (stage outputs, so filters work per group), `score`, `tie_group`, `breakdown` (jsonb) and `state` (`tentative` or `final`). The engine rewrites a node's rows as a whole; `final` rows change only through a correction. |
+| `tournament.flow_node_result` | The ranked output of a node port: `node_id`, `port`, 1-based `rank`, exactly one of `workspace_member_id` / `team_id`, `role` (set only by a ranking by role, where `rank` counts inside the role), `stage_item_id` and `item_rank` (stage outputs, so filters work per group), `score`, `tie_group`, `breakdown` (jsonb) and `state` (`tentative` or `final`). The engine rewrites a node's rows as a whole; `final` rows change only through a correction. |
 
 Node statuses by kind: `registration` has `draft`, `open`, `check_in`, `closed`; `formation` has `draft`, `forming`, `completed`; `stage` has `draft`, `ready`, `live`, `completed`; the five pure kinds have `pending`, `tentative`, `final`, written by the engine only.
 
@@ -31,7 +31,7 @@ A `filter`, `merge`, `split` and `leaderboard` port takes the unit of its input.
 
 ## Validation and freezing
 
-The validator returns issues with a `severity` of `error` or `warning`. Errors block a save: a cycle, an unknown port, a unit mismatch, a second edge into a single-input port, an `aggregate` mode that needs `n` larger than its number of inputs. Warnings only inform. A node is frozen once it has left `draft` (pure nodes: once any lifecycle node downstream has); a frozen node cannot be deleted, re-configured or have its incoming edges changed. Adding nodes that lead only into non-frozen nodes is always allowed.
+The validator returns issues with a `severity` of `error` or `warning`. Errors block a save: a cycle, an unknown port, a unit mismatch, a second edge into a single-input port, an `aggregate` mode that needs `n` larger than its number of inputs, an aggregate ranking by role that feeds anything but a `leaderboard`. Warnings only inform. A node is frozen once it has left `draft` (pure nodes: once any lifecycle node downstream has); a frozen node cannot be deleted, re-configured or have its incoming edges changed. Adding nodes that lead only into non-frozen nodes is always allowed.
 
 ## Routes
 
@@ -98,15 +98,18 @@ An `aggregate` result row has `score` = the total, `tie_group` for an unresolved
   "port": "ranking",
   "rank": 1,
   "workspace_member_id": 301,
+  "role": null,
   "score": 47.0,
   "tie_group": null,
   "breakdown": [
-    {"node_id": 8,  "place": 1, "score": 25.0, "counted": true},
-    {"node_id": 12, "place": 3, "score": 15.0, "counted": false},
-    {"node_id": 15, "place": 2, "score": 22.0, "counted": true}
+    {"node_id": 8,  "place": 1, "score": 25.0, "counted": true,  "role": "tank",    "team_id": 1617, "wins": 4, "draws": 2, "losses": 0, "buchholz": 15.0},
+    {"node_id": 12, "place": 3, "score": 15.0, "counted": false, "role": "support", "team_id": 1650, "wins": 3, "draws": 0, "losses": 3, "buchholz": 12.5},
+    {"node_id": 15, "place": 2, "score": 22.0, "counted": true,  "role": "tank",    "team_id": 1688, "wins": 4, "draws": 1, "losses": 1, "buchholz": 14.0}
   ],
   "state": "tentative"
 }
 ```
 
-`node_id` in an entry is the source node of that input (a stage), `place` its place there, `score` what the aggregate's score rule gave it, and `counted` whether the aggregate's mode used it: all entries in `sum_all`, the best `n` in `sum_best_n`, the latest `n` in `sum_last_n`. An input without an entry means the participant has no row in it. `state` is `final` only when every input is `final`.
+`node_id` in an entry is the source node of that input (a stage), `place` its place there, `score` what the aggregate's score rule gave it, and `counted` whether the aggregate's mode used it: all entries in `sum_all`, the best `n` in `sum_best_n`, the latest `n` in `sum_last_n`. `role` is the top-level role the player had in that input (their roster role that day; the frozen role of an individual Swiss table), `team_id` the team whose row it was (`null` for a player row), and `wins`, `draws`, `losses`, `map_diff`, `buchholz`, `ffa_score` are copied when the input row carried them. An input without an entry means the participant has no row in it. `state` is `final` only when every input is `final`.
+
+With `config.by_role: true` (players unit only) the aggregate ranks every top-level role on its own: a player's days in one role never count toward another, so a player who played two roles has two rows, each with its own `role`. `rank` restarts at 1 inside each role and `tie_group` is the head rank inside the role. Rows without a role on their roster row form their own `role: null` ranking. Such an aggregate may feed only a `leaderboard` (issue `aggregate_by_role_target`); a leaderboard pin then carries the `role` it places in, and `participant_result` keeps each player's best place over their roles, out of that role's row count.

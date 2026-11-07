@@ -3658,6 +3658,30 @@
       "place": "#",
       "participant": "Participant",
       "total": "Total",
+      "caption": "{name}. Use the column headings to sort.",
+      "role": "Role",
+      "noRole": "No role",
+      "roleTabs": "Ranking by role",
+      "byRoleHint": "Each role is ranked separately.",
+      "search": "Search player",
+      "found": "Found {n} of {total}",
+      "noResults": "No players match “{query}”.",
+      "sortBy": "Sort by {column}",
+      "legend": {
+        "counted": "Counted toward the total",
+        "notCounted": "Played, not counted",
+        "missing": "Did not play"
+      },
+      "day": {
+        "team": "Team",
+        "role": "Role",
+        "record": "W–D–L",
+        "buchholz": "Buchholz",
+        "place": "Place",
+        "score": "Score",
+        "counted": "Counted",
+        "notCounted": "Not counted"
+      },
       "formula": {
         "mode": {
           "sumAll": "Every result counts.",
@@ -11082,6 +11106,7 @@
           "unit_mismatch": "A connection brings {source, select, players {players} teams {teams} other {participants}}, but this input takes {target, select, players {players} teams {teams} other {something else}}.",
           "aggregate_n_exceeds_inputs": "Counts {n, plural, one {# result} other {# results}}, but {inputs, plural, =0 {no inputs are} one {only # input is} other {only # inputs are}} connected.",
           "team_intake_target": "Team registration can only feed a formation that takes registered teams.",
+          "aggregate_by_role_target": "A by-role ranking can only feed a leaderboard",
           "missing_input": "{kind, select, stage {Nothing feeds this stage. Connect formed teams or another stage's result to it.} formation {No players come in. Connect a registration to it.} other {Nothing is connected to its input.}}",
           "sink_not_terminal": "{kind, select, registration {Its players go nowhere. Connect it to a formation.} formation {Its teams go nowhere. Connect it to a stage.} other {Its result goes nowhere. Connect it to the next step.}}",
           "node_frozen": "A later step has already started, so this one can no longer change.",
@@ -11198,7 +11223,11 @@
         "participant": "Participant",
         "position": "Position",
         "removePin": "Remove pin",
-        "addPin": "Add pin"
+        "addPin": "Add pin",
+        "byRole": "Ranking by role",
+        "byRoleHint": "Each role ranks separately; a player who played several roles gets a separate row per role.",
+        "positionInRole": "Place in role",
+        "noRole": "No role"
       }
     }
   },

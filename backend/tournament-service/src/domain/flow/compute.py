@@ -23,7 +23,7 @@ __all__ = (
 
 @dataclass(frozen=True, slots=True)
 class ResultRow:
-    """One participant on a node port; the rank is its index in the list plus one."""
+    """One participant on a node port; the rank is its index among the port's rows of the same ``role`` plus one."""
 
     workspace_member_id: int | None
     team_id: int | None
@@ -32,6 +32,8 @@ class ResultRow:
     score: float | None = None
     tie_group: int | None = None
     breakdown: dict[str, Any] | list[Any] | None = None
+    #: The by-role ranking this row belongs to (one role's rows are adjacent); None everywhere else.
+    role: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,11 +141,18 @@ def compute_split(config: SplitNodeConfig, rows: Sequence[ResultRow]) -> PureOut
 def compute_leaderboard(config: LeaderboardNodeConfig, rows: Sequence[ResultRow]) -> PureOutput:
     if not config.pins:
         return PureOutput({"ranking": list(rows)})
+    ranking: list[ResultRow] = []
+    # A by-role ranking arrives one role after another; a pin places its participant inside the pin's role.
+    for role, group in groupby(rows, key=lambda r: r.role):
+        members = list(group)
+        pins = {p.participant_id: p.position for p in config.pins if p.role == role}
+        ranking.extend(_pinned(members, pins) if pins else members)
+    return PureOutput({"ranking": ranking})
+
+
+def _pinned(rows: Sequence[ResultRow], pins: Mapping[int, int]) -> list[ResultRow]:
     by_id = {participant_id(r): r for r in rows}
-    placed = apply_pins(
-        [(participant_id(r), index) for index, r in enumerate(rows, 1)],
-        {p.participant_id: p.position for p in config.pins},
-    )
+    placed = apply_pins([(participant_id(r), index) for index, r in enumerate(rows, 1)], pins)
     ordered = [(by_id[pid], pinned) for pid, _position, pinned in placed]
     ranking: list[ResultRow] = []
     # A pinned row is never tied; an unpinned one stays tied only with the adjacent unpinned rows of its group, and a
@@ -152,4 +161,4 @@ def compute_leaderboard(config: LeaderboardNodeConfig, rows: Sequence[ResultRow]
         members = [r for r, _ in run]
         head = len(ranking) + 1 if key is not None and len(members) > 1 else None
         ranking.extend(replace(r, tie_group=head) for r in members)
-    return PureOutput({"ranking": ranking})
+    return ranking

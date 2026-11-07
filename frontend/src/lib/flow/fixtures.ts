@@ -56,17 +56,28 @@ export const starterRead = (over: { regStatus?: string; formStatus?: string } = 
     participants: []
   }) as unknown as FlowRead;
 
+type Extra = Partial<{
+  role: string | null;
+  team_id: number | null;
+  wins: number;
+  draws: number;
+  losses: number;
+  buchholz: number;
+}>;
 type Row = {
   rank: number;
   member: number;
   score: number;
-  breakdown?: [node: number, place: number, score: number, counted: boolean][];
+  /** The rated role the row ranks under (by-role aggregates and the leaderboard they feed). */
+  role?: string | null;
+  breakdown?: [node: number, place: number, score: number, counted: boolean, extra?: Extra][];
 };
 
 const resultRow = (node: number, state: string, r: Row, tieGroup: number | null = null) => ({
   node_id: node,
   port: "ranking",
   rank: r.rank,
+  role: r.role ?? null,
   workspace_member_id: r.member,
   team_id: null,
   stage_item_id: null,
@@ -74,8 +85,13 @@ const resultRow = (node: number, state: string, r: Row, tieGroup: number | null 
   score: r.score,
   tie_group: tieGroup,
   breakdown:
-    r.breakdown?.map(([node_id, place, score, counted]) => ({ node_id, place, score, counted })) ??
-    null,
+    r.breakdown?.map(([node_id, place, score, counted, extra]) => ({
+      node_id,
+      place,
+      score,
+      counted,
+      ...extra
+    })) ?? null,
   state
 });
 
@@ -171,6 +187,75 @@ export const leagueFlow = (
       { workspace_member_id: 1, team_id: null, name: "Ann" },
       { workspace_member_id: 2, team_id: null, name: "Bob" },
       { workspace_member_id: 3, team_id: null, name: "Cid" }
+    ]
+  } as unknown as FlowRead;
+};
+
+/**
+ * Two team-swiss days → by-role aggregate 20 → leaderboard 21. Ann played tank on day 1 and damage on day 2, so she
+ * ranks in both roles; Ann and Bob tie for tank place 1; Cid has no role. Team 100 is "Rockets".
+ */
+export const roleFlow = (): FlowRead => {
+  const tank = { role: "tank" };
+  const rows: (Row & { tie?: number })[] = [
+    {
+      rank: 1,
+      member: 1,
+      score: 6,
+      role: "tank",
+      tie: 1,
+      breakdown: [[11, 1, 6, true, { ...tank, team_id: 100, wins: 3, draws: 0, losses: 1, buchholz: 7 }]]
+    },
+    {
+      rank: 2,
+      member: 2,
+      score: 6,
+      role: "tank",
+      tie: 1,
+      breakdown: [[12, 2, 6, true, { ...tank, team_id: 100 }]]
+    },
+    {
+      rank: 1,
+      member: 1,
+      score: 4,
+      role: "damage",
+      breakdown: [[12, 3, 4, true, { role: "damage", team_id: 100, wins: 2, draws: 1, losses: 1 }]]
+    },
+    { rank: 1, member: 3, score: 2, role: null, breakdown: [[11, 4, 2, true]] }
+  ];
+  return {
+    nodes: [
+      leagueNode(11, "stage", "Day 1", "completed", {}, 31),
+      leagueNode(12, "stage", "Day 2", "completed", {}, 32),
+      leagueNode(20, "aggregate", "Season", "final", {
+        unit: "players",
+        by_role: true,
+        score: { preset: "stage_points" },
+        mode: "sum_all",
+        n: null
+      }),
+      leagueNode(21, "leaderboard", "Season table", "final", {})
+    ],
+    edges: [
+      [31, 11, 20],
+      [32, 12, 20],
+      [33, 20, 21]
+    ].map(([id, source, target]) => ({
+      id,
+      source_node_id: source,
+      source_port: "ranking",
+      target_node_id: target,
+      target_port: target === 20 ? "inputs" : "ranking"
+    })),
+    results: [
+      ...rows.map((r) => resultRow(20, "final", r)),
+      ...rows.map((r) => resultRow(21, "final", { ...r, breakdown: undefined }, r.tie ?? null))
+    ],
+    participants: [
+      { workspace_member_id: 1, team_id: null, name: "Ann" },
+      { workspace_member_id: 2, team_id: null, name: "Bob" },
+      { workspace_member_id: 3, team_id: null, name: "Cid" },
+      { workspace_member_id: null, team_id: 100, name: "Rockets" }
     ]
   } as unknown as FlowRead;
 };

@@ -75,7 +75,10 @@ class FlowEdge(db.TimeStampIntegerMixin):
 
 
 class FlowNodeResult(db.TimeStampIntegerMixin):
-    """One participant's row on a node output port; ``rank`` is 1-based and dense within the port."""
+    """One participant's row on a node output port; ``rank`` is 1-based and dense within the port and ``role``.
+
+    ``role`` is set only by a by-role aggregate (and the leaderboard it feeds): one row per member per top-level role.
+    """
 
     __tablename__ = "flow_node_result"
     __table_args__ = (
@@ -87,7 +90,9 @@ class FlowNodeResult(db.TimeStampIntegerMixin):
             "node_id",
             "port",
             "workspace_member_id",
+            "role",
             unique=True,
+            postgresql_nulls_not_distinct=True,
             postgresql_where=text("workspace_member_id IS NOT NULL"),
         ),
         Index(
@@ -109,6 +114,8 @@ class FlowNodeResult(db.TimeStampIntegerMixin):
         ForeignKey("workspace_member.id", ondelete="CASCADE"), nullable=True
     )
     team_id: Mapped[int | None] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"), nullable=True)
+    #: Top-level role code (``tank``); NULL outside a by-role ranking.
+    role: Mapped[str | None] = mapped_column(String(32), nullable=True)
     stage_item_id: Mapped[int | None] = mapped_column(ForeignKey(StageItem.id, ondelete="CASCADE"), nullable=True)
     item_rank: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     score: Mapped[float | None] = mapped_column(Numeric(asdecimal=False), nullable=True)

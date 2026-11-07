@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from shared.domain.flow.config import AggregateNodeConfig
-from src.domain.flow.aggregate import AggregateInput, compute_aggregate
+from src.domain.flow.aggregate import AggregateInput, Seat, compute_aggregate
 from src.domain.flow.compute import ResultRow, participant_id
 
 
@@ -88,7 +88,7 @@ def test_teams_expand_to_non_substitute_members():
         "sum_all",
         score={"preset": "placement_table", "table": {"1": 10, "2": 6}},
         inputs=inputs,
-        members={10: [1, 2], 20: [4, 5]},
+        members={10: [Seat(1, "tank"), Seat(2, "support")], 20: [Seat(4, "tank"), Seat(5, "support")]},
     )
     assert out == [(1, 10, 1), (2, 10, 1), (4, 6, 3), (5, 6, 3)]
 
@@ -97,9 +97,91 @@ def test_breakdown_marks_counted_inputs():
     config = AggregateNodeConfig.model_validate({"unit": "players", "score": TABLE, "mode": "sum_last_n", "n": 2})
     a = compute_aggregate(config, DAYS, members_by_team={}).ports["ranking"][-1]
     assert a.breakdown == [
-        {"node_id": 11, "place": 1, "score": 10, "counted": False},
-        {"node_id": 12, "place": 2, "score": 6, "counted": True},
+        {"node_id": 11, "place": 1, "score": 10, "counted": False, "role": None, "team_id": None},
+        {"node_id": 12, "place": 2, "score": 6, "counted": True, "role": None, "team_id": None},
     ]
+
+
+def test_breakdown_names_each_days_team_role_and_stage_metrics():
+    inputs = [
+        AggregateInput(11, [team(10, wins=4, draws=1, losses=0, buchholz=13.5, swiss_status="qualified")], True, T1)
+    ]
+    config = AggregateNodeConfig.model_validate({"unit": "players", "score": TABLE, "mode": "sum_all"})
+    [row] = compute_aggregate(config, inputs, members_by_team={10: [Seat(7, "damage")]}).ports["ranking"]
+    assert row.role is None  # the role is shown per day; only a by-role ranking splits on it
+    assert row.breakdown == [
+        {
+            "node_id": 11,
+            "place": 1,
+            "score": 10,
+            "counted": True,
+            "role": "damage",
+            "team_id": 10,
+            "wins": 4,
+            "draws": 1,
+            "losses": 0,
+            "buchholz": 13.5,
+        }
+    ]
+
+
+def test_by_role_ranks_every_role_on_its_own():
+    # Member 1 tanks on day 11 and supports on days 12-13; member 2 tanks every day; member 3 supports twice.
+    inputs = [
+        AggregateInput(11, [team(10), team(20)], True, T1),
+        AggregateInput(12, [team(30), team(40)], True, T2),
+        AggregateInput(13, [team(50), team(60)], True, T3),
+    ]
+    members = {
+        10: [Seat(1, "tank")],
+        20: [Seat(2, "tank"), Seat(3, "support")],
+        30: [Seat(2, "tank"), Seat(3, "support")],
+        40: [Seat(1, "support")],
+        50: [Seat(1, "support"), Seat(2, "tank")],
+        60: [Seat(9, None)],
+    }
+    config = AggregateNodeConfig.model_validate(
+        {"unit": "players", "score": TABLE, "mode": "sum_best_n", "n": 2, "by_role": True}
+    )
+    out = compute_aggregate(config, inputs, members_by_team=members).ports["ranking"]
+    assert [(r.role, participant_id(r), r.score, r.tie_group) for r in out] == [
+        # support: member 1 = 6 + 10, member 3 = 6 + 10 -> tied on totals and best places; day 13 breaks it for 1.
+        ("support", 1, 16, None),
+        ("support", 3, 16, None),
+        # tank: member 2's best two of 6, 10, 10; member 1's single tank day.
+        ("tank", 2, 20, None),
+        ("tank", 1, 10, None),
+        # a roster row without a role ranks apart.
+        (None, 9, 6, None),
+    ]
+    tank_days = next(r for r in out if r.role == "tank" and r.workspace_member_id == 1).breakdown
+    assert [(e["node_id"], e["role"], e["counted"]) for e in tank_days] == [(11, "tank", True)]
+
+
+def test_by_role_ties_share_the_head_place_inside_their_role():
+    inputs = [AggregateInput(11, [team(10), team(20)], True, T1)]
+    members = {10: [Seat(1, "tank"), Seat(2, "support")], 20: [Seat(3, "tank"), Seat(4, "support")]}
+    config = AggregateNodeConfig.model_validate(
+        {
+            "unit": "players",
+            "score": {"preset": "placement_table", "table": {"1": 5, "2": 5}},
+            "mode": "sum_all",
+            "by_role": True,
+            "tiebreak": [],
+        }
+    )
+    out = compute_aggregate(config, inputs, members_by_team=members).ports["ranking"]
+    assert [(r.role, participant_id(r), r.tie_group) for r in out] == [
+        ("support", 2, 1),
+        ("support", 4, 1),
+        ("tank", 1, 1),
+        ("tank", 3, 1),
+    ]
+
+
+def test_by_role_needs_the_players_unit():
+    with pytest.raises(ValueError, match="players unit"):
+        AggregateNodeConfig.model_validate({"unit": "teams", "score": TABLE, "mode": "sum_all", "by_role": True})
 
 
 def test_rows_sharing_a_tie_group_score_their_head_place():

@@ -11,8 +11,11 @@ import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useRoleCodeName } from "@/hooks/useRoleName";
 import type { DraftNode } from "@/lib/flow/flowDraft";
+import { kindOf } from "@/lib/flow/kinds";
 import { buildLeaderboardTable } from "@/lib/flow/leaderboardTable";
+import { orderedRoleCodes, type RoleOntology } from "@/lib/roster/ontology";
 import type { FlowRead } from "@/types/flow.types";
 
 import { Field, NumberField, SelectField } from "./fields";
@@ -23,6 +26,8 @@ type Props = Readonly<{
   /** The admin read: results and participants feed the previews and pickers. */
   read: FlowRead;
   readOnly: boolean;
+  /** The game's role dictionary: role names, glyphs and order. Without it a role shows as its code. */
+  ontology?: RoleOntology | null;
   onChange: (patch: Pick<DraftNode, "config">) => void;
 }>;
 
@@ -45,6 +50,8 @@ const needsN = (mode: string) => mode === "sum_last_n" || mode === "sum_best_n";
 function participantsOf(read: FlowRead) {
   return (read.participants ?? []).map((p) => ({ id: (p.workspace_member_id ?? p.team_id) as number, name: p.name }));
 }
+
+const withoutByRole = (config: Config) => Object.fromEntries(Object.entries(config).filter(([key]) => key !== "by_role"));
 
 function Remove({ label, disabled, onClick }: Readonly<{ label: string; disabled?: boolean; onClick: () => void }>) {
   return (
@@ -188,14 +195,14 @@ function SplitInspector({ node, readOnly, onChange }: Props) {
   );
 }
 
-function Preview({ node, read }: Pick<Props, "node" | "read">) {
+function Preview({ node, read, ontology }: Pick<Props, "node" | "read" | "ontology">) {
   const t = useTranslations("adminTournament.flow.pure");
-  const table = node.id === null ? null : buildLeaderboardTable(read, node.id);
+  const table = node.id === null ? null : buildLeaderboardTable(read, node.id, (codes) => orderedRoleCodes(ontology, codes));
   if (!table || table.rows.length === 0) return null;
   return (
     <section className="space-y-2" aria-label={t("preview")}>
       <h4 className="text-caption font-semibold">{table.rows.some((r) => r.tentative) ? t("previewTentative") : t("preview")}</h4>
-      <LeaderboardTable table={table} describe={false} />
+      <LeaderboardTable table={table} describe={false} ontology={ontology} />
     </section>
   );
 }
@@ -208,6 +215,7 @@ function AggregateInspector({ node, readOnly, onChange }: Props) {
   const mode = String(config.mode ?? "sum_all");
   const preset = score.preset ?? "stage_points";
   const table = Object.entries(score.table ?? {}).sort(([a], [b]) => Number(a) - Number(b));
+  const players = String(config.unit ?? "players") === "players";
   const set = (patch: Config) => onChange({ config: { ...config, ...patch } });
   const setScore = (patch: Config) => set({ score: { ...score, ...patch } });
   const setTable = (rows: [string, number][]) => setScore({ table: Object.fromEntries(rows) });
@@ -216,14 +224,23 @@ function AggregateInspector({ node, readOnly, onChange }: Props) {
     <div className="space-y-3">
       <SelectField
         label={t("unit")}
-        value={String(config.unit ?? "players")}
+        value={players ? "players" : "teams"}
         options={[
           ["players", tUnit("players")],
           ["teams", tUnit("teams")]
         ]}
         disabled={readOnly}
-        onChange={(unit) => set({ unit })}
+        onChange={(unit) => onChange({ config: { ...(unit === "players" ? config : withoutByRole(config)), unit } })}
       />
+      {players ? (
+        <div className="space-y-1">
+          <Label className="flex items-center gap-2 font-normal">
+            <Switch checked={config.by_role === true} disabled={readOnly} onCheckedChange={(on) => set({ by_role: on })} />
+            {t("byRole")}
+          </Label>
+          <p className="text-caption text-muted-foreground">{t("byRoleHint")}</p>
+        </div>
+      ) : null}
       <SelectField
         label={t("score")}
         value={preset}
@@ -276,35 +293,56 @@ function AggregateInspector({ node, readOnly, onChange }: Props) {
   );
 }
 
-type Pin = { participant_id: number; position: number };
+type Pin = { participant_id: number; role?: string | null; position: number };
+type PinOption = { key: string; label: string; pin: Pick<Pin, "participant_id" | "role"> };
 
-function LeaderboardInspector({ node, read, readOnly, onChange }: Props) {
+function LeaderboardInspector({ node, read, readOnly, onChange, ontology }: Props) {
   const t = useTranslations("adminTournament.flow.pure");
+  const roleName = useRoleCodeName(ontology);
   const pins = (node.config.pins as Pin[] | undefined) ?? [];
   const people = participantsOf(read);
+  const source = node.id === null ? undefined : read.edges.find((e) => e.target_node_id === node.id);
+  const upstream = source && read.nodes.find((n) => n.id === source.source_node_id);
+  const byRole = upstream !== undefined && kindOf(upstream) === "aggregate" && (upstream.config as { by_role?: unknown }).by_role === true;
+  // A by-role ranking holds one row per (member, role), so a pin names that pair; otherwise it names the participant.
+  const options: PinOption[] = [];
+  if (byRole) {
+    const names = new Map(people.map((p) => [p.id, p.name]));
+    for (const r of read.results) {
+      if (r.node_id !== upstream.id || r.port !== "ranking" || r.workspace_member_id == null) continue;
+      const role = r.role ?? null;
+      const key = `${r.workspace_member_id}|${role ?? ""}`;
+      if (options.some((o) => o.key === key)) continue;
+      const who = names.get(r.workspace_member_id) ?? `#${r.workspace_member_id}`;
+      options.push({ key, label: `${who} · ${role ? roleName(role) : t("noRole")}`, pin: { participant_id: r.workspace_member_id, role } });
+    }
+  } else {
+    for (const p of people) options.push({ key: String(p.id), label: p.name, pin: { participant_id: p.id } });
+  }
+  const keyOf = (pin: Pin) => (byRole ? `${pin.participant_id}|${pin.role ?? ""}` : String(pin.participant_id));
   const write = (next: Pin[]) => onChange({ config: { ...node.config, pins: next } });
   const edit = (index: number, patch: Partial<Pin>) => write(pins.map((p, i) => (i === index ? { ...p, ...patch } : p)));
 
   return (
     <div className="space-y-3">
-      <Preview node={node} read={read} />
+      <Preview node={node} read={read} ontology={ontology} />
       <p className="text-label font-semibold uppercase tracking-label text-muted-foreground">{t("pins")}</p>
       {pins.map((pin, index) => (
         <div key={index} className="flex items-end gap-2">
           <div className="flex-1">
             <SelectField
               label={t("participant")}
-              value={String(pin.participant_id)}
-              options={people.map((p) => [String(p.id), p.name] as const)}
+              value={keyOf(pin)}
+              options={options.map((o) => [o.key, o.label] as const)}
               disabled={readOnly}
-              onChange={(id) => edit(index, { participant_id: Number(id) })}
+              onChange={(key) => edit(index, options.find((o) => o.key === key)?.pin ?? {})}
             />
           </div>
-          <NumberField label={t("position")} min={1} value={pin.position} disabled={readOnly} onChange={(position) => edit(index, { position: position ?? 1 })} />
+          <NumberField label={t(byRole ? "positionInRole" : "position")} min={1} value={pin.position} disabled={readOnly} onChange={(position) => edit(index, { position: position ?? 1 })} />
           <Remove label={t("removePin")} disabled={readOnly} onClick={() => write(pins.filter((_, i) => i !== index))} />
         </div>
       ))}
-      <Button type="button" variant="dashed" size="sm" disabled={readOnly || people.length === 0} onClick={() => write([...pins, { participant_id: people[0].id, position: pins.length + 1 }])}>
+      <Button type="button" variant="dashed" size="sm" disabled={readOnly || options.length === 0} onClick={() => write([...pins, { ...options[0].pin, position: pins.length + 1 }])}>
         <Plus aria-hidden />
         {t("addPin")}
       </Button>

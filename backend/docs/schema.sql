@@ -3407,6 +3407,7 @@ CREATE TABLE tournament.flow_node_result (
 	rank INTEGER NOT NULL, 
 	workspace_member_id BIGINT, 
 	team_id BIGINT, 
+	role VARCHAR(32), 
 	stage_item_id BIGINT, 
 	item_rank INTEGER, 
 	score NUMERIC, 
@@ -3425,7 +3426,7 @@ CREATE TABLE tournament.flow_node_result (
 
 CREATE INDEX ix_flow_node_result_node_id ON tournament.flow_node_result (node_id);
 
-CREATE UNIQUE INDEX uq_flow_node_result_member ON tournament.flow_node_result (node_id, port, workspace_member_id) WHERE workspace_member_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_flow_node_result_member ON tournament.flow_node_result (node_id, port, workspace_member_id, role) NULLS NOT DISTINCT WHERE workspace_member_id IS NOT NULL;
 
 CREATE UNIQUE INDEX uq_flow_node_result_team ON tournament.flow_node_result (node_id, port, team_id) WHERE team_id IS NOT NULL;
 

@@ -88,11 +88,13 @@ The **Aggregate** node adds up what each participant scored on each day. With K 
 
 A day the participant did not play counts as 0 in **Sum of all** and **Last N**, is skipped in **Best N**, and is left out of the divisor in **Average**. Participants are ordered by the total; a tie goes to the one with more best places (most firsts, then most seconds), then to the better place on the latest day. A tie that remains can be settled with a pin on the **Leaderboard**.
 
+**Ranking by role** (players only) ranks every role on its own: Tank, Damage and Support become separate rankings with their own places and their own best K days. A player who tanked on some days and supported on others gets a row in each, and the days of one role never add to the other. The role of a day is the player's role in that day's team. A ranking by role can only feed a **Leaderboard**; a pin there places the player inside the chosen role.
+
 The **Table** tab shows the result live while the season runs, and the **Aggregate** node shows the same numbers as a preview.
 
 ## What players see
 
-- **Table** — the **Leaderboard**: one column per day, the results that count highlighted, and above it the rule in words ("Only the best 2 results count."). The tab exists only for tournaments with a leaderboard node.
+- **Table** — the **Leaderboard**: one column per day, the results that count highlighted and marked, and above it the rule in words ("Only the best 2 results count."). Search by player name, sort by any column (places stay the official ones), and hover or tap a day for its team, role, wins–draws–losses and Buchholz. With **Ranking by role** the table has one tab per role. The tab exists only for tournaments with a leaderboard node.
 - **Format** — the graph itself, read-only: each box is a step with its status, arrows show who moves on.
 - **Bracket** — when the tournament has several branches (for example several league days), the stages are grouped by the registrations upstream of them. With one branch, nothing changes.
 - **Registration cards** — a tournament with two or more registration nodes shows one card per open intake, for example **Register for Day 3**. With one intake the usual register button stays.
