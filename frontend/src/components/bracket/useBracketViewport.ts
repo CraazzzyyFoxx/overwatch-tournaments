@@ -122,8 +122,11 @@ export function useBracketViewport(params: {
 
   const onPointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== "mouse" || event.button !== 0) return;
-    // Controls keep their clicks; a draggable team row belongs to dnd-kit.
-    if ((event.target as HTMLElement).closest("button, a, [data-slot-draggable]")) return;
+    // Controls keep their clicks; a draggable team row belongs to dnd-kit. A
+    // portaled menu bubbles here through the React tree but is not on the canvas:
+    // capturing its pointer would swallow the click that selects the item.
+    const target = event.target as HTMLElement;
+    if (!event.currentTarget.contains(target) || target.closest("button, a, [data-slot-draggable]")) return;
     const el = event.currentTarget;
     pan.current = {
       active: true,
