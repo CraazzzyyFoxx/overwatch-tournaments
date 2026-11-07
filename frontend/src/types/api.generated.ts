@@ -84235,7 +84235,8 @@ export enum TournamentFlowUnit {
 }
 export enum TournamentMapVetoMode {
     pool = "pool",
-    slots = "slots"
+    slots = "slots",
+    progressive = "progressive"
 }
 export enum TournamentMatchImportReadStatus {
     pending = "pending",

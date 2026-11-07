@@ -209,7 +209,11 @@ function transitionOf(node: FlowNodeRead, items: number): FormatTransition[] {
     case "filter":
       switch (c.mode) {
         case "top":
-          return [{ kind: "top", n: Number(c.n) }];
+          return [
+            typeof c.upper === "number"
+              ? { kind: "perItemTop", n: Number(c.n), upper: c.upper, grouped: false }
+              : { kind: "top", n: Number(c.n) }
+          ];
         case "per_item_top":
           return [
             {

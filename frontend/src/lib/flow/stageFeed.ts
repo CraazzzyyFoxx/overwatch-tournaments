@@ -16,7 +16,7 @@ export type FeedMode = (typeof FEED_MODES)[number];
 export type FeedRule = {
   mode: FeedMode;
   n: number;
-  /** Double elimination target, `per_item_top` only: how many per group start in the upper bracket. */
+  /** Double elimination target, `top` / `per_item_top` only: how many (per group for `per_item_top`) start in the upper bracket. */
   upper: number | null;
   swissStatus: "qualified" | "eliminated";
 };
@@ -118,16 +118,14 @@ export function choiceOfFeed(feed: StageFeed, fallback: FeedRule): FeedChoice | 
 /** Whether two rules select the same participants; fields a mode ignores do not count. */
 export function sameRule(a: FeedRule, b: FeedRule): boolean {
   if (a.mode !== b.mode) return false;
-  if (a.mode === "top") return a.n === b.n;
-  if (a.mode === "per_item_top") return a.n === b.n && a.upper === b.upper;
+  if (a.mode === "top" || a.mode === "per_item_top") return a.n === b.n && a.upper === b.upper;
   if (a.mode === "swiss_status") return a.swissStatus === b.swissStatus;
   return true;
 }
 
 function filterConfig(rule: FeedRule): Record<string, unknown> {
   if (rule.mode === "swiss_status") return { mode: rule.mode, swiss_status: rule.swissStatus };
-  if (rule.mode === "per_item_top") return { mode: rule.mode, n: rule.n, ...(rule.upper != null ? { upper: rule.upper } : {}) };
-  return { mode: rule.mode, n: rule.n };
+  return { mode: rule.mode, n: rule.n, ...(rule.upper != null ? { upper: rule.upper } : {}) };
 }
 
 const edge = (source: number | string, source_port: string, target: number | string, target_port: string) =>

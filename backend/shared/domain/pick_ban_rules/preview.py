@@ -19,6 +19,9 @@ from .validate import validate_ruleset
 #: Below this many playable items in a group the rules are a trap, not a draft.
 MIN_REMAINING_WARNING = 2
 
+#: Issue code of a progressive map pool too small for the series: the save gate refuses it.
+POOL_EXHAUSTED = "pool_exhausted"
+
 #: A preview has no encounter, so the steps resolve against two stand-in
 #: participations: only HOW MANY of them a step spends items for matters here.
 PREVIEW_PARTICIPANTS = (1, 2)
@@ -74,6 +77,8 @@ def preview_series(
     # without a class) still takes part in the series, it just belongs to no group budget.
     pool_size = sum(groups.values()) if pool_size is None else pool_size
     worst: dict[str, tuple[int, int]] = {}  # group -> (fewest remaining, the map it happens on)
+    #: Progressive map pool: the first map whose steps need more maps than the series has left (map, needed, left).
+    exhausted: tuple[int, int, int] | None = None
     maps: list[dict[str, Any]] = []
     #: round -> (group -> bans that round can land on it), and the round's steps.
     per_round: dict[int, list[tuple[ResolvedStep, dict[str | None, int]]]] = {}
@@ -106,6 +111,19 @@ def preview_series(
             for step, _ in rows
             if _covers(round_number, step, map_index)
         )
+        if kind == "map" and mode == "progressive" and pool_size > 0 and exhausted is None:
+            # Every earlier map was played once and drops out, and so does every earlier ban still in force.
+            carried = sum(
+                step.count * len(step.actors)
+                for round_number, rows in per_round.items()
+                if round_number < map_index
+                for step, _ in rows
+                if _covers(round_number, step, map_index)
+            )
+            left = pool_size - carried - (map_index - 1)
+            needed = sum(step.count * max(len(step.actors), 1) for step in steps if step.action != "side_pick")
+            if needed > left:
+                exhausted = (map_index, needed, left)
 
         remaining: dict[str, int] | None = None
         if kind == "hero" and groups:
@@ -148,6 +166,16 @@ def preview_series(
         for group, (left, map_index) in sorted(worst.items())
         if left < MIN_REMAINING_WARNING
     ]
+    if exhausted is not None:
+        map_index, needed, left = exhausted
+        warnings.append(
+            Issue(
+                "phases",
+                POOL_EXHAUSTED,
+                "error",
+                f"map {map_index} needs {needed} map(s) but only {max(left, 0)} are left in the pool",
+            )
+        )
     return {"maps": maps, "issues": [issue.to_json() for issue in warnings]}
 
 

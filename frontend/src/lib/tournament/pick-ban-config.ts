@@ -41,7 +41,7 @@ import type {
 /** Candidates a slot needs to ban down to a survivor. Mirrors `pick_ban_session.SLOT_CANDIDATE_FLOOR`. */
 const SLOT_CANDIDATE_FLOOR = 2;
 
-export const PICK_BAN_MODES: MapVetoMode[] = ["pool", "slots"];
+export const PICK_BAN_MODES: MapVetoMode[] = ["pool", "slots", "progressive"];
 export const PICK_BAN_ROTATIONS: PickBanFirstBanRotation[] = [
   "fixed",
   "alternate",
@@ -151,8 +151,44 @@ export interface PickBanDraft {
  * did before the constructor existed. A hero ruleset has no generator (a hero
  * pool stays playable, so there is nothing to ban down to) and opens on one
  * empty phase the organizer fills from the step palette.
+ *
+ * A map-by-map pool has no generator either: it opens on the server's
+ * `map_by_map` preset (`pick_ban_rules/presets.py`) — each side bans one map
+ * for the series and the opener picks map 1, then the previous loser picks
+ * every later map out of what is left.
  */
 export function emptyRuleset(kind: PickBanKind, mode: MapVetoMode = "pool"): PickBanRuleset {
+  if (kind === "map" && mode === "progressive") {
+    const step = (id: string, action: "ban" | "pick", actors: PickBanActors): PickBanRulesetStep => ({
+      ...baseStep(id),
+      action,
+      actors,
+      lifetime: null,
+    });
+    return {
+      version: 2,
+      timer_seconds: 60,
+      on_timeout: "random_fill",
+      phases: [
+        {
+          id: "first_map",
+          name: null,
+          when: { type: "map_index", params: { op: "==", value: 1 } },
+          pool_filter: {},
+          generator: null,
+          steps: [step("ban_a", "ban", "first"), step("ban_b", "ban", "second"), step("pick_first", "pick", "first")],
+        },
+        {
+          id: "next_maps",
+          name: null,
+          when: {},
+          pool_filter: {},
+          generator: null,
+          steps: [step("pick_loser", "pick", "loser_prev")],
+        },
+      ],
+    };
+  }
   return {
     version: 2,
     timer_seconds: null,

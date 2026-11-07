@@ -70,6 +70,18 @@ export function PoolStep({
 }>) {
   const t = useTranslations("pickBan.admin");
   const isHero = kind === "hero";
+  // Heroes are banned per map already: a map-by-map pool is a map-veto shape.
+  const modes = isHero ? PICK_BAN_MODES.filter((mode) => mode !== "progressive") : PICK_BAN_MODES;
+  const modeLabel = {
+    pool: t("modePool"),
+    slots: t("modeSlots"),
+    progressive: t("modeProgressive")
+  };
+  const modeHint = {
+    pool: t("modePoolHint"),
+    slots: t("modeSlotsHint"),
+    progressive: t("modeProgressiveHint")
+  };
 
   return (
     <>
@@ -90,20 +102,18 @@ export function PoolStep({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PICK_BAN_MODES.map((mode) => (
+              {modes.map((mode) => (
                 <SelectItem key={mode} value={mode}>
-                  {mode === "pool" ? t("modePool") : t("modeSlots")}
+                  {modeLabel[mode]}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <FieldDescription id={`${ids}-mode-hint`}>
-            {draft.mode === "pool" ? t("modePoolHint") : t("modeSlotsHint")}
-          </FieldDescription>
+          <FieldDescription id={`${ids}-mode-hint`}>{modeHint[draft.mode]}</FieldDescription>
         </Field>
       </div>
 
-      {draft.mode === "pool" ? (
+      {draft.mode !== "slots" ? (
         <Field>
           <FieldTitle className="text-sm">
             {isHero ? t("poolHeroLabel") : t("poolMapLabel")}

@@ -79,3 +79,9 @@ def test_per_item_upper_flags_lower_starters():
     out = compute_filter(config, ROWS, item_order=ORDER).ports["passed"]
     lower = [r.team_id for r in out if (r.breakdown or {}).get("bracket") == "lower"]
     assert lower == [11, 12, 22]
+
+
+def test_top_upper_sends_the_rest_of_the_passed_to_the_lower_bracket():
+    out = compute_filter(FilterNodeConfig(mode="top", n=5, upper=3), ROWS, item_order=ORDER).ports["passed"]
+    assert [r.team_id for r in out] == [10, 20, 11, 21, 12]
+    assert [r.team_id for r in out if (r.breakdown or {}).get("bracket") == "lower"] == [21, 12]

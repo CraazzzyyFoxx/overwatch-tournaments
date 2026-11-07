@@ -51532,7 +51532,8 @@
     "tournament.MapVetoMode": {
       "enum": [
         "pool",
-        "slots"
+        "slots",
+        "progressive"
       ],
       "title": "MapVetoMode",
       "type": "string"

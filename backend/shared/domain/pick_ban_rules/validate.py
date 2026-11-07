@@ -78,6 +78,12 @@ def validate_ruleset(
     issues: list[Issue] = []
     if not ruleset.phases:
         issues.append(_error("phases", "phases_empty", "a ruleset needs at least one phase"))
+    if mode == "progressive" and kind != "map":
+        issues.append(
+            _error(
+                "mode", "progressive_map_only", "a map-by-map pool exists for map veto only: heroes are per map anyway"
+            )
+        )
 
     seen_phase_ids: set[str] = set()
     seen_step_ids: set[str] = set()
@@ -169,6 +175,20 @@ def _validate_phase(
         issues.append(
             _error(f"{path}.steps", "map_phase_without_pick", "a map phase must settle a map with a pick or a decider")
         )
+    elif kind == "map" and mode == "progressive":
+        settled = sum(
+            step.count * (2 if step.actors == "both" else 1)
+            for step in phase.steps
+            if step.action in ("pick", "decider")
+        )
+        if settled != 1:
+            issues.append(
+                _error(
+                    f"{path}.steps",
+                    "progressive_phase_one_map",
+                    "in a map-by-map pool every phase settles exactly one map: one pick or one decider",
+                )
+            )
 
     deciders = [index for index, step in enumerate(phase.steps) if step.action == "decider"]
     if len(deciders) > 1:

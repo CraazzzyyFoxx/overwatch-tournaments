@@ -106,7 +106,8 @@ class FilterNodeConfig(_NodeConfig):
     from_: int | None = Field(None, alias="from", ge=1)
     to: int | None = Field(None, ge=1)
     per_item: dict[int, int] = {}
-    #: Double elimination (``per_item_top`` only): a passed row below this ``item_rank`` starts in the lower bracket.
+    #: Double elimination: a passed row below this ``item_rank`` (``per_item_top``) or this place among the passed
+    #: (``top``) starts in the lower bracket.
     upper: int | None = Field(None, ge=0)
     per_item_upper: dict[int, NonNegativeInt] = {}
     swiss_status: Literal["qualified", "eliminated"] | None = None

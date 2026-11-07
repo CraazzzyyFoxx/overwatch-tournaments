@@ -538,6 +538,8 @@ class FirstPickRule(StrEnum):
 class MapVetoMode(StrEnum):
     POOL = "pool"
     SLOTS = "slots"
+    #: One shared pool, one round per map: each map is settled after the previous game, played maps drop out.
+    PROGRESSIVE = "progressive"
 
 
 class FirstBanRotation(StrEnum):

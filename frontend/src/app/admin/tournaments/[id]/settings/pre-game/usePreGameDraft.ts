@@ -8,6 +8,7 @@ import { hasUnsavedChanges } from "@/lib/form-change";
 import {
   alignSlots,
   emptyPickBanDraft,
+  emptyRuleset,
   fanOutRoundDrafts,
   findInheritedConfig,
   pickBanDraftFromConfig,
@@ -170,17 +171,22 @@ export function usePreGameDraft({
    *
    * The two map generators are mode-specific (`bracket` reads a flat pool,
    * `slot_veto` reads groups), so a generator phase follows the mode rather
-   * than becoming a ruleset the server refuses.
+   * than becoming a ruleset the server refuses. A map-by-map pool has no
+   * generator and settles one map per phase, so entering or leaving it starts
+   * over from that mode's default rules.
    */
   const changeMode = (mode: MapVetoMode) => {
-    const ruleset = {
-      ...draft.ruleset,
-      phases: draft.ruleset.phases.map((phase) =>
-        phase.generator == null
-          ? phase
-          : { ...phase, generator: mode === "slots" ? ("slot_veto" as const) : ("bracket" as const) }
-      )
-    };
+    const ruleset =
+      mode === "progressive" || draft.mode === "progressive"
+        ? emptyRuleset(kind, mode)
+        : {
+            ...draft.ruleset,
+            phases: draft.ruleset.phases.map((phase) =>
+              phase.generator == null
+                ? phase
+                : { ...phase, generator: mode === "slots" ? ("slot_veto" as const) : ("bracket" as const) }
+            )
+          };
     if (mode !== "slots") return patch({ mode, ruleset });
     if (isStageScope && rounds.length > 0) {
       return patch({

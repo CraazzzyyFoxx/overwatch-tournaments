@@ -5607,8 +5607,10 @@
       "modeLabel": "Pool shape",
       "modePool": "One shared pool",
       "modeSlots": "One group per match",
+      "modeProgressive": "One shared pool, map by map",
       "modePoolHint": "One pool and one run of steps for the whole series: captains ban and pick out of the same list.",
       "modeSlotsHint": "A separate group of candidates for each match of the series, each banned down to one survivor on its own.",
+      "modeProgressiveHint": "One pool for the whole series, decided one match at a time: bans and the first map before match 1, then each next map after the previous match, out of what is left. Played maps drop out.",
       "poolMapLabel": "Map pool",
       "poolHeroLabel": "Hero pool",
       "poolHint": "Order matters: it is the order the room lists candidates in.",
@@ -5924,7 +5926,10 @@
         "unknown_param": "Unknown setting.",
         "map_not_covered": "No phase covers this map of the series.",
         "previous_round_on_first_map": "There is no previous map on map 1, so this falls back to the opener.",
-        "group_nearly_exhausted": "This group can be banned down to almost nothing."
+        "group_nearly_exhausted": "This group can be banned down to almost nothing.",
+        "progressive_map_only": "A map-by-map pool exists for maps only: heroes are banned per map anyway.",
+        "progressive_phase_one_map": "In a map-by-map pool every phase settles exactly one map: one pick or one decider.",
+        "pool_exhausted": "The pool runs out before the series ends: add maps or ban fewer."
       },
       "preset": {
         "hero_classic": "Classic: one ban each",
@@ -5934,6 +5939,7 @@
         "hero_anti_one_trick": "Anti-one-trick (tournament)",
         "map_bracket": "Standard map veto",
         "map_slot_veto": "Veto per map group",
+        "map_by_map": "Map by map: one ban each, then the loser picks",
         "lol_side_selection": "Side selection: higher seed, then previous loser",
         "deadlock_hero_bans": "Two bans each, A-B-A-B",
         "valorant_vct_bo1": "VCT Bo1: six bans, side, decider",
@@ -10277,6 +10283,7 @@
       "eliminated": "Eliminated",
       "fedBy": "Fed by",
       "formedBy": "Teams formed by",
+      "upperTop": "Start in the upper bracket",
       "formedByHint": "How the teams are put together: by the balancer, a draft, teams that registered as teams, or by hand.",
       "formationModeLocked": "Locked: team formation has already started, so its method can no longer change.",
       "draftFormat": "Draft format",
@@ -11249,6 +11256,7 @@
         "qualified": "Qualified",
         "eliminated": "Eliminated",
         "filterModes": {
+        "upperTop": "Upper bracket",
           "top": "Top N",
           "range": "Range",
           "per_item_top": "Top N per group",
