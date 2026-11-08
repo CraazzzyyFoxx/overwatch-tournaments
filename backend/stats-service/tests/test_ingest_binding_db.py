@@ -989,3 +989,76 @@ def test_a_map_outside_the_configured_pool_is_refused_before_any_replacement(ing
         assert await snapshot(env, case) == old
 
     run(ingest_database, scenario)
+
+
+async def _other_map(session, case, slug):
+    other = models.CatalogEntity(discipline=case.discipline, kind="map", slug=slug, name=slug, attrs={})
+    session.add(other)
+    await session.flush()
+    return other.id
+
+
+def test_a_decided_encounter_takes_a_log_outside_the_pool(ingest_database):
+    async def scenario(env):
+        case = await new_case(env, "pool-decided")
+        async with db(env) as session:
+            config = models.PickBanConfig(
+                tournament_id=case.tournament_id, kind=enums.PickBanKind.MAP, ruleset_json={"phases": []}
+            )
+            session.add(config)
+            await session.flush()
+            other = await _other_map(session, case, "pool-decided-other")
+            session.add(models.PickBanConfigItem(pick_ban_config_id=config.id, item_id=other))
+            # A whole-series report: the log can no longer decide a game here, it only adds statistics.
+            await session.execute(
+                sa.update(models.Encounter)
+                .where(models.Encounter.id == case.encounter_id)
+                .values(
+                    status=enums.EncounterStatus.COMPLETED,
+                    result_status=enums.EncounterResultStatus.CONFIRMED,
+                    result_source=enums.EncounterResultSource.SERIES_CLAIM.value,
+                )
+            )
+            await session.commit()
+        assert await process_job(env, await submit(env, case, external_id="pool-decided")) == Status.DONE
+
+    run(ingest_database, scenario)
+
+
+def test_admin_bind_takes_a_cancelled_position_that_names_no_map_but_not_one_on_another_map(ingest_database):
+    async def scenario(env):
+        case = await new_case(env, "cancelled-position")
+        async with db(env) as session:
+            elsewhere = await add_game(session, case, map_id=await _other_map(session, case, "cancelled-elsewhere"))
+            # A series entered whole cancels its unplayed positions, before or after a map was named.
+            await session.execute(
+                sa.update(models.EncounterGame)
+                .where(models.EncounterGame.id.in_([case.game_id, elsewhere]))
+                .values(state=enums.EncounterGameState.CANCELLED)
+            )
+            await session.execute(
+                sa.update(models.EncounterGame).where(models.EncounterGame.id == case.game_id).values(map_id=None)
+            )
+            await session.commit()
+        job_id = await submit(env, case)
+        assert await process_job(env, job_id) == Status.AWAITING_LINK
+
+        async def bind(game_id):
+            async with db(env) as session:
+                return await process.bind_ingest_job(
+                    session,
+                    job_id=job_id,
+                    request=BindIngestRequest(encounter_game_id=game_id, teams=team_map(case), expected_revision=0),
+                    user=admin(case),
+                    s3=env.s3,
+                )
+
+        with pytest.raises(IngestRejected) as refused:
+            await bind(elsewhere)
+        assert (refused.value.status_code, refused.value.code) == (409, "binding_mismatch")
+        assert (await job_row(env, job_id)).status == Status.AWAITING_LINK
+
+        read = await bind(case.game_id)
+        assert read.status == Status.DONE and read.binding.encounter_game_id == case.game_id
+
+    run(ingest_database, scenario)

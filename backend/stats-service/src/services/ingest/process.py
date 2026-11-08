@@ -541,8 +541,9 @@ async def _run_admin(
         known = await lookup_identities(
             session, workspace_id=job.workspace_id, doc=validated.doc, producer=prepared.producer
         )
-        if game.map_id != validated.map_id:
-            raise BindingMismatch("the target game is played on another map than the document's")
+        # A position that names no map yet (e.g. one a whole-series report cancelled) accepts the log's map.
+        if not fits(game, validated):
+            raise BindingMismatch("the target game is played on another map or mode than the document's")
         check_forced_teams(validated.doc, known, game, admin.teams)
         await check_roster_owners(
             session, workspace_id=job.workspace_id, doc=validated.doc, known=known, game=game, teams=admin.teams

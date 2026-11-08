@@ -86,12 +86,16 @@ export function AttachLogDialog({
   });
   const encounterOptions = pickTournament ? (encountersQuery.data?.results ?? []) : encounters;
   const encounterId = value === undefined ? undefined : Number(value);
+  // A bind may target a cancelled position (a series entered whole cancels its unplayed ones); an attach hint may not.
+  // Its own key under the detail one: the public readers of that key never see a cancelled game.
   const gamesQuery = useQuery({
-    queryKey: encounterQueryKeys.detail(encounterId),
-    queryFn: () => encounterService.getEncounter(encounterId!),
+    queryKey: bindMode
+      ? [...encounterQueryKeys.detail(encounterId), "with-cancelled-games"]
+      : encounterQueryKeys.detail(encounterId),
+    queryFn: () => encounterService.getEncounter(encounterId!, { withCancelledGames: bindMode }),
     enabled: encounterId !== undefined
   });
-  const games = gamesQuery.data?.games.filter((game) => game.state !== "cancelled") ?? [];
+  const games = gamesQuery.data?.games.filter((game) => bindMode || game.state !== "cancelled") ?? [];
   const selectedGame = games.find((game) => String(game.id) === gameId);
 
   // The authoritative read of the target game, never inferred from the paginated history: its revision is the
@@ -200,7 +204,7 @@ export function AttachLogDialog({
         }}
         options={games.map((game) => ({
           value: String(game.id),
-          label: t("gameOption", {
+          label: t(game.state === "cancelled" ? "gameOptionCancelled" : "gameOption", {
             position: game.position,
             map: mapWithModeName(game.map, game.mode) ?? t("unknownMap"),
             id: game.id

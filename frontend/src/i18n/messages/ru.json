@@ -10811,6 +10811,7 @@
       "pickGame": "Выберите игру",
       "searchGame": "Поиск карты, позиции или ID игры",
       "gameOption": "Игра {position} · {map} · #{id}",
+      "gameOptionCancelled": "Игра {position} · {map} · #{id} · отменена",
       "unknownMap": "Неизвестная карта",
       "loadingGames": "Загрузка игр…",
       "gamesLoadFailed": "Не удалось загрузить игры. Загрузите их заново перед привязкой.",

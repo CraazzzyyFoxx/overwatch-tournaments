@@ -39,7 +39,7 @@ from src.services.admin.stage import stage_service
 from src.services.bracket import advancement
 from src.services.encounter.captain import ReportResultIn, captain_service
 from src.services.encounter.ffa import ffa_encounter_service
-from src.services.encounter.flows import flows_service, to_summary
+from src.services.encounter.flows import CANCELLED_GAMES_ENTITY, flows_service, to_summary
 from src.services.encounter.game_correction import game_correction_service
 from src.services.encounter.games import GameResultIn, encounter_game_service
 from src.services.encounter.map_report import ClaimResultIn, map_report_service
@@ -1226,6 +1226,31 @@ class ReadPathTests(ResultFlowCase):
             self.assertNotIn("players", sa.inspect(bare).unloaded)
         self.assertEqual("T0", read.teams[0].team.name)
         self.assertEqual([], read.teams[0].team.players)
+
+    async def test_a_cancelled_position_is_read_with_its_seats_only_when_asked_for(self) -> None:
+        # The admin log bind targets the positions a whole-series report cancelled; every other reader keeps the
+        # live series.
+        async with self.Session() as s:
+            first, second = await self.seats(s)
+            await self.play(s, 1, first.id, second.id)
+            cancelled = await self.open_game(s, 2)
+        async with self.Session() as s:
+            encounter = await self.encounter(s)
+            await encounter_game_service.cancel_games(
+                s, encounter, [await s.get_one(EncounterGame, cancelled.id)], actor_user_id=None, reason="series"
+            )
+            await s.commit()
+
+        async def games(entities):
+            async with self.Session() as s:
+                read = await flows_service.get_encounter(s, self.ids["e"], entities)
+            return [(game.position, game.state, {line.encounter_team_id for line in game.teams}) for game in read.games]
+
+        seats = {first.id, second.id}
+        self.assertEqual([(1, "confirmed", seats)], await games(["matches"]))
+        self.assertEqual(
+            [(1, "confirmed", seats), (2, "cancelled", seats)], await games(["matches", CANCELLED_GAMES_ENTITY])
+        )
 
 
 class PointsPresetReadTests(ResultFlowCase):

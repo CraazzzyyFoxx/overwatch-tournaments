@@ -41,7 +41,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.get_encounter": {
         "summary": "Get encounter",
-        "description": "Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one encounter by id with optionally hydrated related entities selected via the entities query param.",
+        "description": "Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one encounter by id with optionally hydrated related entities selected via the entities query param. `games` (filled with `matches`) lists the live series only; `games.cancelled` adds its cancelled positions too.",
     },
     "rpc.tournament.get_match": {
         "summary": "Get match with stats",
