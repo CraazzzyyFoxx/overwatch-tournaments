@@ -724,6 +724,58 @@ describe("TournamentLogsTab", () => {
     expect(retryLogRecord).not.toHaveBeenCalled();
   });
 
+  it("binds an awaiting job to a cancelled position of a series entered whole", async () => {
+    // A whole-series report cancels every unplayed position: the bind's only targets, often without a map.
+    getEncounter.mockResolvedValue({
+      ...SEATED,
+      games: [
+        {
+          ...game(805, 1, "cancelled"),
+          map_id: null,
+          map: null,
+          teams: [{ encounter_team_id: 11 }, { encounter_team_id: 22 }]
+        }
+      ]
+    });
+    getGameObservation.mockResolvedValue({
+      encounter_game_id: 805,
+      match_id: null,
+      revision: 0,
+      ingest_job_id: null,
+      is_historical: false
+    });
+    getLogHistory.mockResolvedValue({
+      items: [
+        record(20, {
+          status: "awaiting_link",
+          attached_encounter_id: 6662,
+          teams: [
+            { key: "alpha", source_position: 1, participants: [] },
+            { key: "beta", source_position: 2, participants: [] }
+          ]
+        })
+      ],
+      total: 1
+    });
+    bindLogRecord.mockResolvedValue({ id: 20, status: "done", error: null, binding: null });
+    const scope = await mount(78, [PLAYOFF]);
+    await click(scope.querySelector('button[aria-label="Actions for round_20.txt"]'));
+    await click(menuItem("Attach to game…"));
+    expect(getEncounter).toHaveBeenCalledWith(6662, { withCancelledGames: true });
+    await click(document.querySelector('button[aria-label="Pick a game"]'));
+    await click(commandItem("Game 1 · Unknown map · #805 · cancelled"));
+    await click(document.querySelector('button[aria-label="Game team for log team alpha"]'));
+    await click(commandItem("Home"));
+    await click(document.querySelector('button[aria-label="Game team for log team beta"]'));
+    await click(commandItem("Away"));
+    await click(button(document, "Bind and publish"));
+    expect(bindLogRecord).toHaveBeenCalledWith(20, {
+      encounter_game_id: 805,
+      teams: { alpha: 11, beta: 22 },
+      expected_revision: 0
+    });
+  });
+
   it.each([
     ["a historical reference", { source: "historical_reference" }],
     ["an unavailable raw source", { raw_status: "missing", raw_available: false }]

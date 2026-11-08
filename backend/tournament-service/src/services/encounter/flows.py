@@ -114,13 +114,19 @@ def _saved_view_to_read(saved_view: models.EncounterSavedView) -> schemas.Encoun
     )
 
 
-def _games(encounter: models.Encounter) -> list[models.EncounterGame]:
-    """The series' positions in order. Cancelled ones are history, not the live series. Eager-loaded with
-    ``matches``."""
+#: Entity token that adds the cancelled positions to ``games``: the admin log bind targets them when a series was
+#: entered whole. Every other reader keeps the live series only.
+CANCELLED_GAMES_ENTITY = "games.cancelled"
+
+
+def _games(encounter: models.Encounter, entities: list[str]) -> list[models.EncounterGame]:
+    """The series' positions in order. Cancelled ones are history, not the live series, unless
+    :data:`CANCELLED_GAMES_ENTITY` asks for them. Eager-loaded with ``matches``."""
+    with_cancelled = CANCELLED_GAMES_ENTITY in entities
     return [
         game
         for game in sorted(encounter.games, key=lambda game: (game.position, game.id or 0))
-        if game.state != EncounterGameState.CANCELLED
+        if with_cancelled or game.state != EncounterGameState.CANCELLED
     ]
 
 
@@ -170,7 +176,7 @@ def _encounter_read(
                 confirmed_at=game.confirmed_at,
                 teams=facts.game_lines.get(game.id, []),
             )
-            for game in _games(encounter)
+            for game in _games(encounter, entities)
         ]
 
     encounter_dict = encounter.to_dict()
@@ -322,7 +328,7 @@ class EncounterFlowsService:
                     matches[context.match.id] = await self.to_pydantic_match(
                         session, context, nested, team_cache=teams, tournament_cache=tournaments
                     )
-            game_ids = [game.id for encounter in encounters for game in _games(encounter)]
+            game_ids = [game.id for encounter in encounters for game in _games(encounter, entities)]
             for line in await self.game_team_repo.list_for_games(session, game_ids):
                 game_lines.setdefault(line.game_id, []).append(
                     schemas.EncounterGameTeamRead(

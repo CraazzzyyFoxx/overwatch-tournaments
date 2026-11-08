@@ -10811,6 +10811,7 @@
       "pickGame": "Pick a game",
       "searchGame": "Search map, position or game ID",
       "gameOption": "Game {position} · {map} · #{id}",
+      "gameOptionCancelled": "Game {position} · {map} · #{id} · cancelled",
       "unknownMap": "Unknown map",
       "loadingGames": "Loading games…",
       "gamesLoadFailed": "Could not load games. Reload before attaching.",

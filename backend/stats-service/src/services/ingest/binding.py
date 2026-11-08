@@ -469,12 +469,25 @@ async def pool_refusal(
 
     A pool may name maps and modes: the map is checked against its map items only and the mode against its mode items
     only, so a pool of only modes admits every map and one of only maps every mode (no pool admits all).
+
+    A decided encounter (confirmed, or a series claim/admin/import/host result) admits anything: the log can no longer
+    decide a game there (tournament ``log_evidence`` refuses it as ``encounter_decided``), it only adds statistics.
     """
-    tournament_id = await session.scalar(
-        sa.select(models.Encounter.tournament_id).where(models.Encounter.id == encounter_id)
-    )
-    if tournament_id is None:
+    encounter = (
+        await session.execute(
+            sa.select(
+                models.Encounter.tournament_id, models.Encounter.result_status, models.Encounter.result_source
+            ).where(models.Encounter.id == encounter_id)
+        )
+    ).first()
+    if encounter is None or encounter.tournament_id is None:
         return None  # mixes and scrims carry no tournament pool
+    if encounter.result_status == enums.EncounterResultStatus.CONFIRMED or encounter.result_source not in (
+        None,
+        enums.EncounterResultSource.GAMES.value,
+    ):
+        return None
+    tournament_id = encounter.tournament_id
     stage_id, round_ = (
         await session.execute(
             sa.select(models.BracketEncounter.stage_id, models.BracketEncounter.round).where(

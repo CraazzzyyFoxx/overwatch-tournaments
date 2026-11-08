@@ -13,7 +13,8 @@ import type { Tournament } from "@/types/tournament.types";
 import { apiFetch } from "@/lib/api/fetch";
 
 export default class encounterService {
-  static async getEncounter(id: number): Promise<Encounter> {
+  /** `withCancelledGames` adds the cancelled positions to `games` (the admin log bind's targets); off, it is the live series. */
+  static async getEncounter(id: number, { withCancelledGames = false } = {}): Promise<Encounter> {
     return apiFetch(`/api/v1/encounters/${id}`, {
       skipWorkspace: true,
       query: {
@@ -34,7 +35,8 @@ export default class encounterService {
           "tournament",
           "tournament.division_grid_version",
           "stage",
-          "stage_item"
+          "stage_item",
+          ...(withCancelledGames ? ["games.cancelled"] : [])
         ]
       }
     }).then((res) => res.json());

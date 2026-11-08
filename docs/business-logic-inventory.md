@@ -434,7 +434,7 @@ Kinds: `map` | `hero`. Config cascade: tournament → stage → round. An empty 
 
 Modes: `pool` | `slots` (each slot ≥ 2 candidates; `preset=custom` is forbidden in slots).
 
-A map pool of a game that declares the `mode` kind may also name catalog modes, in the shared pool only (never slots or reserves): an ingested match of another mode is refused (`mode_not_in_pool`), maps are checked against the map items alone, and the room vetoes the map items only.
+A map pool of a game that declares the `mode` kind may also name catalog modes, in the shared pool only (never slots or reserves): an ingested match of another mode is refused (`mode_not_in_pool`), maps are checked against the map items alone, and the room vetoes the map items only. A decided encounter (confirmed, or a series claim/admin/import/host result) skips the pool check on ingest: a log there only adds statistics.
 
 Steps: `ban|pick|protect` × `first|second` plus `decider`. Hero sequences are always custom. Map + bracket preset → `buildSequenceForBestOf(bestOf, poolSize)`.
 
