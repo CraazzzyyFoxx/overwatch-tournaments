@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   closestCenter,
   DndContext,
@@ -35,7 +35,7 @@ import type { StageType } from "@/types/tournament.types";
 
 import { BracketCanvas } from "./BracketCanvas";
 import type { SlotDragData } from "./MatchCard";
-import { buildLayout } from "./layout";
+import { buildLayout, type LayoutHeader } from "./layout";
 import { MAX_SCALE, MIN_SCALE, useBracketViewport } from "./useBracketViewport";
 
 /** One team slot of one match, as the rearrange callback names it. */
@@ -85,6 +85,8 @@ export interface BracketViewProps<M extends BracketMatch> {
    * link the overview and matches sections use to point at one node.
    */
   highlightMatchId?: number | null;
+  /** A control beside each round's chip — the admin bracket's best-of menu. */
+  renderHeaderAction?: (header: LayoutHeader) => ReactNode;
 }
 
 /**
@@ -144,7 +146,8 @@ export function BracketView<M extends BracketMatch>({
   onSwapSlots,
   liveTeamStreams,
   interactive = true,
-  highlightMatchId = null
+  highlightMatchId = null,
+  renderHeaderAction
 }: Readonly<BracketViewProps<M>>) {
   const t = useTranslations();
   // The bracket's own location, stage/view query included: the pre-game room
@@ -397,6 +400,7 @@ export function BracketView<M extends BracketMatch>({
           highlightMatchId={highlightMatchId}
           rearranging={isRearranging && !!onSwapSlots && !isSwapping}
           renderActions={renderActions}
+          renderHeaderAction={renderHeaderAction}
         />
       </div>
       <DragOverlay dropAnimation={null}>

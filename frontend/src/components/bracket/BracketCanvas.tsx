@@ -24,17 +24,24 @@ interface BracketCanvasProps extends Pick<BracketViewport, "scale" | "isGrabbing
   rearranging: boolean;
   /** Footer controls for one card (edit, report); `null` for none. */
   renderActions: (encounter: BracketMatch) => ReactNode;
+  /** A control beside a round's chip (the admin bracket's best-of menu); absent everywhere else. */
+  renderHeaderAction?: (header: LayoutHeader) => ReactNode;
 }
 
 /** A round header's chip; a Swiss pool's record wears the same one. */
 export const HEADER_CHIP =
   "inline-flex items-center rounded-full border border-[color:var(--aqt-border-2)] bg-[hsl(0_0%_0%/0.55)] px-2.5 py-0.5 text-label font-semibold uppercase tabular-nums tracking-label text-[color:var(--aqt-fg-muted)] backdrop-blur-sm";
 
-function RoundHeader({ header, scale, sticky }: Readonly<{ header: LayoutHeader; scale: number; sticky: boolean }>) {
+function RoundHeader({
+  header,
+  scale,
+  sticky,
+  action
+}: Readonly<{ header: LayoutHeader; scale: number; sticky: boolean; action?: ReactNode }>) {
   return (
     <div
       data-round-header={header.id}
-      className="absolute"
+      className="absolute flex items-center gap-1.5"
       style={
         sticky
           ? { left: header.x * scale, top: header.y * scale, width: CARD_WIDTH * scale }
@@ -42,6 +49,8 @@ function RoundHeader({ header, scale, sticky }: Readonly<{ header: LayoutHeader;
       }
     >
       <div className={HEADER_CHIP}>{header.label}</div>
+      {/* The sticky row is click-through so the canvas under it still pans. */}
+      {action ? <div className="pointer-events-auto">{action}</div> : null}
     </div>
   );
 }
@@ -68,7 +77,8 @@ export function BracketCanvas({
   interactive,
   highlightMatchId,
   rearranging,
-  renderActions
+  renderActions,
+  renderHeaderAction
 }: Readonly<BracketCanvasProps>) {
   const t = useTranslations();
   // Deep link: bring the node into view once per mount, not on every re-render
@@ -149,7 +159,7 @@ export function BracketCanvas({
         style={{ width: layout.width * scale }}
       >
         {stickyHeaders.map((header) => (
-          <RoundHeader key={header.id} header={header} scale={scale} sticky />
+          <RoundHeader key={header.id} header={header} scale={scale} sticky action={renderHeaderAction?.(header)} />
         ))}
       </div>
       <div
@@ -199,7 +209,13 @@ export function BracketCanvas({
           </svg>
 
           {canvasHeaders.map((header) => (
-            <RoundHeader key={header.id} header={header} scale={scale} sticky={false} />
+            <RoundHeader
+              key={header.id}
+              header={header}
+              scale={scale}
+              sticky={false}
+              action={renderHeaderAction?.(header)}
+            />
           ))}
 
           {layout.nodes.map((node) => {

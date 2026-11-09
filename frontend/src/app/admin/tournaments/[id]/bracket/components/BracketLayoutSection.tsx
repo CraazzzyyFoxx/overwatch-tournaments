@@ -25,8 +25,6 @@ import adminService from "@/services/admin.service";
 import type { TemplateProblem } from "@/types/admin.types";
 import type { Stage } from "@/types/tournament.types";
 
-import { useHubEncountersQuery } from "../../hubQueries";
-
 const EMPTY_DRAFT: Draft = { upper_seeds: 0, lower_seeds: 0, matches: [] };
 
 /**
@@ -49,36 +47,18 @@ function templateProblems(error: unknown): TemplateProblem[] {
 }
 
 /**
- * The stage's bracket drawn as a wiring diagram the organizer can edit: every
- * slot is a seed placeholder (`U1`, `L3`) or the winner/loser of another match,
- * saved as the stage's `bracket_template` and used by every generation path.
+ * The stage's saved layout and the draft being drawn over it.
  *
- * The seed counts in the header are the template's OWN (`upper_seeds`,
- * `lower_seeds`), not the stage's: a layout may be drawn before the groups that
- * fill it exist. When the two disagree the stage refuses to generate, so the
- * disagreement is spelled out rather than silently corrected.
- *
- * Editing is refused once the stage has matches — the same rule as regenerating
- * — so the section then shows only the server's own 409 text.
+ * Owned by the Bracket tab rather than the section, so the draft survives a
+ * switch to the view mode and back; `dirty` is what that switch asks about.
  */
-export function BracketLayoutSection({ stage }: Readonly<{ stage: Stage }>) {
-  const t = useTranslations("adminBracket.layoutSection");
-  const queryClient = useQueryClient();
-  const encountersQuery = useHubEncountersQuery(stage.tournament_id);
-  const hasEncounters = (encountersQuery.data?.results ?? []).some(
-    (encounter) => encounter.stage_id === stage.id
-  );
-
+export function useBracketTemplateDraft(stage: Stage, enabled: boolean) {
   const templateQuery = useQuery({
     queryKey: adminQueryKeys.stageBracketTemplate(stage.id),
-    queryFn: () => adminService.getStageBracketTemplate(stage.id)
+    queryFn: () => adminService.getStageBracketTemplate(stage.id),
+    enabled
   });
-
   const [draft, dispatch] = useReducer(draftReducer, EMPTY_DRAFT);
-  const [problems, setProblems] = useState<TemplateProblem[]>([]);
-  const [highlightMatchId, setHighlightMatchId] = useState<number | null>(null);
-  const [resetOpen, setResetOpen] = useState(false);
-
   const template = templateQuery.data?.template ?? null;
   // The server's layout is the draft's origin: a fetch that brings a new one
   // (a save, a reset, a seed-count change) starts the draft over. A refetch
@@ -90,6 +70,46 @@ export function BracketLayoutSection({ stage }: Readonly<{ stage: Stage }>) {
   useEffect(() => {
     if (template) dispatch({ type: "reset", draft: draftFromTemplate(template) });
   }, [template]);
+  const origin = useMemo(() => (template ? draftFromTemplate(template) : null), [template]);
+  const dirty = origin !== null && JSON.stringify(origin) !== JSON.stringify(draft);
+
+  return {
+    templateQuery,
+    template,
+    draft,
+    dispatch,
+    dirty,
+    discard: () => {
+      if (origin) dispatch({ type: "reset", draft: origin });
+    }
+  };
+}
+
+export type BracketTemplateDraftState = ReturnType<typeof useBracketTemplateDraft>;
+
+/**
+ * The stage's bracket drawn as a wiring diagram the organizer can edit: every
+ * slot is a seed placeholder (`U1`, `L3`) or the winner/loser of another match,
+ * saved as the stage's `bracket_template` and used by every generation path.
+ *
+ * The seed counts in the header are the template's OWN (`upper_seeds`,
+ * `lower_seeds`), not the stage's: a layout may be drawn before the groups that
+ * fill it exist. When the two disagree the stage refuses to generate, so the
+ * disagreement is spelled out rather than silently corrected.
+ *
+ * Mounted only while the stage has no matches — the same rule as regenerating;
+ * the Bracket tab disables this mode otherwise.
+ */
+export function BracketLayoutSection({
+  stage,
+  state
+}: Readonly<{ stage: Stage; state: BracketTemplateDraftState }>) {
+  const t = useTranslations("adminBracket.layoutSection");
+  const queryClient = useQueryClient();
+  const { templateQuery, template, draft, dispatch } = state;
+  const [problems, setProblems] = useState<TemplateProblem[]>([]);
+  const [highlightMatchId, setHighlightMatchId] = useState<number | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
 
   const payload = useMemo(() => draftToTemplate(draft), [draft]);
 
@@ -146,11 +166,7 @@ export function BracketLayoutSection({ stage }: Readonly<{ stage: Stage }>) {
         </p>
       </div>
 
-      {hasEncounters ? (
-        <p className="text-sm text-muted-foreground">
-          {t("hasMatches")}
-        </p>
-      ) : templateQuery.isPending ? (
+      {templateQuery.isPending ? (
         <Skeleton className="h-64 w-full rounded-xl" />
       ) : template === null ? (
         <p className="text-sm text-muted-foreground">

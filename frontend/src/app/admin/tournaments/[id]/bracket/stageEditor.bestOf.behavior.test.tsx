@@ -1,22 +1,12 @@
 // @vitest-environment happy-dom
 //
-// One claim: a double-elimination stage's best-of can be set per BRACKET.
+// One claim: what the Settings tab offers for best-of.
 //
-// Double elimination numbers its rounds by sign — upper bracket 1..U, grand
-// final U+1, lower bracket -1..-L. The editor used to render a flat
-// `Round 1..max_rounds` list, which could reach neither a lower-bracket round
-// (its keys are negative) nor say which bracket a positive round meant. An
-// organizer who wanted "Bo5 in the upper bracket only" had `default` as the only
-// knob that visibly worked, and that lengthens every match in both brackets.
-//
-// The rows here are pinned against `double_elimination.generate`: an 8-team
-// bracket really does emit upper 1..3, lower -1..-4 and round 4 for the grand
-// final.
-//
-// Carried over from `stageManager.bestOf.behavior.test.tsx` when PR-2e split
-// `StageManager` into the Bracket tab: same claims, now driven through the
-// Best-of block of the stage's Settings page and saved by `SaveBar` instead of
-// the "Advanced" disclosure and its "Save override" button.
+// An elimination bracket's best-of is set where the tree is — the Bracket tab's
+// round headers — so Settings has no Best-of card for it. Every other format
+// plays one length everywhere: a single "All matches" select, and whatever
+// per-round / final override the saved stage carries is cleared on save, since
+// nothing in that editor could reach it and it would silently beat the default.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
@@ -47,8 +37,8 @@ vi.mock("@/services/admin.service", () => ({
     getStagesProgress: (...args: unknown[]) => getStagesProgress(...args),
     updateStage: (...args: unknown[]) => updateStage(...args),
     applyStageBestOf: vi.fn(),
-    // The Settings page also draws the bracket preview; these claims are about
-    // the best-of fields beside it.
+    // The page also draws the bracket preview on the Bracket tab; these claims
+    // are about Settings.
     getStageBracketPreview: vi.fn().mockResolvedValue([]),
     // The rounds the engine says the stage has; empty means "not known yet",
     // which falls the editor back to the team-count formula.
@@ -101,14 +91,17 @@ vi.mock("@/lib/tournament/workspace-query-keys", async (importOriginal) => ({
   invalidateTournamentWorkspace: vi.fn()
 }));
 
-/** An 8-team double elimination in one `single_bracket` item — the reported setup. */
-function singleBracketStage(seededTeams = 8): Stage {
+/** A stage in the reported setup's shape; Settings is its default section. */
+function stageOf(
+  stageType: "round_robin" | "double_elimination",
+  bestOf: Stage["best_of"] = { default: 3, by_round: {}, final: null, swiss_qualify: null, swiss_eliminate: null }
+): Stage {
   return {
     id: 10,
     tournament_id: 84,
     name: "Playoff",
     description: null,
-    stage_type: "double_elimination",
+    stage_type: stageType,
     max_rounds: 5,
     order: 1,
     node_id: 1,
@@ -129,28 +122,10 @@ function singleBracketStage(seededTeams = 8): Stage {
     swiss_eliminate_losses: null,
     de_grand_final_type: "no_reset",
     seed_ranking: "slot",
-    best_of: { default: 3, by_round: {}, final: null, swiss_qualify: null, swiss_eliminate: null },
+    best_of: bestOf,
     challonge_id: null,
     challonge_slug: null,
-    items: [
-      {
-        id: 100,
-        stage_id: 10,
-        name: "Bracket",
-        type: "single_bracket",
-        order: 0,
-        inputs: Array.from({ length: seededTeams }, (_, index) => ({
-          id: 200 + index,
-          stage_item_id: 100,
-          slot: index + 1,
-          input_type: "final",
-          team_id: index + 1,
-          winner_from_stage_item_id: null,
-          winner_position: null,
-          team: null
-        }))
-      }
-    ]
+    items: []
   } as unknown as Stage;
 }
 
@@ -167,12 +142,12 @@ async function settle(times = 12) {
   }
 }
 
-async function mount(stage: Stage, plannedRounds: number[] = []) {
+async function mount(stage: Stage) {
   getStages.mockResolvedValue([stage]);
   getTournament.mockResolvedValue({ id: 84, name: "Cup" });
   getStagesProgress.mockResolvedValue([]);
   getTeams.mockResolvedValue({ results: [] });
-  getStagePlannedRounds.mockResolvedValue(plannedRounds);
+  getStagePlannedRounds.mockResolvedValue([]);
 
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -234,37 +209,18 @@ function only(name: string): HTMLElement {
   return matches[0];
 }
 
-/** The best-of card, addressed by its heading. */
-function bestOfPanel(): HTMLElement {
-  const heading = [...container.querySelectorAll("h2")].find(
-    (element) => (element.textContent ?? "").trim() === "Best-of"
-  );
-  const found = heading?.closest("section");
-  if (!(found instanceof HTMLElement)) throw new Error("best-of section is not rendered");
-  return found;
+/** The labels of every Settings field, the controls an organizer can reach. */
+function settingsLabels(): string[] {
+  return [...container.querySelectorAll("label")].map((element) => (element.textContent ?? "").trim());
 }
 
-/** Bracket row label -> the round labels it offers, in order. */
-function roundLabelsBySection(): Record<string, string[]> {
-  const sections: Record<string, string[]> = {};
-  // A bracket's row is labelled as a whole (no `for`); its rounds each name a select.
-  for (const heading of bestOfPanel().querySelectorAll("label:not([for])")) {
-    const rounds = [...(heading.closest("div.grid")?.querySelectorAll("label[for]") ?? [])];
-    if (rounds.length === 0) continue;
-    sections[(heading.textContent ?? "").trim()] = rounds.map((label) =>
-      (label.textContent ?? "").trim()
-    );
-  }
-  return sections;
-}
-
-/** The select trigger the round label `label` names. */
-function roundSelect(label: string): HTMLElement {
-  const found = [...bestOfPanel().querySelectorAll("label")].find(
+/** The select trigger the label `label` names. */
+function selectFor(label: string): HTMLElement {
+  const found = [...container.querySelectorAll("label")].find(
     (element) => (element.textContent ?? "").trim() === label
   );
   const trigger = found?.htmlFor ? document.getElementById(found.htmlFor) : null;
-  if (!(trigger instanceof HTMLElement)) throw new Error(`no select for round "${label}"`);
+  if (!(trigger instanceof HTMLElement)) throw new Error(`no select for "${label}"`);
   return trigger;
 }
 
@@ -276,100 +232,67 @@ beforeEach(() => {
     act(() => root.unmount());
     container.remove();
   }
-  updateStage.mockResolvedValue(singleBracketStage());
+  updateStage.mockResolvedValue(stageOf("round_robin"));
 });
 
-describe("Stage editor best-of, double elimination", () => {
-  it("groups the rounds by bracket instead of one flat list", async () => {
-    await mount(singleBracketStage());
+describe("Stage editor best-of in Settings", () => {
+  it("leaves an elimination bracket's best-of to the Bracket tab", async () => {
+    await mount(stageOf("double_elimination"));
 
-    expect(roundLabelsBySection()).toEqual({
-      "Upper bracket": ["UB Round 1", "UB Semifinal", "UB Final"],
-      "Lower bracket": ["LB Round 1", "LB Round 2", "LB Round 3", "LB Final"]
-    });
+    // Sanity: this is the Settings page, so the stage's own fields are there.
+    expect(settingsLabels()).toContain("Format");
+    expect(settingsLabels()).not.toContain("All matches");
+    expect(container.textContent).not.toContain("Apply to existing matches");
   });
 
-  it("names the grand final knob so it is not read as 'the last round of both'", async () => {
-    await mount(singleBracketStage());
+  it("sets one length for every match of a round robin", async () => {
+    await mount(stageOf("round_robin"));
 
-    const labels = [...bestOfPanel().querySelectorAll("label")].map((element) =>
-      (element.textContent ?? "").trim()
-    );
-    expect(labels).toContain("Grand Final");
-    expect(labels).not.toContain("Final");
-  });
+    // One select, not a per-round grid and not a final override.
+    expect(settingsLabels()).toContain("All matches");
+    expect(settingsLabels()).not.toContain("Final");
+    expect(settingsLabels().filter((label) => /^Round \d+$/.test(label))).toEqual([]);
 
-  it("writes upper-bracket rounds and the grand final without touching the lower bracket", async () => {
-    await mount(singleBracketStage());
-
-    // The reported ask: Bo5 in upper rounds 2 and 3 and the grand final, lower
-    // bracket untouched.
-    for (const label of ["UB Semifinal", "UB Final"]) {
-      await click(roundSelect(label));
-      await choose("Bo5");
-    }
-    await click(roundSelect("Grand Final"));
+    await click(selectFor("All matches"));
     await choose("Bo5");
     await click(only("Save changes"));
 
     expect(updateStage).toHaveBeenCalledTimes(1);
-    const [stageId, payload] = updateStage.mock.calls[0] as [
-      number,
-      { best_of: { default: number; by_round: Record<string, number>; final: number | null } }
-    ];
+    const [stageId, payload] = updateStage.mock.calls[0] as [number, { best_of: unknown }];
     expect(stageId).toBe(10);
-    // Upper rounds 2 and 3 by number; the grand final via `final`, which the
-    // server resolves to the max round and which outranks `by_round`.
-    expect(payload.best_of).toEqual({ default: 3, by_round: { "2": 5, "3": 5 }, final: 5, swiss_qualify: null, swiss_eliminate: null });
-    // Nothing negative: every lower-bracket round keeps the stage default.
-    expect(Object.keys(payload.best_of.by_round).filter((key) => Number(key) < 0)).toEqual([]);
+    expect(payload.best_of).toEqual({
+      default: 5,
+      by_round: {},
+      final: null,
+      swiss_qualify: null,
+      swiss_eliminate: null
+    });
   });
 
-  it("reaches a lower-bracket round, which a positive-only list could not address", async () => {
-    await mount(singleBracketStage());
+  it("clears a per-round override the stage carried from another format", async () => {
+    // A stage that was an elimination bracket and is a round robin now: the
+    // overrides are unreachable here and would silently beat the default.
+    await mount(
+      stageOf("round_robin", {
+        default: 3,
+        by_round: { "1": 5 },
+        final: 7,
+        swiss_qualify: null,
+        swiss_eliminate: null
+      })
+    );
 
-    await click(roundSelect("LB Final"));
-    await choose("Bo5");
+    await click(selectFor("All matches"));
+    await choose("Bo1");
     await click(only("Save changes"));
 
-    const [, payload] = updateStage.mock.calls[0] as [
-      number,
-      { best_of: { by_round: Record<string, number> } }
-    ];
-    // LB Final is round -4 in an 8-team bracket, per `double_elimination.generate`.
-    expect(payload.best_of.by_round).toEqual({ "-4": 5 });
-  });
-
-  it("offers the bracket it is about to build before any team is seeded", async () => {
-    await mount(singleBracketStage(0));
-
-    // No seeds means no team count to derive from, so the rows fall back to
-    // max_rounds (5, which counts the grand final) rather than disappearing.
-    expect(roundLabelsBySection()["Upper bracket"]).toEqual([
-      "UB Round 1",
-      "UB Round 2",
-      "UB Semifinal",
-      "UB Final"
-    ]);
-  });
-
-  it("offers the lower-bracket round the engine plans, which the formula misses", async () => {
-    // 4 upper seeds + 8 teams starting below: the engine builds LB -1..-5,
-    // while the team-count formula tops out at -4. Without the fifth row that
-    // round is unconfigurable.
-    await mount(singleBracketStage(4), [-5, -4, -3, -2, -1, 1, 2, 3]);
-
-    const lower = roundLabelsBySection()["Lower bracket"];
-    expect(lower).toHaveLength(5);
-
-    await click(roundSelect(lower[4]));
-    await choose("Bo5");
-    await click(only("Save changes"));
-
-    const [, payload] = updateStage.mock.calls[0] as [
-      number,
-      { best_of: { by_round: Record<string, number> } }
-    ];
-    expect(payload.best_of.by_round).toEqual({ "-5": 5 });
+    const [, payload] = updateStage.mock.calls[0] as [number, { best_of: unknown }];
+    expect(payload.best_of).toEqual({
+      default: 1,
+      by_round: {},
+      final: null,
+      swiss_qualify: null,
+      swiss_eliminate: null
+    });
   });
 });

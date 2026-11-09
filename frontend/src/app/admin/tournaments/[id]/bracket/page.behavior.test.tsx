@@ -362,13 +362,13 @@ describe("Bracket tab · URL is the state", () => {
     ).toBe(true);
   });
 
-  it("falls back to Settings for a tab the stage's format does not have", async () => {
-    // Only an elimination bracket has a layout; stage 10 is a round robin.
+  it("opens the Bracket tab for any format, with the structure editor kept to elimination", async () => {
+    // Stage 10 is a round robin: it still has a bracket view, but no wiring to edit.
     await mount("?stage=10&section=layout");
 
-    expect(sectionTab("Bracket layout")).toBeNull();
-    expect(sectionTab("Settings")?.getAttribute("aria-current")).toBe("page");
-    expect(bodyText()).toContain("Bracket preview");
+    expect(sectionTab("Bracket")?.getAttribute("aria-current")).toBe("page");
+    expect(sectionTab("Settings")?.getAttribute("aria-current")).not.toBe("page");
+    expect(bodyText()).not.toContain("Edit structure");
   });
 });
 
