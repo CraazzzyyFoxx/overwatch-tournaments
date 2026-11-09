@@ -339,6 +339,19 @@ def test_a_gated_identity_verifies_every_handle_it_carries() -> None:
     assert [(e["field"], e["code"]) for e in _errors(caught.value)] == [("identity_battlenet", "not_verified")]
 
 
+def test_a_primary_only_gate_lets_unverified_smurfs_ride_beside_a_verified_main() -> None:
+    schema = _schema(battlenet_params={"require_verified": True, "verify_primary_only": True})
+    session = _FakeSession([("battlenet", "player#1234")])
+
+    values = _validate({"identity_battlenet": ["Player#1234", "Alt#9999"]}, schema=schema, session=session)
+
+    assert values["identity_battlenet"] == ["Player#1234", "Alt#9999"]
+    # The main itself is still gated.
+    with pytest.raises(ApiHTTPException) as caught:
+        _validate({"identity_battlenet": ["Alt#9999", "Player#1234"]}, schema=schema, session=session)
+    assert [(e["field"], e["code"]) for e in _errors(caught.value)] == [("identity_battlenet", "not_verified")]
+
+
 def test_an_organizers_draft_neither_requires_nor_verifies() -> None:
     """``enforce_required=False`` is the organizer path: they are entering what
     they know, and nobody's OAuth proves their typing."""

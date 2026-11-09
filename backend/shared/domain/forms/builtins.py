@@ -61,6 +61,9 @@ class _Strict(BaseModel):
 class IdentityParams(_Strict):
     #: Only meaningful for providers that ``can_be_verified``; ignored otherwise.
     require_verified: bool = False
+    #: With ``require_verified``: only the primary (first) handle must be verified;
+    #: the extras (smurfs) are taken as typed.
+    verify_primary_only: bool = False
     #: How many handles the answer may carry (primary + extras). ``None`` means
     #: the provider's ``default_max_count``.
     max_count: int | None = Field(default=None, ge=1, le=MAX_IDENTITY_COUNT)

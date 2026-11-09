@@ -7987,6 +7987,8 @@
       "editableHintRoles": "The registrant may change their roles until the application enters the balancer pool or a team roster. After that the roles re-lock anyway.",
       "requireVerified": "Require a verified account",
       "requireVerifiedHint": "The registrant must pick one of their OAuth-verified accounts instead of typing a handle.",
+      "verifyPrimaryOnly": "Verify the main account only",
+      "verifyPrimaryOnlyHint": "Only the first (main) account must be verified; additional accounts such as smurfs are accepted as typed.",
       "maxCount": "Handles allowed",
       "maxCountHint": "How many accounts the registrant may list, the first one being the main. Leave empty for the provider's default.",
       "keyLocked": "Answer key: {key}",
