@@ -59,8 +59,7 @@ import {
   stageFormFromStage,
   type StageForm
 } from "../stageForm";
-import { BracketLayoutSection } from "./BracketLayoutSection";
-import { BracketPreview } from "./BracketPreview";
+import { BracketTab } from "./BracketTab";
 import { FfaScoringSection } from "./FfaScoringSection";
 import { RoundScheduleSection, useRoundSchedule } from "./RoundScheduleSection";
 import { StageItemsSection } from "./StageItemsSection";
@@ -213,14 +212,12 @@ export function StageEditor({
   // Standings presets and tiebreakers rank the stages that produce a table:
   // a group, and an FFA league (whose lobby IS its table).
   const ranksTable = GROUP_STAGE_TYPES.includes(form.stageType) || isFfaForm;
-  // Only an elimination bracket HAS a layout to draw.
-  const hasLayout = BRACKET_STAGE_TYPES.includes(form.stageType);
+  // An elimination bracket sets its best-of on the Bracket tab's round headers; every other format here.
+  const isEliminationForm = BRACKET_STAGE_TYPES.includes(form.stageType);
   const requested = searchParams?.get("section") ?? "";
-  const activeSection: BracketSection =
-    (BRACKET_SECTIONS as readonly string[]).includes(requested) &&
-    (requested !== "layout" || hasLayout)
-      ? (requested as BracketSection)
-      : "settings";
+  const activeSection: BracketSection = (BRACKET_SECTIONS as readonly string[]).includes(requested)
+    ? (requested as BracketSection)
+    : "settings";
 
   const sectionHref = (key: BracketSection) => {
     const next = new URLSearchParams(searchParams?.toString() ?? "");
@@ -316,8 +313,7 @@ export function StageEditor({
     key,
     label: t(key),
     href: sectionHref(key),
-    badge: key === "items" ? stage.items.length || undefined : undefined,
-    hidden: key === "layout" && !hasLayout
+    badge: key === "items" ? stage.items.length || undefined : undefined
   }));
 
   return (
@@ -454,9 +450,8 @@ export function StageEditor({
       <div className="pt-4">
         {activeSection === "settings" ? (
           // The settings rail's rhythm: `SettingGroup` cards, each section building its own. From a 72rem panel (a
-          // Full HD screen) they flow over two balanced columns, so whatever cards this format has pack without holes;
-          // the preview closes the tab at full width. It stays unframed: the bracket draws its own panel, and a card
-          // around it would be a second frame. Each card's own bottom margin spaces it from the next one and the preview.
+          // Full HD screen) they flow over two balanced columns, so whatever cards this format has pack without holes.
+          // Each card's own bottom margin spaces it from the next one.
           <div className="@container">
             <div className="gap-4 @6xl:columns-2 *:mb-4 *:break-inside-avoid">
               <GeneralSection stage={stage} form={form} onChange={patchForm} isSuperuser={isSuperuser}>
@@ -467,23 +462,31 @@ export function StageEditor({
               {/* Under the advance count it checks, over the Points group's bye. */}
               {form.stageType === "swiss" ? <SwissSection stage={stage} form={form} onChange={patchForm} /> : null}
               {ranksTable ? <TiebreakersSection stage={stage} form={form} onChange={patchForm} /> : null}
-              <BestOfSection
-                stage={stage}
-                form={form}
-                onChange={patchForm}
-                bracketTeamCount={projection.bracketTeams.count}
-                lowerBracketTeamCount={projection.lowerBracketTeamCount}
-                plannedRounds={plannedRounds}
-                onApplyToExisting={() => applyBestOfMutation.mutate()}
-                applying={applyBestOfMutation.isPending}
-              />
+              {isEliminationForm ? null : (
+                <BestOfSection
+                  form={form}
+                  onChange={patchForm}
+                  onApplyToExisting={() => applyBestOfMutation.mutate()}
+                  applying={applyBestOfMutation.isPending}
+                />
+              )}
               <RoundScheduleSection schedule={schedule} />
             </div>
-            <BracketPreview projection={projection} stage={stage} teams={teams} className="px-1 py-2" />
           </div>
         ) : null}
 
-        {activeSection === "layout" ? <BracketLayoutSection stage={stage} /> : null}
+        {activeSection === "layout" ? (
+          <BracketTab
+            stage={stage}
+            projection={projection}
+            teams={teams}
+            onBestOfSaved={(saved) => {
+              // The pick is saved already: the form follows it, or the SaveBar would offer to revert it.
+              patchForm({ bestOf: saved.best_of });
+              onChanged();
+            }}
+          />
+        ) : null}
 
         {activeSection === "standings" && stage.stage_type === "individual_swiss" ? (
           <PlayerStandingsSection stage={stage} tournament={tournament} onChanged={onChanged} />

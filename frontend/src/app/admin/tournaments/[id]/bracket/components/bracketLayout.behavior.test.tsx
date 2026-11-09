@@ -11,6 +11,10 @@
 // cannot express — an empty slot. Every bracket rule (the shape of the final,
 // the loser drops) is the validator's, and its complaints come back as a list
 // that points at the match it is talking about.
+//
+// The editor is the Bracket tab's "Edit structure" mode, so it is reached the
+// way an organizer reaches it: through that switch, and leaving it with an
+// unsaved layout asks first.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
@@ -19,11 +23,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
 import { ApiError } from "@/lib/api/error";
+import { projectStage } from "@/lib/bracket/projection";
 import type { BracketTemplateRead } from "@/types/admin.types";
 import type { Encounter } from "@/types/encounter.types";
 import type { Stage } from "@/types/tournament.types";
 
-import { BracketLayoutSection } from "./BracketLayoutSection";
+import { BracketTab } from "./BracketTab";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -39,8 +44,15 @@ vi.mock("@/services/admin.service", () => ({
   default: {
     getStageBracketTemplate: (...args: unknown[]) => getStageBracketTemplate(...args),
     setStageBracketTemplate: (...args: unknown[]) => setStageBracketTemplate(...args),
-    clearStageBracketTemplate: (...args: unknown[]) => clearStageBracketTemplate(...args)
+    clearStageBracketTemplate: (...args: unknown[]) => clearStageBracketTemplate(...args),
+    // The View mode draws the generator's skeleton; nothing here asserts on it.
+    getStageBracketPreview: vi.fn().mockResolvedValue([])
   }
+}));
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/admin/tournaments/84/bracket",
+  useSearchParams: () => new URLSearchParams("stage=5&section=layout")
 }));
 
 vi.mock("@/services/encounter.service", () => ({
@@ -224,19 +236,30 @@ async function settle() {
   }
 }
 
-async function mount(current: Stage = stage()) {
+async function mount(current: Stage = stage(), { edit = true } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   root = createRoot(container);
   await act(async () => {
     root!.render(
       <QueryClientProvider client={client}>
         <NextIntlClientProvider locale="en" messages={en}>
-          <BracketLayoutSection stage={current} />
+          <BracketTab
+            stage={current}
+            projection={projectStage({
+              stage: current,
+              stageType: current.stage_type,
+              maxRounds: current.max_rounds,
+              bestOf: current.best_of
+            })}
+            teams={[]}
+            onBestOfSaved={vi.fn()}
+          />
         </NextIntlClientProvider>
       </QueryClientProvider>
     );
   });
   await settle();
+  if (edit) await click(button("Edit structure"));
   return client;
 }
 
@@ -450,6 +473,28 @@ describe("Bracket layout editor", () => {
     expect(container.textContent).toContain(
       "This stage already has generated matches. Delete them first to edit the bracket."
     );
+    expect(button("Edit structure")?.disabled).toBe(true);
     expect(button("Save")).toBeUndefined();
+  });
+
+  it("asks before leaving the editor with an unsaved layout", async () => {
+    await mount();
+    await click(port("1-winner"));
+    await click(slot("3-2"));
+
+    // Leaving with the draft unsaved asks; declining keeps the editor and the wiring.
+    await click(button("View"));
+    const dialog = () => document.body.querySelector('[role="alertdialog"]');
+    expect(dialog()).not.toBeNull();
+    await click(button("Cancel", dialog()!));
+    expect(slot("3-2")?.textContent).toContain("W M1");
+
+    // Discarding goes back to the saved layout.
+    await click(button("View"));
+    await click(button("Discard", dialog()!));
+    expect(port("1-winner")).toBeNull();
+    await click(button("Edit structure"));
+    expect(slot("3-1")?.textContent).toContain("W M1");
+    expect(setStageBracketTemplate).not.toHaveBeenCalled();
   });
 });

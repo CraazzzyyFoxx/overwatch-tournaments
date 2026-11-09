@@ -10209,7 +10209,7 @@
       "tiebreakers": "Tiebreakers",
       "bestOf": "Best-of",
       "schedule": "Round schedule",
-      "layout": "Bracket layout",
+      "layout": "Bracket",
       "points": "Points",
       "swiss": "Qualification & elimination",
       "standings": "Standings",
@@ -10354,6 +10354,24 @@
       "emptyFfa": "An FFA stage's lobbies are drawn once they are generated.",
       "emptyGroup": "A group stage's matches are drawn once they are generated."
     },
+    "bracketTab": {
+      "mode": "Bracket mode",
+      "view": "View",
+      "structure": "Edit structure",
+      "discardTitle": "Discard the structure changes?",
+      "discardDescription": "The unsaved wiring is lost and the saved layout comes back.",
+      "discardConfirm": "Discard"
+    },
+    "bracketBestOf": {
+      "default": "Default best-of",
+      "roundMenu": "Best-of of {round}",
+      "inherit": "Default (Bo{bo})",
+      "saved": "Best-of saved",
+      "saveError": "Could not save the best-of",
+      "confirmTitle": "Change matches already in play?",
+      "confirmDescription": "{count, plural, one {# match that is played, reported or in progress changes its} other {# matches that are played, reported or in progress change their}} series length. Scores are kept.",
+      "confirmLabel": "Change best-of"
+    },
     "layoutSection": {
       "save": "Bracket layout saved",
       "reset": "Bracket layout reset to the generated one",
@@ -10461,18 +10479,12 @@
       "applyExisting": "Apply to existing matches",
       "existingMatches": "Existing matches",
       "lobbyLength": "Lobby length",
-      "bestOfRound": "Best-of per round",
       "baked": "Baked into {target} on (re)generation. Use \"Apply to existing matches\" to backfill without regenerating.",
       "lobbies": "lobbies",
       "matches": "matches",
-      "separateBrackets": "Upper and lower bracket rounds are configured separately.",
       "gamesPerLobby": "Games per lobby",
-      "default": "Default",
+      "allMatches": "All matches",
       "games": "{count, plural, one {# game} other {# games}}",
-      "grandFinalCap": "Grand Final",
-      "final": "Final",
-      "sameUpper": "Same as upper bracket",
-      "sameRounds": "Same as rounds",
       "pairingMode": "Lobby pairing",
       "pairingModeHelp": "By points: each role is sorted by the personal table and cut into lobbies in order. Whole-pool balance: the balancer splits everyone into equal teams and the pairs are random.",
       "pairingScore": "By points",
@@ -10539,11 +10551,6 @@
       },
       "divisionFallback": "Division {number}",
       "emptySlot": "Empty slot"
-    },
-    "bestOfSections": {
-      "upper": "Upper bracket",
-      "lower": "Lower bracket",
-      "other": "Other configured rounds"
     },
     "markdownEditor": {
       "nothingPublished": "Nothing published yet.",

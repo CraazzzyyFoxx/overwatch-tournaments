@@ -98,6 +98,7 @@ export function stageFormFromStage(stage: Stage): StageForm {
 
 export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpdateInput {
   const isFfa = FFA_STAGE_TYPES.includes(form.stageType);
+  const isElimination = BRACKET_STAGE_TYPES.includes(form.stageType);
   const isSwiss = form.stageType === "swiss";
   const isIndividualSwiss = INDIVIDUAL_SWISS_STAGE_TYPES.includes(form.stageType);
   // A threshold only exists on a Swiss stage, and a decisive match only while
@@ -132,17 +133,15 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
     swiss_eliminate_losses: eliminateLosses,
     de_grand_final_type:
       form.stageType === "double_elimination" ? form.deGrandFinalType : "no_reset",
-    seed_ranking: BRACKET_STAGE_TYPES.includes(form.stageType) ? form.seedRanking : "slot",
-    // An FFA lobby is one round of N games, and the generator resolves that count
-    // as `resolve_best_of(cfg, 1, is_final=False)` — `by_round["1"]` outranks
-    // `default`, and `final` is a bracket's last round. Either one left over from
-    // the format this stage used to be would silently beat "Games per lobby",
-    // with nothing in the editor that can reach it, so only `default` is kept.
+    seed_ranking: isElimination ? form.seedRanking : "slot",
+    // Only an elimination bracket is configured per round (on its round headers). Every other format plays one
+    // length everywhere, and a `by_round` or `final` left over from what the stage used to be would silently beat
+    // that `default` — FFA reads it from `by_round["1"]` — with nothing in the editor that can reach it.
     // `best_of` is replaced whole: a key left out resets to null, so all are sent.
     best_of: {
       default: form.bestOf.default,
-      by_round: isFfa ? {} : form.bestOf.by_round,
-      final: isFfa ? null : form.bestOf.final,
+      by_round: isElimination ? form.bestOf.by_round : {},
+      final: isElimination ? form.bestOf.final : null,
       swiss_qualify: qualifyWins != null ? form.bestOf.swiss_qualify : null,
       swiss_eliminate: eliminateLosses != null ? form.bestOf.swiss_eliminate : null
     },

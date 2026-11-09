@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useId, useMemo } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
@@ -11,6 +11,8 @@ import { previewToBracketMatches, type BracketMatch } from "@/lib/bracket/view";
 import { seatAt } from "@/lib/encounter/seats";
 import { notify } from "@/lib/notify";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BEST_OF_OPTIONS } from "@/lib/tournament/best-of";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import type { Team } from "@/types/team.types";
@@ -25,6 +27,8 @@ import {
 } from "@/lib/bracket/projection";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 
+import { useBracketBestOf } from "./useBracketBestOf";
+
 /**
  * The stage as it would be generated right now.
  *
@@ -35,9 +39,9 @@ import { adminQueryKeys } from "@/lib/admin/query-keys";
  * bracket-shaped drawing re-derived here, which is the only way the preview and
  * the generated bracket cannot disagree about byes and lower-bracket drops.
  *
- * The per-round best-of is on the cards themselves ("Bo3"), so the round chips
- * this section used to list beside them are gone. The drawn tree follows the
- * SAVED stage — a format or best-of edit shows up once it is saved.
+ * The best-of of an elimination bracket is set right here: a default above the
+ * tree and a menu on each round header (`useBracketBestOf`). A pick saves at
+ * once, so the drawn tree and the cards' "Bo3" follow it.
  *
  * Teams can be rearranged by drag: generated matches swap encounter slots, and
  * a Draft skeleton seeded in slot order swaps the seed inputs behind it.
@@ -47,14 +51,17 @@ export function BracketPreview({
   projection,
   stage,
   teams,
-  className
+  onBestOfSaved
 }: Readonly<{
   projection: StageProjection;
   stage: Stage;
   teams: Team[];
-  className?: string;
+  /** The stage after a best-of pick saved it; the editor syncs its form from it. */
+  onBestOfSaved: (saved: Stage) => void;
 }>) {
   const t = useTranslations("adminBracket.preview");
+  const tBestOf = useTranslations("adminBracket.bracketBestOf");
+  const bestOfId = useId();
   const { bracketTeams, unresolved } = projection;
   const sourceNote = {
     seeded: t("sourceSeeded"),
@@ -92,6 +99,7 @@ export function BracketPreview({
 
   const matches: BracketMatch[] = generated.length > 0 ? generated : projected;
   const isLoading = encountersQuery.isPending || (previewQuery.isPending && previewQuery.isFetching);
+  const bestOf = useBracketBestOf({ stage, matches, generated, onSaved: onBestOfSaved });
 
   // Generated matches are real rows, so their slots can be rearranged from
   // here as well as from the public bracket; a projection has nothing to write.
@@ -167,7 +175,7 @@ export function BracketPreview({
   return (
     // No frame of its own: the bracket below draws its own cards and panels,
     // and a card inside a card inside the editor's card reads as noise.
-    <section aria-labelledby="bracket-preview-heading" className={className}>
+    <section aria-labelledby="bracket-preview-heading">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 id="bracket-preview-heading" className="text-sm font-semibold text-foreground">
           {t("title")}
@@ -205,6 +213,28 @@ export function BracketPreview({
         </p>
       ) : null}
 
+      {isBracket ? (
+        <div className="mt-3 flex items-center gap-2">
+          <label htmlFor={bestOfId} className="text-xs text-muted-foreground">
+            {tBestOf("default")}
+          </label>
+          <Select
+            value={String(stage.best_of.default)}
+            onValueChange={(value) => bestOf.setDefault(Number(value))}
+            disabled={bestOf.pending}
+          >
+            <SelectTrigger id={bestOfId} size="sm" className="w-24">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {BEST_OF_OPTIONS.map((n) => (
+                <SelectItem key={n} value={String(n)}>{`Bo${n}`}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
+
       <div className="mt-3 border-t border-border pt-3">
         {isLoading ? (
           <Skeleton className="h-64 w-full rounded-xl" />
@@ -228,6 +258,7 @@ export function BracketPreview({
             type={stage.stage_type}
             interactive={generated.length > 0}
             onSwapSlots={onSwapSlots}
+            renderHeaderAction={isBracket ? bestOf.renderHeaderAction : undefined}
           />
         ) : (
           <p className="text-xs text-muted-foreground">
@@ -239,6 +270,7 @@ export function BracketPreview({
           </p>
         )}
       </div>
+      {bestOf.confirmDialog}
     </section>
   );
 }

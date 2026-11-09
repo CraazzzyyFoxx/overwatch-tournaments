@@ -35,11 +35,20 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const getStageBracketPreview = vi.fn();
 const getAllEncounters = vi.fn();
+const updateStage = vi.fn();
+const applyStageBestOf = vi.fn();
+const onBestOfSaved = vi.fn();
 
 vi.mock("@/services/admin.service", () => ({
   default: {
-    getStageBracketPreview: (...args: unknown[]) => getStageBracketPreview(...args)
+    getStageBracketPreview: (...args: unknown[]) => getStageBracketPreview(...args),
+    updateStage: (...args: unknown[]) => updateStage(...args),
+    applyStageBestOf: (...args: unknown[]) => applyStageBestOf(...args)
   }
+}));
+
+vi.mock("@/lib/notify", () => ({
+  notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() }
 }));
 
 vi.mock("@/services/encounter.service", () => ({
@@ -195,6 +204,16 @@ function generatedEncounter(): Encounter {
 let container: HTMLDivElement;
 let root: Root | null = null;
 
+async function settle() {
+  for (let index = 0; index < 12; index += 1) {
+    await act(async () => {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setTimeout(resolve, 0);
+      await promise;
+    });
+  }
+}
+
 async function mount(current: Stage = stage()) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   root = createRoot(container);
@@ -211,6 +230,7 @@ async function mount(current: Stage = stage()) {
             })}
             stage={current}
             teams={teams()}
+            onBestOfSaved={onBestOfSaved}
           />
         </NextIntlClientProvider>
       </QueryClientProvider>
@@ -218,13 +238,7 @@ async function mount(current: Stage = stage()) {
   });
   // Two queries settle in sequence: the encounters list decides whether the
   // projection is requested at all.
-  for (let index = 0; index < 12; index += 1) {
-    await act(async () => {
-      const { promise, resolve } = Promise.withResolvers<void>();
-      setTimeout(resolve, 0);
-      await promise;
-    });
-  }
+  await settle();
 }
 
 beforeEach(() => {
@@ -232,6 +246,8 @@ beforeEach(() => {
   document.body.appendChild(container);
   getAllEncounters.mockResolvedValue({ results: [], total: 0 });
   getStageBracketPreview.mockResolvedValue(skeleton());
+  updateStage.mockImplementation((_id: number, body: Partial<Stage>) => Promise.resolve({ ...stage(), ...body }));
+  applyStageBestOf.mockResolvedValue({ updated: 1 });
 });
 
 afterEach(() => {
@@ -310,5 +326,73 @@ describe("Bracket preview", () => {
     await mount({ ...stage(), seed_ranking: "avg_sr" });
     expect(toggle()).toBeNull();
     expect(container.textContent).toContain("Set Bracket seeds to slot order");
+  });
+});
+
+describe("Best-of on the bracket", () => {
+  async function pick(round: number, option: string) {
+    const trigger = container.querySelector(`[data-round-best-of="${round}"]`);
+    if (!trigger) throw new Error(`No best-of menu on round ${round}`);
+    await act(async () => {
+      trigger.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0, pointerType: "mouse" })
+      );
+    });
+    const item = Array.from(document.body.querySelectorAll('[role="menuitemradio"]')).find(
+      (candidate) => candidate.textContent?.trim() === option
+    );
+    if (!item) throw new Error(`No "${option}" in the menu`);
+    await act(async () => {
+      item.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+  }
+
+  const savedBestOf = () => (updateStage.mock.calls[0][1] as Pick<Stage, "best_of">).best_of;
+
+  it("saves a round's length from its header at once, without touching matches that do not exist", async () => {
+    await mount();
+
+    await pick(1, "Bo5");
+
+    expect(savedBestOf()).toEqual({ default: 3, by_round: { "1": 5 }, final: null, swiss_qualify: null, swiss_eliminate: null });
+    expect(applyStageBestOf).not.toHaveBeenCalled();
+    expect(onBestOfSaved).toHaveBeenCalledWith(expect.objectContaining({ best_of: savedBestOf() }));
+  });
+
+  it("sets the final through `final`, which outranks a row of its own round", async () => {
+    // A row left on the final's round would be dead config under `final`.
+    await mount({ ...stage(), best_of: { ...stage().best_of, by_round: { "2": 3 } } });
+
+    await pick(2, "Bo5");
+
+    expect(savedBestOf()).toMatchObject({ by_round: {}, final: 5 });
+  });
+
+  it("asks before changing a played match, then rewrites the existing ones", async () => {
+    getAllEncounters.mockResolvedValue({
+      results: [
+        generatedEncounter(),
+        { ...generatedEncounter(), id: 902, round: 2, status: "open", result_status: "none", teams: [] }
+      ],
+      total: 2
+    });
+    await mount();
+
+    await pick(1, "Bo5");
+    const dialog = document.body.querySelector('[role="alertdialog"]');
+    expect(dialog?.textContent).toContain("1 match that is played, reported or in progress");
+    expect(updateStage).not.toHaveBeenCalled();
+
+    const confirm = Array.from(dialog!.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Change best-of"
+    );
+    await act(async () => {
+      confirm!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+
+    expect(savedBestOf().by_round).toEqual({ "1": 5 });
+    expect(applyStageBestOf).toHaveBeenCalledWith(5);
   });
 });
