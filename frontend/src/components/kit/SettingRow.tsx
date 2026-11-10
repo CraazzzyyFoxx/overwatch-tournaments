@@ -48,8 +48,10 @@ export interface SettingRowCount {
  * One setting: what it is and why on the left, the control on the right.
  *
  * `stacked` puts the control under its label at full width, for the values a
- * half column cannot hold: text a reader types, Markdown, a record table. A
- * group narrower than `@xl` (36rem) stacks every row, from the same DOM.
+ * control column cannot hold: text a reader types, Markdown, a record table. A
+ * group narrower than `@md` (28rem) stacks every row, from the same DOM. Beside
+ * the label the control gets a 14rem column (more if its content needs it), so
+ * a select in a wide card does not stretch to half the page.
  *
  * `error` renders under the control, with an icon and words (never colour
  * alone); pair it with `invalidProps(htmlFor, error)` on the control. `count`
@@ -85,10 +87,9 @@ export function SettingRow({
     <div
       className={cn(
         "grid gap-2 py-3 first:pt-0 last:pb-0",
-        // The container, not the viewport, decides: beside the admin sidebar
-        // and the section rail a 1024px window leaves a form too narrow for
-        // two columns, and a dialog never has room for them.
-        !stacked && "@xl:grid-cols-2 @xl:items-center @xl:gap-6"
+        // The container, not the viewport, decides: a settings card is one
+        // column of a `SettingsGrid`, and a dialog is narrower still.
+        !stacked && "@md:grid-cols-[minmax(0,1fr)_minmax(auto,14rem)] @md:items-center @md:gap-6"
       )}
     >
       <div className="min-w-0">
@@ -118,7 +119,7 @@ export function SettingRow({
         ) : null}
       </div>
       <div className="min-w-0">
-        <div className={cn("flex min-w-0 items-center", !stacked && "@xl:justify-end")}>
+        <div className={cn("flex min-w-0 items-center", !stacked && "@md:justify-end")}>
           {children}
         </div>
         {error ? (
@@ -151,6 +152,9 @@ export function SettingRow({
  * `flush` drops the body's padding and row hairlines for one block that runs
  * edge to edge: a table, which brings its own rules between rows.
  *
+ * `wide` spans every column of the `SettingsGrid` it sits in, for a body that
+ * needs the page's width (a document editor, a per-round table).
+ *
  * `level` is the title's heading rank: 2 under a page `h1`, deeper inside a
  * dialog whose own title and section heading sit above the group.
  */
@@ -162,6 +166,7 @@ export function SettingGroup({
   actions,
   immediate = false,
   flush = false,
+  wide = false,
   level = 2,
   children
 }: Readonly<{
@@ -172,6 +177,7 @@ export function SettingGroup({
   actions?: ReactNode;
   immediate?: boolean;
   flush?: boolean;
+  wide?: boolean;
   level?: 2 | 3 | 4;
   children: ReactNode;
 }>) {
@@ -184,7 +190,7 @@ export function SettingGroup({
   return (
     // `scroll-mt-16` keeps a jumped-to group clear of the admin top bar; a
     // flush body is clipped to the card's corners.
-    <Card asChild className={cn("scroll-mt-16", flush && "overflow-hidden")}>
+    <Card asChild className={cn("scroll-mt-16", flush && "overflow-hidden", wide && "[column-span:all]")}>
       <section id={id} ref={ref} aria-labelledby={titleId}>
         {/* `min-w-48`: past that the actions wrap under the title instead of squeezing it. */}
         <header className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
@@ -219,5 +225,22 @@ export function SettingGroup({
         </div>
       </section>
     </Card>
+  );
+}
+
+/**
+ * The page body that holds a section's `SettingGroup` cards: as many balanced
+ * columns of at least 26rem as fit (at most three, and never more than there
+ * are cards), packed top to bottom so a short card never leaves a hole beside
+ * a tall one. The column count follows this element's own width, not the
+ * viewport. A `wide` group spans every column.
+ *
+ * Only cards go in here: a save bar or a page note sits outside it.
+ */
+export function SettingsGrid({ children }: Readonly<{ children: ReactNode }>) {
+  return (
+    <div className="gap-4 columns-[26rem_3] *:mb-4 *:break-inside-avoid [&:has(>:nth-child(2):last-child)]:columns-[26rem_2] [&:has(>:only-child)]:columns-1">
+      {children}
+    </div>
   );
 }

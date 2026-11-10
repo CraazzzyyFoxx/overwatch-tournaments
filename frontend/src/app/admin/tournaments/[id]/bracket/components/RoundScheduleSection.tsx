@@ -315,7 +315,13 @@ export function RoundScheduleSection({ schedule }: Readonly<{ schedule: RoundSch
   const { isFfa, source, rows } = schedule;
 
   return (
-    <SettingGroup id="stage-round-schedule" title={tEditor("schedule")} description={t("description")}>
+    // The table's pickers need the page's width; an empty note does not.
+    <SettingGroup
+      id="stage-round-schedule"
+      title={tEditor("schedule")}
+      description={t("description")}
+      wide={rows.length > 0}
+    >
       {source.isPending ? (
         <Skeleton className="h-40 w-full rounded-lg" />
       ) : source.isError ? (

@@ -12,7 +12,7 @@ import { eyebrowClass } from "@/components/ui/eyebrow";
 import { useWorkspaceTimezone } from "@/hooks/useWorkspaceTimezone";
 import { SCHEDULE_PHASES } from "@/lib/tournament/lifecycle";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
-import { getUtcOffsetLabel, utcToZonedInput, zonedInputToUtc } from "@/lib/workspace/timezone";
+import { utcToZonedInput, zonedInputToUtc } from "@/lib/workspace/timezone";
 import adminService from "@/services/admin.service";
 import type { FlowNodeScheduleEntry, TournamentFlowNode } from "@/types/flow.types";
 
@@ -80,25 +80,15 @@ export function NodeScheduleEditor({
 
   return (
     <>
-      <SettingGroup
-        id={`schedule-node-${node.id}`}
-        title={node.name}
-        description={
-          <>
-            {t("hint")}
-            <span className="mt-1 block font-medium text-foreground/80">
-              {t("timezoneLabel", { label: t("timezone"), timezone, offset: getUtcOffsetLabel(timezone) })}
-            </span>
-          </>
-        }
-      >
-        {/* One header row instead of repeated label pairs. Stacked below lg, where each picker shows its own labels again. */}
+      <SettingGroup id={`schedule-node-${node.id}`} title={node.name}>
+        {/* One header row instead of repeated label pairs, once the card fits two pickers side by side; narrower,
+            each picker shows its own labels again. The card's body is the container. */}
         <div
           role="group"
           aria-label={`${t("aria")}: ${node.name}`}
-          className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(6rem,8rem)_1fr_1fr] lg:items-center lg:gap-x-4 lg:gap-y-3"
+          className="flex flex-col gap-4 @min-[48rem]:grid @min-[48rem]:grid-cols-[minmax(6rem,8rem)_1fr_1fr] @min-[48rem]:items-center @min-[48rem]:gap-x-4 @min-[48rem]:gap-y-3"
         >
-          <div aria-hidden className="hidden lg:contents">
+          <div aria-hidden className="hidden @min-[48rem]:contents">
             <span />
             <span className={eyebrowClass("muted")}>{t("starts")}</span>
             <span className={eyebrowClass("muted")}>{t("ends")}</span>
@@ -107,14 +97,14 @@ export function NodeScheduleEditor({
           {phases.map((phase) => {
             const label = t(`phases.${phase}`);
             return (
-              <div key={phase} className="flex flex-col gap-2 lg:contents">
-                <p className="text-xs font-medium text-foreground lg:py-1">{label}</p>
+              <div key={phase} className="flex flex-col gap-2 @min-[48rem]:contents">
+                <p className="text-xs font-medium text-foreground @min-[48rem]:py-1">{label}</p>
                 <DateTimePicker
                   id={`schedule-${node.id}-${phase}-starts`}
                   timeId={`schedule-${node.id}-${phase}-starts-time`}
                   dateLabel={t("phaseStartsAt", { phase: label })}
                   timeLabel={t("phaseStartTime", { phase: label })}
-                  labelClassName="lg:sr-only"
+                  labelClassName="@min-[48rem]:sr-only"
                   disabled={disabled}
                   value={form[phase]?.starts_at}
                   onChange={(next) => setField(phase, "starts_at", next)}
@@ -124,7 +114,7 @@ export function NodeScheduleEditor({
                   timeId={`schedule-${node.id}-${phase}-ends-time`}
                   dateLabel={t("phaseEndsAt", { phase: label })}
                   timeLabel={t("phaseEndTime", { phase: label })}
-                  labelClassName="lg:sr-only"
+                  labelClassName="@min-[48rem]:sr-only"
                   disabled={disabled}
                   value={form[phase]?.ends_at}
                   onChange={(next) => setField(phase, "ends_at", next)}

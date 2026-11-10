@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 
 import { Switch } from "@/components/ui/switch";
 import { SaveBar } from "@/components/kit/SaveBar";
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import type { Tournament } from "@/types/tournament.types";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
@@ -41,7 +41,7 @@ function ScoringForm({
 
   return (
     <>
-      <div className="flex flex-col gap-4">
+      <SettingsGrid>
         <SettingGroup id="results" title={t("results")}>
           <SettingRow htmlFor="settings-is-finished" label={t("finished")}>
             <Switch
@@ -64,7 +64,7 @@ function ScoringForm({
             />
           </SettingRow>
         </SettingGroup>
-      </div>
+      </SettingsGrid>
 
       <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>

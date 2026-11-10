@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 
 import { SaveBar } from "@/components/kit/SaveBar";
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { NumberInput } from "@/components/ui/number-input";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { Tournament } from "@/types/tournament.types";
@@ -62,6 +62,7 @@ function PovStreamDelayForm({
 
   return (
     <>
+      <SettingsGrid>
       <SettingGroup id="pov-streams" title={t("title")}>
         <SettingRow htmlFor="settings-pov-stream-delay" label={t("delay")} hint={t("delayHint")}>
           <NumberInput
@@ -77,6 +78,7 @@ function PovStreamDelayForm({
           />
         </SettingRow>
       </SettingGroup>
+      </SettingsGrid>
 
       <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>

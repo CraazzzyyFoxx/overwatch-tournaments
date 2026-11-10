@@ -19,7 +19,7 @@ import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { PhaseStrip, type PhaseState } from "@/components/kit/PhaseStrip";
 import { SaveBar } from "@/components/kit/SaveBar";
 import { useInSettingsPreview } from "@/components/kit/SettingsContinuation";
-import { SettingGroup, SettingRow, invalidProps } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, SettingsGrid, invalidProps } from "@/components/kit/SettingRow";
 import { getApiErrorMessage } from "@/lib/api/error";
 import { PLATFORM_ZONE } from "@/lib/site/host";
 import { notify } from "@/lib/notify";
@@ -183,172 +183,174 @@ export function DomainSection({ workspaceId }: Readonly<{ workspaceId: number | 
     <WorkspaceSettingsFrame workspaceId={workspaceId} settings={settings}>
       {({ form: values, workspace: ws }) => (
         <>
-          <SettingGroup
-            id="address"
-            title={t("groups.address.title")}
-            description={t("groups.address.description")}
-          >
-            <SettingRow
-              htmlFor="workspace-subdomain"
-              label={t("subdomain")}
-              hint={
-                values.subdomain
-                  ? `https://${values.subdomain}.${PLATFORM_ZONE}`
-                  : t("platformUrlOnly")
-              }
-              error={errors.subdomain}
-              stacked
+          <SettingsGrid>
+            <SettingGroup
+              id="address"
+              title={t("groups.address.title")}
+              description={t("groups.address.description")}
             >
-              <InputGroup>
-                <InputGroupInput
-                  id="workspace-subdomain"
-                  value={values.subdomain ?? ""}
-                  spellCheck={false}
-                  onChange={(event) =>
-                    patch({
-                      subdomain: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")
-                    })
-                  }
-                  onBlur={() => reveal("subdomain")}
-                  {...invalidProps("workspace-subdomain", errors.subdomain)}
-                />
-                <InputGroupAddon align="inline-end">
-                  <InputGroupText>.{PLATFORM_ZONE}</InputGroupText>
-                </InputGroupAddon>
-              </InputGroup>
-            </SettingRow>
-          </SettingGroup>
-
-          <SettingGroup
-            id="custom-domain"
-            title={t("customDomain")}
-            description={t("groups.customDomain.description")}
-            immediate
-          >
-            <div className="pb-4">
-              <PhaseStrip
-                phases={[
-                  { key: "add", label: t("addDomain"), state: phaseState(0) },
-                  { key: "dns", label: t("addDns"), state: phaseState(1) },
-                  { key: "verified", label: t("verifyLabel"), state: phaseState(2) }
-                ]}
-              />
-            </div>
-
-            <SettingRow
-              htmlFor="workspace-custom-domain"
-              label={t("domainLabel")}
-              error={draftError}
-              stacked
-            >
-              <div className="flex w-full flex-wrap gap-2">
-                <Input
-                  id="workspace-custom-domain"
-                  className="min-w-[16rem] flex-1"
-                  value={draftDomain}
-                  placeholder={t("domainPlaceholder")}
-                  inputMode="url"
-                  spellCheck={false}
-                  disabled={!!domain.verifiedAt}
-                  onChange={(event) => {
-                    setDraftDomain(event.target.value.toLowerCase().trim());
-                    setDomainRefusal(null);
-                  }}
-                  onBlur={() => {
-                    if (draftDomain) setDraftJudged(true);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !domain.verifiedAt) saveDraft();
-                  }}
-                  {...invalidProps("workspace-custom-domain", draftError)}
-                />
-                {domain.verifiedAt ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="text-danger"
-                    disabled={clearMutation.isPending}
-                    onClick={() => setRemoveOpen(true)}
-                  >
-                    {t("removeDomain")}
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={setDomainMutation.isPending}
-                    onClick={saveDraft}
-                  >
-                    {setDomainMutation.isPending ? t("saving") : t("saveDomain")}
-                  </Button>
-                )}
-                {pending ? (
-                  <Button
-                    type="button"
-                    disabled={verifyMutation.isPending}
-                    onClick={() => verifyMutation.mutate()}
-                  >
-                    {verifyMutation.isPending ? t("saving") : t("verifyNow")}
-                  </Button>
-                ) : null}
-              </div>
-            </SettingRow>
-
-            {pending ? (
               <SettingRow
-                label={t("dnsRecords")}
-                hint={t("addRecords", { seconds: VERIFY_POLL_MS / 1000 })}
+                htmlFor="workspace-subdomain"
+                label={t("subdomain")}
+                hint={
+                  values.subdomain
+                    ? `https://${values.subdomain}.${PLATFORM_ZONE}`
+                    : t("platformUrlOnly")
+                }
+                error={errors.subdomain}
                 stacked
               >
-                <DnsRecords
-                  records={[
-                    { type: "TXT", host: `_owt-verify.${domain.domain}`, value: domain.token ?? "" },
-                    { type: "CNAME", host: domain.domain ?? "", value: PLATFORM_ZONE }
+                <InputGroup>
+                  <InputGroupInput
+                    id="workspace-subdomain"
+                    value={values.subdomain ?? ""}
+                    spellCheck={false}
+                    onChange={(event) =>
+                      patch({
+                        subdomain: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")
+                      })
+                    }
+                    onBlur={() => reveal("subdomain")}
+                    {...invalidProps("workspace-subdomain", errors.subdomain)}
+                  />
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupText>.{PLATFORM_ZONE}</InputGroupText>
+                  </InputGroupAddon>
+                </InputGroup>
+              </SettingRow>
+            </SettingGroup>
+
+            <SettingGroup
+              id="custom-domain"
+              title={t("customDomain")}
+              description={t("groups.customDomain.description")}
+              immediate
+            >
+              <div className="pb-4">
+                <PhaseStrip
+                  phases={[
+                    { key: "add", label: t("addDomain"), state: phaseState(0) },
+                    { key: "dns", label: t("addDns"), state: phaseState(1) },
+                    { key: "verified", label: t("verifyLabel"), state: phaseState(2) }
                   ]}
-                  onCopy={copy}
+                />
+              </div>
+
+              <SettingRow
+                htmlFor="workspace-custom-domain"
+                label={t("domainLabel")}
+                error={draftError}
+                stacked
+              >
+                <div className="flex w-full flex-wrap gap-2">
+                  <Input
+                    id="workspace-custom-domain"
+                    className="min-w-[16rem] flex-1"
+                    value={draftDomain}
+                    placeholder={t("domainPlaceholder")}
+                    inputMode="url"
+                    spellCheck={false}
+                    disabled={!!domain.verifiedAt}
+                    onChange={(event) => {
+                      setDraftDomain(event.target.value.toLowerCase().trim());
+                      setDomainRefusal(null);
+                    }}
+                    onBlur={() => {
+                      if (draftDomain) setDraftJudged(true);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !domain.verifiedAt) saveDraft();
+                    }}
+                    {...invalidProps("workspace-custom-domain", draftError)}
+                  />
+                  {domain.verifiedAt ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="text-danger"
+                      disabled={clearMutation.isPending}
+                      onClick={() => setRemoveOpen(true)}
+                    >
+                      {t("removeDomain")}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={setDomainMutation.isPending}
+                      onClick={saveDraft}
+                    >
+                      {setDomainMutation.isPending ? t("saving") : t("saveDomain")}
+                    </Button>
+                  )}
+                  {pending ? (
+                    <Button
+                      type="button"
+                      disabled={verifyMutation.isPending}
+                      onClick={() => verifyMutation.mutate()}
+                    >
+                      {verifyMutation.isPending ? t("saving") : t("verifyNow")}
+                    </Button>
+                  ) : null}
+                </div>
+              </SettingRow>
+
+              {pending ? (
+                <SettingRow
+                  label={t("dnsRecords")}
+                  hint={t("addRecords", { seconds: VERIFY_POLL_MS / 1000 })}
+                  stacked
+                >
+                  <DnsRecords
+                    records={[
+                      { type: "TXT", host: `_owt-verify.${domain.domain}`, value: domain.token ?? "" },
+                      { type: "CNAME", host: domain.domain ?? "", value: PLATFORM_ZONE }
+                    ]}
+                    onCopy={copy}
+                  />
+                </SettingRow>
+              ) : null}
+            </SettingGroup>
+
+            {/* Each placeholder is what a blank field falls back to, so the
+                reader sees what search engines get without filling anything. */}
+            <SettingGroup
+              id="search"
+              title={t("groups.search.title")}
+              description={t("groups.search.description")}
+            >
+              <SettingRow
+                htmlFor="workspace-seo-title"
+                label={t("seoTitle")}
+                count={{ value: (values.seo_title ?? "").length, max: SEO_TITLE_SHOWN, soft: true }}
+                stacked
+              >
+                <Input
+                  id="workspace-seo-title"
+                  value={values.seo_title ?? ""}
+                  placeholder={ws.name}
+                  onChange={(event) => patch({ seo_title: event.target.value })}
                 />
               </SettingRow>
-            ) : null}
-          </SettingGroup>
-
-          {/* Each placeholder is what a blank field falls back to, so the
-              reader sees what search engines get without filling anything. */}
-          <SettingGroup
-            id="search"
-            title={t("groups.search.title")}
-            description={t("groups.search.description")}
-          >
-            <SettingRow
-              htmlFor="workspace-seo-title"
-              label={t("seoTitle")}
-              count={{ value: (values.seo_title ?? "").length, max: SEO_TITLE_SHOWN, soft: true }}
-              stacked
-            >
-              <Input
-                id="workspace-seo-title"
-                value={values.seo_title ?? ""}
-                placeholder={ws.name}
-                onChange={(event) => patch({ seo_title: event.target.value })}
-              />
-            </SettingRow>
-            <SettingRow
-              htmlFor="workspace-seo-description"
-              label={t("seoDescription")}
-              count={{
-                value: (values.seo_description ?? "").length,
-                max: SEO_DESCRIPTION_SHOWN,
-                soft: true
-              }}
-              stacked
-            >
-              <Textarea
-                id="workspace-seo-description"
-                value={values.seo_description ?? ""}
-                placeholder={ws.description ?? undefined}
-                onChange={(event) => patch({ seo_description: event.target.value })}
-              />
-            </SettingRow>
-          </SettingGroup>
+              <SettingRow
+                htmlFor="workspace-seo-description"
+                label={t("seoDescription")}
+                count={{
+                  value: (values.seo_description ?? "").length,
+                  max: SEO_DESCRIPTION_SHOWN,
+                  soft: true
+                }}
+                stacked
+              >
+                <Textarea
+                  id="workspace-seo-description"
+                  value={values.seo_description ?? ""}
+                  placeholder={ws.description ?? undefined}
+                  onChange={(event) => patch({ seo_description: event.target.value })}
+                />
+              </SettingRow>
+            </SettingGroup>
+          </SettingsGrid>
 
           <SaveBar
             dirty={settings.dirty}

@@ -4,7 +4,7 @@ import { useId } from "react";
 import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingRow } from "@/components/kit/SettingRow";
 import { eyebrowClass } from "@/components/ui/eyebrow";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,6 +26,7 @@ import {
   tiebreakOrderForPreset
 } from "@/lib/bracket/projection";
 import type { SectionProps } from "./types";
+import { ScoringPart } from "./ScoringSection";
 
 /** What the engine pays for a result where the stage sets no points (`standings/service.py` `_scoring`). */
 const DEFAULT_POINTS = { win: 1, draw: 0.5, loss: 0 } as const;
@@ -69,7 +70,7 @@ export function TiebreakersSection({ form, onChange }: SectionProps) {
       {/* Points for beating an opponent. An FFA lobby has none to beat: its
           points come from the place and the score of each game. */}
       {isGroups ? (
-        <SettingGroup id="stage-points" title={tRoot("editor.points")} description={t("pointsHelp")}>
+        <ScoringPart title={tRoot("editor.points")} description={t("pointsHelp")}>
           <SettingRow htmlFor={`${ids}-win`} label={t("winOverride")}>
             <NumberInput
               id={`${ids}-win`}
@@ -114,10 +115,10 @@ export function TiebreakersSection({ form, onChange }: SectionProps) {
               />
             </SettingRow>
           ) : null}
-        </SettingGroup>
+        </ScoringPart>
       ) : null}
 
-      <SettingGroup id="stage-tiebreakers" title={tRoot("editor.tiebreakers")}>
+      <ScoringPart title={tRoot("editor.tiebreakers")}>
         <SettingRow htmlFor={`${ids}-preset`} label={t("standingsPreset")}>
           <Select
             value={form.rankingPreset}
@@ -234,7 +235,7 @@ export function TiebreakersSection({ form, onChange }: SectionProps) {
             ) : null}
           </div>
         </SettingRow>
-      </SettingGroup>
+      </ScoringPart>
     </>
   );
 }

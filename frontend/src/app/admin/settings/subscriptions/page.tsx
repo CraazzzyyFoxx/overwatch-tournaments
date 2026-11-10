@@ -8,6 +8,7 @@ import SubscriptionProvidersCard, {
   type ProviderDraft
 } from "@/components/admin/subscriptions/SubscriptionProviderCard";
 import { SaveBar } from "@/components/kit/SaveBar";
+import { SettingsGrid } from "@/components/kit/SettingRow";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
@@ -128,16 +129,18 @@ function SubscriptionsSettings({ workspaceId }: Readonly<{ workspaceId: number }
 
   return (
     <div className="flex flex-col gap-4">
-      <SubscriptionProvidersCard
-        workspaceId={workspaceId}
-        resetKey={resetKey}
-        onDraftChange={onProviderDraft}
-      />
-      <WorkspaceRequirementCard
-        workspaceId={workspaceId}
-        draft={requirementDraft}
-        onDraftChange={setRequirementDraft}
-      />
+      <SettingsGrid>
+        <SubscriptionProvidersCard
+          workspaceId={workspaceId}
+          resetKey={resetKey}
+          onDraftChange={onProviderDraft}
+        />
+        <WorkspaceRequirementCard
+          workspaceId={workspaceId}
+          draft={requirementDraft}
+          onDraftChange={setRequirementDraft}
+        />
+      </SettingsGrid>
       <SaveBar
         dirty={dirty}
         summary={summary}

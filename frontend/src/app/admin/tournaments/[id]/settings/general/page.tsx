@@ -15,7 +15,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { SaveBar } from "@/components/kit/SaveBar";
 import { MAX_AVATAR_BYTES } from "@/lib/uploads";
 import { notify } from "@/lib/notify";
@@ -79,7 +79,7 @@ function GeneralForm({
           showCount
         />
       </div>
-
+      <SettingsGrid>
       <SettingGroup id="details" title={t("groups.details.title")}>
         <SettingRow htmlFor="settings-name" label={t("name")} stacked>
           <Input
@@ -141,6 +141,7 @@ function GeneralForm({
       </SettingGroup>
 
       <BrandingGroup tournament={tournament} tournamentId={tournamentId} disabled={disabled} />
+      </SettingsGrid>
 
       <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>

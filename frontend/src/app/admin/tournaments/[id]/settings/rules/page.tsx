@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 
 import { MarkdownEditor } from "@/components/admin/MarkdownEditor";
 import { SaveBar } from "@/components/kit/SaveBar";
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import type { Tournament } from "@/types/tournament.types";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
@@ -52,7 +52,8 @@ function RulesForm({
 
   return (
     <>
-      <SettingGroup id="document" title={t("groups.document.title")}>
+      <SettingsGrid>
+      <SettingGroup id="document" title={t("groups.document.title")} wide>
         <SettingRow
           label={t("label")}
           hint={t.rich("hint", { code: (chunks) => <code>{chunks}</code> })}
@@ -70,6 +71,7 @@ function RulesForm({
           />
         </SettingRow>
       </SettingGroup>
+      </SettingsGrid>
 
       <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>

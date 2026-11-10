@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { SaveBar } from "@/components/kit/SaveBar";
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { WorkspaceSettingsFrame } from "./WorkspaceSettingsFrame";
 import { useWorkspaceSettingsForm } from "./useWorkspaceSettingsForm";
 
@@ -33,50 +33,52 @@ export function VisibilitySection({ workspaceId }: Readonly<{ workspaceId: numbe
     <WorkspaceSettingsFrame workspaceId={workspaceId} settings={settings}>
       {({ form: values }) => (
         <>
-          <SettingGroup id="listing" title={t("groups.discovery.title")}>
-            <SettingRow htmlFor="workspace-is-hidden" label={t("hidden")} hint={t("hiddenHelp")}>
-              <Switch
-                id="workspace-is-hidden"
-                checked={values.is_hidden}
-                onCheckedChange={(checked) => patch({ is_hidden: checked })}
-              />
-            </SettingRow>
-          </SettingGroup>
+          <SettingsGrid>
+            <SettingGroup id="listing" title={t("groups.discovery.title")}>
+              <SettingRow htmlFor="workspace-is-hidden" label={t("hidden")} hint={t("hiddenHelp")}>
+                <Switch
+                  id="workspace-is-hidden"
+                  checked={values.is_hidden}
+                  onCheckedChange={(checked) => patch({ is_hidden: checked })}
+                />
+              </SettingRow>
+            </SettingGroup>
 
-          <SettingGroup
-            id="newcomers"
-            title={t("groups.newcomers.title")}
-            description={t("scopeHelp")}
-          >
-            <RadioGroup
-              value={values.newcomer_scope}
-              onValueChange={(value) => patch({ newcomer_scope: value as "global" | "workspace" })}
-              aria-label={t("newcomerScope")}
-              className="gap-4"
+            <SettingGroup
+              id="newcomers"
+              title={t("groups.newcomers.title")}
+              description={t("scopeHelp")}
             >
-              {NEWCOMER_SCOPES.map((scope) => {
-                const id = `newcomer-scope-${scope.value}`;
-                return (
-                  <div key={scope.value} className="flex items-start gap-3">
-                    <RadioGroupItem
-                      id={id}
-                      value={scope.value}
-                      aria-describedby={`${id}-help`}
-                      className="mt-0.5"
-                    />
-                    <div className="min-w-0">
-                      <Label htmlFor={id} className="text-sm font-medium">
-                        {t(scope.label)}
-                      </Label>
-                      <p id={`${id}-help`} className="mt-0.5 max-w-prose text-xs text-muted-foreground">
-                        {t(scope.help)}
-                      </p>
+              <RadioGroup
+                value={values.newcomer_scope}
+                onValueChange={(value) => patch({ newcomer_scope: value as "global" | "workspace" })}
+                aria-label={t("newcomerScope")}
+                className="gap-4"
+              >
+                {NEWCOMER_SCOPES.map((scope) => {
+                  const id = `newcomer-scope-${scope.value}`;
+                  return (
+                    <div key={scope.value} className="flex items-start gap-3">
+                      <RadioGroupItem
+                        id={id}
+                        value={scope.value}
+                        aria-describedby={`${id}-help`}
+                        className="mt-0.5"
+                      />
+                      <div className="min-w-0">
+                        <Label htmlFor={id} className="text-sm font-medium">
+                          {t(scope.label)}
+                        </Label>
+                        <p id={`${id}-help`} className="mt-0.5 max-w-prose text-xs text-muted-foreground">
+                          {t(scope.help)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </RadioGroup>
-          </SettingGroup>
+                  );
+                })}
+              </RadioGroup>
+            </SettingGroup>
+          </SettingsGrid>
 
           <SaveBar
             dirty={settings.dirty}
