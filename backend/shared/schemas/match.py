@@ -101,6 +101,9 @@ class NativeMatchMember(BaseModel):
     handle_snapshot: str
     #: From ``observed_role_id`` through the owner ontology.
     observed_role: RoleRef | None
+    #: The member's rank on the game's own ladder on the match date (``DisciplineSpec.native_rank_at``); ``None``
+    #: when the game keeps no native rank or none was known by then.
+    rank_value: int | None = None
 
 
 class NativeFact(BaseModel):

@@ -8,7 +8,7 @@ value stands for every role of the rated dimension (``agent``).
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import sqlalchemy as sa
@@ -18,7 +18,7 @@ from shared.core.social import SocialProvider
 from shared.models.identity.social import SocialAccount
 from shared.models.ranks.rank import RankAccountState, UserRankSnapshot
 
-__all__ = ("DISCIPLINE", "MAX_AGE", "best_per_user", "latest_rank_rows", "native_ranks", "roles")
+__all__ = ("DISCIPLINE", "MAX_AGE", "best_per_user", "latest_rank_rows", "native_ranks", "ranks_at", "roles")
 
 DISCIPLINE = "deadlock"
 #: Same freshness rule as Overwatch's ``OW_RANK_MAX_AGE`` (``shared/services/rank_snapshots.py``) and LoL's.
@@ -87,6 +87,34 @@ async def native_ranks(session: AsyncSession, user_ids: Sequence[int]) -> dict[i
         .where(*_ranked_fresh_steam(latest))
     )
     return best_per_user((row[0], row[1]) for row in rows.all())
+
+
+async def ranks_at(session: AsyncSession, user_ids: Sequence[int], at: datetime) -> dict[int, int]:
+    """The best rank each player held at ``at``: per Steam account the newest row captured by then (a row is written on
+    a change, so it holds until the next one), ranked ones only. An account first polled after ``at`` says nothing."""
+    if not user_ids:
+        return {}
+    snap = UserRankSnapshot
+    held = (
+        sa.select(SocialAccount.user_id, snap.rank_value, snap.is_ranked)
+        .join(SocialAccount, SocialAccount.id == snap.social_account_id)
+        .where(
+            snap.discipline == DISCIPLINE,
+            snap.captured_at <= at,
+            SocialAccount.provider == SocialProvider.STEAM,
+            SocialAccount.user_id.in_(list(user_ids)),
+        )
+        .distinct(snap.social_account_id)
+        .order_by(snap.social_account_id, snap.captured_at.desc(), snap.id.desc())
+        .subquery("deadlock_held")
+    )
+    rows = await session.execute(
+        sa.select(held.c.user_id, held.c.rank_value).where(held.c.is_ranked.is_(True), held.c.rank_value.is_not(None))
+    )
+    best: dict[int, int] = {}
+    for user_id, value in rows.all():
+        best[user_id] = max(value, best.get(user_id, value))
+    return best
 
 
 def latest_rank_rows(members: Any, game: str) -> Any:

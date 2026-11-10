@@ -2752,7 +2752,9 @@
       "scoreboard": {
         "final": "Final figures",
         "at": "At {time}: kills, deaths and items exact; the rest from the game's {sample} sample",
-        "endOnly": "Only recorded at the end of the match"
+        "endOnly": "Only recorded at the end of the match",
+        "rank": "Rank",
+        "rankAt": "Rank on the match date"
       },
       "preset": {
         "overview": "Overview",

@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from pydantic import BaseModel
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +39,10 @@ NativeRanks = Callable[["AsyncSession", Sequence[int]], Awaitable[dict[int, dict
 #: the newest ranked snapshot per account and role with the columns ``user_id, handle (the account label), platform,
 #: role, rank_value, division, tier, captured_at, snapshot_id``. ``None``: the core's OverFast twin.
 NativeRankRows = Callable[[Any, str], Any]
+
+#: A game's native rank as it stood at a moment: ``(session, players.user ids, at)`` -> ``{user_id: rank_value}``, the
+#: best rank a player held at ``at`` on the game's own ladder (the match view's rank on the match date). Reads only.
+NativeRankAt = Callable[["AsyncSession", Sequence[int], "datetime"], Awaitable[dict[int, int]]]
 
 #: A collection RPC the module serves (``rank.collect``): ``(session, caller or None for a public read, gateway data)``.
 #: The handler validates its own payload and authorizes the caller; it returns what the RPC envelope serializes.
@@ -225,6 +231,8 @@ class DisciplineSpec:
     native_ladder: tuple[NativeTier, ...] = ()
     #: See ``NativeRankRows``; only a module with ``native_ranks`` declares it.
     native_rank_rows: NativeRankRows | None = field(default=None, compare=False)
+    #: See ``NativeRankAt``; ``None``: a match shows no rank.
+    native_rank_at: NativeRankAt | None = field(default=None, compare=False)
     #: The role ontology; exactly one dimension is ``rated``.
     dimensions: tuple[DimensionSpec, ...] = ()
     #: Team-format presets; the first is what an owner without a format of its own gets.

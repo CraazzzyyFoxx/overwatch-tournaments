@@ -12,6 +12,8 @@ from shared.disciplines.lobby import IngestClient, LobbyBotSpec
 from shared.disciplines.spec import DimensionSpec, DisciplineSpec, FormatDimensionSpec, RoleSpec, TeamFormatPreset
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from pydantic import BaseModel
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +57,12 @@ def _native_rank_rows(members: Any, game: str) -> Any:
     from shared.disciplines.deadlock.ranks import latest_rank_rows
 
     return latest_rank_rows(members, game)
+
+
+async def _native_rank_at(session: AsyncSession, user_ids: Sequence[int], at: datetime) -> dict[int, int]:
+    from shared.disciplines.deadlock.ranks import ranks_at
+
+    return await ranks_at(session, user_ids, at)
 
 
 def _decode(raw: bytes, ctx: DecodeContext) -> MatchDoc:
@@ -205,6 +213,7 @@ SPEC = DisciplineSpec(
     native_ranks=_native_ranks,
     native_ladder=NATIVE_LADDER,
     native_rank_rows=_native_rank_rows,
+    native_rank_at=_native_rank_at,
     configure_runtime=_configure_runtime,
     register_jobs=_register_jobs,
     start_jobs=_start_jobs,

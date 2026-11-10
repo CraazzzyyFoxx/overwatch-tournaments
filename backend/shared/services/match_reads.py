@@ -11,7 +11,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.disciplines import identity_provider
+from shared.disciplines import discipline, identity_provider
 from shared.repository.stats_reads import (
     MatchReadContext,
     get_match_events,
@@ -101,6 +101,8 @@ async def match_statistics_read(session: AsyncSession, match_id: int) -> NativeM
     segments = await get_match_segments(session, match_ids=[match_id])
     facts = await get_match_facts(session, match_ids=[match_id])
     entities = {row.entity.id: row.entity for row in facts if row.entity is not None}
+    rank_at = discipline(members[0].discipline).native_rank_at if members else None
+    ranks = await rank_at(session, [row.player_id for row in members], members[0].played_at) if rank_at else {}
     return NativeMatchStatistics(
         members=[
             NativeMatchMember(
@@ -119,6 +121,7 @@ async def match_statistics_read(session: AsyncSession, match_id: int) -> NativeM
                 observed_role=None
                 if row.role_dimension is None
                 else RoleRef(dimension=row.role_dimension, role=row.role_code, parent=row.role_parent_code),
+                rank_value=ranks.get(row.player_id),
             )
             for row in members
         ],

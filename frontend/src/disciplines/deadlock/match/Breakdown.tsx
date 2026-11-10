@@ -193,7 +193,7 @@ function PlayerLines({ teams, feed, t: moment, durationS }: Readonly<{ teams: re
         variant="pill"
         size="sm"
         aria-label={t("matches.deadlock.breakdown.graphSeries")}
-        className="self-start"
+        className="justify-self-start"
       >
         <ToggleGroupItem value="net_worth">{t("matches.deadlock.colTitle.net_worth")}</ToggleGroupItem>
         <ToggleGroupItem value="player_damage">{t("matches.deadlock.colTitle.player_damage")}</ToggleGroupItem>

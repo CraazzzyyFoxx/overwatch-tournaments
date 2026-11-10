@@ -718,7 +718,7 @@ class EncounterFlowsService:
         # No tournament_id in the args, so this key can't carry a tournament's
         # cache generations — staleness is bounded by the short TTL.
         # ``native_`` namespaces the participant/fact document shape: a cached value of another shape is never read.
-        key="native_match_stats:v3:{match_id}:{entities}:{workspace_id}",
+        key="native_match_stats:v4:{match_id}:{entities}:{workspace_id}",
         prefix="fastapi:",
     )
     async def get_match_with_stats(

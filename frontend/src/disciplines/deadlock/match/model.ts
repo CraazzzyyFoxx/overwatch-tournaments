@@ -1,4 +1,6 @@
+import { tierAt } from "@/components/rank/rank-history-model";
 import type { CatalogEntityRead } from "@/types/catalog.types";
+import type { NativeTier } from "@/types/discipline.types";
 import type { MatchWithStats } from "@/types/encounter.types";
 import type { PersonDisplay } from "@/types/user.types";
 import type { MatchEvent } from "@/types/killfeed.types";
@@ -19,6 +21,8 @@ export interface DlPlayer {
   display: PersonDisplay;
   side: Side;
   hero: CatalogEntityRead | null;
+  /** The rank the player held on the match date, a step of the game's ladder; `null` when none was known. */
+  rank: NativeTier | null;
   /** Whole-match facts by stat code. */
   stats: Record<string, number>;
 }
@@ -88,8 +92,11 @@ const push = <K, V>(map: Map<K, V[]>, key: K, value: V) => {
   else map.set(key, [value]);
 };
 
-/** The two sides of a Deadlock match, or `null` when it is not a duel of two participations. */
-export function readTeams(match: Pick<MatchWithStats, "participants" | "statistics">): [DlTeam, DlTeam] | null {
+/** The two sides of a Deadlock match, or `null` when it is not a duel of two participations; ranks read on `ladder`. */
+export function readTeams(
+  match: Pick<MatchWithStats, "participants" | "statistics">,
+  ladder: readonly NativeTier[] = []
+): [DlTeam, DlTeam] | null {
   if (match.participants.length !== 2) return null;
   const entities = new Map(match.statistics.entities.map((entity) => [entity.id, entity]));
   const [home, away] = match.participants.map((participant, index): DlTeam => {
@@ -109,6 +116,7 @@ export function readTeams(match: Pick<MatchWithStats, "participants" | "statisti
           display: member.display,
           side,
           hero: heroId == null ? null : (entities.get(heroId) ?? null),
+          rank: tierAt(ladder, member.rank_value) ?? null,
           stats: Object.fromEntries(facts.map((fact) => [fact.stat_code, fact.value]))
         };
       })

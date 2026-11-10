@@ -2501,7 +2501,7 @@ export interface paths {
         };
         /**
          * Get encounter
-         * @description Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one encounter by id with optionally hydrated related entities selected via the entities query param.
+         * @description Permission: public; no authentication required — a hidden tournament is visible only to its workspace's admins and users on its preview allowlist. Returns one encounter by id with optionally hydrated related entities selected via the entities query param. `games` (filled with `matches`) lists the live series only; `games.cancelled` adds its cancelled positions too.
          *
          *     RPC subject: `rpc.tournament.get_encounter`
          */
@@ -6837,7 +6837,7 @@ export interface paths {
         put?: never;
         /**
          * Bind an unlinked ingest job to a game
-         * @description Permission: workspace `log.update` in the job's workspace. Binds an `awaiting_link` (or `failed`) job's stored document or raw source to `encounter_game_id` with the operator's complete `teams` map (`document team key -> encounter.team id`, a bijection onto the game's participating teams; a participant contradicting the chosen team is refused, zero overlap is allowed) and publishes it in the same transaction, returning the committed job. The client never sends the document. When the target game already has an observation `expected_revision` is required (`0` = none, `n` = replace exactly revision `n`) and is compared again under the final lock: 409 `stale_revision` / `expected_revision_required`. A `done` job is replayed only by retry with `reparse=true`; a busy job answers 409 `ingest_busy`. Refusals roll back and leave the job as it was: 404 `binding_target_not_found`, 409 `binding_mismatch` / `identity_conflict`, 422 `invalid_team_map`.
+         * @description Permission: workspace `log.update` in the job's workspace. Binds an `awaiting_link` (or `failed`) job's stored document or raw source to `encounter_game_id` with the operator's complete `teams` map (`document team key -> encounter.team id`, a bijection onto the game's participating teams; a participant contradicting the chosen team is refused, zero overlap is allowed) and publishes it in the same transaction, returning the committed job. The client never sends the document. The target may be a cancelled game (a series entered whole cancels its unplayed positions); its map must be the document's or not named yet. A decided encounter (confirmed, or a series claim/admin/import/host result) skips the map-pool check: the log only adds statistics there. When the target game already has an observation `expected_revision` is required (`0` = none, `n` = replace exactly revision `n`) and is compared again under the final lock: 409 `stale_revision` / `expected_revision_required`. A `done` job is replayed only by retry with `reparse=true`; a busy job answers 409 `ingest_busy`. Refusals roll back and leave the job as it was: 404 `binding_target_not_found`, 409 `binding_mismatch` / `identity_conflict`, 422 `invalid_team_map`.
          *
          *     RPC subject: `rpc.stats.ingest.bind`
          */
@@ -15777,6 +15777,12 @@ export interface components {
              * @default null
              */
             config_overrides: components["schemas"]["balancer.ConfigOverrides"] | null;
+            /**
+             * Registration Ids
+             * @description Balance only these registrations of the pool (the panel's 'skip invalid players'). It narrows, never widens: an id the pool does not hold is ignored. Omitted, the whole pool is balanced.
+             * @default null
+             */
+            registration_ids: number[] | null;
         };
         /**
          * AccountDeleteRequest
@@ -19771,7 +19777,10 @@ export interface components {
             port: string;
             /** Rank */
             rank: number;
-            /** Role */
+            /**
+             * Role
+             * @default null
+             */
             role: string | null;
             /** Score */
             score: number | null;
@@ -20212,6 +20221,11 @@ export interface components {
             observed_role: components["schemas"]["tournament.RoleRef"] | null;
             /** Player Id */
             player_id: number;
+            /**
+             * Rank Value
+             * @default null
+             */
+            rank_value: number | null;
             /** Workspace Member Id */
             workspace_member_id: number;
         };
@@ -30279,18 +30293,19 @@ export interface components {
         };
         /**
          * LeaderboardPin
-         * @description An admin-fixed place on a leaderboard, like ``StandingPin`` on a stage table.
+         * @description An admin-fixed place on a leaderboard, like ``StandingPin`` on a stage table; with a by-role ranking the place
+         *     is inside ``role``.
          */
         "tournament.LeaderboardPin": {
             /** Participant Id */
             participant_id: number;
+            /** Position */
+            position: number;
             /**
              * Role
              * @default null
              */
             role: string | null;
-            /** Position */
-            position: number;
         };
         /**
          * LogRecordRef
