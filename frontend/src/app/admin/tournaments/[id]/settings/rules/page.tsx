@@ -21,7 +21,7 @@ const RULES_MAX_LENGTH = 32_000;
  * The published regulations, and nothing else.
  *
  * Authoring a document and setting the points a win is worth are different
- * jobs at different times — the scoring lives in its own section now, so this
+ * jobs at different times — the results flags live in General, so this
  * page is the editor at full height instead of a text box above two selects.
  */
 export default function RulesSettingsPage() {

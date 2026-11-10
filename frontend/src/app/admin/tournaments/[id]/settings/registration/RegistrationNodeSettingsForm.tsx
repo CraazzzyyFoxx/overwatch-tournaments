@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { SaveBar } from "@/components/kit/SaveBar";
@@ -18,12 +18,13 @@ import { useRegistrationNodeConfig } from "../useRegistrationNodeConfig";
 /**
  * How one registration node takes entries: auto-approval, late sign-up, required check-in and the announced capacity.
  * Saved with the node's config (`PUT /admin/tournaments/{id}/flow`), so the page and a flow inspector can embed it as it is.
- * Remount it per node (`key={node.id}`).
+ * Remount it per node (`key={node.id}`). `children` are more cards for the same grid (the page's public-page card).
  */
 export function RegistrationNodeSettingsForm({
   tournament,
-  node
-}: Readonly<{ tournament: Tournament; node: TournamentFlowNode }>) {
+  node,
+  children
+}: Readonly<{ tournament: Tournament; node: TournamentFlowNode; children?: ReactNode }>) {
   const t = useTranslations("registrationFormAdmin.page");
   const tStatus = useTranslations("registrationFormAdmin.status");
   const ids = useId();
@@ -116,6 +117,8 @@ export function RegistrationNodeSettingsForm({
             />
           </SettingRow>
         </SettingGroup>
+
+        {children}
       </SettingsGrid>
 
       <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />

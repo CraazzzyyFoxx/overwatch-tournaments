@@ -10,12 +10,12 @@ import type messages from "@/i18n/messages/en.json";
  * the tab bar and again inside a 714-line form.
  */
 export const SETTINGS_SECTION_LABEL_KEYS: Record<SettingsSection, keyof typeof messages.adminTournament.settings.sections> = {
-  general: "general", rules: "rules", scoring: "scoring", schedule: "schedule", roster: "roster", registration: "registration", admission: "admission", "pre-game": "preGame", "report-form": "reportForm", links: "links", challonge: "challonge", discord: "discord", preview: "preview", danger: "danger"
+  general: "general", rules: "rules", schedule: "schedule", roster: "roster", registration: "registration", admission: "admission", "pre-game": "preGame", "report-form": "reportForm", links: "links", challonge: "challonge", discord: "discord", preview: "preview", danger: "danger"
 };
 
 /** English labels retained for structural tests; rendering uses translated keys above. */
 export const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
-  general: "General", rules: "Rules", scoring: "Results", schedule: "Schedule", roster: "Roster shape", registration: "Registration", admission: "Admission", "pre-game": "Pre-game phase", "report-form": "Match report form", links: "Links", challonge: "Challonge", discord: "Discord", preview: "Preview allowlist", danger: "Delete tournament"
+  general: "General", rules: "Rules", schedule: "Schedule", roster: "Roster shape", registration: "Registration", admission: "Admission", "pre-game": "Pre-game phase", "report-form": "Match report form", links: "Links", challonge: "Challonge", discord: "Discord", preview: "Preview allowlist", danger: "Delete tournament"
 };
 
 /**
@@ -29,7 +29,7 @@ export const SETTINGS_SECTION_GROUPS: ReadonlyArray<{
   labelKey?: keyof typeof messages.adminTournament.settings.groups;
   sections: readonly SettingsSection[];
 }> = [
-  { sections: ["general", "rules", "scoring", "schedule", "roster"] },
+  { sections: ["general", "rules", "schedule", "roster"] },
   // The registration form used to hold all of this INSIDE the questionnaire
   // builder, under six groups whose titles had to be written with "and".
   // Splitting it in two names the two questions being answered: how entries are

@@ -13,6 +13,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
@@ -53,6 +54,7 @@ function GeneralForm({
   disabled: boolean;
 }>) {
   const t = useTranslations("adminTournament.general");
+  const tResults = useTranslations("adminTournament.scoring");
   const { form, patch, dirty, summary, saving, save, discard, error } = useTournamentSettingsForm(
     tournament,
     tournamentId,
@@ -137,6 +139,29 @@ function GeneralForm({
               </SelectContent>
             </Select>
           )}
+        </SettingRow>
+      </SettingGroup>
+
+      <SettingGroup id="results" title={tResults("results")}>
+        <SettingRow htmlFor="settings-is-finished" label={tResults("finished")}>
+          <Switch
+            id="settings-is-finished"
+            checked={form.is_finished}
+            disabled={disabled}
+            onCheckedChange={(checked) => patch({ is_finished: checked })}
+          />
+        </SettingRow>
+        <SettingRow
+          htmlFor="settings-logs-official"
+          label={tResults("logsOfficial")}
+          hint={tResults("logsOfficialDescription")}
+        >
+          <Switch
+            id="settings-logs-official"
+            checked={form.logs_official}
+            disabled={disabled}
+            onCheckedChange={(checked) => patch({ logs_official: checked })}
+          />
         </SettingRow>
       </SettingGroup>
 

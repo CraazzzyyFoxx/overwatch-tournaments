@@ -24,7 +24,6 @@ import { SETTINGS_SECTION_GROUPS, SETTINGS_SECTION_LABEL_KEYS } from "./settings
 const CONTINUED_SECTIONS: Partial<Record<SettingsSection, ComponentType>> = {
   general: dynamic(() => import("./general/page")),
   rules: dynamic(() => import("./rules/page")),
-  scoring: dynamic(() => import("./scoring/page")),
   schedule: dynamic(() => import("./schedule/page")),
   roster: dynamic(() => import("./roster/page")),
   registration: dynamic(() => import("./registration/page")),

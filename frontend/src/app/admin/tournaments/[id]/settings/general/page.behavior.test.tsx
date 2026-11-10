@@ -89,6 +89,7 @@ const TOURNAMENT: Tournament = {
   challonge_id: null,
   challonge_slug: "owt-64",
   is_finished: false,
+  logs_official: false,
   is_hidden: false,
   status: "live",
   auto_transitions_enabled: true,
@@ -257,6 +258,34 @@ describe("Settings › General", () => {
     await settle();
 
     expect(container.querySelector<HTMLInputElement>("#settings-name")?.value).toBe("OWT 64");
+    expect(updateTournament).not.toHaveBeenCalled();
+  });
+});
+
+// `logs_official` is the owner's policy for accepting uploaded match logs as official results. It saves through
+// General's whitelist (a section PATCHes only its own fields) and only for someone who may update the tournament.
+describe("Settings › General › Results", () => {
+  it("saves only logs_official when the switch is turned on", async () => {
+    await render();
+    const logs = container.querySelector<HTMLElement>("#settings-logs-official")!;
+    expect(logs.getAttribute("aria-checked")).toBe("false");
+
+    await click(logs);
+    await act(async () => {
+      button("save")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+
+    expect(updateTournament).toHaveBeenCalledWith(64, { logs_official: true });
+  });
+
+  it("is refused outright without the tournament update permission", async () => {
+    canUpdateTournament = false;
+    await render();
+
+    // The section frame gates the whole page, so the switches never render for an unauthorized reader.
+    expect(container.querySelector("#settings-logs-official")).toBeNull();
+    expect(container.querySelector("#settings-is-finished")).toBeNull();
     expect(updateTournament).not.toHaveBeenCalled();
   });
 });

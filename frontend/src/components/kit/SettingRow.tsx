@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { AlertTriangle } from "lucide-react";
 
@@ -190,7 +190,7 @@ export function SettingGroup({
   return (
     // `scroll-mt-16` keeps a jumped-to group clear of the admin top bar; a
     // flush body is clipped to the card's corners.
-    <Card asChild className={cn("scroll-mt-16", flush && "overflow-hidden", wide && "[column-span:all]")}>
+    <Card asChild className={cn("scroll-mt-16", flush && "overflow-hidden", wide && "col-span-full")}>
       <section id={id} ref={ref} aria-labelledby={titleId}>
         {/* `min-w-48`: past that the actions wrap under the title instead of squeezing it. */}
         <header className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
@@ -229,17 +229,66 @@ export function SettingGroup({
 }
 
 /**
- * The page body that holds a section's `SettingGroup` cards: as many balanced
- * columns of at least 26rem as fit (at most three, and never more than there
- * are cards), packed top to bottom so a short card never leaves a hole beside
- * a tall one. The column count follows this element's own width, not the
- * viewport. A `wide` group spans every column.
+ * The page body that holds a section's `SettingGroup` cards: columns of at
+ * least 26rem, at most three, and only as many as there are cards (empty
+ * tracks collapse, so one card fills the width and two split it).
  *
- * Only cards go in here: a save bar or a page note sits outside it.
+ * Cards that all fit in one row are one row of equal height. More cards than
+ * columns pack as masonry: in reading order, each into the column that ends
+ * highest, so a short card never leaves a hole beside a tall one. A `wide`
+ * group spans every column.
+ *
+ * Masonry by row spans: the rows are 1px and each card spans its own height
+ * plus the gap, re-measured whenever a card resizes or the set of cards
+ * changes. Until then (server render, first paint) it is a plain grid.
+ *
+ * Only cards go in here: a page note sits outside it. A save bar belongs to
+ * the block it saves, inside one wrapper with its card.
  */
 export function SettingsGrid({ children }: Readonly<{ children: ReactNode }>) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const grid = ref.current;
+    if (!grid) return;
+    const place = () => {
+      const items = Array.from(grid.children) as HTMLElement[];
+      const style = getComputedStyle(grid);
+      // Every auto-fit track, collapsed ones included: how many cards one row holds.
+      const columns = style.gridTemplateColumns.split(" ").length;
+      if (items.length <= columns) {
+        grid.style.cssText = "align-items: stretch";
+        for (const item of items) item.style.gridRowEnd = "";
+        return;
+      }
+      // Measured at their own height first (`items-start`), then spanned: reads before writes.
+      grid.style.cssText = "grid-auto-rows: 1px; row-gap: 0px";
+      const gap = Number.parseFloat(style.columnGap) || 0;
+      const spans = items.map((item) => Math.max(1, Math.ceil(item.getBoundingClientRect().height + gap)));
+      items.forEach((item, index) => (item.style.gridRowEnd = `span ${spans[index]}`));
+    };
+    // Re-spanning a card never changes its height, and a stretched row stays one row, so this cannot feed back.
+    const resize = new ResizeObserver(place);
+    const watch = () => {
+      resize.disconnect();
+      for (const item of Array.from(grid.children)) resize.observe(item);
+      place();
+    };
+    const mutation = new MutationObserver(watch);
+    mutation.observe(grid, { childList: true });
+    watch();
+    return () => {
+      resize.disconnect();
+      mutation.disconnect();
+      grid.style.cssText = "";
+    };
+  }, []);
+
   return (
-    <div className="gap-4 columns-[26rem_3] *:mb-4 *:break-inside-avoid [&:has(>:nth-child(2):last-child)]:columns-[26rem_2] [&:has(>:only-child)]:columns-1">
+    <div
+      ref={ref}
+      className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,max(26rem,calc((100%_-_2rem)/3))),1fr))] items-start gap-4"
+    >
       {children}
     </div>
   );
