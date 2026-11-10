@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { SaveBar } from "@/components/kit/SaveBar";
-import { SettingGroup } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingsGrid } from "@/components/kit/SettingRow";
 import {
   Dialog,
   DialogContent,
@@ -154,20 +154,22 @@ export function DiscordSection({ workspaceId }: Readonly<{ workspaceId: number |
           <>
             {boundId ? (
               <>
-                <ServerCard
-                  workspace={workspace}
-                  info={info}
-                  name={name}
-                  icon={boundIcon(workspace, info, manageable)}
-                  onChange={() => {
-                    setError(null);
-                    setPickerOpen(true);
-                  }}
-                  onUnlink={() => setUnlinkOpen(true)}
-                  unlinking={unlink.isPending}
-                />
-                <AnnouncementsCard workspaceId={workspace.id} announcements={announcements} />
-                <MixesCard workspaceId={workspace.id} mixes={mixes} />
+                <SettingsGrid>
+                  <ServerCard
+                    workspace={workspace}
+                    info={info}
+                    name={name}
+                    icon={boundIcon(workspace, info, manageable)}
+                    onChange={() => {
+                      setError(null);
+                      setPickerOpen(true);
+                    }}
+                    onUnlink={() => setUnlinkOpen(true)}
+                    unlinking={unlink.isPending}
+                  />
+                  <AnnouncementsCard workspaceId={workspace.id} announcements={announcements} />
+                  <MixesCard workspaceId={workspace.id} mixes={mixes} />
+                </SettingsGrid>
                 <SaveBar
                   dirty={announcements.dirty || mixes.dirty}
                   summary={saveBarT("changedFields", { count: changedCount })}

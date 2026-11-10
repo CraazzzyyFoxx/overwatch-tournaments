@@ -14,7 +14,7 @@ import { BuildRow } from "./Build";
 import { heldAt, shopPurchases, statsAt, teamAt, type DlPlayer, type DlTeam, type MatchFeed } from "./model";
 import { DIM, FAINT, GAME_SIDE_COLOR, SEAT, useItems, useStatFormat } from "./parts";
 import PlayerPanel from "./PlayerPanel";
-import { HeroBadge } from "./Scoreboard";
+import { HeroBadge, RankMark } from "./Scoreboard";
 
 interface RostersProps {
   teams: readonly [DlTeam, DlTeam];
@@ -72,7 +72,10 @@ export default function Rosters({ teams, feed, durationS, t }: Readonly<RostersP
             </Button>
             <HeroBadge player={player} level={stats.level} size={36} />
           </div>
-          <PlayerName display={player.display} className="min-w-0 text-body text-[color:var(--aqt-fg)]" />
+          <div className="flex min-w-0 items-center gap-2">
+            <PlayerName display={player.display} className="min-w-0 text-body text-[color:var(--aqt-fg)]" />
+            {player.rank ? <RankMark player={player} className="shrink-0 text-label text-[color:var(--aqt-fg-muted)]" /> : null}
+          </div>
           <p className="aqt-tnum m-0 flex items-baseline gap-3 whitespace-nowrap text-caption">
             <span className={DIM}>
               <span className={cn((stats.kills ?? 0) > 0 && stats.kills === bestKills && "font-bold text-[color:var(--aqt-fg)]")}>

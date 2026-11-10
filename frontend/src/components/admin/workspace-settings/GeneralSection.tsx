@@ -13,7 +13,7 @@ import { MarkdownEditor } from "@/components/admin/MarkdownEditor";
 import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
 import { Combobox, ComboboxCheck, ComboboxMeta } from "@/components/ui/combobox";
 import { SaveBar } from "@/components/kit/SaveBar";
-import { SettingGroup, SettingRow, invalidProps } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, SettingsGrid, invalidProps } from "@/components/kit/SettingRow";
 import {
   WorkspaceOwnerControl,
   WorkspaceOwnerTransferControl,
@@ -168,194 +168,197 @@ export function GeneralSection({ workspaceId }: Readonly<{ workspaceId: number |
 
           <WorkspaceNotListedNotice status={workspace.verification_status} />
 
-          <SettingGroup
-            id="identity"
-            title={t("groups.identity.title")}
-            description={t("groups.identity.description")}
-          >
-            <SettingRow htmlFor="workspace-name" label={t("name")} error={errors.name} stacked>
-              <div className="flex w-full items-start gap-4">
-                <EditableAvatar
-                  src={workspace.icon_url}
-                  name={values.name}
-                  size={64}
-                  shape="rounded"
-                  busy={uploadIcon.isPending || deleteIcon.isPending}
-                  onSelectFile={(file) => uploadIcon.mutate(file)}
-                  onDelete={workspace.icon_url ? () => deleteIcon.mutate() : undefined}
-                  accept={ACCEPTED_IMAGE_TYPES}
-                  maxSizeBytes={MAX_FILE_SIZE}
-                  onError={(message) => notify.error(message)}
-                  labels={{ change: t("changeIcon"), remove: t("removeIcon") }}
-                />
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <Input
-                    id="workspace-name"
-                    maxLength={NAME_MAX}
-                    value={values.name}
-                    onChange={(event) => patch({ name: event.target.value })}
-                    onBlur={() => reveal("name")}
-                    {...invalidProps("workspace-name", errors.name)}
-                  />
-                  <p className="text-xs text-muted-foreground">{t("iconHelp")}</p>
-                </div>
-              </div>
-            </SettingRow>
-            <SettingRow htmlFor="workspace-timezone" label={t("timezone")} hint={t("timezoneHelp")}>
-              <TimezoneField
-                id="workspace-timezone"
-                value={values.timezone}
-                onChange={(zone) => patch({ timezone: zone })}
-              />
-            </SettingRow>
-          </SettingGroup>
-
-          <SettingGroup
-            id="community"
-            title={t("groups.publicPage.title")}
-            description={
-              // The way to check the result sits beside what it previews; in
-              // the page header it crowded the title off narrow windows.
-              <>
-                {t("groups.publicPage.description")}{" "}
-                <a
-                  href={`/workspace/${workspace.slug}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-0.5 whitespace-nowrap font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {t("openPage")}
-                  <ArrowUpRight aria-hidden className="size-3.5" />
-                  <span className="sr-only">{t("opensInNewTab")}</span>
-                </a>
-              </>
-            }
-          >
-            <SettingRow
-              htmlFor="workspace-tagline"
-              label={t("tagline")}
-              hint={t("taglineHelp")}
-              error={errors.tagline}
-              count={{ value: values.tagline.length, max: TAGLINE_MAX }}
-              stacked
-            >
-              <Input
-                id="workspace-tagline"
-                maxLength={TAGLINE_MAX}
-                value={values.tagline}
-                onChange={(event) => patch({ tagline: event.target.value })}
-                onBlur={() => reveal("tagline")}
-                {...invalidProps("workspace-tagline", errors.tagline)}
-              />
-            </SettingRow>
-            <SettingRow
-              htmlFor="workspace-description"
-              label={t("description")}
-              hint={t("descriptionHelp")}
-              stacked
-            >
-              <Textarea
-                id="workspace-description"
-                value={values.description}
-                onChange={(event) => patch({ description: event.target.value })}
-              />
-            </SettingRow>
-            {/* `MarkdownEditor` labels its own textarea; the row's label names
-                the field for sighted readers and the counter. */}
-            <SettingRow
-              label={t("about")}
-              hint={t("aboutHelp")}
-              error={errors.about}
-              count={{ value: values.about.length, max: ABOUT_MAX }}
-              stacked
-            >
-              <MarkdownEditor
-                label={t("about")}
-                value={values.about}
-                maxLength={ABOUT_MAX}
-                onChange={(next) => patch({ about: next })}
-                className="w-full"
-              />
-            </SettingRow>
-          </SettingGroup>
-
-          <SettingGroup
-            id="links"
-            title={t("groups.links.title")}
-            description={t("groups.links.description")}
-          >
-            {LINK_FIELDS.map(({ key, labelKey }) => {
-              const id = `workspace-${key}`;
-              return (
-                <SettingRow key={key} htmlFor={id} label={t(labelKey)} error={errors[key]} stacked>
-                  <Input
-                    id={id}
-                    type="url"
-                    inputMode="url"
-                    autoComplete="url"
-                    placeholder={`https://${LINK_HOSTS[key][0]}/…`}
-                    value={values[key]}
-                    onChange={(event) => patch({ [key]: event.target.value })}
-                    onBlur={() => reveal(key)}
-                    {...invalidProps(id, errors[key])}
-                  />
-                </SettingRow>
-              );
-            })}
-          </SettingGroup>
-
-          <SettingGroup
-            id="games"
-            title={t("groups.disciplines.title")}
-            description={t("groups.disciplines.description")}
-          >
-            <div className="space-y-3">
-              <DisciplinesField
-                workspace={workspace}
-                value={values.disciplines_enabled}
-                onChange={(next) => patch({ disciplines_enabled: next })}
-              />
-              <p className="max-w-prose px-2 text-caption text-pretty text-muted-foreground">
-                {t("disciplines.help")}
-              </p>
-            </div>
-          </SettingGroup>
-
-          {/* The transfer row renders nothing for a caller it is not offered
-              to, so a co-administrator reads the owner and nothing to press. */}
-          <SettingGroup
-            id="ownership"
-            title={t("groups.ownership.title")}
-            description={t("groups.ownership.description")}
-            immediate
-          >
-            <SettingRow label={t("owner")}>
-              <div className="min-w-0 text-sm [overflow-wrap:anywhere]">
-                <WorkspaceOwnerValue workspaceId={workspace.id} />
-              </div>
-            </SettingRow>
-            <WorkspaceOwnerTransferControl
-              workspaceId={workspace.id}
-              workspaceName={workspace.name}
-              isSuperuser={isSuperuser}
-            />
-          </SettingGroup>
-
-          {isSuperuser ? (
+          <SettingsGrid>
             <SettingGroup
-              id="platform"
-              title={t("groups.platform.title")}
-              description={t("groups.platform.description")}
+              id="identity"
+              title={t("groups.identity.title")}
+              description={t("groups.identity.description")}
+            >
+              <SettingRow htmlFor="workspace-name" label={t("name")} error={errors.name} stacked>
+                <div className="flex w-full items-start gap-4">
+                  <EditableAvatar
+                    src={workspace.icon_url}
+                    name={values.name}
+                    size={64}
+                    shape="rounded"
+                    busy={uploadIcon.isPending || deleteIcon.isPending}
+                    onSelectFile={(file) => uploadIcon.mutate(file)}
+                    onDelete={workspace.icon_url ? () => deleteIcon.mutate() : undefined}
+                    accept={ACCEPTED_IMAGE_TYPES}
+                    maxSizeBytes={MAX_FILE_SIZE}
+                    onError={(message) => notify.error(message)}
+                    labels={{ change: t("changeIcon"), remove: t("removeIcon") }}
+                  />
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <Input
+                      id="workspace-name"
+                      maxLength={NAME_MAX}
+                      value={values.name}
+                      onChange={(event) => patch({ name: event.target.value })}
+                      onBlur={() => reveal("name")}
+                      {...invalidProps("workspace-name", errors.name)}
+                    />
+                    <p className="text-xs text-muted-foreground">{t("iconHelp")}</p>
+                  </div>
+                </div>
+              </SettingRow>
+              <SettingRow htmlFor="workspace-timezone" label={t("timezone")} hint={t("timezoneHelp")}>
+                <TimezoneField
+                  id="workspace-timezone"
+                  value={values.timezone}
+                  onChange={(zone) => patch({ timezone: zone })}
+                />
+              </SettingRow>
+            </SettingGroup>
+
+            <SettingGroup
+              id="community"
+              wide
+              title={t("groups.publicPage.title")}
+              description={
+                // The way to check the result sits beside what it previews; in
+                // the page header it crowded the title off narrow windows.
+                <>
+                  {t("groups.publicPage.description")}{" "}
+                  <a
+                    href={`/workspace/${workspace.slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 whitespace-nowrap font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {t("openPage")}
+                    <ArrowUpRight aria-hidden className="size-3.5" />
+                    <span className="sr-only">{t("opensInNewTab")}</span>
+                  </a>
+                </>
+              }
+            >
+              <SettingRow
+                htmlFor="workspace-tagline"
+                label={t("tagline")}
+                hint={t("taglineHelp")}
+                error={errors.tagline}
+                count={{ value: values.tagline.length, max: TAGLINE_MAX }}
+                stacked
+              >
+                <Input
+                  id="workspace-tagline"
+                  maxLength={TAGLINE_MAX}
+                  value={values.tagline}
+                  onChange={(event) => patch({ tagline: event.target.value })}
+                  onBlur={() => reveal("tagline")}
+                  {...invalidProps("workspace-tagline", errors.tagline)}
+                />
+              </SettingRow>
+              <SettingRow
+                htmlFor="workspace-description"
+                label={t("description")}
+                hint={t("descriptionHelp")}
+                stacked
+              >
+                <Textarea
+                  id="workspace-description"
+                  value={values.description}
+                  onChange={(event) => patch({ description: event.target.value })}
+                />
+              </SettingRow>
+              {/* `MarkdownEditor` labels its own textarea; the row's label names
+                  the field for sighted readers and the counter. */}
+              <SettingRow
+                label={t("about")}
+                hint={t("aboutHelp")}
+                error={errors.about}
+                count={{ value: values.about.length, max: ABOUT_MAX }}
+                stacked
+              >
+                <MarkdownEditor
+                  label={t("about")}
+                  value={values.about}
+                  maxLength={ABOUT_MAX}
+                  onChange={(next) => patch({ about: next })}
+                  className="w-full"
+                />
+              </SettingRow>
+            </SettingGroup>
+
+            <SettingGroup
+              id="links"
+              title={t("groups.links.title")}
+              description={t("groups.links.description")}
+            >
+              {LINK_FIELDS.map(({ key, labelKey }) => {
+                const id = `workspace-${key}`;
+                return (
+                  <SettingRow key={key} htmlFor={id} label={t(labelKey)} error={errors[key]} stacked>
+                    <Input
+                      id={id}
+                      type="url"
+                      inputMode="url"
+                      autoComplete="url"
+                      placeholder={`https://${LINK_HOSTS[key][0]}/…`}
+                      value={values[key]}
+                      onChange={(event) => patch({ [key]: event.target.value })}
+                      onBlur={() => reveal(key)}
+                      {...invalidProps(id, errors[key])}
+                    />
+                  </SettingRow>
+                );
+              })}
+            </SettingGroup>
+
+            <SettingGroup
+              id="games"
+              title={t("groups.disciplines.title")}
+              description={t("groups.disciplines.description")}
+            >
+              <div className="space-y-3">
+                <DisciplinesField
+                  workspace={workspace}
+                  value={values.disciplines_enabled}
+                  onChange={(next) => patch({ disciplines_enabled: next })}
+                />
+                <p className="max-w-prose px-2 text-caption text-pretty text-muted-foreground">
+                  {t("disciplines.help")}
+                </p>
+              </div>
+            </SettingGroup>
+
+            {/* The transfer row renders nothing for a caller it is not offered
+                to, so a co-administrator reads the owner and nothing to press. */}
+            <SettingGroup
+              id="ownership"
+              title={t("groups.ownership.title")}
+              description={t("groups.ownership.description")}
               immediate
             >
-              <WorkspaceOwnerControl workspaceId={workspace.id} isSuperuser={isSuperuser} />
-              <WorkspaceVerificationControl
-                workspace={workspace}
+              <SettingRow label={t("owner")}>
+                <div className="min-w-0 text-sm [overflow-wrap:anywhere]">
+                  <WorkspaceOwnerValue workspaceId={workspace.id} />
+                </div>
+              </SettingRow>
+              <WorkspaceOwnerTransferControl
+                workspaceId={workspace.id}
+                workspaceName={workspace.name}
                 isSuperuser={isSuperuser}
-                onChanged={invalidate}
               />
             </SettingGroup>
-          ) : null}
+
+            {isSuperuser ? (
+              <SettingGroup
+                id="platform"
+                title={t("groups.platform.title")}
+                description={t("groups.platform.description")}
+                immediate
+              >
+                <WorkspaceOwnerControl workspaceId={workspace.id} isSuperuser={isSuperuser} />
+                <WorkspaceVerificationControl
+                  workspace={workspace}
+                  isSuperuser={isSuperuser}
+                  onChanged={invalidate}
+                />
+              </SettingGroup>
+            ) : null}
+          </SettingsGrid>
 
           <SaveBar
             dirty={settings.dirty}

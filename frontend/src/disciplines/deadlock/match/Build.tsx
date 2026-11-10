@@ -16,7 +16,7 @@ const slotOf = (item: Item | undefined): Slot | null =>
 
 /**
  * The inventory at one moment, as the shop lays it out: a cluster per column (weapon, vitality, spirit) in the game's
- * hue, strongest tier first, then the souls the inventory is worth and how they split across the columns.
+ * hue, tier 1 first, then the souls the inventory is worth and how they split across the columns.
  */
 export function BuildRow({ held, t, atEnd }: Readonly<{ held: readonly Purchase[]; t: number; atEnd: boolean }>) {
   const tr = useTranslations();
@@ -28,7 +28,7 @@ export function BuildRow({ held, t, atEnd }: Readonly<{ held: readonly Purchase[
     purchases: held
       .filter((purchase) => slotOf(items.byId.get(purchase.itemId)) === slot)
       .sort(
-        (a, b) => (items.byId.get(b.itemId)?.item_tier ?? 0) - (items.byId.get(a.itemId)?.item_tier ?? 0) || a.t - b.t
+        (a, b) => (items.byId.get(a.itemId)?.item_tier ?? 0) - (items.byId.get(b.itemId)?.item_tier ?? 0) || a.t - b.t
       )
   }));
   const worth = groups.map(({ slot, purchases }) => ({

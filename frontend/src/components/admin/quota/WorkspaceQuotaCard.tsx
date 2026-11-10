@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 
 import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { SaveBar } from "@/components/kit/SaveBar";
-import { SettingGroup } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingsGrid } from "@/components/kit/SettingRow";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -128,61 +128,63 @@ export function WorkspaceQuotaCard({ workspaceId }: Readonly<{ workspaceId: numb
 
   return (
     <div className="flex flex-col gap-4">
-      <SettingGroup id="usage" title={t("usageHeading")}>
-        {usageQuery.data ? (
-          <QuotaUsagePanel usage={usageQuery.data} />
-        ) : (
-          // Shaped like a scope: its heading, then one bar per counter.
-          <div aria-busy="true" className="space-y-4">
-            <Skeleton className="h-4 w-40" />
-            {[0, 1, 2].map((row) => (
-              <div key={row} className="space-y-1.5">
-                <Skeleton className="h-3 w-48" />
-                <Skeleton className="h-2 w-full" />
-              </div>
-            ))}
-          </div>
-        )}
-      </SettingGroup>
+      <SettingsGrid>
+        <SettingGroup id="usage" title={t("usageHeading")}>
+          {usageQuery.data ? (
+            <QuotaUsagePanel usage={usageQuery.data} />
+          ) : (
+            // Shaped like a scope: its heading, then one bar per counter.
+            <div aria-busy="true" className="space-y-4">
+              <Skeleton className="h-4 w-40" />
+              {[0, 1, 2].map((row) => (
+                <div key={row} className="space-y-1.5">
+                  <Skeleton className="h-3 w-48" />
+                  <Skeleton className="h-2 w-full" />
+                </div>
+              ))}
+            </div>
+          )}
+        </SettingGroup>
 
-      <SettingGroup
-        id="override"
-        title={t("overrideHeading")}
-        description={isSuperuser ? t("overrideHint") : t("overrideHintAdmin")}
-      >
-        {usageQuery.data ? (
-          // One child of the group's divided body: a hidden panel after the
-          // visible one would otherwise leave it a stray hairline underneath.
-          <div className="flex flex-col gap-4">
-            <LinkTabs items={tabs} activeKey={active} level={2} ariaLabel={t("overrideHeading")} />
-            {SCOPES.map((scope) => (
-              <div key={scope} hidden={scope !== active}>
-                <QuotaLimitFields
-                  idPrefix={`${fieldPrefix}-${scope}`}
-                  values={forms[scope].draft}
-                  inherited={policyOf(scope)?.inherited}
-                  raised={forms[scope].raised}
-                  canRaise={isSuperuser}
-                  errors={forms[scope].errors}
-                  disabled={saving}
-                  onChange={forms[scope].set}
-                />
-              </div>
-            ))}
-          </div>
-        ) : (
-          // The scope tabs, then label/control rows.
-          <div aria-busy="true" className="flex flex-col gap-6">
-            <Skeleton className="h-9 w-64" />
-            {[0, 1, 2].map((row) => (
-              <div key={row} className="grid gap-2 @xl:grid-cols-2 @xl:items-center @xl:gap-6">
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-9 w-full" />
-              </div>
-            ))}
-          </div>
-        )}
-      </SettingGroup>
+        <SettingGroup
+          id="override"
+          title={t("overrideHeading")}
+          description={isSuperuser ? t("overrideHint") : t("overrideHintAdmin")}
+        >
+          {usageQuery.data ? (
+            // One child of the group's divided body: a hidden panel after the
+            // visible one would otherwise leave it a stray hairline underneath.
+            <div className="flex flex-col gap-4">
+              <LinkTabs items={tabs} activeKey={active} level={2} ariaLabel={t("overrideHeading")} />
+              {SCOPES.map((scope) => (
+                <div key={scope} hidden={scope !== active}>
+                  <QuotaLimitFields
+                    idPrefix={`${fieldPrefix}-${scope}`}
+                    values={forms[scope].draft}
+                    inherited={policyOf(scope)?.inherited}
+                    raised={forms[scope].raised}
+                    canRaise={isSuperuser}
+                    errors={forms[scope].errors}
+                    disabled={saving}
+                    onChange={forms[scope].set}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            // The scope tabs, then label/control rows.
+            <div aria-busy="true" className="flex flex-col gap-6">
+              <Skeleton className="h-9 w-64" />
+              {[0, 1, 2].map((row) => (
+                <div key={row} className="grid gap-2 @xl:grid-cols-2 @xl:items-center @xl:gap-6">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-9 w-full" />
+                </div>
+              ))}
+            </div>
+          )}
+        </SettingGroup>
+      </SettingsGrid>
 
       <SaveBar
         dirty={changed.length > 0}

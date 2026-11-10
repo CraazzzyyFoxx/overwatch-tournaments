@@ -8,7 +8,7 @@ import { triggerChevronClass } from "@/components/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
 import { SaveBar } from "@/components/kit/SaveBar";
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import type { CssVarMap } from "@/lib/workspace/theme";
 import { BrandColorField } from "./BrandColorField";
 import { BrandPalettePreview, previewPalette } from "./BrandPalettePreview";
@@ -99,46 +99,48 @@ export function BrandingSection({ workspaceId }: Readonly<{ workspaceId: number 
 
         return (
           <>
-            <SettingGroup id="palette" title={t("siteBranding")} description={t("siteBrandingHelp")}>
-              <SettingRow
-                htmlFor="branding-enabled"
-                label={t("useCustomPalette")}
-                hint={t("useCustomPaletteHelp")}
-              >
-                <Switch
-                  id="branding-enabled"
-                  checked={values.branding_enabled}
-                  onCheckedChange={(checked) => patch({ branding_enabled: checked })}
-                />
-              </SettingRow>
-            </SettingGroup>
+            <SettingsGrid>
+              <SettingGroup id="palette" title={t("siteBranding")} description={t("siteBrandingHelp")}>
+                <SettingRow
+                  htmlFor="branding-enabled"
+                  label={t("useCustomPalette")}
+                  hint={t("useCustomPaletteHelp")}
+                >
+                  <Switch
+                    id="branding-enabled"
+                    checked={values.branding_enabled}
+                    onCheckedChange={(checked) => patch({ branding_enabled: checked })}
+                  />
+                </SettingRow>
+              </SettingGroup>
 
-            <SettingGroup id="seeds" title={t("seedColours")} description={t("seedColoursHelp")}>
-              <div className={COLOUR_GRID_CLASS}>{SEEDS.map(field)}</div>
-            </SettingGroup>
+              <SettingGroup id="seeds" title={t("seedColours")} description={t("seedColoursHelp")}>
+                <div className={COLOUR_GRID_CLASS}>{SEEDS.map(field)}</div>
+              </SettingGroup>
 
-            <SettingGroup id="preview" title={t("preview")}>
-              {palette ? (
-                <BrandPalettePreview palette={palette} />
-              ) : (
-                <p className="text-caption text-muted-foreground">{t("previewNeedsSeeds")}</p>
-              )}
-            </SettingGroup>
+              <SettingGroup id="preview" title={t("preview")}>
+                {palette ? (
+                  <BrandPalettePreview palette={palette} />
+                ) : (
+                  <p className="text-caption text-muted-foreground">{t("previewNeedsSeeds")}</p>
+                )}
+              </SettingGroup>
 
-            <SettingGroup id="overrides" title={t("corePalette")} description={t("corePaletteHelp")}>
-              <Collapsible defaultOpen={overridesSaved}>
-                <CollapsibleTrigger asChild>
-                  <Button type="button" variant="ghost" size="sm" className="group group/trigger -ml-2">
-                    <ChevronDown aria-hidden className={triggerChevronClass} />
-                    <span className="group-data-[state=open]:hidden">{t("showOverrides")}</span>
-                    <span className="hidden group-data-[state=open]:inline">{t("hideOverrides")}</span>
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="pt-3">
-                  <div className={COLOUR_GRID_CLASS}>{OVERRIDES.map(field)}</div>
-                </CollapsibleContent>
-              </Collapsible>
-            </SettingGroup>
+              <SettingGroup id="overrides" title={t("corePalette")} description={t("corePaletteHelp")}>
+                <Collapsible defaultOpen={overridesSaved}>
+                  <CollapsibleTrigger asChild>
+                    <Button type="button" variant="ghost" size="sm" className="group group/trigger -ml-2">
+                      <ChevronDown aria-hidden className={triggerChevronClass} />
+                      <span className="group-data-[state=open]:hidden">{t("showOverrides")}</span>
+                      <span className="hidden group-data-[state=open]:inline">{t("hideOverrides")}</span>
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-3">
+                    <div className={COLOUR_GRID_CLASS}>{OVERRIDES.map(field)}</div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </SettingGroup>
+            </SettingsGrid>
 
             <SaveBar
               dirty={settings.dirty}

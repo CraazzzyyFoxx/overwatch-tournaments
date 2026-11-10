@@ -2752,7 +2752,9 @@
       "scoreboard": {
         "final": "Final figures",
         "at": "At {time}: kills, deaths and items exact; the rest from the game's {sample} sample",
-        "endOnly": "Only recorded at the end of the match"
+        "endOnly": "Only recorded at the end of the match",
+        "rank": "Rank",
+        "rankAt": "Rank on the match date"
       },
       "preset": {
         "overview": "Overview",
@@ -7987,6 +7989,8 @@
       "editableHintRoles": "The registrant may change their roles until the application enters the balancer pool or a team roster. After that the roles re-lock anyway.",
       "requireVerified": "Require a verified account",
       "requireVerifiedHint": "The registrant must pick one of their OAuth-verified accounts instead of typing a handle.",
+      "verifyPrimaryOnly": "Verify the main account only",
+      "verifyPrimaryOnlyHint": "Only the first (main) account must be verified; additional accounts such as smurfs are accepted as typed.",
       "maxCount": "Handles allowed",
       "maxCountHint": "How many accounts the registrant may list, the first one being the main. Leave empty for the provider's default.",
       "keyLocked": "Answer key: {key}",
@@ -10206,6 +10210,7 @@
       "general": "General",
       "seeding": "Seeding",
       "ffaScoring": "FFA scoring",
+      "scoring": "Scoring",
       "tiebreakers": "Tiebreakers",
       "bestOf": "Best-of",
       "schedule": "Round schedule",

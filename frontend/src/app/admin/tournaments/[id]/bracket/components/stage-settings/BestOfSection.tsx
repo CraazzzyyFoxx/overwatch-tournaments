@@ -3,7 +3,7 @@
 import { useId } from "react";
 import { useTranslations } from "next-intl";
 
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingRow } from "@/components/kit/SettingRow";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -17,6 +17,7 @@ import { BEST_OF_OPTIONS } from "@/lib/tournament/best-of";
 
 import { FFA_STAGE_TYPES } from "@/lib/bracket/projection";
 import type { SectionProps } from "./types";
+import { ScoringPart } from "./ScoringSection";
 
 /**
  * One series length for every match of a non-elimination stage. An elimination bracket is configured on its own
@@ -40,7 +41,7 @@ export function BestOfSection({
   const isFfa = FFA_STAGE_TYPES.includes(form.stageType);
 
   return (
-    <SettingGroup id="stage-best-of" title={isFfa ? t("lobbyLength") : tRoot("editor.bestOf")}>
+    <ScoringPart title={isFfa ? t("lobbyLength") : tRoot("editor.bestOf")}>
       <SettingRow htmlFor={`${ids}-default`} label={isFfa ? t("gamesPerLobby") : t("allMatches")}>
         <Select
           value={String(form.bestOf.default)}
@@ -71,6 +72,6 @@ export function BestOfSection({
           {t("applyExisting")}
         </Button>
       </SettingRow>
-    </SettingGroup>
+    </ScoringPart>
   );
 }

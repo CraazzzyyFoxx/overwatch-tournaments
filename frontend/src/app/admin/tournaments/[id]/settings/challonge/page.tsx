@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { SaveBar } from "@/components/kit/SaveBar";
-import { SettingGroup } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingsGrid } from "@/components/kit/SettingRow";
 import { hasChallongeSource } from "@/components/admin/tournament-checklist";
 import type { Tournament } from "@/types/tournament.types";
 import { ChallongeIntegrationSection } from "../../components/ChallongeIntegrationSection";
@@ -35,6 +35,7 @@ function ChallongeSettings({
 
   return (
     <>
+      <SettingsGrid>
       <SettingGroup id="sync" title={t("groups.sync.title")}>
         {/* The slug is a tournament field, so it saves through the section's
             own bar; import/export fire their own mutations from inside. */}
@@ -45,6 +46,7 @@ function ChallongeSettings({
           onSlugChange={(value) => patch({ challonge_slug: value })}
         />
       </SettingGroup>
+      </SettingsGrid>
 
       <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>

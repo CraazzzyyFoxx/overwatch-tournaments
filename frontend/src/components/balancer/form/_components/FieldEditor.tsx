@@ -369,6 +369,21 @@ export function FieldEditor({
               />
             </SettingRow>
           ) : null}
+          {identityConfig?.canBeVerified === true && field.params.require_verified === true ? (
+            <SettingRow
+              htmlFor={`${ids}-verify-primary-only`}
+              label={t("verifyPrimaryOnly")}
+              hint={t("verifyPrimaryOnlyHint")}
+            >
+              <Switch
+                id={`${ids}-verify-primary-only`}
+                checked={field.params.verify_primary_only === true}
+                onCheckedChange={(verify_primary_only) =>
+                  onChange({ ...field, params: { ...field.params, verify_primary_only } })
+                }
+              />
+            </SettingRow>
+          ) : null}
         </div>
 
         {identity ? (

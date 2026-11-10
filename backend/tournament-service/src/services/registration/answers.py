@@ -255,10 +255,10 @@ class RegistrationAnswerService:
         skipped, not re-judged: an unreadable answer is not evidence about who
         owns it, and the registrant gets one verdict per field.
 
-        An identity answer carries several handles: EVERY one of them must be
-        verified. A smurf nobody proved ownership of is exactly what the gate
-        exists to keep out, and "primary only" would let it in beside a verified
-        main.
+        An identity answer carries several handles: by default EVERY one of them
+        must be verified, so a smurf nobody proved ownership of cannot ride in
+        beside a verified main. ``verify_primary_only`` relaxes that to the
+        primary handle; the extras are then taken as typed.
         """
         gated: list[tuple[str, str, list[str]]] = []
         errors: list[FieldError] = []
@@ -270,6 +270,8 @@ class RegistrationAnswerService:
             if not handles:
                 errors.append(_not_verified(field.key))
                 continue
+            if IdentityParams.model_validate(field.params).verify_primary_only:
+                handles = handles[:1]
             gated.append((field.key, provider, [normalize_social_handle(provider, handle) for handle in handles]))
 
         if not gated:

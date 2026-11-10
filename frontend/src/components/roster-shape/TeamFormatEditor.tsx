@@ -4,7 +4,7 @@ import { useId, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { ChevronDown, X } from "lucide-react";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { Button } from "@/components/ui/button";
 import { triggerChevronClass } from "@/components/ui/chevron";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -57,6 +57,7 @@ export function TeamFormatEditor({ value, ontology, presets, onChange, disabled 
 
   return <fieldset disabled={disabled || locked} className="flex min-w-0 flex-col gap-4">
     {locked && <p role="status" className="text-sm text-muted-foreground">{t("locked")}</p>}
+    <SettingsGrid>
     <SettingGroup id="format" title={t("formatTitle")}>
       {presets.length > 0 && <SettingRow htmlFor={`${id}-preset`} label={t("preset")} hint={t("presetHint")}>
         <Select value="" onValueChange={next => {
@@ -183,6 +184,7 @@ export function TeamFormatEditor({ value, ontology, presets, onChange, disabled 
         </SettingGroup>
       </fieldset>;
     })}
+    </SettingsGrid>
     {value.dimensions.filter(entry => !ontology.dimensions.some(d => d.code === entry.dimension)).map(entry =>
       <p key={entry.dimension} role="alert" className="text-sm text-destructive">{t("unknown", { role: entry.dimension })}</p>)}
   </fieldset>;

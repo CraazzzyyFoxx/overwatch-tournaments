@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 
 import { Switch } from "@/components/ui/switch";
 import { SaveBar } from "@/components/kit/SaveBar";
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import type { Tournament } from "@/types/tournament.types";
 import { TournamentPreviewAllowlist } from "../../components/TournamentPreviewAllowlist";
 import { SettingsSectionPage } from "../SettingsSection";
@@ -51,6 +51,7 @@ function PreviewForm({
 
   return (
     <>
+      <SettingsGrid>
       <SettingGroup id="visibility" title={t("groups.visibility.title")}>
         <SettingRow htmlFor="settings-is-hidden" label={t("hidden")}>
           <Switch
@@ -71,6 +72,7 @@ function PreviewForm({
           <EmptyNote size="sm">{t("hint")}</EmptyNote>
         )}
       </SettingGroup>
+      </SettingsGrid>
 
       <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>

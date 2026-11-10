@@ -118,7 +118,7 @@ export function CollectionSettingsPanel<T>({
 
   return (
     <>
-      <div className="flex flex-col gap-4">{children(settings.form, settings.patch)}</div>
+      {children(settings.form, settings.patch)}
       <SaveBar
         dirty={settings.dirty}
         summary={settings.summary}

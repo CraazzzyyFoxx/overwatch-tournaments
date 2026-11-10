@@ -52814,6 +52814,18 @@
           "title": "Player Id",
           "type": "integer"
         },
+        "rank_value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rank Value"
+        },
         "workspace_member_id": {
           "title": "Workspace Member Id",
           "type": "integer"

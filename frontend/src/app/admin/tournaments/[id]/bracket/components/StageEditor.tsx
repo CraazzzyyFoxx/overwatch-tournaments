@@ -26,6 +26,7 @@ import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { SaveBar } from "@/components/kit/SaveBar";
+import { SettingsGrid } from "@/components/kit/SettingRow";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -64,6 +65,7 @@ import { FfaScoringSection } from "./FfaScoringSection";
 import { RoundScheduleSection, useRoundSchedule } from "./RoundScheduleSection";
 import { StageItemsSection } from "./StageItemsSection";
 import { BestOfSection } from "./stage-settings/BestOfSection";
+import { ScoringSection } from "./stage-settings/ScoringSection";
 import { GeneralSection } from "./stage-settings/GeneralSection";
 import { SeedingSection } from "./stage-settings/SeedingSection";
 import { SwissSection } from "./stage-settings/SwissSection";
@@ -449,30 +451,31 @@ export function StageEditor({
 
       <div className="pt-4">
         {activeSection === "settings" ? (
-          // The settings rail's rhythm: `SettingGroup` cards, each section building its own. From a 72rem panel (a
-          // Full HD screen) they flow over two balanced columns, so whatever cards this format has pack without holes.
-          // Each card's own bottom margin spaces it from the next one.
-          <div className="@container">
-            <div className="gap-4 @6xl:columns-2 *:mb-4 *:break-inside-avoid">
-              <GeneralSection stage={stage} form={form} onChange={patchForm} isSuperuser={isSuperuser}>
-                <AdvancementRows stage={stage} stageType={form.stageType} advancement={advancement} />
-              </GeneralSection>
-              <SeedingSection form={form} onChange={patchForm} />
-              {isFfaForm ? <FfaScoringSection form={form} onChange={patchForm} saveError={saveError} /> : null}
-              {/* Under the advance count it checks, over the Points group's bye. */}
-              {form.stageType === "swiss" ? <SwissSection stage={stage} form={form} onChange={patchForm} /> : null}
-              {ranksTable ? <TiebreakersSection stage={stage} form={form} onChange={patchForm} /> : null}
-              {isEliminationForm ? null : (
-                <BestOfSection
-                  form={form}
-                  onChange={patchForm}
-                  onApplyToExisting={() => applyBestOfMutation.mutate()}
-                  applying={applyBestOfMutation.isPending}
-                />
-              )}
-              <RoundScheduleSection schedule={schedule} />
-            </div>
-          </div>
+          // The settings rail's rhythm: `SettingGroup` cards, each section building its own, packed over as many
+          // columns as the panel fits.
+          <SettingsGrid>
+            <GeneralSection stage={stage} form={form} onChange={patchForm} isSuperuser={isSuperuser}>
+              <AdvancementRows stage={stage} stageType={form.stageType} advancement={advancement} />
+            </GeneralSection>
+            <SeedingSection form={form} onChange={patchForm} />
+            {isFfaForm ? <FfaScoringSection form={form} onChange={patchForm} saveError={saveError} /> : null}
+            {/* Under the advance count it checks, over the Points part's bye. */}
+            {form.stageType === "swiss" ? <SwissSection stage={stage} form={form} onChange={patchForm} /> : null}
+            {ranksTable || !isEliminationForm ? (
+              <ScoringSection>
+                {isEliminationForm ? null : (
+                  <BestOfSection
+                    form={form}
+                    onChange={patchForm}
+                    onApplyToExisting={() => applyBestOfMutation.mutate()}
+                    applying={applyBestOfMutation.isPending}
+                  />
+                )}
+                {ranksTable ? <TiebreakersSection stage={stage} form={form} onChange={patchForm} /> : null}
+              </ScoringSection>
+            ) : null}
+            <RoundScheduleSection schedule={schedule} />
+          </SettingsGrid>
         ) : null}
 
         {activeSection === "layout" ? (

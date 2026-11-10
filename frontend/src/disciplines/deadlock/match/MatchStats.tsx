@@ -32,14 +32,14 @@ const NO_ASSETS: ItemAssets = { byId: new Map(), byClass: new Map() };
  * side by side with builds and player panels, the full table, the breakdown, the lanes and the timeline. Items are
  * drawn by deadlock-api's own components from its asset list in the page language, read once.
  */
-export default function MatchStats({ match }: Readonly<SlotProps["matchStats"]>) {
+export default function MatchStats({ match, metadata }: Readonly<SlotProps["matchStats"]>) {
   const t_ = useTranslations();
   const language = useLocale() === "ru" ? Language.RU : Language.EN;
   const [tab, setTab] = useState<Tab>("rosters");
   const [preset, setPreset] = useState<PresetKey>("overview");
   const [moment, setMoment] = useState<number | null>(null);
 
-  const teams = useMemo(() => readTeams(match), [match]);
+  const teams = useMemo(() => readTeams(match, metadata.native_ladder), [match, metadata.native_ladder]);
   const events = useQuery({
     queryKey: encounterQueryKeys.matchEvents(match.id),
     queryFn: () => encounterService.getMatchKillFeed(match.id),

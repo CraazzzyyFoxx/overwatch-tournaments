@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { Switch } from "@/components/ui/switch";
 import { SaveBar } from "@/components/kit/SaveBar";
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import adminService from "@/services/admin.service";
 import type { Tournament } from "@/types/tournament.types";
 import { TournamentDiscordSection } from "../../components/TournamentDiscordSection";
@@ -53,6 +53,7 @@ function DiscordSettings({
 
   return (
     <>
+      <SettingsGrid>
       <SettingGroup id="notifications" title={t("groups.notifications.title")}>
         <SettingRow
           htmlFor="settings-discord-broadcasts"
@@ -93,6 +94,7 @@ function DiscordSettings({
           canUpdateTournament={canUpdateTournament}
         />
       </SettingGroup>
+      </SettingsGrid>
 
       <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>

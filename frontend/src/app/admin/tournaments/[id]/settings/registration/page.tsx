@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 
 import { SaveBar } from "@/components/kit/SaveBar";
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { eyebrowClass } from "@/components/ui/eyebrow";
 import { Switch } from "@/components/ui/switch";
 import { PageStateCard } from "@/components/ui/page-state-card";
@@ -81,7 +81,7 @@ function PublicPageForm({
 
   return (
     <>
-      <div className="flex flex-col gap-4">
+      <SettingsGrid>
         <SettingGroup id="display" title={t("display.title")} description={t("display.description")}>
           <SettingRow
             htmlFor={`${ids}-hide-registrations`}
@@ -108,7 +108,7 @@ function PublicPageForm({
             />
           </SettingRow>
         </SettingGroup>
-      </div>
+      </SettingsGrid>
 
       <SaveBar
         dirty={dirty}

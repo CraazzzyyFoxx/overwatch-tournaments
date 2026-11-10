@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { SaveBar } from "@/components/kit/SaveBar";
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { TeamFormatEditor } from "@/components/roster-shape/TeamFormatEditor";
 import { teamFormatPayload, teamFormatErrors, teamFormatsEqual, type TeamFormatWrite } from "@/lib/roster/team-format";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
@@ -111,25 +111,27 @@ function RosterForm({
       {form && totalError && <p role="alert" className="text-sm text-destructive">{formatT("invalidFormat")}</p>}
 
       {hasBench && bench.form ? (
-        <SettingGroup id="bench" title={t("bench.title")} description={t("bench.description")}>
-          <SettingRow
-            htmlFor={`${ids}-max-substitutes`}
-            label={t("team.maxSubstitutes")}
-            hint={t("team.maxSubstitutesHint")}
-          >
-            <NumberInput
-              id={`${ids}-max-substitutes`}
-              integer
-              min={0}
-              value={bench.form.max_substitutes}
-              disabled={disabled}
-              onValueChange={(next) => bench.patch({ max_substitutes: next ?? 0 })}
-              aria-label={t("team.maxSubstitutesAria")}
-              size="sm"
-              className="w-24"
-            />
-          </SettingRow>
-        </SettingGroup>
+        <SettingsGrid>
+          <SettingGroup id="bench" title={t("bench.title")} description={t("bench.description")}>
+            <SettingRow
+              htmlFor={`${ids}-max-substitutes`}
+              label={t("team.maxSubstitutes")}
+              hint={t("team.maxSubstitutesHint")}
+            >
+              <NumberInput
+                id={`${ids}-max-substitutes`}
+                integer
+                min={0}
+                value={bench.form.max_substitutes}
+                disabled={disabled}
+                onValueChange={(next) => bench.patch({ max_substitutes: next ?? 0 })}
+                aria-label={t("team.maxSubstitutesAria")}
+                size="sm"
+                className="w-24"
+              />
+            </SettingRow>
+          </SettingGroup>
+        </SettingsGrid>
       ) : null}
 
       <SaveBar

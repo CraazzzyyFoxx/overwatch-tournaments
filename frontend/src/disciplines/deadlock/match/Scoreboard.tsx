@@ -9,6 +9,7 @@ import PlayerName from "@/components/PlayerName";
 import { Button } from "@/components/ui/button";
 import { triggerChevronClass } from "@/components/ui/chevron";
 import { eyebrowClass } from "@/components/ui/eyebrow";
+import Image from "@/components/ui/image";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -54,6 +55,18 @@ export function HeroBadge({ player, level, size = 32 }: Readonly<{ player: DlPla
   );
 }
 
+/** The rank the player held on the match date: the tier emblem and the step's name (`Oracle 3`), a faint dash without. */
+export function RankMark({ player, className }: Readonly<{ player: DlPlayer; className?: string }>) {
+  const tr = useTranslations();
+  if (!player.rank) return <span className={cn(FAINT, className)}>—</span>;
+  return (
+    <span className={cn("inline-flex items-center gap-1 whitespace-nowrap", className)} title={tr("matches.deadlock.scoreboard.rankAt")}>
+      <Image src={player.rank.icon_url} alt="" aria-hidden width={20} height={20} className="size-5 shrink-0 object-contain" />
+      {player.rank.name}
+    </span>
+  );
+}
+
 /**
  * Both teams' players in one table so they scroll sideways together: a column set, a team line with the totals,
  * then the players by end-of-match souls, each column's best in bold. Everything reads the moment on screen: the
@@ -66,7 +79,7 @@ export default function Scoreboard({ teams, feed, minutes, durationS, t, preset 
   const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
   const columns: Column[] = PRESETS[preset];
   const withBuild = preset === "overview";
-  const span = 1 + columns.length + (withBuild ? 1 : 0);
+  const span = 2 + columns.length + (withBuild ? 1 : 0);
   const atEnd = t >= durationS || !feed;
   const sampled = feed && !atEnd ? sampleTimeAt(feed, t) : null;
 
@@ -128,6 +141,9 @@ export default function Scoreboard({ teams, feed, minutes, durationS, t, preset 
             <TableHead scope="col" className={cn("h-9 border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)]", STICKY)}>
               {tr("matches.scoreboard.player")}
             </TableHead>
+            <TableHead scope="col" title={tr("matches.deadlock.scoreboard.rankAt")} className="h-9 text-left">
+              {tr("matches.deadlock.scoreboard.rank")}
+            </TableHead>
             {columns.map((column) => (
               <TableHead key={column.key} scope="col" title={title(column.key)} className="h-9 text-right">
                 {tr(`matches.deadlock.col.${column.key}` as never)}
@@ -174,6 +190,7 @@ export default function Scoreboard({ teams, feed, minutes, durationS, t, preset 
                     <span className={eyebrowClass("faint", "ms-auto ps-3")}>{tr("matches.scoreboard.total")}</span>
                   </span>
                 </TableHead>
+                <TableCell className={cn(CELL, "h-11")} />
                 {columns.map((column) => {
                   const total = atEnd || column.timed ? column.total(stats, ctx) : null;
                   return (
@@ -213,6 +230,9 @@ export default function Scoreboard({ teams, feed, minutes, durationS, t, preset 
                           <PlayerName display={player.display} className="ms-1 min-w-0 text-body text-[color:var(--aqt-fg)]" />
                         </div>
                       </TableHead>
+                      <TableCell className={CELL}>
+                        <RankMark player={player} className="text-[color:var(--aqt-fg-muted)]" />
+                      </TableCell>
                       {columns.map((column) => {
                         const value = valueOf(column, player);
                         const cell = cn(CELL, "aqt-tnum text-right");

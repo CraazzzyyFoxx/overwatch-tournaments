@@ -4,7 +4,7 @@ import { useId } from "react";
 import { useTranslations } from "next-intl";
 
 import { SaveBar } from "@/components/kit/SaveBar";
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { NumberInput } from "@/components/ui/number-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -35,7 +35,7 @@ export function RegistrationNodeSettingsForm({
 
   return (
     <>
-      <div className="flex flex-col gap-4">
+      <SettingsGrid>
         <SettingGroup id="status" title={tStatus("title")}>
           {/* Derived, not editable: openness is the node's status inside its sign-up window. Closed is the absence of the pill. */}
           <SettingRow label={tStatus("acceptLabel")} hint={tStatus("scheduleHint")}>
@@ -116,7 +116,7 @@ export function RegistrationNodeSettingsForm({
             />
           </SettingRow>
         </SettingGroup>
-      </div>
+      </SettingsGrid>
 
       <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>
