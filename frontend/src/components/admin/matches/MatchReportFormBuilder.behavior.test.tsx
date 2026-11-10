@@ -27,6 +27,9 @@ vi.mock("@/services/report-form.service", () => ({
 // keys the component is contracted to use.
 vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
 
+// The `SaveBar` asks for a router to finish a navigation its discard prompt held back.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+
 vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() }
 }));
@@ -60,12 +63,24 @@ async function mount(node: ReactNode) {
   return container;
 }
 
+// Radix selects open on `pointerdown` and pick an option on `click`; both are sent.
 async function click(element: Element | null | undefined) {
   expect(element).toBeTruthy();
   await act(async () => {
+    element!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     element!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
   await tick();
+}
+
+/** Opens the select labelled `label` and picks the option reading `option`. */
+async function choose(scope: ParentNode, label: string, option: string) {
+  await click(controlsLabelled(scope, label)[0]);
+  await click(
+    Array.from(document.querySelectorAll('[role="option"]')).find(
+      (element) => element.textContent?.trim() === option
+    )
+  );
 }
 
 // React overrides the input's own `value` setter to track changes; assigning
@@ -124,29 +139,26 @@ describe("MatchReportFormBuilder", () => {
     document.body.innerHTML = "";
   });
 
-  it("cannot mark a disabled field required, and keeps the choice for when it comes back", async () => {
-    // "Required" only means something for a field captains are shown. The value
-    // must survive the round trip, or turning a field off and on again silently
-    // downgrades a rule the organizer set.
+  it("turns a field off without dropping its required rule", async () => {
+    // "Off" hides the field from captains; the rule the organizer set must
+    // survive in the saved config, or switching the field back on later
+    // silently downgrades it.
     const container = await mount(<MatchReportFormBuilder tournamentId={7} />);
-    await waitFor(() => button(container, "save"), "the builder");
+    await waitFor(() => button(container, "addField"), "the builder");
 
-    const enabled = controlsLabelled(container, "enabledLabel");
-    const required = controlsLabelled(container, "requiredLabel");
-    expect(enabled).toHaveLength(3);
-    expect(required).toHaveLength(3);
+    // closeness ships enabled + required.
+    expect(controlsLabelled(container, "fields.closeness")[0].textContent).toContain("modes.required");
 
-    // closeness is the first row and ships enabled + required.
-    expect(required[0].hasAttribute("disabled")).toBe(false);
-    expect(required[0].getAttribute("aria-checked")).toBe("true");
+    await choose(container, "fields.closeness", "modes.off");
+    expect(controlsLabelled(container, "fields.closeness")[0].textContent).toContain("modes.off");
 
-    await click(enabled[0]);
-    expect(required[0].hasAttribute("disabled")).toBe(true);
-    expect(required[0].getAttribute("aria-checked")).toBe("true");
-
-    await click(enabled[0]);
-    expect(required[0].hasAttribute("disabled")).toBe(false);
-    expect(required[0].getAttribute("aria-checked")).toBe("true");
+    await click(button(container, "save"));
+    expect(saveReportForm).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        built_in_fields: expect.objectContaining({ closeness: { enabled: false, required: true } })
+      })
+    );
   });
 
   it("slugs a new field's key from its label until the key is edited by hand", async () => {
@@ -183,20 +195,15 @@ describe("MatchReportFormBuilder", () => {
     const secondKey = controlsLabelled(container, "keyLabel")[1] as HTMLInputElement;
     await type(secondKey, "vod");
 
-    expect(container.textContent).toContain("errors.keyDuplicate");
-    expect(button(container, "save")?.hasAttribute("disabled")).toBe(true);
+    // The reason is text in the save bar, not a red border, and saving sends nothing.
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("errors.keyDuplicate");
+    await click(button(container, "save"));
     expect(saveReportForm).not.toHaveBeenCalled();
-
-    // The reason is text, not a red border, and the Save button points at it.
-    const blockedId = button(container, "save")?.getAttribute("aria-describedby");
-    expect(blockedId).toBeTruthy();
-    expect(container.querySelector(`[id="${blockedId}"]`)?.textContent).toContain(
-      "errors.keyDuplicate"
-    );
 
     await type(secondKey, "match_notes");
     expect(container.textContent).not.toContain("errors.keyDuplicate");
-    expect(button(container, "save")?.hasAttribute("disabled")).toBe(false);
+    await click(button(container, "save"));
+    expect(saveReportForm).toHaveBeenCalledTimes(1);
   });
 
   it("blocks Save on a field with no label", async () => {
@@ -204,19 +211,19 @@ describe("MatchReportFormBuilder", () => {
     await waitFor(() => button(container, "addField"), "the add button");
 
     await click(button(container, "addField"));
-    expect(container.textContent).toContain("errors.labelRequired");
-    expect(button(container, "save")?.hasAttribute("disabled")).toBe(true);
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("errors.labelRequired");
+    await click(button(container, "save"));
+    expect(saveReportForm).not.toHaveBeenCalled();
   });
 
-  it("saves the built-in toggles and the custom text fields together", async () => {
+  it("saves the built-in choices and the custom text fields together", async () => {
     const container = await mount(<MatchReportFormBuilder tournamentId={7} />);
-    await waitFor(() => button(container, "save"), "the builder");
+    await waitFor(() => button(container, "addField"), "the builder");
 
-    // Nothing edited yet: there is nothing to persist.
-    expect(button(container, "save")?.hasAttribute("disabled")).toBe(true);
+    // Nothing edited yet: no save bar, nothing to persist.
+    expect(button(container, "save")).toBeUndefined();
 
-    // comment is the third built-in row.
-    await click(controlsLabelled(container, "requiredLabel")[2]);
+    await choose(container, "fields.comment", "modes.required");
     await click(button(container, "addField"));
     await type(controlsLabelled(container, "labelLabel")[0], "Coach notes");
     await type(controlsLabelled(container, "placeholderLabel")[0], "  Anything else  ");
@@ -269,5 +276,6 @@ describe("MatchReportFormBuilder", () => {
     await waitFor(() => container.textContent?.includes("loadError"), "the load error");
 
     expect(button(container, "save")).toBeUndefined();
+    expect(button(container, "addField")).toBeUndefined();
   });
 });

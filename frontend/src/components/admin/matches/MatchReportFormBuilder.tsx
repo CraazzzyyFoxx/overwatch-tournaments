@@ -2,19 +2,19 @@
 
 import { useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Plus, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { SaveBar } from "@/components/kit/SaveBar";
+import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { notify } from "@/lib/notify";
-import { cn } from "@/lib/utils";
 import reportFormService from "@/services/report-form.service";
 import {
   DEFAULT_MATCH_REPORT_BUILT_INS,
@@ -22,8 +22,6 @@ import {
   type ReportBuiltInFieldConfig,
   type ReportCustomFieldDefinition
 } from "@/types/encounter.types";
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { Spinner } from "@/components/ui/spinner";
 
 type BuiltInKey = keyof MatchReportForm["built_in_fields"];
 
@@ -76,95 +74,58 @@ function FieldError({ id, text }: Readonly<{ id: string; text: string }>) {
   );
 }
 
-function ToggleCell({
-  id,
-  label,
-  checked,
-  disabled,
-  describedBy,
-  onCheckedChange
-}: Readonly<{
-  id: string;
-  label: string;
-  checked: boolean;
-  disabled?: boolean;
-  describedBy?: string;
-  onCheckedChange: (value: boolean) => void;
-}>) {
-  return (
-    <div className="flex min-w-20 flex-col items-start gap-1.5">
-      {/* Radix Switch renders a <button>, so a wrapping <label> would not
-          associate. The id/htmlFor pair does. */}
-      <Label htmlFor={id} className={cn("text-xs", disabled && "text-muted-foreground")}>
-        {label}
-      </Label>
-      <Switch
-        id={id}
-        checked={checked}
-        disabled={disabled}
-        aria-describedby={describedBy}
-        onCheckedChange={onCheckedChange}
-      />
-    </div>
-  );
-}
+type BuiltInMode = "off" | "optional" | "required";
 
+/**
+ * One standard field as a single choice. "Off" leaves the stored `required` as it was: the field is simply not
+ * shown, and the organizer's rule is still there in the saved config.
+ */
 function BuiltInRow({
-  idBase,
+  id,
   name,
   hint,
   config,
-  enabledLabel,
-  requiredLabel,
+  modeLabels,
   onChange
 }: Readonly<{
-  idBase: string;
+  id: string;
   name: string;
   hint: string;
   config: ReportBuiltInFieldConfig;
-  enabledLabel: string;
-  requiredLabel: string;
+  modeLabels: Record<BuiltInMode, string>;
   onChange: (updates: Partial<ReportBuiltInFieldConfig>) => void;
 }>) {
-  const hintId = `${idBase}-hint`;
+  const mode: BuiltInMode = !config.enabled ? "off" : config.required ? "required" : "optional";
   return (
-    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4 rounded-lg border border-[color:var(--aqt-border)] p-4">
-      <div className="min-w-56 max-w-prose flex-1 space-y-1">
-        <p className="text-sm font-medium">{name}</p>
-        <p id={hintId} className="text-xs text-muted-foreground">
-          {hint}
-        </p>
-      </div>
-      <div className="flex shrink-0 gap-4">
-        <ToggleCell
-          id={`${idBase}-enabled`}
-          label={enabledLabel}
-          checked={config.enabled}
-          describedBy={hintId}
-          onCheckedChange={(value) => onChange({ enabled: value })}
-        />
-        <ToggleCell
-          id={`${idBase}-required`}
-          label={requiredLabel}
-          checked={config.required}
-          // A field nobody is shown cannot be mandatory. The stored value stays
-          // put, so re-enabling the field restores the organizer's choice.
-          disabled={!config.enabled}
-          describedBy={hintId}
-          onCheckedChange={(value) => onChange({ required: value })}
-        />
-      </div>
-    </div>
+    <SettingRow htmlFor={id} label={name} hint={hint}>
+      <Select
+        value={mode}
+        onValueChange={(next) =>
+          onChange(next === "off" ? { enabled: false } : { enabled: true, required: next === "required" })
+        }
+      >
+        <SelectTrigger id={id}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {(["off", "optional", "required"] as const).map((value) => (
+            <SelectItem key={value} value={value}>
+              {modeLabels[value]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </SettingRow>
   );
 }
 
 /**
- * Per-tournament editor for the captain match-report form.
- *
- * Two concerns in one panel: which of the three optional built-in fields
- * captains see (and must fill in), and the organizer's own free-text questions.
- * The series score is absent on purpose — it is the input to result derivation,
- * so a report without it would be meaningless.
+ * Per-tournament editor for the captain match-report form, in the settings
+ * rail's card language: one card for which of the three optional built-in
+ * fields captains see (and must fill in), one for the organizer's own
+ * free-text questions, and the shared `SaveBar`. The series score is absent on
+ * purpose — it is the input to result derivation, so a report without it would
+ * be meaningless.
  *
  * The backend is the validation authority; the inline checks here exist so the
  * organizer sees a bad key before a 422 does.
@@ -326,195 +287,166 @@ export function MatchReportFormBuilder({ tournamentId }: Readonly<{ tournamentId
   }
 
   const limitNoticeId = `${idBase}-limit`;
-  const saveBlockedId = `${idBase}-blocked`;
+  const modeLabels: Record<BuiltInMode, string> = {
+    off: t("modes.off"),
+    optional: t("modes.optional"),
+    required: t("modes.required")
+  };
 
   return (
-    <Card>
-      <CardContent className="space-y-6 pt-6">
-        <section aria-labelledby={`${idBase}-built-in`} className="space-y-3">
-          <div className="space-y-1">
-            <h3 id={`${idBase}-built-in`} className={eyebrowClass("muted")}>
-              {t("builtInHeading")}
-            </h3>
-            <p className="text-xs text-muted-foreground">{t("builtInDescription")}</p>
-          </div>
-          {/* Three fixed rows rather than a table walk: the built-in set is
-              frozen by the wire contract, and `t` only accepts literal keys. */}
-          <div className="space-y-2">
-            <BuiltInRow
-              idBase={`${idBase}-closeness`}
-              name={t("fields.closeness")}
-              hint={t("fields.closenessHint")}
-              config={builtIns.closeness}
-              enabledLabel={t("enabledLabel")}
-              requiredLabel={t("requiredLabel")}
-              onChange={(updates) => updateBuiltIn("closeness", updates)}
-            />
-            <BuiltInRow
-              idBase={`${idBase}-map-codes`}
-              name={t("fields.mapCodes")}
-              hint={t("fields.mapCodesHint")}
-              config={builtIns.map_codes}
-              enabledLabel={t("enabledLabel")}
-              requiredLabel={t("requiredLabel")}
-              onChange={(updates) => updateBuiltIn("map_codes", updates)}
-            />
-            <BuiltInRow
-              idBase={`${idBase}-comment`}
-              name={t("fields.comment")}
-              hint={t("fields.commentHint")}
-              config={builtIns.comment}
-              enabledLabel={t("enabledLabel")}
-              requiredLabel={t("requiredLabel")}
-              onChange={(updates) => updateBuiltIn("comment", updates)}
-            />
-          </div>
-        </section>
+    <>
+      <SettingsGrid>
+        {/* Three fixed rows rather than a table walk: the built-in set is
+            frozen by the wire contract, and `t` only accepts literal keys. */}
+        <SettingGroup id="standard-fields" title={t("builtInHeading")} description={t("builtInDescription")}>
+          <BuiltInRow
+            id={`${idBase}-closeness`}
+            name={t("fields.closeness")}
+            hint={t("fields.closenessHint")}
+            config={builtIns.closeness}
+            modeLabels={modeLabels}
+            onChange={(updates) => updateBuiltIn("closeness", updates)}
+          />
+          <BuiltInRow
+            id={`${idBase}-map-codes`}
+            name={t("fields.mapCodes")}
+            hint={t("fields.mapCodesHint")}
+            config={builtIns.map_codes}
+            modeLabels={modeLabels}
+            onChange={(updates) => updateBuiltIn("map_codes", updates)}
+          />
+          <BuiltInRow
+            id={`${idBase}-comment`}
+            name={t("fields.comment")}
+            hint={t("fields.commentHint")}
+            config={builtIns.comment}
+            modeLabels={modeLabels}
+            onChange={(updates) => updateBuiltIn("comment", updates)}
+          />
+        </SettingGroup>
 
-        <section
-          aria-labelledby={`${idBase}-custom`}
-          className="space-y-3 border-t border-border/30 pt-6"
+        <SettingGroup
+          id="custom-fields"
+          title={t("customHeading")}
+          summary={`${customFields.length} / ${MAX_CUSTOM_FIELDS}`}
+          description={t("customDescription")}
+          actions={
+            <>
+              {atFieldLimit ? (
+                <p id={limitNoticeId} className="text-xs text-muted-foreground">
+                  {t("maxFieldsReached")}
+                </p>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={atFieldLimit}
+                aria-describedby={atFieldLimit ? limitNoticeId : undefined}
+                onClick={addCustomField}
+              >
+                <Plus aria-hidden />
+                {t("addField")}
+              </Button>
+            </>
+          }
         >
-          <div className="space-y-1">
-            <h3 id={`${idBase}-custom`} className={eyebrowClass("muted")}>
-              {t("customHeading")}
-            </h3>
-            <p className="text-xs text-muted-foreground">{t("customDescription")}</p>
-          </div>
-
           {customFields.length === 0 ? (
-            <EmptyNote className="text-center">{t("noCustomFields")}</EmptyNote>
+            <p className="py-3 text-center text-caption text-muted-foreground">{t("noCustomFields")}</p>
           ) : (
-            <ul className="space-y-3">
-              {customFields.map((field, index) => {
-                const errors = rowErrors[index];
-                const rowId = `${idBase}-${field.uid}`;
-                const labelErrorId = `${rowId}-label-error`;
-                const keyErrorId = `${rowId}-key-error`;
-                const keyHintId = `${rowId}-key-hint`;
-                return (
-                  <li
-                    key={field.uid}
-                    className="space-y-3 rounded-lg border border-[color:var(--aqt-border)] p-4"
-                  >
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-1.5">
-                        <Label htmlFor={`${rowId}-label`} className="text-xs">
-                          {t("labelLabel")}
-                        </Label>
-                        <Input
-                          id={`${rowId}-label`}
-                          value={field.label}
-                          aria-invalid={Boolean(errors.label)}
-                          aria-describedby={errors.label ? labelErrorId : undefined}
-                          onChange={(event) =>
-                            updateCustomField(field.uid, { label: event.target.value })
-                          }
-                        />
-                        {errors.label ? <FieldError id={labelErrorId} text={errors.label} /> : null}
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label htmlFor={`${rowId}-key`} className="text-xs">
-                          {t("keyLabel")}
-                        </Label>
-                        <Input
-                          id={`${rowId}-key`}
-                          value={field.key}
-                          className="font-mono"
-                          aria-invalid={Boolean(errors.key)}
-                          aria-describedby={errors.key ? `${keyHintId} ${keyErrorId}` : keyHintId}
-                          onChange={(event) =>
-                            updateCustomField(field.uid, {
-                              key: event.target.value,
-                              keyLocked: true
-                            })
-                          }
-                        />
-                        <p id={keyHintId} className="text-xs text-muted-foreground">
-                          {t("keyHint")}
-                        </p>
-                        {errors.key ? <FieldError id={keyErrorId} text={errors.key} /> : null}
-                      </div>
+            customFields.map((field, index) => {
+              const errors = rowErrors[index];
+              const rowId = `${idBase}-${field.uid}`;
+              const labelErrorId = `${rowId}-label-error`;
+              const keyErrorId = `${rowId}-key-error`;
+              const keyHintId = `${rowId}-key-hint`;
+              return (
+                <div key={field.uid} className="space-y-3 py-4 first:pt-1 last:pb-1">
+                  <div className="grid gap-3 @md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`${rowId}-label`} className="text-xs">
+                        {t("labelLabel")}
+                      </Label>
+                      <Input
+                        id={`${rowId}-label`}
+                        value={field.label}
+                        aria-invalid={Boolean(errors.label)}
+                        aria-describedby={errors.label ? labelErrorId : undefined}
+                        onChange={(event) => updateCustomField(field.uid, { label: event.target.value })}
+                      />
+                      {errors.label ? <FieldError id={labelErrorId} text={errors.label} /> : null}
                     </div>
 
-                    <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-                      <div className="min-w-56 flex-1 space-y-1.5">
-                        <Label htmlFor={`${rowId}-placeholder`} className="text-xs">
-                          {t("placeholderLabel")}
-                        </Label>
-                        <Input
-                          id={`${rowId}-placeholder`}
-                          value={field.placeholder ?? ""}
-                          onChange={(event) =>
-                            updateCustomField(field.uid, { placeholder: event.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="flex items-end gap-4">
-                        <ToggleCell
-                          id={`${rowId}-required`}
-                          label={t("requiredLabel")}
-                          checked={field.required}
-                          onCheckedChange={(value) =>
-                            updateCustomField(field.uid, { required: value })
-                          }
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-danger hover:text-danger"
-                          onClick={() => removeCustomField(field.uid)}
-                        >
-                          <Trash2 aria-hidden />
-                          {t("removeField")}
-                        </Button>
-                      </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`${rowId}-key`} className="text-xs">
+                        {t("keyLabel")}
+                      </Label>
+                      <Input
+                        id={`${rowId}-key`}
+                        value={field.key}
+                        className="font-mono"
+                        aria-invalid={Boolean(errors.key)}
+                        aria-describedby={errors.key ? `${keyHintId} ${keyErrorId}` : keyHintId}
+                        onChange={(event) =>
+                          updateCustomField(field.uid, { key: event.target.value, keyLocked: true })
+                        }
+                      />
+                      <p id={keyHintId} className="text-xs text-muted-foreground">
+                        {t("keyHint")}
+                      </p>
+                      {errors.key ? <FieldError id={keyErrorId} text={errors.key} /> : null}
                     </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                  </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={atFieldLimit}
-              aria-describedby={atFieldLimit ? limitNoticeId : undefined}
-              onClick={addCustomField}
-            >
-              <Plus aria-hidden />
-              {t("addField")}
-            </Button>
-            {atFieldLimit ? (
-              <p id={limitNoticeId} className="text-xs text-muted-foreground">
-                {t("maxFieldsReached")}
-              </p>
-            ) : null}
-          </div>
-        </section>
-      </CardContent>
-
-      <CardFooter className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 border-t border-border/30 pt-6">
-        {blockingError ? <FieldError id={saveBlockedId} text={blockingError} /> : null}
-        <Button
-          type="button"
-          onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending || Boolean(blockingError) || !hasChanges}
-          aria-describedby={blockingError ? saveBlockedId : undefined}
-        >
-          {saveMutation.isPending ? (
-            <Spinner />
-          ) : (
-            <Save aria-hidden />
+                  <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+                    <div className="min-w-48 flex-1 space-y-1.5">
+                      <Label htmlFor={`${rowId}-placeholder`} className="text-xs">
+                        {t("placeholderLabel")}
+                      </Label>
+                      <Input
+                        id={`${rowId}-placeholder`}
+                        value={field.placeholder ?? ""}
+                        onChange={(event) => updateCustomField(field.uid, { placeholder: event.target.value })}
+                      />
+                    </div>
+                    <div className="flex h-9 items-center gap-2">
+                      {/* Radix Switch renders a <button>, so a wrapping <label> would not associate. */}
+                      <Switch
+                        id={`${rowId}-required`}
+                        checked={field.required}
+                        onCheckedChange={(value) => updateCustomField(field.uid, { required: value })}
+                      />
+                      <Label htmlFor={`${rowId}-required`} className="text-xs">
+                        {t("requiredLabel")}
+                      </Label>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-9 text-muted-foreground hover:text-danger"
+                      aria-label={t("removeField")}
+                      onClick={() => removeCustomField(field.uid)}
+                    >
+                      <Trash2 aria-hidden />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
           )}
-          {saveMutation.isPending ? t("saving") : t("save")}
-        </Button>
-      </CardFooter>
-    </Card>
+        </SettingGroup>
+      </SettingsGrid>
+
+      <SaveBar
+        dirty={hasChanges}
+        summary={t("unsavedChanges")}
+        error={blockingError}
+        saving={saveMutation.isPending}
+        onDiscard={() => setDraft(null)}
+        // A blocked save is explained in the bar itself; sending it would only buy a 422.
+        onSave={() => (blockingError ? undefined : saveMutation.mutate())}
+      />
+    </>
   );
 }

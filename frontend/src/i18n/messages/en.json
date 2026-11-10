@@ -1754,8 +1754,12 @@
     "builtInDescription": "The series score is always required and cannot be turned off.",
     "customHeading": "Custom text fields",
     "customDescription": "Add up to 20 free-text questions for captains.",
-    "enabledLabel": "Enabled",
     "requiredLabel": "Required",
+    "modes": {
+      "off": "Off",
+      "optional": "Optional",
+      "required": "Required"
+    },
     "fields": {
       "closeness": "Match quality",
       "closenessHint": "A 1-10 rating of how close the series was.",
@@ -1772,8 +1776,7 @@
     "placeholderLabel": "Placeholder",
     "noCustomFields": "No custom fields yet.",
     "maxFieldsReached": "Limit of 20 custom fields reached.",
-    "save": "Save form",
-    "saving": "Saving…",
+    "unsavedChanges": "Unsaved report form changes",
     "saved": "Report form saved",
     "saveError": "Failed to save the report form",
     "errors": {
@@ -10679,7 +10682,6 @@
       "sections": {
         "general": "General",
         "rules": "Rules",
-        "scoring": "Results",
         "schedule": "Schedule",
         "roster": "Roster shape",
         "registration": "Registration",

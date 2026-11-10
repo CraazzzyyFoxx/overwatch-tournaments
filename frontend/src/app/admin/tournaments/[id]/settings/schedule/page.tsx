@@ -89,8 +89,8 @@ function ScheduleForm({
                 {t("timezoneLabel", { label: t("timezone"), timezone, offset: getUtcOffsetLabel(timezone) })}
               </span>
             </p>
-            {/* A grid, not `SettingsGrid`: each editor carries its own sticky `SaveBar`, and a wrapper each keeps
-                them from stacking; the cards are alike in height, so rows leave no holes. */}
+            {/* Wider columns than `SettingsGrid`'s: a node's date pairs need ~36rem. The cards are alike in height,
+                so plain rows leave no holes. Each editor carries its own sticky `SaveBar`, wrapped with its card. */}
             <div className="grid grid-cols-[repeat(auto-fill,minmax(min(36rem,100%),1fr))] items-start gap-4">
               {nodes.map((node) => (
                 <div key={node.id}>
