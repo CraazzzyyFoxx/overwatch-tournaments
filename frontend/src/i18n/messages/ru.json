@@ -1,5 +1,15 @@
 {
   "common": {
+    "roleRankRows": {
+      "primary": "Основная",
+      "noRank": "Нет ранга — не играет",
+      "gameRank": "В игре {rank}",
+      "source": {
+        "registration": "из заявки",
+        "workspace": "из воркспейса",
+        "native": "из игры"
+      }
+    },
     "roleOntology": {
       "unknown": "Неизвестная роль: {role}",
       "retired": "Неактивная роль: {role}",

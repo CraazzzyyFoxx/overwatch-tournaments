@@ -1,5 +1,15 @@
 {
   "common": {
+    "roleRankRows": {
+      "primary": "Main",
+      "noRank": "No rank — not playable",
+      "gameRank": "In game {rank}",
+      "source": {
+        "registration": "from registration",
+        "workspace": "from workspace",
+        "native": "from the game"
+      }
+    },
     "roleOntology": {
       "unknown": "Unknown role: {role}",
       "retired": "Retired role: {role}",
