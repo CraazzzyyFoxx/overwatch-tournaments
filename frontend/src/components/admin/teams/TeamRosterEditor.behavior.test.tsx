@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import type { Player } from "@/types/team.types";
 import { TeamRosterEditor } from "./TeamRosterEditor";
 
@@ -50,7 +50,7 @@ vi.mock("next/image", () => ({
   default: ({ src, alt }: { src: string; alt: string }) => <img src={src} alt={alt} />
 }));
 vi.mock("@/hooks/useCurrentWorkspace", () => ({ useDivisionGrid: () => DIVISION_GRID }));
-vi.mock("@/components/kit/ServerSearchCombobox", () => ({
+vi.mock("@/components/kit/UserSearchCombobox", () => ({
   UserSearchCombobox: () => <div data-testid="user-search" />
 }));
 

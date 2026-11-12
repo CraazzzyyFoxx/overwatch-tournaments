@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import type { ManageableDiscordGuild } from "@/types/workspace.types";
 import { GuildMark } from "./GuildMark";
 

@@ -11,7 +11,7 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import DivisionIcon from "@/components/DivisionIcon";
 import { CatalogEntityStrip } from "@/components/catalog/CatalogEntityImage";
 import { Card } from "@/components/ui/card";
-import { disclosureChevronClass } from "@/components/ui/chevron";
+import { disclosureChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { answerFlag } from "@/lib/forms/answers";
 import { resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { useSlotLabel } from "@/hooks/useSlotLabel";

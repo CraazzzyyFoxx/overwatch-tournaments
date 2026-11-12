@@ -5,7 +5,7 @@ import { Maximize2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { TONE_TEXT } from "@/components/ui/tone";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { cn } from "@/lib/utils";
 
 type MermaidApi = (typeof import("mermaid"))["default"];

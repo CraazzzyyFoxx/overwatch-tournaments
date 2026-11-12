@@ -14,7 +14,7 @@ import { useFormatter } from "@/lib/datetime/client";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import { DistributionBar } from "./DistributionBar";
 import {

@@ -14,8 +14,8 @@ import {
   useAuditTranslator
 } from "@/components/kit/audit-log";
 import { formatRelative } from "@/components/kit/format-time";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { Label } from "@/components/ui/label";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useAuthProfile } from "@/hooks/useAuthProfile";

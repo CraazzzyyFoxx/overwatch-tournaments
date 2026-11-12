@@ -11,7 +11,7 @@
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import type { TableCommand } from "@/components/data-table";
+import type { TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
 
 interface CatalogCommandsProps {
   /**

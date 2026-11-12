@@ -3,8 +3,8 @@
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,

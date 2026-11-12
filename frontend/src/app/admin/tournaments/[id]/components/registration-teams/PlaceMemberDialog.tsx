@@ -7,12 +7,12 @@ import { useTranslations } from "next-intl";
 
 import { PersonLabel } from "@/components/PlayerName";
 import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
-import { Checkbox } from "@/components/ui/checkbox";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,

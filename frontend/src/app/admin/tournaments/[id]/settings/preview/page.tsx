@@ -9,7 +9,7 @@ import type { Tournament } from "@/types/tournament.types";
 import { TournamentPreviewAllowlist } from "../../components/TournamentPreviewAllowlist";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 
 export default function PreviewSettingsPage() {
   return (

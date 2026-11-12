@@ -13,7 +13,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 
 import type { ColumnDefinition } from "./participantsColumns.model";
 import { isMandatoryParticipantColumnId } from "./participants-url-state";

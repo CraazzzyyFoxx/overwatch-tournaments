@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 
 import { HandleLabel } from "@/components/HandleLabel";
 import { IngestLinks } from "@/components/IngestLinks";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { Button } from "@/components/ui/button";
@@ -16,11 +16,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import { revalidateUser } from "@/app/actions/users";
 import { SITE_NAME } from "@/config/site";
 import { useGameDescriptors } from "@/hooks/useGameDescriptors";

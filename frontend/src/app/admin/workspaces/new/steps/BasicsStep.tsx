@@ -10,7 +10,7 @@ import {
   InputGroupInput,
   InputGroupText
 } from "@/components/ui/input-group";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { notify } from "@/lib/notify";
 import { PLATFORM_ZONE } from "@/lib/site/host";

@@ -4,8 +4,8 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { ApiError, errorBodyFields, getApiErrorMessage } from "@/lib/api/error";

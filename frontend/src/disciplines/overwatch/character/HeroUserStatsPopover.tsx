@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import CharacterCard, { CharacterMapStats, signedPoints } from "@/components/profile/CharacterCard";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import type { SlotProps } from "@/disciplines/types";
 import { characterClass } from "@/lib/catalog/attrs";
 import { LOW_SAMPLE_GAMES, winrateColor } from "@/lib/colors";

@@ -3,12 +3,12 @@
 import Image from "@/components/ui/image";
 import { useTranslations } from "next-intl";
 
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { InspectorField } from "@/components/kit/InspectorField";
 import { Button } from "@/components/ui/button";
 import { FileButton } from "@/components/ui/file-button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,

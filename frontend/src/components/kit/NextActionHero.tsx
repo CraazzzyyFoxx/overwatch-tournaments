@@ -6,7 +6,7 @@ import { ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 
 export interface NextActionHeroProps {
   eyebrow: string;

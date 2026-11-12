@@ -2,7 +2,7 @@
 
 import { encounterStatusKey } from "@/components/admin/encounters/EncounterCells";
 import { InspectorField, InspectorSection } from "@/components/kit/InspectorField";
-import { TONE_TEXT } from "@/components/ui/tone";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { useFormatter } from "@/lib/datetime/client";
 import { useTranslations } from "next-intl";
 import type { EncounterReportsRow } from "@/types/admin.types";

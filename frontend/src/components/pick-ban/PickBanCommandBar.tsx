@@ -5,9 +5,9 @@ import { Ban, EyeOff, PauseCircle, Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { OverlayBar } from "@/components/ui/overlay-bar";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { cn } from "@/lib/utils";
 import type { PickBanAction, PickBanKind, PickBanState } from "@/types/tournament.types";
 

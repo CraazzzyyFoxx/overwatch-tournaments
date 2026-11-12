@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import { TeamLogo, type TeamNameInput } from "@/components/TeamName";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { MapReportDialog } from "@/components/pick-ban/MapReportDialog";
 import { acceptedScore, pickBanSeats } from "@/components/pick-ban/pick-ban-model";
 import type { PregameCharacterBoard } from "@/disciplines/types";

@@ -11,8 +11,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { RowButton } from "@/components/ui/row-button";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { cn } from "@/lib/utils";
 
 import { sourceLabel } from "@/lib/bracket/view";

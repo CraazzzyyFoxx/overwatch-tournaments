@@ -403,12 +403,6 @@
     "save": "Save",
     "delete": "Delete",
     "previous": "Previous",
-    "pagination": {
-      "label": "Pagination",
-      "previous": "Previous page",
-      "next": "Next page",
-      "goToPage": "Go to page {page}"
-    },
     "pageState": {
       "error": {
         "title": "Unable to load this section",
@@ -14519,35 +14513,12 @@
         "bronze": "{place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} place, bronze",
         "place": "{place, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} place",
         "none": "No placement"
-      },
-      "infiniteScroll": {
-        "rows": "rows",
-        "progress": "Showing {loaded, number} {unit}",
-        "progressOf": "Showing {loaded, number} of {total, number} {unit}",
-        "loading": "Loading more {unit}…",
-        "loadMore": "Load more {unit}",
-        "retry": "Try loading {unit} again",
-        "error": "Unable to load more {unit}. Check your connection and try again."
       }
     },
     "actions": {
       "back": "Back",
       "backToList": "Back to list",
       "openPage": "Open page",
-      "save": "Save",
-      "clearSelection": "Clear selection",
-      "bulkActions": "Bulk actions",
-      "selectedSummary": "<num>{count}</num> selected",
-      "activeFilters": "Active filters",
-      "filter": "Filter",
-      "filterBy": "Filter by…",
-      "noFilters": "No filters available.",
-      "addFilter": "Add filter",
-      "removeFilter": "Remove filter {label}",
-      "backToFilterList": "Back to filter list",
-      "searchPicker": "Search {label}…",
-      "nothingMatchesShort": "Nothing matches.",
-      "clearAll": "Clear all",
       "previousRow": "Previous row",
       "nextRow": "Next row",
       "closeInspector": "Close inspector",
@@ -14586,11 +14557,6 @@
       "empty": "No users match that search. Try a shorter name.",
       "none": "No user",
       "userId": "User #{id}"
-    },
-    "entityForm": {
-      "couldNotSave": "Could not save your changes.",
-      "discardChanges": "Discard changes",
-      "unsavedDescription": "You have unsaved changes in this form. Leave now and the current edits will be lost."
     },
     "avatar": {
       "unsupportedType": "Unsupported file type",
@@ -14814,55 +14780,8 @@
     }
   },
   "kitTable": {
-    "table": {
-      "copyRow": "Copy row",
-      "copy": "Copy “{value}”",
-      "rows": "Rows",
-      "range": "{start}–{end} of {total}",
-      "rowsPerPage": "Rows per page",
-      "rowsAuto": "Auto"
-    },
     "dataTableExtra": {
-      "noRecords": "Nothing here yet.",
-      "search": "Search…",
-      "clearSearchAndFilters": "Clear search and filters",
-      "clearSearch": "Clear search",
-      "clearFilters": "Clear filters",
-      "collapseDetails": "Collapse details",
-      "expandDetails": "Expand details",
-      "selectRow": "Select row {id}",
-      "selectVisibleRows": "Select visible selectable rows",
-      "sortPriority": "Sort priority {index}",
-      "sortHint": "Click to sort, Shift+click to add a second sort",
-      "sort": "Sort",
-      "sortAsc": "Ascending",
-      "sortDesc": "Descending",
-      "resize": "Resize {id} column",
-      "resizeHint": "Drag to resize, double-click to reset",
-      "actions": "Actions",
-      "actionsFor": "Actions for {label}",
-      "refreshing": "Refreshing results…",
-      "selectedRowsOtherPages": "Selected rows not on this page are included in bulk actions",
-      "exportSelected": "{count, plural, one {Export # selected row as CSV} other {Export # selected rows as CSV}}",
-      "selectedOnOtherPages": "{count} selected on other pages",
-      "exportCurrent": "Export the current view as CSV",
-      "compactRows": "Compact rows",
-      "core": "Core",
-      "meta": "Meta",
-      "admin": "Admin",
-      "columns": "Columns",
-      "resetColumns": "Reset to defaults",
-      "views": "Views",
-      "view": "View",
-      "deleteView": "Delete view {name}",
-      "saveViewPrompt": "Save current view…",
-      "saveView": "Save current view",
-      "viewName": "View name",
-      "rowFallback": "row {id}",
-      "noMatchSearch": "Nothing matches the search.",
-      "noMatchFilters": "Nothing matches these filters.",
-      "noMatchBoth": "Nothing matches the search and filters.",
-      "rowHint": "Use the Up and Down arrows to move between rows{select, select, yes {, Space to select, Shift with an arrow to extend the selection} other {}}{open, select, yes {, Enter to open the focused row} other {}}."
+      "actionsFor": "Actions for {label}"
     }
   },
   "sheetsFeed": {

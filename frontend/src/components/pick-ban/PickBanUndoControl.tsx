@@ -9,7 +9,7 @@ import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import pickBanService from "@/services/pickBan.service";
 import type { PickBanKind, PickBanUndo } from "@/types/tournament.types";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import type { PickBanItemLike } from "./PickBanGrid";
 import { PickBanItemThumb } from "./PickBanItemThumb";

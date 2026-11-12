@@ -21,7 +21,7 @@ import { TeamPlacement } from "@/components/TournamentTeamCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import {
   Table,

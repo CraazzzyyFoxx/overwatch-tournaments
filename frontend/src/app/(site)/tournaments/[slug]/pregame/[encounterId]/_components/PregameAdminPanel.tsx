@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { useMutation } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { PickBanKind, PickBanState } from "@/types/tournament.types";

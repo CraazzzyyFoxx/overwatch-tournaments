@@ -4,8 +4,8 @@ import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
-import { Label } from "@/components/ui/label";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { GameMark } from "@/components/workspace/GameMark";
 import type { DisciplineDescriptor } from "@/types/discipline.types";
 

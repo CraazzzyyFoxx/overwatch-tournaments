@@ -5,7 +5,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { LEDE_CLASS, SECTION_TITLE_CLASS } from "@/components/site/open-layout";
 import { OrganizerTabs } from "@/components/site/OrganizerTabs";
 import { owtButton } from "@/components/site/owt-button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { cn } from "@/lib/utils";
 
 import { FEATURES } from "./PlatformFeatures";

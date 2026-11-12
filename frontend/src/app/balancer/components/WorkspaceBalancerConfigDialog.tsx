@@ -14,7 +14,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { NumberInput } from "@/components/ui/number-input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";

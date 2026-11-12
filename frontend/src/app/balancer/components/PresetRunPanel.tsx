@@ -32,10 +32,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import type { BalancerPlayerExportFormat } from "@/types/balancer-admin.types";
 import { TOOLBAR_BUTTON_CLASS } from "@/components/balancer/balancer-page-helpers";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { WorkspaceCounter } from "./WorkspaceCounter";
 import type { JobStatus } from "./useBalancerJob";
 

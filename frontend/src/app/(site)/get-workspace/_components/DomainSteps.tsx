@@ -12,7 +12,7 @@ import {
   RAIL_TAB_CLASS
 } from "@/components/site/OrganizerTabs";
 import { owtButton } from "@/components/site/owt-button";
-import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";

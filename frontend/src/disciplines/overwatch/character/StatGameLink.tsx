@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { PersonLabel } from "@/components/PlayerName";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useHoverIntent } from "@/hooks/useHoverIntent";

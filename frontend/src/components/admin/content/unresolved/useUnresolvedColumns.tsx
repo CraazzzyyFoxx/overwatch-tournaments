@@ -7,7 +7,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Check, EyeOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { useFormatter } from "@/lib/datetime/client";
 import type { CatalogAliasMissRead } from "@/types/admin.types";
 

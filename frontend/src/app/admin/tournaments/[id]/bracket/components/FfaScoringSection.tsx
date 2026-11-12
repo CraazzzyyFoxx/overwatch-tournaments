@@ -5,12 +5,12 @@ import { useTranslations } from "next-intl";
 import { Trash2 } from "lucide-react";
 
 import { ffaErrorEntries, useFfaErrorMessage } from "@/components/admin/ffa/FfaGameResultsDialog";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,

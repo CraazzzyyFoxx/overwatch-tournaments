@@ -6,7 +6,7 @@ import { AlertTriangle, Check } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { columnMeta } from "@/components/data-table";
+import { columnMeta } from "@craazzzyyfoxx/admin-kit/data-table";
 import { ScheduledAtCell } from "@/components/admin/encounters/EncounterCells";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { StatusPill } from "@/components/kit/StatusPill";

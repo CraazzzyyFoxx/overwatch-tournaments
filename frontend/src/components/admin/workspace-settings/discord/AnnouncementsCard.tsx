@@ -9,8 +9,8 @@ import {
   useScopedSettingsForm,
   type ScopedSettingsForm
 } from "@/components/kit/useScopedSettingsForm";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";

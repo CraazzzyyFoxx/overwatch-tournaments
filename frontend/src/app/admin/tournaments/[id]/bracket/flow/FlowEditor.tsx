@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { flowNodeTypes } from "@/components/flow/FlowNodeCard";
 import { CanvasPanel, GraphCanvas } from "@/components/graph-canvas/GraphCanvas";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { SaveBar } from "@/components/kit/SaveBar";
 import { Button } from "@/components/ui/button";
 import { floatingPanelClass } from "@/components/ui/popover";

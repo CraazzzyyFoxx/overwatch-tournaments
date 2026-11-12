@@ -8,7 +8,7 @@ import TeamName from "@/components/TeamName";
 import { TeamPlacement } from "@/components/TournamentTeamCard";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { Separator } from "@/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { groupDisplayName, groupHue } from "@/lib/tournament/group";

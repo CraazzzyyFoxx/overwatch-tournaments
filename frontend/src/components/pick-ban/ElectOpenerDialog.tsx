@@ -17,7 +17,7 @@ import {
 import { notify } from "@/lib/notify";
 import pickBanService from "@/services/pickBan.service";
 import type { PickBanKind } from "@/types/tournament.types";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import type { PickBanSeat } from "./pick-ban-model";
 
 interface ElectOpenerDialogProps {

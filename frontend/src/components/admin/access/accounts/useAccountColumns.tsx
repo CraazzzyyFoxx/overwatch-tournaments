@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { BadgeAlert, ShieldAlert, Trash2, UserRound, XCircle } from "lucide-react";
 
-import { columnMeta, createKebabColumn } from "@/components/data-table";
+import { columnMeta, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { getSingleLinkedPlayer } from "@/lib/auth/profile-links";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";

@@ -7,7 +7,7 @@ import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { SearchField } from "@/components/ui/search-field";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { GameFilterHint } from "@/components/workspace/GameFilterHint";

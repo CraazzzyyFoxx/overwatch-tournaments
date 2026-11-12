@@ -10,9 +10,9 @@ import { PersonLabel } from "@/components/PlayerName";
 import { CAPTION_CLASS, lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
 import RankHistory from "@/components/RankHistory";
 import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Sheet,
   SheetContent,

@@ -6,8 +6,8 @@ import { useTranslations } from "next-intl";
 
 import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
 import { Badge } from "@/components/ui/badge";
-import { eyebrowClass } from "@/components/ui/eyebrow";
-import { FilterChip } from "@/components/ui/filter-chip";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { useQueryParams } from "@/hooks/useQueryParams";

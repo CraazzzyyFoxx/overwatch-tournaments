@@ -28,8 +28,9 @@ export default defineConfig({
     // whose hook dispatcher react-dom never sets. `@tanstack/react-table` calls
     // hooks, so every `useReactTable` render threw "Invalid hook call" until it
     // was inlined through Vite alongside the app code. `cmdk` calls `useRef` the
-    // same way, so every combobox popover threw the moment it opened.
-    server: { deps: { inline: ["@tanstack/react-table", "cmdk"] } },
+    // same way, so every combobox popover threw the moment it opened. The admin kit's
+    // ESM imports `next/navigation` and `next/link`, which Node cannot resolve itself.
+    server: { deps: { inline: ["@tanstack/react-table", "cmdk", "@craazzzyyfoxx/admin-kit"] } },
     environment: "node",
     // Node 25 ships a global `localStorage` stub (no methods without
     // `--localstorage-file`) that shadows happy-dom's, so every

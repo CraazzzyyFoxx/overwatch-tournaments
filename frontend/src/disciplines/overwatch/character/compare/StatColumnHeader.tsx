@@ -9,7 +9,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { TableHead } from "@/components/ui/table";
 import { cn } from "@/lib/utils";

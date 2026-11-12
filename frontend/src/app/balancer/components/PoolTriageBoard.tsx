@@ -5,7 +5,7 @@ import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-
 import { GripVertical } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

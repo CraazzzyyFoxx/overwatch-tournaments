@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { TONE_TEXT } from "@/components/ui/tone";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { useFormatter } from "@/lib/datetime/client";
 import type { AchievementOverrideRead, AchievementRule } from "@/types/admin.types";
 import type { Tournament } from "@/types/tournament.types";

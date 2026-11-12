@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { UserSearchCombobox } from "@/components/kit/ServerSearchCombobox";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
+import { UserSearchCombobox } from "@/components/kit/UserSearchCombobox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { notify } from "@/lib/notify";
 import { canonicalDisplay } from "@/lib/player";

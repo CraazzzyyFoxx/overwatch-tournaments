@@ -6,7 +6,7 @@ import { useFormatter } from "@/lib/datetime/client";
 
 import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 import {
   DialogContent,
   DialogDescription,
@@ -16,11 +16,11 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { getApiErrorMessage } from "@/lib/api/error";
 import type { CustomGame } from "@/services/custom-game.service";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import type { DisciplineDescriptor } from "@/types/discipline.types";
 import type { Workspace } from "@/types/workspace.types";
 

@@ -5,7 +5,7 @@ import { useFormatter } from "@/lib/datetime/client";
 import { LEADER_STATS, STAT_META, findLeader, formatStat, type MatchStatsTeam } from "./stats";
 import { CatalogEntityStrip } from "@/components/catalog/CatalogEntityImage";
 import { Card } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import PlayerName from "@/components/PlayerName";
 import { cn } from "@/lib/utils";
 

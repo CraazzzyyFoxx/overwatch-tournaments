@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { MoreHorizontal, Plus } from "lucide-react";
 
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { StatusPill } from "@/components/kit/StatusPill";
 import {
   SortableGrip,
@@ -20,13 +20,13 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Progress } from "@/components/ui/progress";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { Separator } from "@/components/ui/separator";
 import {
   Select,

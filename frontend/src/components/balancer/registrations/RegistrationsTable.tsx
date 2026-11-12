@@ -19,11 +19,11 @@ import {
 } from "@/components/balancer/registrations/_components/registrationGrouping";
 import { useRegistrationFilters } from "@/components/balancer/registrations/_hooks/useRegistrationFilters";
 import { useRegistrationMutations } from "@/components/balancer/registrations/_hooks/useRegistrationMutations";
-import { DataTable, type DataTableGroup, type TableCommand, createKebabColumn } from "@/components/data-table";
+import { DataTable, type DataTableGroup, type TableCommand, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { useAuditTrail } from "@/components/kit/AuditTrailSheet";
-import { FilterBar } from "@/components/kit/FilterBar";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useQueryParams } from "@/hooks/useQueryParams";

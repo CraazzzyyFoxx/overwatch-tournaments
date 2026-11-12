@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FieldDescription } from "@/components/ui/field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { SaveBar } from "@/components/kit/SaveBar";
 import {
   isRulesTemplate,

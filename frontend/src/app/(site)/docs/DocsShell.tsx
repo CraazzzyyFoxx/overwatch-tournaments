@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SearchField } from "@/components/ui/search-field";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { cn } from "@/lib/utils";
 
 import type { DocLink, DocSection } from "./nav";

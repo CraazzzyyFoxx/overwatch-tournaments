@@ -13,11 +13,11 @@ import {
   type Band
 } from "@/app/admin/settings/divisions/editor/draftReducer";
 import { gameFilterDefs } from "@/components/admin/game-filter";
-import { DataTable } from "@/components/data-table";
-import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { FilterBar } from "@/components/kit/FilterBar";
-import { useFilters } from "@/components/kit/useFilters";
+import { DataTable } from "@craazzzyyfoxx/admin-kit/data-table";
+import { ConfirmDialog, type ConfirmIntent } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { Button } from "@/components/ui/button";
 import { useFilePicker } from "@/components/ui/file-button";
 import { PageStateCard } from "@/components/ui/page-state-card";

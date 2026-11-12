@@ -5,10 +5,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Check, ClipboardCheck, Lock, Play, RotateCcw, Undo2, Users, type LucideIcon } from "lucide-react";
 
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
-import { StatusDot } from "@/components/ui/status-dot";
-import type { Tone } from "@/components/ui/tone";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
+import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";
 import { useFlowPath } from "@/hooks/useFlowPath";
 import { notify } from "@/lib/notify";

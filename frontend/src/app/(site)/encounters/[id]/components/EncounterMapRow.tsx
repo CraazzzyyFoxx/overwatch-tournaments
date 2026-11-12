@@ -6,7 +6,7 @@ import { BarChart3, ImageOff } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { StatusDot } from "@/components/ui/status-dot";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import MatchStatsDialog, { type MatchStatsSeriesEntry } from "@/components/match/MatchStatsDialog";
 import { ScoreCell, type ScoreKind } from "@/components/match/cells";

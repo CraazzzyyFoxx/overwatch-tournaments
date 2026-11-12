@@ -9,7 +9,7 @@ import { acceptedScore } from "@/components/pick-ban/pick-ban-model";
 import TeamName from "@/components/TeamName";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusDot } from "@/components/ui/status-dot";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { GameMark } from "@/components/workspace/GameMark";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";

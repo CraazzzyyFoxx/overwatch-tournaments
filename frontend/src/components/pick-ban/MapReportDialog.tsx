@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
@@ -27,7 +27,7 @@ import { ApiError } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
 import pickBanService from "@/services/pickBan.service";
 import type { PickBanGame } from "@/types/tournament.types";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import { MatchImport } from "./MatchImport";
 import { acceptedScore, type PickBanSeat } from "./pick-ban-model";

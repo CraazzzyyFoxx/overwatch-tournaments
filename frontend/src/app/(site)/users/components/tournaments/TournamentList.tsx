@@ -9,13 +9,13 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { GameIcon } from "@/components/workspace/GameIcon";
 import { WdlText, WdlBar } from "@/app/(site)/users/components/tournaments/tournaments-history.atoms";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
+import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { PlaceBadge } from "@/components/ui/place-badge";
-import { RowButton } from "@/components/ui/row-button";
-import { SearchField } from "@/components/ui/search-field";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import {
   mapsWinratePct,
   tournamentAggregate

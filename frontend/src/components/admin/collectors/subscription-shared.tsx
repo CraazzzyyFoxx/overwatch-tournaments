@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 
 import { StatusPill } from "@/components/kit/StatusPill";
-import type { Tone } from "@/components/ui/tone";
+import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import type { SubscriptionCollectionStats } from "@/types/admin.types";
 
 import type { CollectorHealth } from "./collector-state";

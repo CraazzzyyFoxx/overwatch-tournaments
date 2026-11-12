@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Slot } from "@radix-ui/react-slot";
+import { Slot } from "radix-ui";
 
 import { cn } from "@/lib/utils";
 
@@ -13,7 +13,7 @@ const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & { asChild?: boolean }
 >(({ className, asChild, ...props }, ref) => {
-  const Comp = asChild ? Slot : "div";
+  const Comp = asChild ? Slot.Root : "div";
   return (
     <Comp
       ref={ref}
@@ -44,7 +44,7 @@ const CardTitle = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & { asChild?: boolean }
 >(({ className, asChild, ...props }, ref) => {
-  const Comp = asChild ? Slot : "div";
+  const Comp = asChild ? Slot.Root : "div";
   return <Comp ref={ref} className={cn("text-heading font-semibold", className)} {...props} />;
 });
 CardTitle.displayName = "CardTitle";

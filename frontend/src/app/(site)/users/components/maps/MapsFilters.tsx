@@ -6,7 +6,7 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import { TournamentCombobox } from "@/components/tournaments/TournamentCombobox";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { SearchField } from "@/components/ui/search-field";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type SortKey = "winrate" | "count" | "name";

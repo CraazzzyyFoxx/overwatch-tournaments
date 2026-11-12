@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { cn } from "@/lib/utils";
 
 import {

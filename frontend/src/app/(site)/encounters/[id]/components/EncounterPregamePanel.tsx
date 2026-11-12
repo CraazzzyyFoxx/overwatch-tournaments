@@ -12,7 +12,7 @@ import { duelSeats, seatsBySlot } from "@/lib/encounter/seats";
 import { CARD_SUB, CardHead, Fact, FactGrid, SectionHead } from "@/components/match/EncounterAtoms";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { StatusDot } from "@/components/ui/status-dot";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 
 interface EncounterPregamePanelProps {

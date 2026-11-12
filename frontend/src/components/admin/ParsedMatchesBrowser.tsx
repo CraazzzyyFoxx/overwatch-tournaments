@@ -6,12 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FileQuestion } from "lucide-react";
 
-import { DataTable } from "@/components/data-table";
+import { DataTable } from "@craazzzyyfoxx/admin-kit/data-table";
 import { LogStatusPill, ParsedMatchDetail } from "@/components/admin/ParsedMatchDetail";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { FilterBar } from "@/components/kit/FilterBar";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
-import { useFilters, type FilterDef } from "@/components/kit/useFilters";
+import { useFilters, type FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { gameFilterDefs } from "@/components/admin/game-filter";
 import {
   TOURNAMENT_QUERY_PARAM,

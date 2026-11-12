@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import { History, Search, User, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { usePlayerSearch } from "@/hooks/usePlayerSearch";
 import { cn } from "@/lib/utils";
 import type { MinimizedUser } from "@/types/user.types";

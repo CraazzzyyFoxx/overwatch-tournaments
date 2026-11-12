@@ -6,9 +6,9 @@ import { Archive, CircleDot, Clock, Plus } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
-import { DataTable, columnMeta, type TableCommand } from "@/components/data-table";
+import { DataTable, columnMeta, type TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { announcementText } from "@/lib/notifications/announcement-text";
 import type { NotificationItem } from "@/types/notification.types";

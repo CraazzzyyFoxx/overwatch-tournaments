@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
-import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog, type ConfirmIntent } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { SaveBar } from "@/components/kit/SaveBar";
 import { SettingsGrid } from "@/components/kit/SettingRow";
@@ -33,7 +33,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
@@ -53,7 +53,7 @@ import {
   projectStage,
   type StageProgress
 } from "@/lib/bracket/projection";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import {
   buildStageUpdatePayload,
   stageFormChanges,

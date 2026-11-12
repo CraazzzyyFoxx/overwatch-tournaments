@@ -15,7 +15,7 @@ import {
   ContextMenuLabel,
   ContextMenuSeparator,
   ContextMenuTrigger
-} from "@/components/ui/context-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/context-menu";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthProfile } from "@/hooks/useAuthProfile";

@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
-import { LoadErrorNote } from "@/components/kit/EmptyNote";
+import { LoadErrorNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { CardSurface } from "@/components/profile/atoms";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LOW_SAMPLE_GAMES, winrateColor } from "@/lib/colors";

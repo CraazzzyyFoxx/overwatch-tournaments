@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { useDebounce } from "use-debounce";
 
-import { DataPagination } from "@/components/ui/data-pagination";
+import { DataPagination } from "@craazzzyyfoxx/admin-kit/ui/data-pagination";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { SearchField } from "@/components/ui/search-field";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { useQueryParams } from "@/hooks/useQueryParams";
 
 /**

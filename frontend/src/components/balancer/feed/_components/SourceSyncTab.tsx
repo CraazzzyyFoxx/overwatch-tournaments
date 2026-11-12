@@ -5,21 +5,21 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
 import { StatusPill } from "@/components/kit/StatusPill";
-import { type Tone } from "@/components/ui/tone";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { type Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { disclosureChevronClass } from "@/components/ui/chevron";
+import { disclosureChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type {
   AdminGoogleSheetFeed,
   AdminGoogleSheetFeedSyncResponse,
 } from "@/types/balancer-admin.types";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { cn } from "@/lib/utils";
 
 interface SourceSyncTabProps {

@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Gamepad2 } from "lucide-react";
 
-import { columnMeta } from "@/components/data-table";
+import { columnMeta } from "@craazzzyyfoxx/admin-kit/data-table";
 import { AssetPreview } from "@/components/admin/AssetPreview";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import type { CatalogEntityRead } from "@/types/catalog.types";

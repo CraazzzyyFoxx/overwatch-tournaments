@@ -4,7 +4,7 @@ import { useCallback, useMemo, useReducer, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
-import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog, type ConfirmIntent } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { SaveBar } from "@/components/kit/SaveBar";
 import { useGameDescriptors } from "@/hooks/useGameDescriptors";

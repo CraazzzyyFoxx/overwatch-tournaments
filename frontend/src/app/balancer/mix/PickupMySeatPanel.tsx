@@ -13,7 +13,7 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { IngestLinks } from "@/components/IngestLinks";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { cn } from "@/lib/utils";
 import { roleOf, type RoleRef } from "@/lib/roster/role-ref";

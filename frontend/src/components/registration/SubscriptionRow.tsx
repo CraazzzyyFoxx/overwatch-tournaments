@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { getApiErrorMessage } from "@/lib/api/error";
 import { translateRegistrationTeamError } from "@/lib/registration/team-errors";
 import type { SubscriptionStatus } from "@/types/registration.types";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 interface SubscriptionRowProps {
   provider: string;

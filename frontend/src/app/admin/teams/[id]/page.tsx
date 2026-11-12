@@ -9,7 +9,7 @@ import { formatDateRange } from "@/lib/datetime";
 import { useFormatter } from "@/lib/datetime/client";
 
 import { InlineEditText } from "@/components/kit/InlineEditText";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { TeamRosterEditor } from "@/components/admin/teams/TeamRosterEditor";
@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,

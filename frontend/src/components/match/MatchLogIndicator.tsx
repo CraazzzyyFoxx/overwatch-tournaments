@@ -5,7 +5,7 @@ import { CircleAlert, CircleCheck, ScrollText, FileDown, FileX } from "lucide-re
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import type { RawSourceStatus } from "@/types/encounter.types";

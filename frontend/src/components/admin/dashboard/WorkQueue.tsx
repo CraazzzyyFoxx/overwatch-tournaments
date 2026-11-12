@@ -5,7 +5,7 @@ import { AlertCircle, AlertTriangle, ChevronRight, Info, type LucideIcon } from 
 
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { StatusPill } from "@/components/kit/StatusPill";
-import { TONE_TEXT, type Tone } from "@/components/ui/tone";
+import { TONE_TEXT, type Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GameIcon } from "@/components/workspace/GameIcon";
 import { cn } from "@/lib/utils";

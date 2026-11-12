@@ -16,10 +16,10 @@ import type {
   UserMergePreviewRequest,
   UserMergePreviewResponse
 } from "@/types/admin.types";
-import { UserSearchCombobox } from "@/components/kit/ServerSearchCombobox";
+import { UserSearchCombobox } from "@/components/kit/UserSearchCombobox";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +29,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { UserMergeAuthSection } from "./UserMergeAuthSection";
 import { AffectedRecordsSummary } from "./user-merge/AffectedRecordsSummary";

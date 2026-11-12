@@ -8,8 +8,8 @@ import {
   VersionHistory,
   type VersionHistoryProps
 } from "@/app/admin/settings/divisions/VersionHistory";
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import {
   Select,
   SelectContent,

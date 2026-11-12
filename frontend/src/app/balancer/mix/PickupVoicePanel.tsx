@@ -12,7 +12,7 @@ import {
 } from "@/app/balancer/mix/pickup-chrome";
 import { teamNamesByIndex } from "@/app/balancer/mix/pickup-lineup";
 import { busyVoices, voiceBlocker, voicePatch, type BusyVoice } from "@/app/balancer/mix/pickup-voice";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { controlSurfaceClass } from "@/components/ui/input";

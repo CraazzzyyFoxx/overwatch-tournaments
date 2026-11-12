@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 
 import TeamName from "@/components/TeamName";
 import { Badge } from "@/components/ui/badge";
-import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import {
   Table,
   TableBody,

@@ -17,18 +17,18 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
-import { TONE_TEXT } from "@/components/ui/tone";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import balancerAdminService from "@/services/balancer-admin.service";
 import type {
   RegistrationRankAutofillRequest,
   RegistrationRankAutofillResponse
 } from "@/types/balancer-admin.types";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import { RankAutofillPreviewTables } from "./_components/RankAutofillPreviewTables";
 import { RankAutofillStageList } from "./_components/RankAutofillStageList";

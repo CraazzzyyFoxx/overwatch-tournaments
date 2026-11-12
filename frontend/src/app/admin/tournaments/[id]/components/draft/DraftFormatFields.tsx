@@ -4,7 +4,7 @@ import { useId } from "react";
 import { useTranslations } from "next-intl";
 
 import { FieldDescription } from "@/components/ui/field";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,

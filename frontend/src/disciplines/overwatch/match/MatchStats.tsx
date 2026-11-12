@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import type { SlotProps } from "@/disciplines/types";
 import type { DisciplineMetadata } from "@/types/discipline.types";
 import type { MatchWithStats } from "@/types/encounter.types";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { availableRounds } from "./stats";

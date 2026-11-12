@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { DraftNode } from "@/lib/flow/flowDraft";
 import { nodeDraftFormat, registrationNodeConfig } from "@/lib/tournament/flow-nodes";

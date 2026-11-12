@@ -1,6 +1,6 @@
 "use client";
 
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -22,7 +22,7 @@ import type { SubroleCatalog } from "@/types/registration.types";
 import { HeaderCombobox } from "./HeaderCombobox";
 import { HeaderMultiCombobox } from "./HeaderMultiCombobox";
 import { ModeToggle } from "./ModeToggle";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 
 const AUTO_FIELD_MODES: MappingTargetMode[] = ["auto", "columns"];
 const STANDARD_FIELD_MODES: MappingTargetMode[] = ["columns", "constant", "disabled"];

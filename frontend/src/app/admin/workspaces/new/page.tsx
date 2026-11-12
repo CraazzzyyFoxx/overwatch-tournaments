@@ -9,7 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { PermissionGate } from "@/components/admin/PermissionGate";
 import { WizardShell } from "@/components/kit/WizardShell";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";

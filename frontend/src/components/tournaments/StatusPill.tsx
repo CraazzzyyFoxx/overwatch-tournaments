@@ -1,7 +1,7 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { StatusDot } from "@/components/ui/status-dot";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 
 /**
  * Presentation buckets for tournament-domain lifecycle state. `live`,

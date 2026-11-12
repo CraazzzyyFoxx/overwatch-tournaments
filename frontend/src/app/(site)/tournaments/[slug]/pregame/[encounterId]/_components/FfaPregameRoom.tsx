@@ -7,7 +7,7 @@ import { RoomChat } from "@/components/chat/RoomChat";
 import { BackLink } from "@/components/site/BackLink";
 import TeamName from "@/components/TeamName";
 import { Card, CardContent } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { encounterChatRoom } from "@/lib/realtime/chat-rooms";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";

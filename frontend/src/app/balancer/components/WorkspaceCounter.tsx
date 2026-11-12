@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 
 type WorkspaceCounterProps = {
   label: string;

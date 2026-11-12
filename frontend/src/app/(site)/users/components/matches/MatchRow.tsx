@@ -7,7 +7,7 @@ import { ResTag, ScoreCell } from "@/components/match/cells";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { CatalogEntityStrip } from "@/components/catalog/CatalogEntityImage";
 import { TableCell, TableRow } from "@/components/ui/table";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import MatchRowBadge from "@/components/match/MatchRowBadge";
 import {
   encounterLogEntries,

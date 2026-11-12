@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { MatchReportForm, matchReportDraftKey } from "@/components/tournaments/MatchReportForm";
 import { PickBanItemThumb } from "@/components/pick-ban/PickBanItemThumb";
 import type { PregameCharacterRound } from "@/disciplines/types";

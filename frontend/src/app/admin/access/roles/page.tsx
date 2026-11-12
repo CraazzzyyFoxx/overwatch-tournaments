@@ -4,15 +4,15 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { RoleEditor } from "@/components/admin/access/RoleEditor";
 import { RoleList } from "@/components/admin/access/RoleList";
 import { RoleScopeSelect, useRoleScope } from "@/components/admin/access/RoleScopeSelect";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { MasterDetail } from "@/components/kit/MasterDetail";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";

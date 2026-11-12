@@ -13,7 +13,7 @@ import { act, type ComponentProps, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import type { Stage, Standings } from "@/types/tournament.types";
 
 import { StageEditor } from "./components/StageEditor";

@@ -4,8 +4,8 @@ import { useCallback, useId, useMemo } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import { TONE_TEXT } from "@/components/ui/tone";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { BracketView, type BracketSlotRef } from "@/components/bracket/BracketView";
 import { previewToBracketMatches, type BracketMatch } from "@/lib/bracket/view";
 import { seatAt } from "@/lib/encounter/seats";

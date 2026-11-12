@@ -5,7 +5,7 @@ import { ChevronDownIcon, X } from "lucide-react";
 import { type DateTimeFormatOptions, useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 import { Button, selectTriggerClass } from "@/components/ui/button";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Calendar } from "@/components/ui/calendar";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { TimeInput } from "@/components/ui/time-input";

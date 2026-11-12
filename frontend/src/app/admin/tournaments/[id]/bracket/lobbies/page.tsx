@@ -7,8 +7,8 @@ import { useTranslations } from "next-intl";
 
 import { FfaGameResultsDialog, useFfaErrorMessage } from "@/components/admin/ffa/FfaGameResultsDialog";
 import FfaLobbyTable, { lobbyGamePositions } from "@/components/ffa/FfaLobbyTable";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";

@@ -9,7 +9,7 @@ import { BarChart3, FileDown, FileUp, History, Undo2 } from "lucide-react";
 import { CARD_TITLE_CLASS, lobbyLetter, teamAccent } from "@/app/balancer/mix/pickup-chrome";
 import type { MixLogUpload } from "@/app/balancer/mix/useMixLogUpload";
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { formatRelative } from "@/components/kit/format-time";
 import { LogUploadDialog } from "@/components/logs/LogUploadDialog";
 import MatchStatsDialog from "@/components/match/MatchStatsDialog";
@@ -24,10 +24,10 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
-import { Spinner } from "@/components/ui/spinner";
-import { StatusDot } from "@/components/ui/status-dot";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { useCatalogEntities } from "@/hooks/useCatalogEntities";
 import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";

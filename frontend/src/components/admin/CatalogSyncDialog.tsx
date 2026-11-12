@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Check, Circle, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { TONE_TEXT } from "@/components/ui/tone";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import type { CatalogSync } from "@/hooks/useCatalogSync";
 import { useKindLabel } from "@/hooks/useKindLabel";
 import { getApiErrorMessage } from "@/lib/api/error";

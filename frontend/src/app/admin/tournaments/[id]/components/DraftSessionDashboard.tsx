@@ -16,7 +16,7 @@ import { tabFallback, useHubTournamentQuery } from "../hubQueries";
 import { AdminControlRoom } from "./draft/AdminControlRoom";
 import { DraftHistoryPanel } from "./draft/DraftHistoryPanel";
 import { DraftSetupWizard } from "./draft/DraftSetupWizard";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 
 interface DraftSessionDashboardProps {
   tournamentId: number;

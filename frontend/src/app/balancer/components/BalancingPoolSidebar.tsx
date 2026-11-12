@@ -13,10 +13,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
-import { SearchField } from "@/components/ui/search-field";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { AdminRegistration, BalancerApplication, WorkspaceBalancerConfig } from "@/types/balancer-admin.types";
 import type { StatusMeta } from "@/types/registration.types";

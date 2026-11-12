@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { Spinner } from "@/components/ui/spinner";
-import { TONE_TEXT } from "@/components/ui/tone";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 
 import type { BalancerOperationStep, BalancerOperationStepStatus } from "./operation-steps";
 

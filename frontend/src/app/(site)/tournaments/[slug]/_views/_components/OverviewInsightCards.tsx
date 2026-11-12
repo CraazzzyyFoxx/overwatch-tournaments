@@ -8,7 +8,7 @@ import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { ResTag } from "@/components/match/cells";
 import PlayerName from "@/components/PlayerName";
 import TeamName from "@/components/TeamName";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Separator } from "@/components/ui/separator";
 import { useCatalogEntities } from "@/hooks/useCatalogEntities";
 import type { CatalogEntityRead } from "@/types/catalog.types";

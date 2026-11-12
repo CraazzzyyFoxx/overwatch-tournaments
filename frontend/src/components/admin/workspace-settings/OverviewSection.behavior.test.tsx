@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import SettingsRootPage from "@/app/admin/settings/page";
 import WorkspaceRootPage from "@/app/admin/workspaces/[id]/page";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import type { Workspace } from "@/types/workspace.types";
 
 declare global {

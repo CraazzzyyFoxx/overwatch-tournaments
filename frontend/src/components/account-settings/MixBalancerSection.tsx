@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
 import { cn } from "@/lib/utils";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,7 +34,7 @@ import {
   type MixBalancerPreferencesRead,
   type MixRatingMode,
 } from "@/services/mix-preferences.service";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import {
   DEFAULT_COMFORT_TILT,

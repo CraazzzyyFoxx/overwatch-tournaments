@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
 import { SaveBar } from "@/components/kit/SaveBar";

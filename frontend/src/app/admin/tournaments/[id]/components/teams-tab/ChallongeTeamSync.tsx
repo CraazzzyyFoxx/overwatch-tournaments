@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 
-import type { TableCommand } from "@/components/data-table";
+import type { TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
 import { adminDetailTableStyles as tableStyles } from "@/components/admin/AdminDetailTable";
 import { WizardShell } from "@/components/kit/WizardShell";
 import { Button } from "@/components/ui/button";

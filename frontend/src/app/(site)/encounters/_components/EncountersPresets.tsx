@@ -7,7 +7,7 @@ import { ChevronDown, Save, Trash2 } from "lucide-react";
 import { useFormatter } from "@/lib/datetime/client";
 import { ApiError } from "@/lib/api/error";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -18,9 +18,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import type { EncounterOverview, EncounterSavedView } from "@/types/encounter.types";
 
 import { QUICK_FILTERS, sameFilters, savedViewState } from "./encounters.helpers";

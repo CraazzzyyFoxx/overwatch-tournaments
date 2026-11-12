@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { UserCog, X } from "lucide-react";
 
-import { ServerSearchCombobox } from "@/components/kit/ServerSearchCombobox";
+import { ServerSearchCombobox } from "@craazzzyyfoxx/admin-kit/kit/ServerSearchCombobox";
 import { Button } from "@/components/ui/button";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import {
@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import type { CustomGame } from "@/services/custom-game.service";
 import { workspacePlayerService, type RosterMember } from "@/services/workspace-player.service";
 

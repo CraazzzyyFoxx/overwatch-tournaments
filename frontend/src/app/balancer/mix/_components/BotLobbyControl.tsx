@@ -12,7 +12,7 @@ import {
 import { CAPTION_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import type { MixBotLobby } from "@/services/custom-game.service";
 

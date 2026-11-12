@@ -14,14 +14,14 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { PlayerSearchCombobox } from "@/components/PlayerSearchCombobox";
 import { NAV_GROUPS, NAV_LINKS, currentNavHref, navItemAvailable } from "@/components/site/site-nav-groups";
 import { Button } from "@/components/ui/button";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { Eyebrow } from "@/components/ui/eyebrow";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import UserMenu from "@/components/UserMenu";

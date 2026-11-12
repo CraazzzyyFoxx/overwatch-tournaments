@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { cn } from "@/lib/utils";
 
 import type { StageFormat } from "../tournamentOverview.model";

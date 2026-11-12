@@ -9,9 +9,9 @@ import {
   AdminDetailTableShell,
   adminDetailTableStyles as tableStyles
 } from "@/components/admin/AdminDetailTable";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { UserSearchCombobox } from "@/components/kit/ServerSearchCombobox";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { UserSearchCombobox } from "@/components/kit/UserSearchCombobox";
 import DivisionIcon from "@/components/DivisionIcon";
 import { Button } from "@/components/ui/button";
 import { PersonLabel } from "@/components/PlayerName";

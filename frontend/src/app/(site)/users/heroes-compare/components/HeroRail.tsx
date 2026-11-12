@@ -7,7 +7,7 @@ import { characterClassOf, classRank } from "@/components/pick-ban/pick-ban-mode
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { useRoleName } from "@/hooks/useRoleName";
 import { findRole, ratedDimension } from "@/lib/roster/ontology";
 import { cn } from "@/lib/utils";

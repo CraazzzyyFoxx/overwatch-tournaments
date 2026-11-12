@@ -6,11 +6,11 @@ import type { Row } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import { DataTable, type DataTableGroup, type TableCommand } from "@/components/data-table";
-import { FilterBar } from "@/components/kit/FilterBar";
-import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { useFilters } from "@/components/kit/useFilters";
+import { DataTable, type DataTableGroup, type TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
+import { ConfirmDialog, type ConfirmIntent } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import {
   EMPTY_STATUS_FORM,
   StatusForm,

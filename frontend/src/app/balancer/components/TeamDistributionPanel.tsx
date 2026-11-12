@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 import { TEAM_BADGE_ACCENTS } from "@/components/balancer/balancer-page-helpers";
 import { calculateTeamAverageFromPayload } from "@/components/balancer/balancer-page-helpers";

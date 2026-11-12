@@ -6,9 +6,9 @@ import { useTranslations } from "next-intl";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Checkbox } from "@/components/ui/checkbox";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
-import { SearchField } from "@/components/ui/search-field";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
+import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import {
   Select,
   SelectContent,

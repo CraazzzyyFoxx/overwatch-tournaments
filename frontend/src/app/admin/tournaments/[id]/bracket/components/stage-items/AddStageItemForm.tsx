@@ -7,7 +7,7 @@ import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,
@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { getDefaultStageItemType, STAGE_ITEM_TYPE_LABELS } from "@/lib/bracket/projection";
 import adminService from "@/services/admin.service";
 import type { Stage, StageItemType } from "@/types/tournament.types";

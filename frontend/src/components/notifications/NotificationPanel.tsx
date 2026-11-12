@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import Image from "@/components/ui/image";
 import { SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import { SITE_NAME } from "@/config/site";
 import { useMinuteClock } from "@/hooks/useMinuteClock";

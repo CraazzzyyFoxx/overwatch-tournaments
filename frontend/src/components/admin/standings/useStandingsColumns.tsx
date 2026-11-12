@@ -6,7 +6,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { CircleCheck, CircleX, Lock, Pencil, Trash2 } from "lucide-react";
 
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { createKebabColumn } from "@/components/data-table";
+import { createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { PlaceBadge } from "@/components/ui/place-badge";
 import TeamName from "@/components/TeamName";
 import { cn } from "@/lib/utils";

@@ -4,8 +4,8 @@ import { LayoutGrid, List } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Card } from "@/components/ui/card";
-import { FilterChip } from "@/components/ui/filter-chip";
-import { SearchField } from "@/components/ui/search-field";
+import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import type { TournamentStatus } from "@/types/tournament.types";
 import {

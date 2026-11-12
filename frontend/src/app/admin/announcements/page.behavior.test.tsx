@@ -20,7 +20,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import en from "@/i18n/messages/en.json";
 import type { NotificationItem } from "@/types/notification.types";
 

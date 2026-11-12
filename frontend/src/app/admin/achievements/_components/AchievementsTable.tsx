@@ -5,7 +5,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import { CircleOff } from "lucide-react";
 
-import { DataTable, columnMeta, createKebabColumn } from "@/components/data-table";
+import { DataTable, columnMeta, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import adminService from "@/services/admin.service";
 import { achievementQueryKeys } from "@/lib/achievements/query-keys";

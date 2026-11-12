@@ -17,7 +17,7 @@ import {
   ContextMenuLabel,
   ContextMenuSeparator,
   ContextMenuTrigger
-} from "@/components/ui/context-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/context-menu";
 import { hasBlockingIssues } from "@/components/balancer/balancer-page-helpers";
 import {
   isRoleEntryActive,

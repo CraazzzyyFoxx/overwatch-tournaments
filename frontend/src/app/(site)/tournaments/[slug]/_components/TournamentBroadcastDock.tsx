@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { TwitchEmbed } from "@/components/stream/TwitchEmbed";
 import { Dock } from "@/components/ui/dock";
-import { StatusDot } from "@/components/ui/status-dot";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import {
   embeddableTwitchChannel,
   getStreamStatus,

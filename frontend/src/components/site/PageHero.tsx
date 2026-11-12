@@ -1,6 +1,6 @@
 import React from "react";
 
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { cn } from "@/lib/utils";
 
 /**

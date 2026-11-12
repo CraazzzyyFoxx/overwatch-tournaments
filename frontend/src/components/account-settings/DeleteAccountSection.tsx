@@ -5,11 +5,11 @@ import { useId, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { ApiError } from "@/lib/api/error";
 import { logout } from "@/lib/auth/logout";
 import { notify } from "@/lib/notify";

@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
-import { TONE_TEXT } from "@/components/ui/tone";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { useRoleName } from "@/hooks/useRoleName";
 import { findRole, type RoleOntology } from "@/lib/roster/ontology";
 import type { RoleRef } from "@/lib/roster/team-format";

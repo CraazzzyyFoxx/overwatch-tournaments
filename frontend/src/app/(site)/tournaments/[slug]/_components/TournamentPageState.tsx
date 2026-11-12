@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { cn } from "@/lib/utils";
 

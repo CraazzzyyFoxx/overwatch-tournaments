@@ -6,7 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 
 import TeamName from "@/components/TeamName";
 import { Card } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { useFormatter } from "@/lib/datetime/client";
 import { sortTeamPlayers } from "@/lib/player";
 import type { RoleOntology } from "@/lib/roster/ontology";

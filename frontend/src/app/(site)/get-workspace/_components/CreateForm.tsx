@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Check, CircleAlert, Lock, LogIn } from "lucide-react";
 
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { owtButton } from "@/components/site/owt-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

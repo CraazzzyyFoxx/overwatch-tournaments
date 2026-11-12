@@ -6,7 +6,7 @@ import { Pause, Play } from "lucide-react";
 import { HeroFrame } from "@/components/site/PageHero";
 import { MoreLink } from "@/components/site/open-layout";
 import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAutoplay } from "@/hooks/useAutoplay";

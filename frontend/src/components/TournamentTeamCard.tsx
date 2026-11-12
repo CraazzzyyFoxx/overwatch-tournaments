@@ -14,7 +14,7 @@ import { CatalogEntityStrip } from "@/components/catalog/CatalogEntityImage";
 import TeamName from "@/components/TeamName";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { IconTooltip } from "@/components/ui/icon-tooltip";

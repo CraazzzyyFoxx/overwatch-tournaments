@@ -10,7 +10,7 @@ import {
   stageWindowValue
 } from "../rank-autofill-stages";
 import { SortableGrip, useSortableRow } from "@/components/kit/SortableRows";
-import { TONE_TEXT } from "@/components/ui/tone";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,

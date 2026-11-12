@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { Clock, Trophy, Zap } from "lucide-react";
 
 import { Section, SectionHead } from "@/components/site/open-layout";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";

@@ -7,10 +7,10 @@ import { AlertTriangle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { useUnsavedGuard } from "@/components/kit/useUnsavedGuard";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { useUnsavedGuard } from "@craazzzyyfoxx/admin-kit/kit/useUnsavedGuard";
 import { useReportUnsaved } from "@/components/kit/SettingsContinuation";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 export interface SaveBarProps {
   dirty: boolean;

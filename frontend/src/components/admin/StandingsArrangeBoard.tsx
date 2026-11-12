@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 import { useMutation } from "@tanstack/react-query";
 import { Lock, LockOpen, RotateCcw } from "lucide-react";
 
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SortableGrip, SortableRows, useSortableRow } from "@/components/kit/SortableRows";
 import TeamName from "@/components/TeamName";
 import { Button } from "@/components/ui/button";

@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import type { DivisionGridEntity } from "@/types/workspace.types";
 
 /** One menu row: `null` handlers and a missing grant drop it; `disabled` keeps it with the menu's reason line. */

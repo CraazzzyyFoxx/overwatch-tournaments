@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { cn } from "@/lib/utils";

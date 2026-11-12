@@ -7,9 +7,9 @@ import { useTranslations } from "next-intl";
 
 import { WizardShell, type WizardStep } from "@/components/kit/WizardShell";
 import { Card } from "@/components/ui/card";
-import { eyebrowClass } from "@/components/ui/eyebrow";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Progress } from "@/components/ui/progress";
 import {

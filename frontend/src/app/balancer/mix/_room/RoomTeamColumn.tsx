@@ -14,7 +14,7 @@ import type { PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
 import { PickBanItemThumb } from "@/components/pick-ban/PickBanItemThumb";
 import { CHARACTER_PICK_BAN_KIND } from "@/components/pick-ban/pick-ban-model";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { OPEN_SLOT_CODE } from "@/lib/roster/shape";

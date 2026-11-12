@@ -4,19 +4,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import type { DateFormatter } from "@/components/kit/format-time";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { ChallongeSyncLogEntry } from "@/types/admin.types";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { Spinner } from "@/components/ui/spinner";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 interface ChallongeIntegrationSectionProps {

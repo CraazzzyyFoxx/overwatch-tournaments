@@ -6,11 +6,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleOff, FileJson } from "lucide-react";
 
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { FileButton } from "@/components/ui/file-button";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,

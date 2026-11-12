@@ -5,9 +5,9 @@ import { Search } from "lucide-react";
 
 import { CAPTION_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { DataPagination } from "@/components/ui/data-pagination";
+import { DataPagination } from "@craazzzyyfoxx/admin-kit/ui/data-pagination";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { IconTooltip } from "@/components/ui/icon-tooltip";
 import { Input } from "@/components/ui/input";
 import { PageStateCard } from "@/components/ui/page-state-card";

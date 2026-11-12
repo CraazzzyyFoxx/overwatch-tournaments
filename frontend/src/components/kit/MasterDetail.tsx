@@ -6,7 +6,7 @@ import { ChevronLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 

@@ -4,9 +4,9 @@ import { useState } from "react";
 import { Eye, Repeat2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { cn } from "@/lib/utils";
 import type {
   PickBanDisputeState,

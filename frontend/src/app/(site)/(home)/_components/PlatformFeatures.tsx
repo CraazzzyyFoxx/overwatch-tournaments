@@ -1,7 +1,7 @@
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { MoreLink, Section, SectionHead } from "@/components/site/open-layout";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
 import { cn } from "@/lib/utils";
 

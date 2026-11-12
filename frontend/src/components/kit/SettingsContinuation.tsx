@@ -18,7 +18,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ArrowDown, ArrowUp } from "lucide-react";
 
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { holdScrollPosition } from "@/lib/scroll-hold";
 

@@ -9,7 +9,7 @@ import {
   useScopedSettingsForm,
   type ScopedSettingsForm
 } from "@/components/kit/useScopedSettingsForm";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
+import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DiscordChannelSelect } from "@/components/discord/DiscordChannelSelect";

@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from "react";
-import * as SelectPrimitive from "@radix-ui/react-select";
+import { Select as SelectPrimitive } from "radix-ui";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
 
 import { selectTriggerClass } from "@/components/ui/button";
-import { triggerChevronClass } from "@/components/ui/chevron";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import {
   floatingPanelClass,
   floatingPanelFadeClass,

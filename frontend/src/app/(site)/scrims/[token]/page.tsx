@@ -19,7 +19,7 @@ import type { ScrimRoom } from "@/types/scrim.types";
 
 import { useEntityWorkspace } from "@/hooks/useEntityWorkspace";
 import { PregameRoom } from "@/app/(site)/tournaments/[slug]/pregame/[encounterId]/_components/PregameRoom";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { scrimQueryKeys } from "@/lib/scrims/query-keys";
 
 /** Where a scrim room hands the viewer back when it is done with them. */

@@ -13,7 +13,7 @@ import CompareUnifiedTable, {
 import { useUserCompareSearchParams } from "@/app/(site)/users/compare/hooks/useUserCompareSearchParams";
 import { useUserCompareData } from "@/app/(site)/users/compare/hooks/useUserCompareData";
 import { UsersMissingGrid } from "@/app/(site)/users/components/shared/UsersMissingGrid";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { GameScopeControl } from "@/components/workspace/GameScopeControl";
 import { useGameBoundParams } from "@/components/workspace/scope-pill-store";

@@ -12,7 +12,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { DISCORD_CLIENT_ID } from "@/config/site";
 import { initials } from "@/lib/utils";
 import type { DiscordGuildInfo } from "@/types/discord.types";

@@ -7,10 +7,10 @@ import { Combobox, ComboboxCheck, ComboboxMeta } from "@/components/ui/combobox"
 import { TeamCombobox } from "@/components/admin/TeamCombobox";
 import DivisionIcon from "@/components/DivisionIcon";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
-import { Checkbox } from "@/components/ui/checkbox";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,

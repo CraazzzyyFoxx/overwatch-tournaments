@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 
-import { DataTable, type TableCommand } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
 import type { Team } from "@/types/team.types";
 import { useChallongeTeamSync } from "./teams-tab/ChallongeTeamSync";
 import { useTeamColumns } from "./teams-tab/useTeamColumns";

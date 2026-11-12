@@ -6,7 +6,7 @@ import { LogStatsName } from "../stat-names";
 import { COMPARISON_STATS, STAT_META, formatStat, teamTotal, type MatchStatsTeam } from "./stats";
 import TeamName from "@/components/TeamName";
 import { Card } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Separator } from "@/components/ui/separator";
 
 interface TeamComparisonProps {

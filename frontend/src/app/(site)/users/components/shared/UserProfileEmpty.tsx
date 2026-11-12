@@ -4,7 +4,7 @@ import { CalendarSearch, Medal, Sparkles, Swords, Trophy, Users } from "lucide-r
 
 import { HeroFrame } from "@/components/site/PageHero";
 import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { canonicalDisplay } from "@/lib/player";
 
 /**

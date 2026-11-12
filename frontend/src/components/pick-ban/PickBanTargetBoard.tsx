@@ -7,7 +7,7 @@ import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { findRole, type RoleOntology } from "@/lib/roster/ontology";
 import { cn } from "@/lib/utils";

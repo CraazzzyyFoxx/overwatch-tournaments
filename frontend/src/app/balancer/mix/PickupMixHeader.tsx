@@ -16,7 +16,7 @@ import {
 
 import { MAX_LOBBIES, lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
 import { LobbyStage } from "@/app/balancer/mix/_components/LobbyStage";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import { BanPresetSelect, useBanPresetName } from "@/components/pick-ban/BanPresetSelect";
 import { MixFormationControl } from "@/components/mix/MixFormationControl";
@@ -31,14 +31,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { Eyebrow } from "@/components/ui/eyebrow";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import {
   useMixPresetClocks,

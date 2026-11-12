@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { AlertTriangle } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { cn } from "@/lib/utils";
 import { useSettingsOutlineEntry } from "./SettingsOutline";
 

@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Save, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,10 +20,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RowButton } from "@/components/ui/row-button";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { fieldErrorsFrom } from "@/lib/forms/form-errors";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";

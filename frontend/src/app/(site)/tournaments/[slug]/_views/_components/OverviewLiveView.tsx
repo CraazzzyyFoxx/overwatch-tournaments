@@ -10,7 +10,7 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { ProfileStat } from "@/components/profile/atoms";
 import TeamName, { TeamLogo } from "@/components/TeamName";
 import { Badge } from "@/components/ui/badge";
-import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import {
   Table,
   TableBody,

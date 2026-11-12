@@ -12,7 +12,7 @@ import { LinkTabs } from "@/components/kit/LinkTabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";

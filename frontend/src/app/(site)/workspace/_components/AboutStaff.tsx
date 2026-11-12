@@ -9,7 +9,7 @@ import {
   Section,
   SectionHead
 } from "@/components/site/open-layout";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getFormatLocale } from "@/lib/datetime/server";
 import { getPlayerSlug } from "@/lib/player";

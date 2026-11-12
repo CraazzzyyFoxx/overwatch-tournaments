@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import type { DraftFeasibility } from "@/types/draft.types";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 
 interface FeasibilityStatusProps {
   feasibility: DraftFeasibility | null;

@@ -8,7 +8,7 @@ import { aggregateRoleStats } from "@/lib/roster/role-ref";
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { tint } from "@/lib/colors";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";

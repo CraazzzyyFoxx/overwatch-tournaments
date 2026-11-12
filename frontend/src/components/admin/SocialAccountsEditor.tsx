@@ -6,10 +6,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { invalidProps, settingErrorId } from "@/components/kit/SettingRow";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +17,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Select,

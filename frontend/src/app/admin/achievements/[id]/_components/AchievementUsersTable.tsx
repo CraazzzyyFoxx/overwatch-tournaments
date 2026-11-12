@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { TournamentCombobox } from "@/components/tournaments/TournamentCombobox";
-import { DataTable } from "@/components/data-table";
+import { DataTable } from "@craazzzyyfoxx/admin-kit/data-table";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { Button } from "@/components/ui/button";
 import { useFormatter } from "@/lib/datetime/client";

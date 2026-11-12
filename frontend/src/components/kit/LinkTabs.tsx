@@ -3,7 +3,7 @@
 import type { KeyboardEvent } from "react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 
-import type { Tone } from "@/components/ui/tone";
+import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { TabBadge, TabDot, tabIndicatorClass, tabRowRef, tabsListVariants, tabsTriggerVariants } from "@/components/ui/tabs";
 import { toggleVariants } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";

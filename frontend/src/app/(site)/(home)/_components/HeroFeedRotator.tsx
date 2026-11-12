@@ -5,7 +5,7 @@ import { Pause, Play } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAutoplay } from "@/hooks/useAutoplay";
 import { useOffscreen } from "@/hooks/useOffscreen";

@@ -7,7 +7,7 @@ import {
   formatAuditActor,
   type AuditTranslator
 } from "@/components/kit/audit-log";
-import type { FilterDef } from "@/components/kit/useFilters";
+import type { FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import type { AuditLogRead } from "@/types/admin.types";
 
 import { SCOPE_PARAM } from "./model";

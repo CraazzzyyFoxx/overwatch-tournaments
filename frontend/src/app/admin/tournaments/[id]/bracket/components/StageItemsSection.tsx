@@ -38,8 +38,8 @@ import {
   STAGE_ITEM_TYPE_LABELS,
   type StageProgress
 } from "@/lib/bracket/projection";
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { Spinner } from "@/components/ui/spinner";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { AddStageItemForm } from "./stage-items/AddStageItemForm";

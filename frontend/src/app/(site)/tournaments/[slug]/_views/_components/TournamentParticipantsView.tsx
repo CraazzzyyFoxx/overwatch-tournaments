@@ -16,12 +16,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { FilterChip } from "@/components/ui/filter-chip";
-import { SearchField } from "@/components/ui/search-field";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import {
   Select,
   SelectContent,

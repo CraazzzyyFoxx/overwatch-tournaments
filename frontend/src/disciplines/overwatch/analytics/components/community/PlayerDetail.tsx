@@ -8,7 +8,7 @@ import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useRoleName } from "@/hooks/useRoleName";
 import { getImpactColor } from "@/lib/colors";

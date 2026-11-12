@@ -14,8 +14,8 @@ import {
 import { HEADER_CHIP } from "@/components/bracket/BracketCanvas";
 import { StreamWatchContext } from "@/components/stream/stream-watch";
 import { Button } from "@/components/ui/button";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
-import { StatusDot } from "@/components/ui/status-dot";
+import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { swissPools } from "@/lib/bracket/swiss";
 import { duelSeats } from "@/lib/encounter/seats";
 import { isEncounterCompleted } from "@/lib/encounter/status";

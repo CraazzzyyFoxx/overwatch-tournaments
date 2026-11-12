@@ -7,14 +7,14 @@ import { Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
+import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { PickBanKind } from "@/types/tournament.types";
 import { matchesItemName } from "@/lib/tournament/pick-ban-config";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 
 /** One selectable map or hero, flattened so both catalogues share one picker. */
 export interface CatalogueItem {

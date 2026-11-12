@@ -4,14 +4,14 @@ import { useId, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 
-import { DataTable } from "@/components/data-table";
+import { DataTable } from "@craazzzyyfoxx/admin-kit/data-table";
 import { CatalogAliasesField, CatalogImageField, CatalogNameField } from "@/components/admin/CatalogFormFields";
 import { CatalogSyncDialog } from "@/components/admin/CatalogSyncDialog";
 import { useCatalogCommands } from "@/components/admin/CatalogToolbarActions";
-import { FilterBar } from "@/components/kit/FilterBar";
-import { useFilters } from "@/components/kit/useFilters";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,

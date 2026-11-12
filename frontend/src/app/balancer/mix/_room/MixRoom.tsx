@@ -20,7 +20,7 @@ import { useSideLabel } from "@/components/pick-ban/useSideLabel";
 import { BackLink } from "@/components/site/BackLink";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";

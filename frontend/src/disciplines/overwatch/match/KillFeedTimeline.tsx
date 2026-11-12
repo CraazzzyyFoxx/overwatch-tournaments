@@ -6,7 +6,7 @@ import { ArrowRight, Crosshair, Plus, RotateCw, Skull, Zap, ZapOff } from "lucid
 import type { MatchWithStats } from "@/types/encounter.types";
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";

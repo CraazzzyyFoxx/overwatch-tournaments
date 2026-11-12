@@ -11,8 +11,8 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Spinner } from "@/components/ui/spinner";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import type { AchievementRule } from "@/types/admin.types";
 
 /**

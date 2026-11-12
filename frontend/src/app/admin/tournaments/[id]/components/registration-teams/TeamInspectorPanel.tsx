@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { InspectorField } from "@/components/kit/InspectorField";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,

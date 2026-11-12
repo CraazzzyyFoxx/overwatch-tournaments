@@ -2,8 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { Card } from "@/components/ui/card";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
-import { SearchField } from "@/components/ui/search-field";
+import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 
 export type Filter = "all" | "wins" | "losses" | "draws" | "group" | "playoffs" | "finals" | "mvp1" | "has_logs";
 

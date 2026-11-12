@@ -14,7 +14,7 @@ import {
   SheetHeader,
   SheetTitle
 } from "@/components/ui/sheet";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,
@@ -25,7 +25,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
-import { TONE_TINT } from "@/components/ui/tone";
+import { TONE_TINT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { cn } from "@/lib/utils";
 import type {
   AdminRegistration,
@@ -37,7 +37,7 @@ import type { DisciplineMetadata } from "@/types/discipline.types";
 import { showsRoles } from "@/lib/roster/ontology";
 import { AdditionalHandleStrip, HandleCopyButton } from "./HandleCopyControls";
 import RankHistory from "@/components/RankHistory";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import { PlayerEditHistoryPanel } from "./PlayerEditHistoryPanel";
 import { SortableRoleEntry } from "./PlayerEditRoleRow";

@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { roleChoices, type RoleOntology } from "@/lib/roster/ontology";
 import { cn } from "@/lib/utils";

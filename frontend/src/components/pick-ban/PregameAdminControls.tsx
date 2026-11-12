@@ -5,10 +5,10 @@ import { Ban, Pause, Play, RotateCcw, ShieldCheck, Timer, Undo2 } from "lucide-r
 import { useTranslations } from "next-intl";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { cn } from "@/lib/utils";
@@ -28,7 +28,7 @@ import type {
 import type { PickBanSeat } from "@/components/pick-ban/pick-ban-model";
 import type { PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
 import { PickBanSideChoice } from "@/components/pick-ban/PickBanSideChoice";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import { PregameAdminBox } from "./PregameAdminBox";
 import type { PickBanAdminSlot } from "./usePickBanController";

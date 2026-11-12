@@ -9,7 +9,7 @@ import { useTranslations } from "next-intl";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
 import { Card } from "@/components/ui/card";
-import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import {
   Table,
   TableBody,

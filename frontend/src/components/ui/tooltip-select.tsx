@@ -3,7 +3,7 @@
 import React from "react";
 
 import { Select, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 
 interface TooltipSelectProps {
   /** The control's name: its tooltip and accessible label. */

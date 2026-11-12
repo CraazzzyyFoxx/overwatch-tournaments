@@ -7,7 +7,7 @@ import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import { useFormatter } from "@/lib/datetime/client";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RankCrest } from "@/components/RankCrest";
 import { roleOf } from "@/lib/roster/role-ref";

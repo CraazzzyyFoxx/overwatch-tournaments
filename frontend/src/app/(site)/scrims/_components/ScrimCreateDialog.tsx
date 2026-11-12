@@ -25,7 +25,7 @@ import {
   FieldSet,
   FieldTitle
 } from "@/components/ui/field";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
+import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -54,7 +54,7 @@ import {
   pickBanDraftToInput,
   stageRoundOptions
 } from "@/lib/tournament/pick-ban-config";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import {
   ScrimPoolEditor,

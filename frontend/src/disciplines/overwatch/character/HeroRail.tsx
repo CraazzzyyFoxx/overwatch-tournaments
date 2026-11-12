@@ -18,9 +18,9 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
-import { SearchField } from "@/components/ui/search-field";
-import { RowButton } from "@/components/ui/row-button";
+import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 
 export interface HeroRow {
   id: number;

@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 import { Lock } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
-import { RowButton } from "@/components/ui/row-button";
-import { SearchField } from "@/components/ui/search-field";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import type { RbacRole } from "@/types/rbac.types";
 
 /**

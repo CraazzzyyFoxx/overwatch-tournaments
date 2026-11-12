@@ -7,7 +7,7 @@ import { CheckCircle2, Send, UserPlus } from "lucide-react";
 import { postModeOf, signupPostOf } from "@/app/balancer/mix/PickupMixHeader";
 import { CAPTION_CLASS, CARD_TITLE_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { cn } from "@/lib/utils";
 import type { CustomGame } from "@/services/custom-game.service";
 

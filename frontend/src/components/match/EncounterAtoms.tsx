@@ -1,7 +1,7 @@
 import React from "react";
 
 import { CardTitle } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { cn } from "@/lib/utils";
 
 /**

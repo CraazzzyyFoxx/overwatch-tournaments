@@ -7,9 +7,9 @@ import { ArrowUpRight, Check, ChevronsUpDown, Gamepad2, Globe, Lock, Plus, type 
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { Separator } from "@/components/ui/separator";
 import { GameMark } from "@/components/workspace/GameMark";
 import { useScopePillOpen } from "@/components/workspace/scope-pill-store";

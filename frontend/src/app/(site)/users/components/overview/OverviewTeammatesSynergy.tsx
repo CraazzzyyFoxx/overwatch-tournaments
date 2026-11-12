@@ -12,8 +12,8 @@ import { winrateColor } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 import { canonicalDisplay, getPlayerSlug } from "@/lib/player";
 import { Button } from "@/components/ui/button";
-import { DataPagination } from "@/components/ui/data-pagination";
-import { SearchField } from "@/components/ui/search-field";
+import { DataPagination } from "@craazzzyyfoxx/admin-kit/ui/data-pagination";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Dialog,

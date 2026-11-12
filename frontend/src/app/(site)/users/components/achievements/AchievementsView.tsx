@@ -16,10 +16,10 @@ import { classifyRarity, localizedText, RARITY_ORDER, rarityVarClass, type Rarit
 import { AchievementDetailDialog } from "@/app/(site)/users/components/achievements/AchievementDetailDialog";
 import { AchievementArt } from "@/components/achievements/AchievementArt";
 import { RarityStrip } from "@/components/achievements/RarityStrip";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
-import { SearchField } from "@/components/ui/search-field";
+import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { Separator } from "@/components/ui/separator";
 import { CardSurface } from "@/components/profile/atoms";
 import { TournamentCombobox } from "@/components/tournaments/TournamentCombobox";

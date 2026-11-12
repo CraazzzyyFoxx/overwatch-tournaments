@@ -15,7 +15,7 @@ import { PlatformHealth } from "@/components/admin/dashboard/PlatformHealth";
 import { Timeline } from "@/components/admin/dashboard/Timeline";
 import { Trends } from "@/components/admin/dashboard/Trends";
 import { WorkQueue } from "@/components/admin/dashboard/WorkQueue";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAuthProfile } from "@/hooks/useAuthProfile";

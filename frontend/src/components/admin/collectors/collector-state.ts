@@ -1,4 +1,4 @@
-import type { Tone } from "@/components/ui/tone";
+import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 
 /**
  * A collector's one-word verdict for the tab bar's health dot.

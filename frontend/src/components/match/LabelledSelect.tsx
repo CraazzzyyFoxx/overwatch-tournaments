@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import {
   Select,
   SelectContent,

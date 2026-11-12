@@ -8,7 +8,7 @@ import { cn, initials } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useFilePicker } from "@/components/ui/file-button";
 import Image from "@/components/ui/image";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 const DEFAULT_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
 

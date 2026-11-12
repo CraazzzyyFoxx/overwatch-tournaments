@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { cn } from "@/lib/utils";
 
 type TableProps = React.HTMLAttributes<HTMLTableElement> & {

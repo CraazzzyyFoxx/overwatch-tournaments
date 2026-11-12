@@ -10,7 +10,7 @@ import {
   AdminDetailTableShell,
   adminDetailTableStyles as styles
 } from "@/components/admin/AdminDetailTable";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { DateTimePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";

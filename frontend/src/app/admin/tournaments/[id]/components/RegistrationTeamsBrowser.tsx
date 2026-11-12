@@ -4,14 +4,14 @@ import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 
-import { DataTable } from "@/components/data-table";
-import { FilterBar } from "@/components/kit/FilterBar";
+import { DataTable } from "@craazzzyyfoxx/admin-kit/data-table";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
-import { useFilters, type FilterDef } from "@/components/kit/useFilters";
+import { useFilters, type FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { translateRegistrationTeamError } from "@/lib/registration/team-errors";

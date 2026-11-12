@@ -13,7 +13,7 @@ import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { TOURNAMENT_PHASES } from "@/lib/tournament/lifecycle";
 import type { TournamentStatus } from "@/types/tournament.types";
 import { Skeleton } from "@/components/ui/skeleton";
-import { InfiniteScrollFooter } from "@/components/ui/infinite-scroll";
+import { InfiniteScrollFooter } from "@craazzzyyfoxx/admin-kit/ui/infinite-scroll";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import type { StatsScope } from "@/lib/site/stats-scope";

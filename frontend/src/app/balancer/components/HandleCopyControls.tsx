@@ -8,7 +8,7 @@ import {
   ContextMenuItem,
   ContextMenuLabel,
   ContextMenuSeparator
-} from "@/components/ui/context-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/context-menu";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +16,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { formatHandlesForClipboard } from "@/components/balancer/balancer-page-helpers";

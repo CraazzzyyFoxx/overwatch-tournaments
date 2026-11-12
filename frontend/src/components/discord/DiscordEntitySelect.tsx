@@ -5,10 +5,10 @@ import { Code2, RefreshCw } from "lucide-react";
 
 import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { cn } from "@/lib/utils";
 
 /** A `CommandGroup` worth of entities. Omit `heading` for a single flat group

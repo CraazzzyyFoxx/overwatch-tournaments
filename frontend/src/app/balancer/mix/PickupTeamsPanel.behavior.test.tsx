@@ -1169,7 +1169,7 @@ describe("PickupTeamsPanel", () => {
     expect(byName(scope, "Start match")).toBeNull();
     // The match plays out in the room; the desk links there quietly.
     expect(roomLink(scope)?.getAttribute("href")).toBe("/balancer/mix/3/lobby/A");
-    expect(roomLink(scope)?.className).not.toContain("--aqt-teal");
+    expect(roomLink(scope)?.className).not.toContain("--color-primary");
     expect(scope.querySelectorAll('button[aria-label="Make captain"]')).toHaveLength(0);
     // The three seats still render; none of them can be dragged.
     expect(scope.querySelectorAll("section li")).toHaveLength(3);
@@ -1191,7 +1191,7 @@ describe("PickupTeamsPanel", () => {
     expect(scope.textContent).toContain("Lineup frozen while the match is live");
     expect(scope.textContent).toContain("Hero bans and picks are on in the room");
     expect(roomLink(scope)?.getAttribute("href")).toBe("/balancer/mix/3/lobby/A");
-    expect(roomLink(scope)?.className).toContain("--aqt-teal");
+    expect(roomLink(scope)?.className).toContain("--color-primary");
     expect(scope.querySelectorAll("section li")).toHaveLength(3);
     expect(byName(scope, "Draw")).toBeNull();
     expect(byName(scope, "Balance teams")).toBeNull();
@@ -1213,7 +1213,7 @@ describe("PickupTeamsPanel", () => {
       expect(scope.textContent).toContain("Captains are drafting in the room");
       expect(scope.textContent).toContain("The teams show up here once the draft ends.");
       expect(roomLink(scope)?.getAttribute("href")).toBe("/balancer/mix/3/lobby/B");
-      expect(roomLink(scope)?.className).toContain("--aqt-teal");
+      expect(roomLink(scope)?.className).toContain("--color-primary");
       expect(scope.textContent).not.toContain("karin");
       expect(byName(scope, "Balance teams")).toBeNull();
     }

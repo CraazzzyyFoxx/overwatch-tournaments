@@ -7,7 +7,7 @@ import { type ComponentProps, type ReactNode } from "react";
 
 import CookieSettingsButton from "@/components/CookieSettingsButton";
 import Github from "@/components/icons/Github";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import { APP_VERSION, BRAND_NAME, REPO_URL, SITE_URL } from "@/config/site";

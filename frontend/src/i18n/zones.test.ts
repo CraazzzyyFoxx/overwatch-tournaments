@@ -1,9 +1,14 @@
 import { createTranslator } from "next-intl";
 import { describe, expect, it } from "vitest";
 
-import en from "./messages/en.json";
+import { en as kitEn } from "@craazzzyyfoxx/admin-kit/messages";
+
+import appEn from "./messages/en.json";
 import ZONE_NAMESPACES from "./zone-namespaces.json";
 import { pickMessages, ZONES } from "./zones";
+
+// What `request.ts` serves: the app's tree plus the kit's `adminKit` namespace.
+const en = { ...appEn, ...kitEn };
 
 /**
  * The bundle *contents* are generated and drift-checked by

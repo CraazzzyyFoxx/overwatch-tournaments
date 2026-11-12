@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal } from "lucide-react";
 
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { CHARACTER_PICK_BAN_KIND } from "@/components/pick-ban/pick-ban-model";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import type { DraftMutations } from "@/hooks/useDraftData";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";

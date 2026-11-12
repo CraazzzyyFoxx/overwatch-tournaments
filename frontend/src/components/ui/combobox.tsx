@@ -4,7 +4,7 @@ import { type ReactElement, type ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
 import { selectTriggerClass } from "@/components/ui/button";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import {
   Command,
   CommandEmpty,
@@ -13,7 +13,7 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator
-} from "@/components/ui/command";
+} from "@craazzzyyfoxx/admin-kit/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 

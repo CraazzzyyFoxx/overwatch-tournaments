@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { UserSearchCombobox } from "@/components/kit/ServerSearchCombobox";
+import { UserSearchCombobox } from "@/components/kit/UserSearchCombobox";
 import { TournamentCombobox } from "@/components/tournaments/TournamentCombobox";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { Label } from "@/components/ui/label";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { AchievementOverrideCreateInput } from "@/types/admin.types";

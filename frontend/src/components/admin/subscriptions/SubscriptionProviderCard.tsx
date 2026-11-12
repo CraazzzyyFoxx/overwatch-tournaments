@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,

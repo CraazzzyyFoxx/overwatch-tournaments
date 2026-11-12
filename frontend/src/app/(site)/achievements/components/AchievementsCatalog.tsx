@@ -9,9 +9,9 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 import { cn } from "@/lib/utils";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { Card } from "@/components/ui/card";
-import { FilterChip } from "@/components/ui/filter-chip";
+import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { SearchField } from "@/components/ui/search-field";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,

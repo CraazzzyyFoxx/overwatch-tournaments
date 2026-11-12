@@ -4,7 +4,7 @@ import { Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 
 interface RegistrationBulkActionsProps {

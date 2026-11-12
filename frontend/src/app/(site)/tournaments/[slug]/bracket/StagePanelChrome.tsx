@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { LinkTabs } from "@/components/kit/LinkTabs";
 import { Badge } from "@/components/ui/badge";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import type { BracketTabs } from "./bracketStages.model";

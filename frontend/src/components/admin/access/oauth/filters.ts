@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 
 import { PROVIDER_META } from "@/components/admin/OAuthProviderMark";
-import type { FilterDef } from "@/components/kit/useFilters";
+import type { FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import type { OAuthProvider } from "@/types/rbac.types";
 
 /** One chip, the provider — every provider the app knows, whether or not a row has it yet. */

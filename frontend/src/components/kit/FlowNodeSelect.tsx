@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { nodesOfKind } from "@/lib/tournament/flow-nodes";
 import type { Tournament } from "@/types/tournament.types";

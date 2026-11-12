@@ -17,9 +17,9 @@ import type { RoleOntology } from "@/lib/roster/ontology";
 
 import { MappingGroupSection } from "./MappingGroupSection";
 import { GROUP_DESCRIPTIONS, GROUP_LABELS, GROUP_ORDER, targetsByGroup } from "./mappingConfig";
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { StatusDot } from "@/components/ui/status-dot";
-import { Spinner } from "@/components/ui/spinner";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 interface ColumnMappingTabProps {
   catalog: MappingCatalog;

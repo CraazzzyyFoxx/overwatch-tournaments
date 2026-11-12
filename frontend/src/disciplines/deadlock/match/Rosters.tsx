@@ -7,7 +7,7 @@ import { ChevronDown } from "lucide-react";
 import PlayerName from "@/components/PlayerName";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { BuildRow } from "./Build";

@@ -6,7 +6,7 @@ import { ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import type { LayoutHeader } from "@/components/bracket/layout";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -15,7 +15,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { isSlotRearrangeable, type BracketMatch } from "@/lib/bracket/view";
 import { notify } from "@/lib/notify";
 import { BEST_OF_OPTIONS, resolveBestOf } from "@/lib/tournament/best-of";

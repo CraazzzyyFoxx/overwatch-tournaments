@@ -11,7 +11,7 @@ import type { TournamentHistoryEntry } from "@/types/registration.types";
 import TournamentHistoryCell from "./TournamentHistoryCell";
 
 // Radix mounts tooltip content only while open; the history list is what is under test.
-vi.mock("@/components/ui/tooltip", () => ({
+vi.mock("@craazzzyyfoxx/admin-kit/ui/tooltip", () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>

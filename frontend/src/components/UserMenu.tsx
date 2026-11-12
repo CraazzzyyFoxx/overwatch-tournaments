@@ -10,7 +10,7 @@ import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { useCanAccessAdminEntry } from "@/components/site/useCanAccessAdminEntry";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { Separator } from "@/components/ui/separator";
 import { getAuthProfileHref } from "@/lib/auth/profile-links";
 import { logout } from "@/lib/auth/logout";

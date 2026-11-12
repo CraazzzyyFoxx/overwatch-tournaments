@@ -31,7 +31,7 @@ import {
   SidebarUserDropdown,
   SidebarWorkspaceLogoItem
 } from "@/components/admin/sidebar-shared";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 
 export function AdminSidebar() {
   const t = useTranslations("adminShell");

@@ -8,7 +8,7 @@ import { SaveBar } from "@/components/kit/SaveBar";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { useScopedSettingsForm } from "@/components/kit/useScopedSettingsForm";
 import { DateTimePicker } from "@/components/ui/date-picker";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { useWorkspaceTimezone } from "@/hooks/useWorkspaceTimezone";
 import { SCHEDULE_PHASES } from "@/lib/tournament/lifecycle";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";

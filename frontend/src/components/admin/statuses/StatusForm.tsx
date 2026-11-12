@@ -5,13 +5,13 @@ import { Pipette } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Button } from "@/components/ui/button";
 import { ColorSwatch } from "@/components/ui/color-swatch";
 import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,

@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import { navigation } from "@/test/url-navigation";
 import type { AchievementRule } from "@/types/admin.types";
 
@@ -20,10 +20,11 @@ const getAchievementRules = vi.fn();
 vi.mock("next-intl", async (importOriginal) => {
   const actual = await importOriginal<typeof import("next-intl")>();
   const { default: en } = await import("@/i18n/messages/en.json");
+  const { en: kit } = await import("@craazzzyyfoxx/admin-kit/messages");
   return {
     ...actual,
     useTranslations: (namespace?: string) =>
-      actual.createTranslator({ locale: "en", messages: en, namespace: namespace as never })
+      actual.createTranslator({ locale: "en", messages: { ...en, ...kit }, namespace: namespace as never })
   };
 });
 vi.mock("next/navigation", async () => (await import("@/test/url-navigation")).nextNavigationMock);
@@ -165,10 +166,11 @@ describe("the rule catalog under the game scope", () => {
     getAchievementRules.mockResolvedValue({ results: [rule(1, "overwatch", "Clutch")], total: 40, page: 2, per_page: 15 });
     window.history.replaceState(null, "", "/admin/achievements?page=2");
     await mount(null, true);
-    expect(getAchievementRules).toHaveBeenLastCalledWith(7, null, expect.objectContaining({ page: 2 }));
+    // Not "last": the table prefetches the next page, so page 3 follows page 2.
+    expect(getAchievementRules).toHaveBeenCalledWith(7, null, expect.objectContaining({ page: 2 }));
 
     await mount("lol", false);
 
-    expect(getAchievementRules).toHaveBeenLastCalledWith(7, "lol", expect.objectContaining({ page: 1 }));
+    expect(getAchievementRules).toHaveBeenCalledWith(7, "lol", expect.objectContaining({ page: 1 }));
   });
 });

@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { SaveBar } from "@/components/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Switch } from "@/components/ui/switch";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { tabFallback } from "../../hubQueries";

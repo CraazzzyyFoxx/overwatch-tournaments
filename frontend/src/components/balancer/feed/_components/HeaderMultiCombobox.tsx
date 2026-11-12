@@ -5,7 +5,7 @@ import { ChevronDown, ChevronUp, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 
 interface HeaderMultiComboboxProps {
   /** Available header keys to choose from. */

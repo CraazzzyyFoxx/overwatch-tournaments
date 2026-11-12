@@ -6,8 +6,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { Spinner } from "@/components/ui/spinner";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import pickBanService from "@/services/pickBan.service";

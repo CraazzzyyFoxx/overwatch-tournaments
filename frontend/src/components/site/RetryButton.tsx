@@ -6,7 +6,7 @@ import { RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 /**
  * "Повторить" for a server-rendered block that failed to load: re-renders the

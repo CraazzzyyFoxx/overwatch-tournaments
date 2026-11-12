@@ -6,8 +6,8 @@ import { useTranslations } from "next-intl";
 
 import { PersonLabel } from "@/components/PlayerName";
 import { TournamentTeamCard } from "@/components/TournamentTeamCard";
-import { FilterChip } from "@/components/ui/filter-chip";
-import { SearchField } from "@/components/ui/search-field";
+import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import {
   Select,
   SelectContent,

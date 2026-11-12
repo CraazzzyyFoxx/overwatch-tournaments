@@ -11,7 +11,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import {
   ContextMenuRadioGroup,
   ContextMenuRadioItem,
@@ -19,7 +19,7 @@ import {
   ContextMenuSub,
   ContextMenuSubContent,
   ContextMenuSubTrigger,
-} from "@/components/ui/context-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/context-menu";
 import { cn } from "@/lib/utils";
 import type { StatusMeta } from "@/types/registration.types";
 

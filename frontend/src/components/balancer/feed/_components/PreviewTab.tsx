@@ -15,8 +15,8 @@ import type {
 } from "@/types/balancer-admin.types";
 
 import { PreviewTable } from "./PreviewTable";
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { Spinner } from "@/components/ui/spinner";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 interface PreviewTabProps {
   catalog: MappingCatalog;

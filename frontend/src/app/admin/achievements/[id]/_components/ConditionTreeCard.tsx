@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
 
 import { GraphCanvasSkeleton } from "@/components/graph-canvas/GraphCanvasSkeleton";
-import { LoadErrorNote } from "@/components/kit/EmptyNote";
+import { LoadErrorNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 
 // @xyflow/react (plus its stylesheet) is the heaviest thing this route can

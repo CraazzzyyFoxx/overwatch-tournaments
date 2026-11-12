@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
-import { TONE_TEXT, type Tone } from "@/components/ui/tone";
+import { TONE_TEXT, type Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { cn } from "@/lib/utils";
 
 interface StatusIconBadgeProps {

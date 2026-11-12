@@ -10,7 +10,7 @@ import { Achievement } from "@/types/achievement.types";
 import achievementsService from "@/services/achievements.service";
 import PlayerName from "@/components/PlayerName";
 import TeamName from "@/components/TeamName";
-import { DataPagination } from "@/components/ui/data-pagination";
+import { DataPagination } from "@craazzzyyfoxx/admin-kit/ui/data-pagination";
 import { CardSurface } from "@/components/profile/atoms";
 import { Skeleton } from "@/components/ui/skeleton";
 import { achievementQueryKeys } from "@/lib/achievements/query-keys";

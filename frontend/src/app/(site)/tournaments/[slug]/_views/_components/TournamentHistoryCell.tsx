@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useRoleName } from "@/hooks/useRoleName";
 import { getDivisionLabel } from "@/lib/divisions/grid";

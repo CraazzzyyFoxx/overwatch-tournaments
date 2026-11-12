@@ -10,7 +10,7 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { ProfileStat } from "@/components/profile/atoms";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Progress } from "@/components/ui/progress";
 import { RankCrest } from "@/components/RankCrest";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";

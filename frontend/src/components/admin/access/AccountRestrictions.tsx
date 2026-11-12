@@ -9,7 +9,7 @@ import {
   PermissionPicker,
   type PermissionCatalogEntry
 } from "@/components/admin/access/PermissionPicker";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,

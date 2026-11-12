@@ -15,10 +15,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import type { InternalBalancePayload } from "@/types/balancer-admin.types";
 import { MUTED_BUTTON_CLASS } from "@/components/balancer/balancer-page-helpers";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { BalanceStatsRow, type VariantStats } from "./BalanceStatsRow";
 
 type BalanceActionsBarProps = {

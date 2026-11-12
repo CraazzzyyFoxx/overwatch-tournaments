@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import { Button } from "@/components/ui/button";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";

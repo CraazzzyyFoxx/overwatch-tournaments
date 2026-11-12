@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FileX2, ListChecks, Pencil, Trash2 } from "lucide-react";
 
-import { columnMeta, createKebabColumn } from "@/components/data-table";
+import { columnMeta, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import TeamName from "@/components/TeamName";
 import { pregameRoomHref } from "@/lib/encounter/pregame-room";

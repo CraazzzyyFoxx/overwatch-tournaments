@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import type { AchievementRarity, AchievementMatchLink } from "@/types/achievement.types";
 import { cn } from "@/lib/utils";
 import { classifyRarity, localizedText, rarityVarClass, type Rarity } from "@/lib/achievements/rarity";

@@ -14,8 +14,8 @@ import {
   Cell
 } from "recharts";
 import { Card } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { LogStatsName } from "../stat-names";
 import { STAT_META, activePlayers, formatStat, playerStat, type MatchStatsTeam } from "./stats";
 

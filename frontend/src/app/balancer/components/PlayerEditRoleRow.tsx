@@ -7,8 +7,8 @@ import { SortableGrip, useSortableRow } from "@/components/kit/SortableRows";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
-import { RowButton } from "@/components/ui/row-button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import {
   Select,
   SelectContent,

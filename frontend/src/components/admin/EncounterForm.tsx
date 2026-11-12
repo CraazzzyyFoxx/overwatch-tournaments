@@ -7,7 +7,7 @@ import { TeamCombobox } from "@/components/admin/TeamCombobox";
 import { buildEncounterName } from "@/components/admin/encounter-name";
 import { duelSeats } from "@/lib/encounter/seats";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,

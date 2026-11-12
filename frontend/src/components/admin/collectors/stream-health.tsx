@@ -14,7 +14,7 @@ import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useFormatter } from "@/lib/datetime/client";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import { diagnoseStreamHealth } from "./stream-shared";
 import { adminQueryKeys } from "@/lib/admin/query-keys";

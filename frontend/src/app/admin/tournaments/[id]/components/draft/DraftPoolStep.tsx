@@ -8,7 +8,7 @@ import { FactList } from "@/components/kit/FactList";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Progress } from "@/components/ui/progress";

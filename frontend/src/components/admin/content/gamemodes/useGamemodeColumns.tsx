@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import type { ColumnDef } from "@tanstack/react-table";
 
-import { columnMeta } from "@/components/data-table";
+import { columnMeta } from "@craazzzyyfoxx/admin-kit/data-table";
 import { AssetPreview } from "@/components/admin/AssetPreview";
 import type { CatalogEntityRead } from "@/types/catalog.types";
 

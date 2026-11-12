@@ -6,7 +6,7 @@ import { ChevronDown } from "lucide-react";
 
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { Card } from "@/components/ui/card";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GameIcon } from "@/components/workspace/GameIcon";

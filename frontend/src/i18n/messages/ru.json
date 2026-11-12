@@ -403,12 +403,6 @@
     "save": "Сохранить",
     "delete": "Удалить",
     "previous": "Назад",
-    "pagination": {
-      "label": "Постраничная навигация",
-      "previous": "Предыдущая страница",
-      "next": "Следующая страница",
-      "goToPage": "Перейти на страницу {page}"
-    },
     "pageState": {
       "error": {
         "title": "Не удалось загрузить раздел",
@@ -14519,35 +14513,12 @@
         "bronze": "{place}-е место, бронза",
         "place": "{place}-е место",
         "none": "Без места"
-      },
-      "infiniteScroll": {
-        "rows": "строк",
-        "progress": "Показано {loaded, number} {unit}",
-        "progressOf": "Показано {loaded, number} из {total, number} {unit}",
-        "loading": "Загружаем ещё…",
-        "loadMore": "Загрузить ещё",
-        "retry": "Повторить загрузку",
-        "error": "Не удалось загрузить ещё. Проверьте соединение и попробуйте снова."
       }
     },
     "actions": {
       "back": "Назад",
       "backToList": "К списку",
       "openPage": "Открыть страницу",
-      "save": "Сохранить",
-      "clearSelection": "Снять выделение",
-      "bulkActions": "Массовые действия",
-      "selectedSummary": "Выбрано: <num>{count}</num>",
-      "activeFilters": "Активные фильтры",
-      "filter": "Фильтр",
-      "filterBy": "Фильтр…",
-      "noFilters": "Доступных фильтров нет.",
-      "addFilter": "Добавить фильтр",
-      "removeFilter": "Удалить фильтр {label}",
-      "backToFilterList": "К списку фильтров",
-      "searchPicker": "Поиск: {label}…",
-      "nothingMatchesShort": "Совпадений нет.",
-      "clearAll": "Очистить всё",
       "previousRow": "Предыдущая строка",
       "nextRow": "Следующая строка",
       "closeInspector": "Закрыть инспектор",
@@ -14586,11 +14557,6 @@
       "empty": "Пользователи по этому запросу не найдены. Попробуйте короткое имя.",
       "none": "Без пользователя",
       "userId": "Пользователь #{id}"
-    },
-    "entityForm": {
-      "couldNotSave": "Не удалось сохранить изменения.",
-      "discardChanges": "Отменить изменения",
-      "unsavedDescription": "В этой форме есть несохранённые изменения. Если выйти сейчас, текущие правки будут потеряны."
     },
     "avatar": {
       "unsupportedType": "Неподдерживаемый тип файла",
@@ -14814,55 +14780,8 @@
     }
   },
   "kitTable": {
-    "table": {
-      "copyRow": "Копировать строку",
-      "copy": "Копировать «{value}»",
-      "rows": "Строки",
-      "range": "{start}–{end} из {total}",
-      "rowsPerPage": "Строк на странице",
-      "rowsAuto": "Авто"
-    },
     "dataTableExtra": {
-      "noRecords": "Пока пусто.",
-      "search": "Поиск…",
-      "clearSearchAndFilters": "Очистить поиск и фильтры",
-      "clearSearch": "Очистить поиск",
-      "clearFilters": "Очистить фильтры",
-      "collapseDetails": "Свернуть подробности",
-      "expandDetails": "Развернуть подробности",
-      "selectRow": "Выбрать строку {id}",
-      "selectVisibleRows": "Выбрать все видимые строки",
-      "sortPriority": "Приоритет сортировки {index}",
-      "sortHint": "Нажмите для сортировки, Shift+клик — добавить вторую сортировку",
-      "sort": "Сортировка",
-      "sortAsc": "По возрастанию",
-      "sortDesc": "По убыванию",
-      "resize": "Изменить размер столбца {id}",
-      "resizeHint": "Перетащите для изменения размера, дважды щёлкните для сброса",
-      "actions": "Действия",
-      "actionsFor": "Действия для {label}",
-      "refreshing": "Обновление результатов…",
-      "selectedRowsOtherPages": "Выбранные строки с других страниц участвуют в массовых действиях",
-      "exportSelected": "{count, plural, one {Экспортировать # выбранную строку в CSV} few {Экспортировать # выбранные строки в CSV} many {Экспортировать # выбранных строк в CSV} other {Экспортировать # выбранной строки в CSV}}",
-      "selectedOnOtherPages": "{count} выбрано на других страницах",
-      "exportCurrent": "Экспортировать текущее представление в CSV",
-      "compactRows": "Компактные строки",
-      "core": "Основные",
-      "meta": "Служебные",
-      "admin": "Администрирование",
-      "columns": "Столбцы",
-      "resetColumns": "Сбросить настройки",
-      "views": "Представления",
-      "view": "Вид",
-      "deleteView": "Удалить представление {name}",
-      "saveViewPrompt": "Сохранить текущее представление…",
-      "saveView": "Сохранить текущее представление",
-      "viewName": "Название представления",
-      "rowFallback": "строки {id}",
-      "noMatchSearch": "По запросу ничего не найдено.",
-      "noMatchFilters": "Под эти фильтры ничего не подходит.",
-      "noMatchBoth": "Под запрос и фильтры ничего не подходит.",
-      "rowHint": "Стрелки вверх и вниз переключают строки{select, select, yes {, пробел выбирает, Shift со стрелкой расширяет выделение} other {}}{open, select, yes {, Enter открывает выбранную строку} other {}}."
+      "actionsFor": "Действия для {label}"
     }
   },
   "sheetsFeed": {

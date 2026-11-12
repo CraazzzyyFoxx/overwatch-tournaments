@@ -28,7 +28,7 @@ import { CaptainPoolPicker } from "./CaptainPoolPicker";
 import type { DraftCaptainRow } from "./setup-model";
 import type { DraftCaptainSetup } from "./setup-types";
 import { captainSeat, poolRegistrationSummary, registrationLabel } from "./setup-types";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 
 interface DraftCaptainsStepProps {
   pool: AdminRegistration[];

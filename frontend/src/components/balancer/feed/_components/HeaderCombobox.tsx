@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 
 interface HeaderComboboxProps {
   /** Available header keys to choose from. */

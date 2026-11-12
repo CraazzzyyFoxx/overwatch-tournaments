@@ -2,7 +2,7 @@ import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { useTranslations } from "next-intl";
 
 import { TeamLogo } from "@/components/TeamName";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { PlaceBadge } from "@/components/ui/place-badge";
 import { cn } from "@/lib/utils";
 import type { TeamNameInput } from "@/components/TeamName";

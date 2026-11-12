@@ -20,8 +20,8 @@ import {
   Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { StatusDot } from "@/components/ui/status-dot";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { cn } from "@/lib/utils";
 import type { StageSummary, TournamentDisplayStatus } from "@/types/tournament.types";

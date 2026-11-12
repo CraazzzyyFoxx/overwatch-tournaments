@@ -11,7 +11,7 @@ import {
   admissionDecisionLabel,
   builtinAnswerLabel
 } from "@/components/balancer/registrations/_components/registrationsTranslator";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Button } from "@/components/ui/button";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useFormatter } from "@/lib/datetime/client";

@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import TeamName from "@/components/TeamName";
 import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { mapWithModeName } from "@/lib/catalog/mode";
 import { encounterSeatScore } from "@/lib/encounter/detail";
 import { getEncounterWinner, isEncounterCompleted, isEncounterLive } from "@/lib/encounter/status";

@@ -20,9 +20,9 @@ import { AccountRoles } from "@/components/admin/access/AccountRoles";
 import {
   AuthUserSearchCombobox,
   type AuthUserOption
-} from "@/components/kit/ServerSearchCombobox";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+} from "@/components/kit/UserSearchCombobox";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { Button } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";

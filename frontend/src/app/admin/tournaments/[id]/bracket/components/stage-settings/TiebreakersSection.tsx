@@ -5,9 +5,9 @@ import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { SettingRow } from "@/components/kit/SettingRow";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,

@@ -44,7 +44,7 @@ import { slotCodesOf } from "@/lib/roster/shape";
 import { tournamentOverviewQueryOptions } from "@/lib/tournament/overview-query";
 import { notify } from "@/lib/notify";
 import { useFlowPath } from "@/hooks/useFlowPath";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import type { FlowStep } from "@/lib/tournament/flow-path";
 import balancerAdminService from "@/services/balancer-admin.service";
 import balancerService from "@/services/balancer.service";

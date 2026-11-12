@@ -5,7 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Ban, FolderInput, Lock, Pencil, RotateCcw, Unlock, UserPlus } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { columnMeta, createKebabColumn, type KebabAction } from "@/components/data-table";
+import { columnMeta, createKebabColumn, type KebabAction } from "@craazzzyyfoxx/admin-kit/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { PersonLabel } from "@/components/PlayerName";
 import { StatusPill } from "@/components/kit/StatusPill";

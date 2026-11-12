@@ -3,10 +3,10 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
-import { SearchField } from "@/components/ui/search-field";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { cn } from "@/lib/utils";
 
 import { MermaidDiagram } from "./MermaidDiagram";

@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { ProfileStat } from "@/components/profile/atoms";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 
 /** One lobby-ranked tournament stat of a player: its rank among the lobby and the displayed value. */
 export interface LobbyStatTile {

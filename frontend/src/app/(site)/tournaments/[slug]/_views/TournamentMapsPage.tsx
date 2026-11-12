@@ -5,8 +5,8 @@ import { ImageOff } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { FilterChip } from "@/components/ui/filter-chip";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import Image from "@/components/ui/image";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { isEncounterCompleted } from "@/lib/encounter/status";

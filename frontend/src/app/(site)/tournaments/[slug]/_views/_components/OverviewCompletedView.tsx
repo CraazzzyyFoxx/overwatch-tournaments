@@ -8,7 +8,7 @@ import PlayerName, { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { ProfileStat } from "@/components/profile/atoms";
 import { TeamLogo } from "@/components/TeamName";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { PlaceBadge } from "@/components/ui/place-badge";
 import { Separator } from "@/components/ui/separator";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";

@@ -5,11 +5,11 @@ import { ChevronDown, CircleCheck, CircleX, TriangleAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { CanvasPanel, useFocusNode } from "@/components/graph-canvas/GraphCanvas";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { floatingPanelClass } from "@/components/ui/popover";
-import { RowButton } from "@/components/ui/row-button";
-import { TONE_TEXT } from "@/components/ui/tone";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import type { FlowDraft, KeyedValidation } from "@/lib/flow/flowDraft";
 import { cn } from "@/lib/utils";
 import type { FlowIssueRead } from "@/types/flow.types";

@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { SettingRow } from "@/components/kit/SettingRow";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import {
   Select,
   SelectContent,

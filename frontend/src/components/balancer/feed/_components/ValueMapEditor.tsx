@@ -4,7 +4,7 @@ import { Minus, Plus, Sprout, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import type { ValueMapRow } from "@/types/balancer-admin.types";
 import type { SubroleCatalog, SubroleOption } from "@/types/registration.types";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { registrationRoles, type RoleOntology } from "@/lib/roster/ontology";
 import { OPEN_SLOT_CODE } from "@/lib/roster/shape";

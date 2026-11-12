@@ -6,7 +6,7 @@ import { getTranslations } from "next-intl/server";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 
 const QUICK_LINKS: { href: string; key: "tournaments" | "players" | "encounters"; icon: LucideIcon }[] =
   [

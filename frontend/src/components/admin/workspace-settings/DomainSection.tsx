@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/input-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { PhaseStrip, type PhaseState } from "@/components/kit/PhaseStrip";
 import { SaveBar } from "@/components/kit/SaveBar";
 import { useInSettingsPreview } from "@/components/kit/SettingsContinuation";

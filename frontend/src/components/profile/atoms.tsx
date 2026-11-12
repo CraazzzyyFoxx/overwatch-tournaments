@@ -2,7 +2,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { Card, CardTitle } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { ResTag } from "@/components/match/cells";
 
 // ─── Profile-only atoms (no cross-page consumer; kept local) ──────────────────

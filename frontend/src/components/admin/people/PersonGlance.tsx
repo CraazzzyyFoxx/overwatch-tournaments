@@ -10,7 +10,7 @@ import { StatusIcon } from "@/components/admin/StatusIcon";
 import { PROVIDER_LABELS } from "@/components/admin/collectors/subscription-shared";
 import { useLinkedAccount } from "@/components/admin/people/PersonAccountTab";
 import { SubscriptionStateIcon } from "@/components/admin/people/PersonSubscriptionPanel";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDisciplineMetadata, useDisciplines } from "@/hooks/useDisciplineMetadata";

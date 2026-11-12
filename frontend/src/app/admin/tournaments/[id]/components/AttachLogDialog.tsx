@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { encounterScopeLabel } from "@/components/admin/encounters/EncounterCells";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { Button } from "@/components/ui/button";
 import { SearchableImageSelect } from "@/components/ui/searchable-image-select";
 import { Skeleton } from "@/components/ui/skeleton";

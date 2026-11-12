@@ -4,7 +4,7 @@ import { useState, type ReactElement, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { Combobox, ComboboxCheck, ComboboxMeta } from "@/components/ui/combobox";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 import Image from "@/components/ui/image";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";

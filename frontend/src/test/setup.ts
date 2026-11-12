@@ -3,7 +3,12 @@ import { act, createElement, type ComponentProps } from "react";
 import type { Root } from "react-dom/client";
 import { afterEach, vi } from "vitest";
 
-import en from "@/i18n/messages/en.json";
+import { en as kitEn } from "@craazzzyyfoxx/admin-kit/messages";
+
+import appEn from "@/i18n/messages/en.json";
+
+// `i18n/request.ts` serves the kit's `adminKit` namespace next to the app's tree.
+const en = { ...appEn, ...kitEn };
 
 // In the app every zone layout mounts `ZoneIntlProvider`, so a component never
 // renders without messages. Tests render components bare, and the shared kit
@@ -31,7 +36,12 @@ vi.mock("next-intl", async (importOriginal) => {
   return {
     ...actual,
     NextIntlClientProvider: (props: ComponentProps<typeof actual.NextIntlClientProvider>) =>
-      createElement(actual.NextIntlClientProvider, { timeZone, ...props }),
+      createElement(actual.NextIntlClientProvider, {
+        timeZone,
+        ...props,
+        // A test's own `messages={en}` carries no `adminKit`; the app's zone bundles always do.
+        ...(props.messages && { messages: { ...kitEn, ...props.messages } })
+      }),
     useTranslations: ((namespace?: string) => {
       try {
         return actual.useTranslations(namespace as never);
@@ -41,6 +51,29 @@ vi.mock("next-intl", async (importOriginal) => {
     }) as typeof actual.useTranslations
   };
 });
+
+// The admin kit's `useIsMobile` asks `matchMedia`, which happy-dom answers from its own viewport —
+// not from the `window.innerWidth` a test sets. Answer width queries from `innerWidth`, evaluated on
+// every read; a test that stubs `matchMedia` itself overrides this.
+if (typeof window !== "undefined") {
+  window.matchMedia = ((query: string) => {
+    const width = (kind: string) => Number(new RegExp(`\\(${kind}-width:\\s*(\\d+)px\\)`).exec(query)?.[1]);
+    return {
+      get matches() {
+        const max = width("max");
+        const min = width("min");
+        return (Number.isNaN(max) || window.innerWidth <= max) && (Number.isNaN(min) || window.innerWidth >= min) && !(Number.isNaN(max) && Number.isNaN(min));
+      },
+      media: query,
+      onchange: null,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      dispatchEvent: () => false
+    };
+  }) as unknown as typeof window.matchMedia;
+}
 
 // Radix (Select, Slider) calls these on pointerdown; happy-dom has neither.
 if (typeof Element !== "undefined") {
