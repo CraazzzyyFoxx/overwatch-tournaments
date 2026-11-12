@@ -67,6 +67,10 @@ _INVALID_STATE = "Invalid or expired OAuth state"
 _INVALID_LINK_TICKET = "Invalid or expired link ticket"
 
 
+def _link_message(provider: str, created: bool) -> str:
+    return f"{provider.title()} account {'linked successfully' if created else 'was already linked'}"
+
+
 def _discord_guild_icon_url(guild_id: object, icon: object) -> str | None:
     """CDN URL for a guild icon hash from ``GET /users/@me/guilds``.
 
@@ -266,12 +270,13 @@ class OAuthFlowService:
         if user is None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authenticated")
 
-        await self.accounts.link_to_user(session, user, oauth_user_info, token_data)
+        _, created = await self.accounts.link_to_user(session, user, oauth_user_info, token_data)
         return schemas.OAuthLinkResult(
             mode="linked",
-            message=f"{provider.title()} account linked successfully",
+            message=_link_message(provider, created),
             provider=provider,
             username=oauth_user_info.username,
+            already_linked=not created,
             origin=payload.origin,
             redirect=payload.redirect,
             action=payload.action,
@@ -323,11 +328,12 @@ class OAuthFlowService:
         except (KeyError, TypeError) as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_INVALID_LINK_TICKET) from exc
 
-        await self.accounts.link_to_user(session, user, oauth_user_info, token_data)
+        _, created = await self.accounts.link_to_user(session, user, oauth_user_info, token_data)
         return {
-            "message": f"{oauth_user_info.provider.value.title()} account linked successfully",
+            "message": _link_message(oauth_user_info.provider.value, created),
             "provider": oauth_user_info.provider.value,
             "username": oauth_user_info.username,
+            "already_linked": not created,
         }
 
     async def connections_for(self, session: AsyncSession, user: models.AuthUser) -> list[schemas.OAuthUserInfo]:

@@ -7702,6 +7702,10 @@
       "link_taken": "This {provider} account is already linked to a different account here. Sign in with {provider} to reach that account, delete it under Account settings → Danger zone, then link it again.",
       "linkProviderFallback": "OAuth",
       "generic": "Sign-in failed. Please try again."
+    },
+    "link": {
+      "linked": "{provider} account linked.",
+      "already_linked": "This {provider} account is already linked to your account."
     }
   },
   "legal": {

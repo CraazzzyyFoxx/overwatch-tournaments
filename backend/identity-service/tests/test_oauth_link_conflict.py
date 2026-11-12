@@ -105,18 +105,27 @@ def test_link_refused_when_another_account_still_owns_the_provider_identity() ->
     assert session.commit_called is False
 
 
-def test_relinking_the_same_provider_account_is_idempotent() -> None:
+def test_relinking_the_same_provider_account_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
     """A re-link of the SAME provider account to the SAME account refreshes the
-    stored tokens instead of erroring -- the user has nothing to fix."""
+    stored tokens instead of erroring, re-verifies the social identity (it may
+    have lost its mark since), and reports ``created=False``."""
     existing = SimpleNamespace(auth_user_id=1, access_token="stale", refresh_token=None)
     session = _ConflictSession(existing)
     session.refresh = lambda _instance: asyncio.sleep(0)
+    attach_calls: list[dict] = []
 
-    result = asyncio.run(
+    async def _attach(_session, auth_user, oauth_info, **kwargs):
+        attach_calls.append({"user_id": auth_user.id, **kwargs})
+
+    monkeypatch.setattr(oauth_accounts, "_attach_verified_social_account", _attach)
+
+    conn, created = asyncio.run(
         oauth_accounts.link_to_user(session, SimpleNamespace(id=1, username="me"), _oauth_info(), TOKEN_DATA)
     )
 
-    assert result is existing
+    assert conn is existing
+    assert created is False
+    assert attach_calls == [{"user_id": 1, "claim_subject": True}]
     # Discord's token is kept, sealed at rest: never the clear value.
     assert existing.access_token.startswith(secretbox.PREFIX)
     key = secretbox.load_key(settings.oauth_token_encryption_key)
