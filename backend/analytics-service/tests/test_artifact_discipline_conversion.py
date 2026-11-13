@@ -14,6 +14,7 @@ No test fits or retrains anything; fixture estimators are the real LightGBM/XGBo
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import importlib.util
 import io
@@ -25,6 +26,7 @@ import subprocess
 import sys
 import tarfile
 import typing
+from collections.abc import Iterator
 from pathlib import Path
 
 import joblib
@@ -35,6 +37,7 @@ from sqlalchemy.orm import Session
 
 from shared import models
 from shared.disciplines.overwatch import analytics as ow_analytics
+from shared.testing.stats_parity import legacy_database
 from src.services.ml.models.base import load_artifact
 from tests.test_ml_prediction_parity import (
     GOLDEN,
@@ -217,8 +220,13 @@ def _entry(workspace_root: Path, row: tuple, roles: dict[str, int], algorithms: 
 
 
 @pytest.fixture(scope="module")
-def workspace(tmp_path_factory: pytest.TempPathFactory, stats_parity_template) -> Workspace:
-    url, _ids = stats_parity_template
+def workspace(
+    request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory, stats_parity_template
+) -> Workspace:
+    # The persistent template is read-only: the registry rows below go into this module's own derived template.
+    stack = contextlib.ExitStack()
+    request.addfinalizer(stack.close)
+    url = stack.enter_context(legacy_database(template_url=stats_parity_template[0]))
     root = tmp_path_factory.mktemp("conversion")
     (root / "models").mkdir()
     for _, name, *_ in ROWS:
@@ -870,11 +878,11 @@ def _sql(url: str, statement: str, **params: typing.Any) -> None:
 
 
 @pytest.fixture
-def registry(workspace: Workspace, stats_parity_database) -> str:
-    """A fresh clone at head holding the inventory's rows, all still at their original URIs."""
-    url, _ids = stats_parity_database
-    _insert_registry(url, workspace.inventory)
-    return url
+def registry(workspace: Workspace) -> Iterator[str]:
+    """A fresh clone of the workspace's derived template holding the inventory's rows, at their original URIs."""
+    with legacy_database(template_url=workspace.template_url) as url:
+        _insert_registry(url, workspace.inventory)
+        yield url
 
 
 def _uris(url: str) -> dict[int, str]:
