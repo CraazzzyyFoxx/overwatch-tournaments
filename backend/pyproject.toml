@@ -107,9 +107,10 @@ known-first-party = ["shared", "src"]
 
 [tool.coverage.run]
 # Per-service suites run with --parallel-mode + --source, then `coverage combine`
-# merges them. relative_files keeps paths portable across the matrix/checkout.
-relative_files = true
-# xdist workers are subprocesses: measure them too (each writes its own parallel data file).
+# merges them. Paths stay absolute: every CI job checks out to the same path, and
+# subprocesses (xdist workers, a test's `python -c` in a service dir) would record
+# an ambiguous relative `src/...`.
+# Measure subprocesses too (each writes its own parallel data file).
 patch = ["subprocess"]
 omit = [
     "*/tests/*",
