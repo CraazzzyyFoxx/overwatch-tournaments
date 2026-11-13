@@ -105,6 +105,22 @@ $ make test
 The lower-level `bash ./scripts/test.sh` still exists, but prefer `make test`. A coverage report is
 generated at `htmlcov/index.html`.
 
+A single suite runs directly against the ephemeral test Postgres from `docker-compose.test.yml`
+(started on demand):
+
+```console
+$ uv run --env-file shared/testing/test.env pytest stats-service/tests
+```
+
+* The heavy suites (shared, app, stats, balancer, tournament, analytics) run on every CPU
+  (`pytest-xdist`, `-n auto --dist loadfile`); each worker gets its own clone of `anak_test` for the
+  run. Pass `-n 0` to run serially, e.g. one test under a debugger.
+* The populated stats/ingest template databases (`p4_stats01_tpl_*`) persist in the test Postgres
+  and are rebuilt only when the migrations or their seed code change.
+* Tests never reach Redis: clients are fakeredis and cashews stays in memory; a real connect fails
+  the test (`shared/testing/redis_guard.py`, `OWT_TEST_ALLOW_REDIS=1` to lift).
+* asyncio debug mode is off; `PYTHONASYNCIODEBUG=1` turns it back on.
+
 The historical migration cutover proofs in `tests/` skip their scratch-database tests by default
 (`shared.testing.db.migration_proofs_enabled()`): they build databases at old revisions and take
 hours. Run them deliberately, on the ephemeral test Postgres from `docker-compose.test.yml` only:

@@ -46,10 +46,12 @@ connection still bound to the test's closed one.
 from __future__ import annotations
 
 import asyncio
+import atexit
 import importlib
 import os
 import subprocess
 import sys
+import warnings
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -109,9 +111,84 @@ def is_protected_db(name: str | None) -> bool:
 
 
 def is_ephemeral_test_dsn() -> bool:
-    """True when POSTGRES_* still point at the committed dummy, not a real DSN."""
+    """True when POSTGRES_* still point at the committed dummy (or this xdist worker's clone of it), not a real DSN."""
     env = postgres_env()
-    return env["host"].lower() in EPHEMERAL_HOSTS and env["port"] == EPHEMERAL_PORT and env["db"] == EPHEMERAL_DB
+    db = env["db"]
+    own_clone = os.environ.get("OWT_TEST_BASE_DB") == EPHEMERAL_DB and db.startswith(f"{EPHEMERAL_DB}_")
+    return (
+        env["host"].lower() in EPHEMERAL_HOSTS and env["port"] == EPHEMERAL_PORT and (db == EPHEMERAL_DB or own_clone)
+    )
+
+
+def _admin_connect():  # noqa: ANN202 -- psycopg is imported lazily, like in _probe
+    import psycopg
+
+    env = postgres_env()
+    return psycopg.connect(
+        host=env["host"],
+        port=int(env["port"]),
+        dbname="postgres",
+        user=env["user"],
+        password=env["password"],
+        connect_timeout=CONNECT_TIMEOUT,
+        autocommit=True,
+    )
+
+
+def _drop_database(name: str) -> None:
+    from psycopg import sql
+
+    with _admin_connect() as admin:
+        admin.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name)))
+
+
+#: This worker's open admin connection holding the advisory lock that marks its clone as alive.
+_clone_owner: Any = None
+
+
+def isolate_xdist_worker_db() -> None:
+    """Give this pytest-xdist worker its own clone of ``anak_test`` for the run.
+
+    Most DB tests share one database and tag their rows, but some read table-wide aggregates (rarity ratios, outbox
+    and job counts), use fixed ids or take table locks, so workers would see each other. The base is migrated and
+    cloned under an advisory lock; the clone is dropped when the worker exits, and one whose owner died (its owner
+    lock is free) is dropped by the next run. When the clone can't be made (Postgres down, ``anak_test`` busy in
+    another session) the worker shares ``anak_test`` as before.
+    Runs from :func:`shared.testing.env.apply_test_env_defaults`, before any service ``Settings`` reads POSTGRES_DB.
+    """
+    global _ensured, _clone_owner
+    worker = os.environ.get("PYTEST_XDIST_WORKER")
+    if not worker or os.environ.get("OWT_TEST_BASE_DB") or not is_ephemeral_test_dsn():
+        return
+    from psycopg import sql
+
+    base = EPHEMERAL_DB
+    os.environ["OWT_TEST_BASE_DB"] = base
+    name = f"{base}_{os.environ.get('PYTEST_XDIST_TESTRUNUID', 'run')[:8]}_{worker}"
+    try:
+        owner = _admin_connect()
+        owner.execute("SELECT pg_advisory_lock(hashtext(%s))", (name,))
+        owner.execute("SELECT pg_advisory_lock(hashtext(%s))", (base,))
+        try:
+            stale = owner.execute(
+                "SELECT datname FROM pg_database WHERE datname LIKE %s AND datname <> %s", (f"{base}\\_%\\_gw%", name)
+            ).fetchall()
+            for (old,) in stale:
+                if owner.execute("SELECT pg_try_advisory_lock(hashtext(%s))", (old,)).fetchone()[0]:
+                    owner.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(old)))
+                    owner.execute("SELECT pg_advisory_unlock(hashtext(%s))", (old,))
+            _alembic_upgrade()
+            owner.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name)))
+            owner.execute(sql.SQL("CREATE DATABASE {} TEMPLATE {}").format(sql.Identifier(name), sql.Identifier(base)))
+        finally:
+            owner.execute("SELECT pg_advisory_unlock(hashtext(%s))", (base,))
+    except Exception as exc:  # noqa: BLE001 -- any failure: keep the shared database
+        warnings.warn(f"xdist worker {worker} shares {base} (no clone: {exc})", stacklevel=2)
+        return
+    _clone_owner = owner
+    os.environ["POSTGRES_DB"] = name
+    atexit.register(_drop_database, name)
+    _ensured = True  # cloned from a reachable base migrated to head just above
 
 
 #: Why a historical migration cutover proof did not run.

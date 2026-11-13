@@ -20,3 +20,7 @@ dependencies = [
 python = "../.venv"
 python-version = "3.14"
 root = ["..", "."]
+
+[tool.pytest.ini_options]
+# One worker per CPU, a whole file per worker (tests in a file share module fixtures and tags). `-n 0` = serial.
+addopts = "-n auto --dist loadfile"
