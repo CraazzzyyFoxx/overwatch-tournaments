@@ -1,6 +1,6 @@
 import React from "react";
 
-import { CardTitle } from "@/components/ui/card";
+import { CardTitle } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { cn } from "@/lib/utils";
 

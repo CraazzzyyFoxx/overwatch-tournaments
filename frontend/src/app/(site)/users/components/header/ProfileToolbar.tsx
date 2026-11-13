@@ -6,7 +6,7 @@ import { GitCompare } from "lucide-react";
 
 import SharePlayerCard, { type ShareCardData } from "@/app/(site)/users/components/header/SharePlayerCard";
 import FavoriteStarButton from "@/components/FavoriteStarButton";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 
 interface ProfileToolbarProps {
   /** Player data used to render the shareable card. */

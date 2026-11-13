@@ -6,12 +6,12 @@ import { ChevronDown } from "lucide-react";
 
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import PlayerName from "@/components/PlayerName";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import { cn } from "@/lib/utils";
 import { BuildRow } from "./Build";
 import { PRESETS, type Column, type PresetKey } from "./columns";

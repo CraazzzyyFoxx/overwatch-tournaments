@@ -6,10 +6,10 @@ import { useId, useRef } from "react";
 
 import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogTitle } from "@craazzzyyfoxx/admin-kit/ui/dialog";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { notify } from "@/lib/notify";

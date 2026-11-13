@@ -4,12 +4,12 @@ import { useId, useMemo, type PointerEvent } from "react";
 import { useTranslations } from "next-intl";
 import { CircleHelp, MoveHorizontal, Skull, type LucideIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { groupKills, soulsSeries, type DlTeam, type MatchFeed, type Side } from "./model";
 import { DIM, FAINT, SEAT, formatClock, sideVars, useStatFormat, useWidth } from "./parts";

@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { createLadder } from "@/app/admin/settings/divisions/editor/draftReducer";
 import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { GameField } from "@/components/workspace/GameField";

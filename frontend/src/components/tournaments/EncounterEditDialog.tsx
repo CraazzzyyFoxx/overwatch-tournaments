@@ -7,7 +7,7 @@ import { Star } from "lucide-react";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { EncounterScoreControls } from "@/components/tournaments/EncounterScoreControls";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { DateTimePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
@@ -15,8 +15,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
@@ -24,7 +24,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { stageNeedsWinner, type EncounterScore } from "@/lib/encounter/score";
 import { notify } from "@/lib/notify";

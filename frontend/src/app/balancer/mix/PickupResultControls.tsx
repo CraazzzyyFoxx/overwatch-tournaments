@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { teamAccent } from "@/app/balancer/mix/pickup-chrome";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { cn } from "@/lib/utils";
 import type { CustomGameOutcome } from "@/services/custom-game.service";

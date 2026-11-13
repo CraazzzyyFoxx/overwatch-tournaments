@@ -11,7 +11,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { classifyRarity, localizedText, RARITY_ORDER, rarityVarClass, type Rarity } from "@/lib/achievements/rarity";
 import { AchievementDetailDialog } from "@/app/(site)/users/components/achievements/AchievementDetailDialog";
 import { AchievementArt } from "@/components/achievements/AchievementArt";

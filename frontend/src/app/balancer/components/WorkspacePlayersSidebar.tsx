@@ -22,13 +22,13 @@ import {
 import { WorkspacePlayerSheet } from "@/app/balancer/components/WorkspacePlayerSheet";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { DataPagination } from "@craazzzyyfoxx/admin-kit/ui/data-pagination";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -36,7 +36,7 @@ import {
   ContextMenuLabel,
   ContextMenuTrigger,
 } from "@craazzzyyfoxx/admin-kit/ui/context-menu";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useSlotLabel } from "@/hooks/useSlotLabel";

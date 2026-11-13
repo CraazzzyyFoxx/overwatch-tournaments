@@ -8,18 +8,18 @@ import achievementsService from "@/services/achievements.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { cn } from "@/lib/utils";
 import { useQueryParams } from "@/hooks/useQueryParams";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { RarityStrip } from "@/components/achievements/RarityStrip";
 import type { Achievement, AchievementCategory } from "@/types/achievement.types";
 import { classifyRarity, rarityVarClass, RARITY_ORDER, type Rarity } from "@/lib/achievements/rarity";

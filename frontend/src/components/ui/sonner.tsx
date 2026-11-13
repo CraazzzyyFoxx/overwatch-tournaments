@@ -2,8 +2,8 @@
 
 import { Toaster as SonnerToaster, type ToasterProps } from "sonner";
 
-import { buttonVariants } from "@/components/ui/button";
-import { floatingPanelClass } from "@/components/ui/popover";
+import { buttonVariants } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { floatingPanelClass } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { TONE_HUE, type Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { cn } from "@/lib/utils";
 

@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -15,7 +15,7 @@ import {
   SheetTitle,
   SheetTrigger
 } from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { translateRegistrationTeamError } from "@/lib/registration/team-errors";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";

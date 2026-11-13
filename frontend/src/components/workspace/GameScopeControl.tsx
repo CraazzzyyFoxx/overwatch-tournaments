@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { DisciplineUnavailable } from "@/components/workspace/DisciplineUnavailable";
 import { GameTabs } from "@/components/workspace/GameTabs";
 import type { GameScopeState } from "@/hooks/useGameScope";

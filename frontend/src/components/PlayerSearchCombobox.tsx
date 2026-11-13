@@ -4,10 +4,10 @@ import { useId } from "react";
 import { useTranslations } from "next-intl";
 import { History, Search, User, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
-import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { Popover, PopoverAnchor, PopoverContent } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { usePlayerSearch } from "@/hooks/usePlayerSearch";
 import { cn } from "@/lib/utils";

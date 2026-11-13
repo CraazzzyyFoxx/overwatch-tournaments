@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { TeamCombobox } from "@/components/admin/TeamCombobox";
 import { buildEncounterName } from "@/components/admin/encounter-name";
 import { duelSeats } from "@/lib/encounter/seats";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import {
@@ -15,7 +15,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import type {
   EncounterCreateInput,
   EncounterEditableStatus,

@@ -5,7 +5,7 @@ import { Camera, Pencil, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { cn, initials } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { useFilePicker } from "@/components/ui/file-button";
 import Image from "@/components/ui/image";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";

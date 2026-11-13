@@ -5,12 +5,12 @@ import { useTranslations } from "next-intl";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card, CardContent } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { FieldDescription } from "@/components/ui/field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import {
   isRulesTemplate,
   type PickBanDraft,
@@ -25,6 +25,7 @@ import { SidesStep } from "./SidesStep";
 import { useRulesetValidation } from "./rules/useRulesetValidation";
 import { PRE_GAME_STEPS, type PreGameScope, type PreGameStep } from "./pre-game-scope";
 import { usePreGameDraft } from "./usePreGameDraft";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 export interface PreGameEditorProps {
   tournamentId: number;
@@ -88,6 +89,7 @@ export function PreGameEditor({
   onSave,
   onResetToInherited
 }: Readonly<PreGameEditorProps>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("pickBan.admin");
   const ids = useId();
 
@@ -255,6 +257,7 @@ export function PreGameEditor({
       ) : null}
 
       <SaveBar
+        onDirtyChange={reportUnsaved}
         dirty={form.dirty && canManage}
         edited={form.edited && canManage}
         saving={saving}

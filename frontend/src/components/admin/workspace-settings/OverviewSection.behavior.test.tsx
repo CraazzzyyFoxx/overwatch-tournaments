@@ -69,7 +69,7 @@ vi.mock("@/stores/workspace.store", () => ({
   ) => selector({ currentWorkspaceId: 8, fetchWorkspaces: vi.fn() })
 }));
 
-vi.mock("@/components/kit/SaveBar", () => ({
+vi.mock("@craazzzyyfoxx/admin-kit/kit/SaveBar", () => ({
   SaveBar: () => <div data-save-bar />
 }));
 

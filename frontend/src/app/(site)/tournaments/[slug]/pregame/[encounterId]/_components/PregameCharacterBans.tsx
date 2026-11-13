@@ -2,8 +2,8 @@
 
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { DisciplineWidget } from "@/disciplines/DisciplineWidget";
 import { loadPregameUI } from "@/disciplines/registry/pregame";
 import type { SlotProps } from "@/disciplines/types";

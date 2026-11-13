@@ -6,10 +6,10 @@ import { useTranslations } from "next-intl";
 
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
+import { Combobox, ComboboxCheck } from "@craazzzyyfoxx/admin-kit/ui/combobox";
 import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";

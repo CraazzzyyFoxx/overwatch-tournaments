@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 import { CheckCircle2, Circle, Lock, Minus, type LucideIcon } from "lucide-react";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { StatusPill } from "@/components/kit/StatusPill";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import type { ChecklistItem, ChecklistPhase, ChecklistState } from "@/components/admin/tournament-checklist";
 

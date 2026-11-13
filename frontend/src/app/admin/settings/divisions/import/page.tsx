@@ -6,7 +6,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { WizardShell, type WizardStep } from "@/components/kit/WizardShell";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
@@ -18,8 +18,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";

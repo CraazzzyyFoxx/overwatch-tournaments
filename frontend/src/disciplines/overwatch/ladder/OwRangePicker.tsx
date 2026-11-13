@@ -4,8 +4,8 @@ import { useState } from "react";
 import { ChevronDown, Unlink } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { cn } from "@/lib/utils";
 import type { NativeTier } from "@/types/discipline.types";
 

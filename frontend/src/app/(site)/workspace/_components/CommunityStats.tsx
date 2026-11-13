@@ -5,7 +5,7 @@ import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Column, ColumnHead, OpenLoadError, Section, SectionHead } from "@/components/site/open-layout";
 import Image from "@/components/ui/image";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { getFormatter } from "@/lib/datetime/server";
 import { orderedRoleCodes, roleName, roleTint, slotLabel } from "@/lib/roster/ontology";
 import disciplineService from "@/services/discipline.service";

@@ -5,7 +5,7 @@ import type { AuthMergePolicy, AuthMergePreview } from "@/types/admin.types";
 import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@craazzzyyfoxx/admin-kit/ui/select";
 import { getSocialProviderConfig } from "@/lib/social/providers";
 
 function conflictValue(value: unknown, emptyLabel: string) {

@@ -10,10 +10,10 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
+import { Table, TableBody, TableCell, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import userService from "@/services/user.service";
 import type { LobbyLeaderboard } from "@/types/user.types";
 

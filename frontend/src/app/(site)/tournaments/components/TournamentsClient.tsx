@@ -12,7 +12,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { TOURNAMENT_PHASES } from "@/lib/tournament/lifecycle";
 import type { TournamentStatus } from "@/types/tournament.types";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { InfiniteScrollFooter } from "@craazzzyyfoxx/admin-kit/ui/infinite-scroll";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { useQueryParams } from "@/hooks/useQueryParams";

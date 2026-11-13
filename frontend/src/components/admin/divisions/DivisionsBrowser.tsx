@@ -18,10 +18,10 @@ import { ConfirmDialog, type ConfirmIntent } from "@craazzzyyfoxx/admin-kit/kit/
 import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { useFilePicker } from "@/components/ui/file-button";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { GameScopeControl } from "@/components/workspace/GameScopeControl";
 import { useGameScope } from "@/hooks/useGameScope";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";

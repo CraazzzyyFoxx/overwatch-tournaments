@@ -3,7 +3,7 @@ import { Check, CornerDownLeft, Plus } from "lucide-react";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import { PersonLabel } from "@/components/PlayerName";
-import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { IconTooltip } from "@craazzzyyfoxx/admin-kit/ui/icon-tooltip";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";

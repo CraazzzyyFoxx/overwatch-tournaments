@@ -28,9 +28,9 @@ import {
 } from "@/app/balancer/mix/pickup-lineup";
 import { usePickupMix } from "@/app/balancer/mix/usePickupMix";
 import { useMixLogUpload } from "@/app/balancer/mix/useMixLogUpload";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useCatalogEntities } from "@/hooks/useCatalogEntities";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";

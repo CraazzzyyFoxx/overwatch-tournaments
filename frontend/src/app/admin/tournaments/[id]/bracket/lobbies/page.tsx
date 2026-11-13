@@ -9,11 +9,11 @@ import { FfaGameResultsDialog, useFfaErrorMessage } from "@/components/admin/ffa
 import FfaLobbyTable, { lobbyGamePositions } from "@/components/ffa/FfaLobbyTable";
 import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { FFA_STAGE_TYPES } from "@/lib/bracket/projection";
 import { standingsCuts, type StandingsCuts } from "@/lib/flow/standingsCuts";

@@ -5,8 +5,8 @@ import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 
 import RankHistory from "@/components/RankHistory";

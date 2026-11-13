@@ -4,7 +4,7 @@ import { type ReactNode } from "react";
 import { Ban, EyeOff, PauseCircle, Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { OverlayBar } from "@/components/ui/overlay-bar";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";

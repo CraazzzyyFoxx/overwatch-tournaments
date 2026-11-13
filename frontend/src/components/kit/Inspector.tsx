@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, ExternalLink, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";

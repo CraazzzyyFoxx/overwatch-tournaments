@@ -12,7 +12,7 @@ import {
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DiscordChannelSelect } from "@/components/discord/DiscordChannelSelect";
 import { notificationQueryKeys } from "@/lib/notifications/query-keys";

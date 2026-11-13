@@ -18,7 +18,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import adminService from "@/services/admin.service";
 import type { CatalogEntityRead } from "@/types/catalog.types";
 import { usePermissions } from "@/hooks/usePermissions";

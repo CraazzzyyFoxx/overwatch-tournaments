@@ -11,7 +11,7 @@ import {
   AuthUserSearchCombobox,
   type AuthUserOption
 } from "@/components/kit/UserSearchCombobox";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import {
   Select,
@@ -19,10 +19,10 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { identityProvider } from "@/lib/forms/builtin-keys";
 import { fieldErrorsFrom } from "@/lib/forms/form-errors";
 import { visibleFields } from "@/lib/forms/visible-when";

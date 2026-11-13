@@ -6,10 +6,10 @@ import { useTranslations } from "next-intl";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/lib/api/error";

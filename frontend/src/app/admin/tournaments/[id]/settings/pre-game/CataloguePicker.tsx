@@ -5,13 +5,13 @@ import Image from "@/components/ui/image";
 import { useTranslations } from "next-intl";
 import { Plus, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Combobox, ComboboxCheck } from "@craazzzyyfoxx/admin-kit/ui/combobox";
 import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import type { PickBanKind } from "@/types/tournament.types";
 import { matchesItemName } from "@/lib/tournament/pick-ban-config";
 import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";

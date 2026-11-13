@@ -5,10 +5,10 @@ import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 
 import { useBellSignal } from "@/components/notifications/bell-signal";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -79,7 +79,7 @@ function SignedInBell({ authUserId }: Readonly<{ authUserId: number }>) {
             that is also a popover, and the list is the whole task. */}
         <SheetContent
           side="bottom"
-          closeButton={false}
+          showCloseButton={false}
           className="inset-0 flex h-dvh max-h-none w-auto flex-col gap-0 overflow-hidden rounded-none border-0 bg-[color:var(--aqt-card-2)] p-0"
         >
           <NotificationPanel inbox={inbox} isPhone onClose={() => setOpen(false)} />

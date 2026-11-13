@@ -3,7 +3,7 @@
 import { useId } from "react";
 import { useTranslations } from "next-intl";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";

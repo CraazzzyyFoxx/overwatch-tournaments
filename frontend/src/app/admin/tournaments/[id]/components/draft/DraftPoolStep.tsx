@@ -6,13 +6,13 @@ import { useTranslations } from "next-intl";
 
 import { FactList } from "@/components/kit/FactList";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { showsRoles, type RoleOntology } from "@/lib/roster/ontology";
 import type { DraftFeasibility } from "@/types/draft.types";

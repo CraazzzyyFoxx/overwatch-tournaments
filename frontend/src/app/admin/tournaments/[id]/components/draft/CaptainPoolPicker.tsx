@@ -15,7 +15,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { roleTint, slotCodeOrder, slotRank, type RoleOntology } from "@/lib/roster/ontology";

@@ -15,8 +15,8 @@ import {
 
 import { FactList } from "@/components/kit/FactList";
 import { TONE_TEXT, type Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";

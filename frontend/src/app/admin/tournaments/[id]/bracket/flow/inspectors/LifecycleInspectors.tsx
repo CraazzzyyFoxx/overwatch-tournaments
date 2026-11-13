@@ -4,7 +4,7 @@ import { useId, type ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { DraftNode } from "@/lib/flow/flowDraft";

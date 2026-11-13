@@ -4,7 +4,7 @@ import { useId } from "react";
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Switch } from "@/components/ui/switch";
@@ -14,6 +14,7 @@ import { FlowNodeScope } from "../FlowNodeScope";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useRegistrationFormSection } from "../useRegistrationFormSection";
 import { RegistrationNodeSettingsForm } from "./RegistrationNodeSettingsForm";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 const RegistrationFormBuilder = dynamic(
   () => import("@/components/balancer/form/RegistrationFormBuilder"),
@@ -71,6 +72,7 @@ function PublicPageForm({
   tournamentId,
   disabled
 }: Readonly<{ tournamentId: number; disabled: boolean }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("registrationFormAdmin.page");
   const ids = useId();
   const { value, patch, dirty, summary, saving, save, discard, error, retry } =
@@ -119,6 +121,7 @@ function PublicPageForm({
       </SettingGroup>
 
       <SaveBar
+        onDirtyChange={reportUnsaved}
         dirty={dirty}
         summary={summary}
         saving={saving}

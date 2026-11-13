@@ -14,7 +14,7 @@ import {
   TOURNAMENT_QUERY_PARAM,
   parseTournamentQueryParam
 } from "@/components/admin/tournament-filter";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";

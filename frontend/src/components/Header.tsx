@@ -13,7 +13,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { PlayerSearchCombobox } from "@/components/PlayerSearchCombobox";
 import { NAV_GROUPS, NAV_LINKS, currentNavHref, navItemAvailable } from "@/components/site/site-nav-groups";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import {
   DropdownMenu,
@@ -110,7 +110,7 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
               the absent description is declared absent on purpose. */}
             <SheetContent
               side="left"
-              closeButton={false}
+              showCloseButton={false}
               aria-describedby={undefined}
               className="w-[min(320px,86vw)] p-[18px_16px_24px] sm:max-w-none"
             >

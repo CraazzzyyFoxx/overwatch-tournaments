@@ -9,7 +9,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 
 /** A visible label and a select whose trigger is named by it, so assistive technology hears what it chooses. */
 export default function LabelledSelect({

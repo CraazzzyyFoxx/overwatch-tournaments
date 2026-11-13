@@ -9,7 +9,7 @@ import { PanelLeft } from "lucide-react";
 import { useIsMobile } from "@/hooks/useMobile";
 import { cn } from "@/lib/utils";
 import { SIDEBAR_COOKIE_MAX_AGE, SIDEBAR_COOKIE_NAMES } from "@/lib/site/sidebar-cookies";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -201,7 +201,7 @@ const Sidebar = React.forwardRef<
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            closeButton={false}
+            showCloseButton={false}
             className="w-[var(--sidebar-width)] bg-sidebar p-0 text-sidebar-foreground"
             style={
               {

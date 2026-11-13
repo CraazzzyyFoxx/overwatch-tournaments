@@ -11,7 +11,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { notify } from "@/lib/notify";
 import workspaceService from "@/services/workspace.service";
 import type { WorkspaceSystemRole } from "@/types/workspace.types";

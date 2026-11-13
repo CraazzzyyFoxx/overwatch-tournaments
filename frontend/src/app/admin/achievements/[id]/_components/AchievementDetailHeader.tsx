@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { MoreHorizontal } from "lucide-react";
 
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,

@@ -10,9 +10,9 @@ import { PerformanceBadge } from "@/components/PerformanceBadge";
 import TeamName from "@/components/TeamName";
 import { CatalogEntityStrip } from "@/components/catalog/CatalogEntityImage";
 import { CARD_SUB, CardHead } from "@/components/match/EncounterAtoms";
-import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import type { SlotProps } from "@/disciplines/types";
 import { LogStatsName } from "../stat-names";
 import {

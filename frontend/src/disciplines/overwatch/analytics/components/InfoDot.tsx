@@ -3,8 +3,8 @@
 import { Info } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { IconTooltip } from "@craazzzyyfoxx/admin-kit/ui/icon-tooltip";
 import type { GlossaryTerm } from "@/disciplines/overwatch/analytics/analytics-glossary";
 
 interface InfoDotProps {

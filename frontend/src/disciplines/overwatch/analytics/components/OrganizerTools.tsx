@@ -3,8 +3,8 @@
 import { ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import {
   Collapsible,

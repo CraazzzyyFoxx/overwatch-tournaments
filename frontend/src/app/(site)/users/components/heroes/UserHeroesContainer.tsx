@@ -9,7 +9,7 @@ import { TournamentCombobox } from "@/components/tournaments/TournamentCombobox"
 import CharacterStatsTable from "@/components/profile/CharacterStatsTable";
 import ProfileWidget from "@/components/profile/ProfileWidget";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { userQueryKeys } from "@/lib/users/query-keys";
 import type { StatsScope } from "@/lib/site/stats-scope";
 import type { WorkspaceAxis } from "@/lib/site/discipline-scope";

@@ -11,8 +11,8 @@ import { CAPTION_CLASS, CARD_TITLE_CLASS, lobbyLetter } from "@/app/balancer/mix
 import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { IngestLinks } from "@/components/IngestLinks";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { cn } from "@/lib/utils";

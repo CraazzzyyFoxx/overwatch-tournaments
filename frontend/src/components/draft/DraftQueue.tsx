@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useMemo, useRef, useState } from "react";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { useDraftLayerPad } from "@/hooks/useDraftLayerPad";
 import { usePickCountdown } from "@/hooks/usePickCountdown";
 import { useSlotLabel } from "@/hooks/useSlotLabel";

@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 
 import { SettingRow } from "@/components/kit/SettingRow";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { FieldError } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
@@ -16,7 +16,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {

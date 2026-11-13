@@ -6,8 +6,8 @@ import { useTranslations } from "next-intl";
 
 import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
 import { InspectorField, InspectorSection } from "@/components/kit/InspectorField";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { LogUploadDialog } from "@/components/logs/LogUploadDialog";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { adminQueryKeys } from "@/lib/admin/query-keys";

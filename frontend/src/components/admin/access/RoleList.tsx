@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Lock } from "lucide-react";
 
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import type { RbacRole } from "@/types/rbac.types";

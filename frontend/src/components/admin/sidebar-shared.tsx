@@ -7,7 +7,7 @@ import { ArrowLeft, Bell, Check, ChevronsUpDown } from "lucide-react";
 
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Popover, PopoverClose, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverClose, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import {
   SidebarMenu,

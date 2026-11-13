@@ -2364,7 +2364,7 @@ describe("merged header layout", () => {
     );
     await render();
 
-    const cards = Array.from(document.body.querySelectorAll('[data-ui="card"]'));
+    const cards = Array.from(document.body.querySelectorAll('[data-slot="card"]'));
     const poolCard = cards.find((card) => card.textContent?.includes(ROOM.map.title));
     const stepsCard = cards.find((card) => card.textContent?.includes(ROOM.steps.title));
     expect(poolCard).toBeTruthy();

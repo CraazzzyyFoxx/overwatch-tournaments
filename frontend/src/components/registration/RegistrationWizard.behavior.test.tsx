@@ -20,7 +20,7 @@ vi.mock("next-intl", () => ({
 }));
 // Radix portals and pointer measurement do not work under happy-dom; these two
 // primitives are stood in by the contracts the form actually uses.
-vi.mock("@/components/ui/select", () => ({
+vi.mock("@craazzzyyfoxx/admin-kit/ui/select", () => ({
   Select: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   SelectTrigger: ({ children, ...rest }: { children: ReactNode }) => (
     <button type="button" {...rest}>

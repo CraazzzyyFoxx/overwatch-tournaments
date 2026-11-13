@@ -3,7 +3,7 @@
 import { AlertTriangle } from "lucide-react";
 
 import { ColorSwatch } from "@/components/ui/color-swatch";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { invalidProps, settingErrorId } from "@/components/kit/SettingRow";
 

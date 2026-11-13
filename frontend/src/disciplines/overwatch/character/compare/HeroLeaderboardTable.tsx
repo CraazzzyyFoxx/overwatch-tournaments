@@ -4,11 +4,11 @@ import { useMemo, useState } from "react";
 import { EyeOff, RotateCcw, Sword } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import { cn } from "@/lib/utils";
 import type { DivisionGrid, DivisionGridVersion } from "@/types/workspace.types";
 

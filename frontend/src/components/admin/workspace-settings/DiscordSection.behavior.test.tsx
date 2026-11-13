@@ -86,7 +86,8 @@ vi.mock("@/stores/workspace.store", () => ({
 
 vi.mock("next-intl", async () => {
   const importedMessages = await import("@/i18n/messages/en.json");
-  const messages = importedMessages.default ?? importedMessages;
+  const { en: kitMessages } = await import("@craazzzyyfoxx/admin-kit/messages");
+  const messages = { ...(importedMessages.default ?? importedMessages), ...kitMessages };
   return {
     useTranslations: (namespace: string) => (key: string, values?: Record<string, unknown>) => {
       let value: unknown = messages;

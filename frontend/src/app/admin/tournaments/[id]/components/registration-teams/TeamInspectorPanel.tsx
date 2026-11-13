@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { InspectorField } from "@/components/kit/InspectorField";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
@@ -12,7 +12,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { REGISTRATION_TEAM_ERROR_CODES } from "@/lib/registration/team-errors";
 import type { RegistrationTeam } from "@/types/registration-team.types";

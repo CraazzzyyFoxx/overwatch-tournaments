@@ -13,7 +13,7 @@ import {
 import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { DateTimePicker } from "@/components/ui/date-picker";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -21,7 +21,7 @@ import {
   TableHead,
   TableHeader,
   TableRow
-} from "@/components/ui/table";
+} from "@craazzzyyfoxx/admin-kit/ui/table";
 import { FFA_STAGE_TYPES } from "@/lib/bracket/projection";
 import { stageBestOfRoundSections } from "@/lib/tournament/best-of";
 import { notify } from "@/lib/notify";

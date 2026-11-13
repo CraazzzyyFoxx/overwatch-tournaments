@@ -3,8 +3,8 @@
 import React from "react";
 
 import type { Tournament } from "@/types/tournament.types";
-import { SelectContent, SelectGroup, SelectItem } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { SelectContent, SelectGroup, SelectItem } from "@craazzzyyfoxx/admin-kit/ui/select";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { TooltipSelect } from "@/components/ui/tooltip-select";
 import { useTranslations } from "next-intl";
 

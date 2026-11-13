@@ -11,8 +11,8 @@ import { PROVIDER_LABELS } from "@/components/admin/collectors/subscription-shar
 import { useLinkedAccount } from "@/components/admin/people/PersonAccountTab";
 import { SubscriptionStateIcon } from "@/components/admin/people/PersonSubscriptionPanel";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useDisciplineMetadata, useDisciplines } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { adminQueryKeys } from "@/lib/admin/query-keys";

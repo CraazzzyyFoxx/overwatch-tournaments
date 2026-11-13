@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { useTranslations } from "next-intl";
 import type {
   MappingValueCategory,

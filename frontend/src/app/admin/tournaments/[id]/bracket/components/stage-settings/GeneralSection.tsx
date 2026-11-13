@@ -4,7 +4,7 @@ import { useId, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
@@ -12,7 +12,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { tiebreakersForStageType } from "@/lib/tournament/tiebreakers";
 import type { StagePairingMode, StageType } from "@/types/tournament.types";
 

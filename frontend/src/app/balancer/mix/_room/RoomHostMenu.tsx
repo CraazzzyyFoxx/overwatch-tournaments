@@ -7,7 +7,7 @@ import { MoreHorizontal } from "lucide-react";
 
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { CHARACTER_PICK_BAN_KIND } from "@/components/pick-ban/pick-ban-model";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,

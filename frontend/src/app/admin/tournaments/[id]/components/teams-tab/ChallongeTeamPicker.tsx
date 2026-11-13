@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { Combobox, ComboboxCheck, ComboboxMeta } from "@/components/ui/combobox";
+import { Combobox, ComboboxCheck, ComboboxMeta } from "@craazzzyyfoxx/admin-kit/ui/combobox";
 import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 import type {
   ChallongeTeamPreviewParticipant,

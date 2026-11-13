@@ -10,8 +10,8 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
-import { TableHead } from "@/components/ui/table";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { TableHead } from "@craazzzyyfoxx/admin-kit/ui/table";
 import { cn } from "@/lib/utils";
 
 import { StatColumnDef, StatKey } from "./stat-columns";

@@ -3,9 +3,9 @@
 import React from "react";
 
 import { AvatarStack } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import Image from "@/components/ui/image";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { useHoverIntent } from "@/hooks/useHoverIntent";
 import { catalogInitials } from "@/lib/catalog/initials";
 import { cn } from "@/lib/utils";

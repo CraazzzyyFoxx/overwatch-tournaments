@@ -4,7 +4,7 @@ import { useState } from "react";
 import { GripVertical, Plus, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger
 } from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 

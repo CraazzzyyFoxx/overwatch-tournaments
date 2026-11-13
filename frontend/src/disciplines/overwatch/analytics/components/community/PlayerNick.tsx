@@ -4,7 +4,7 @@ import { Shuffle, Sprout } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { PersonLabel } from "@/components/PlayerName";
-import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { IconTooltip } from "@craazzzyyfoxx/admin-kit/ui/icon-tooltip";
 import { cn } from "@/lib/utils";
 import type { PlayerVM } from "@/disciplines/overwatch/analytics/useAnalyticsViewModel";
 

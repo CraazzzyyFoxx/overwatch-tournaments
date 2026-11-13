@@ -5,10 +5,10 @@ import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { invalidProps, SettingGroup, settingHintId, SettingRow } from "@/components/kit/SettingRow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
 import { FileButton } from "@/components/ui/file-button";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { revalidateUser } from "@/app/actions/users";
 import { usePermissions } from "@/hooks/usePermissions";
 import { ApiError, getApiErrorMessage } from "@/lib/api/error";

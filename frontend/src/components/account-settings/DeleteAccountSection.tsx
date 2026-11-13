@@ -7,8 +7,8 @@ import { useTranslations } from "next-intl";
 
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { ApiError } from "@/lib/api/error";
 import { logout } from "@/lib/auth/logout";

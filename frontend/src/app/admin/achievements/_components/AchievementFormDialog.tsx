@@ -5,9 +5,9 @@ import { useTranslations } from "next-intl";
 
 import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { InspectorField } from "@/components/kit/InspectorField";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { FileButton } from "@/components/ui/file-button";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -16,7 +16,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { GameField } from "@/components/workspace/GameField";
 import {

@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import TeamName, { type TeamNameInput } from "@/components/TeamName";
 import EncounterRosterPanel from "@/components/match/EncounterRosterPanel";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { cn } from "@/lib/utils";
 import { seatAt, seatTeam, seatsBySlot } from "@/lib/encounter/seats";

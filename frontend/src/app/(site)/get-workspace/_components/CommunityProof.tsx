@@ -6,7 +6,7 @@ import { FEATURED_GLOW } from "@/app/(site)/(home)/_components/NowOnPlatform";
 import { NumbersReveal } from "@/app/(site)/(home)/_components/NumbersReveal";
 import { Section } from "@/components/site/open-layout";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { TrustedBadge } from "@/components/workspace/TrustedBadge";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import { getFormatter } from "@/lib/datetime/server";

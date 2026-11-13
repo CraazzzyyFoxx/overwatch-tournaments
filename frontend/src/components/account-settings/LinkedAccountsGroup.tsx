@@ -10,7 +10,7 @@ import { IngestLinks } from "@/components/IngestLinks";
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { SocialIcon } from "@/components/social/SocialIcon";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +19,7 @@ import {
 } from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import { revalidateUser } from "@/app/actions/users";
 import { SITE_NAME } from "@/config/site";

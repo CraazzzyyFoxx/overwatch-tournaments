@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { ConfirmDialog, type ConfirmIntent } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { useGameDescriptors } from "@/hooks/useGameDescriptors";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useFilePicker } from "@/components/ui/file-button";
@@ -43,6 +43,7 @@ import {
 import { DraftEditorActions } from "./draft-editor/DraftEditorActions";
 import { useDraftMutations } from "./draft-editor/useDraftMutations";
 import { useMappingSources } from "./draft-editor/useMappingSources";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 /** The right rail becomes a sub-tab below this width (F12 ·8). */
 const RAIL_MEDIA_QUERY = "(min-width: 1280px)";
@@ -108,6 +109,7 @@ export function DraftEditor({
   initialChoices,
   onReload
 }: Readonly<DraftEditorProps>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminSettings.divisions");
   // The game's short name ("OW", "LoL") for the copy that names its ladder; the code until descriptors load.
   const game = useGameDescriptors().get(discipline)?.short_name || discipline;
@@ -393,6 +395,7 @@ export function DraftEditor({
 
       {editable ? (
         <SaveBar
+          onDirtyChange={reportUnsaved}
           dirty={dirty}
           saving={saveMutation.isPending}
           primaryLabel={t("editor.saveDraft")}

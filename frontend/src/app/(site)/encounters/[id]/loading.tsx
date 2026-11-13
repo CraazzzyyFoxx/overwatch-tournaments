@@ -1,5 +1,5 @@
-import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import {
   BOARD,
   BOARD_CENTER,

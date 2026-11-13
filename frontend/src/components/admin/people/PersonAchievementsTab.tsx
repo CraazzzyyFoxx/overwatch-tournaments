@@ -9,9 +9,9 @@ import { SearchX } from "lucide-react";
 import { AchievementArt } from "@/components/achievements/AchievementArt";
 import { EmptyNote, LoadErrorNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SettingGroup } from "@/components/kit/SettingRow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import userService from "@/services/user.service";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 

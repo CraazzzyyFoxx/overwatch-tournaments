@@ -4,7 +4,7 @@ import userService from "@/services/user.service";
 import { User } from "@/types/user.types";
 import type { StatsScope } from "@/lib/site/stats-scope";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import MatchesTable, { type MatchesFilters } from "@/app/(site)/users/components/matches/MatchesTable";
 import type { StageStats } from "@/app/(site)/users/components/matches/MatchesSidebars";
 import { USER_ENCOUNTER_ENTITIES } from "@/app/(site)/users/components/shared/encounter-perspective";

@@ -10,7 +10,7 @@ import { duelSeats, seatAt, type Duel, type DuelSlot } from "@/lib/encounter/sea
 import { EncounterRostersModal } from "@/components/EncounterRostersModal";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import TeamName from "@/components/TeamName";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";

@@ -7,10 +7,10 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { useFormatter } from "@/lib/datetime/client";
 import { duelSeats } from "@/lib/encounter/seats";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import type { EncounterInsights, EncounterStageKind } from "@/types/encounter.types";
 
 import { formatPercent, formatSeriesLength } from "./encounters.helpers";

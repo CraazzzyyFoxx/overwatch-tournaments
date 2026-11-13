@@ -3,10 +3,10 @@
 import { useState, type ReactElement, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
-import { Combobox, ComboboxCheck, ComboboxMeta } from "@/components/ui/combobox";
+import { Combobox, ComboboxCheck, ComboboxMeta } from "@craazzzyyfoxx/admin-kit/ui/combobox";
 import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 import Image from "@/components/ui/image";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 export interface SearchableImageOption {

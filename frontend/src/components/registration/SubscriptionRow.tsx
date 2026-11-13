@@ -5,9 +5,9 @@ import { ArrowRight, Link2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { SubscriptionProviderBadge } from "@/components/status/RegistrationBadges";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { FieldError } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { getApiErrorMessage } from "@/lib/api/error";
 import { translateRegistrationTeamError } from "@/lib/registration/team-errors";
 import type { SubscriptionStatus } from "@/types/registration.types";

@@ -6,7 +6,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { SettingRow } from "@/components/kit/SettingRow";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { NumberInput } from "@/components/ui/number-input";
 import {
@@ -15,7 +15,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { tiebreakerLabel, tiebreakersForStageType } from "@/lib/tournament/tiebreakers";
 
 import {

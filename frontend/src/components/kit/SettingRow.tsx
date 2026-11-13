@@ -4,7 +4,7 @@ import { useId, useLayoutEffect, useRef, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { AlertTriangle } from "lucide-react";
 
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { cn } from "@/lib/utils";
 import { useSettingsOutlineEntry } from "./SettingsOutline";

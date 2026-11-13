@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { useScopedSettingsForm } from "@/components/kit/useScopedSettingsForm";
 import { DateTimePicker } from "@/components/ui/date-picker";
@@ -15,6 +15,7 @@ import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/workspace/timezone";
 import adminService from "@/services/admin.service";
 import type { FlowNodeScheduleEntry, TournamentFlowNode } from "@/types/flow.types";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 type ScheduledKind = keyof typeof SCHEDULE_PHASES;
 type Phase = (typeof SCHEDULE_PHASES)[ScheduledKind][number];
@@ -32,6 +33,7 @@ export function NodeScheduleEditor({
   node,
   disabled = false
 }: Readonly<{ tournamentId: number; node: TournamentFlowNode; disabled?: boolean }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminTournament.schedule");
   const client = useQueryClient();
   const timezone = useWorkspaceTimezone();
@@ -125,7 +127,7 @@ export function NodeScheduleEditor({
         </div>
       </SettingGroup>
 
-      <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
+      <SaveBar onDirtyChange={reportUnsaved} dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>
   );
 }

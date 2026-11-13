@@ -4,10 +4,10 @@ import { useTranslations } from "next-intl";
 import { ArrowDown, ArrowUp } from "lucide-react";
 
 import { TournamentCombobox } from "@/components/tournaments/TournamentCombobox";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@craazzzyyfoxx/admin-kit/ui/select";
 
 type SortKey = "winrate" | "count" | "name";
 type OrderKey = "asc" | "desc";

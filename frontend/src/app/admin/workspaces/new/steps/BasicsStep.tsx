@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { EditableAvatar } from "@/components/ui/editable-avatar";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import {
   InputGroup,
   InputGroupAddon,

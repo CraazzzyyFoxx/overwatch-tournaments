@@ -7,7 +7,7 @@ import { Metadata } from "next";
 import Image from "@/components/ui/image";
 import MatchStatistics from "@/components/match/MatchStatistics";
 import { observedScore } from "@/lib/encounter/detail";
-import { Card, CardHeader } from "@/components/ui/card";
+import { Card, CardHeader } from "@craazzzyyfoxx/admin-kit/ui/card";
 import TeamName from "@/components/TeamName";
 import { EntityWorkspace } from "@/components/workspace/EntityWorkspace";
 import { RawLogStatus } from "@/components/match/MatchLogIndicator";

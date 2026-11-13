@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { PermissionPicker } from "@/components/admin/access/PermissionPicker";
 import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { DateTimePicker } from "@/components/ui/date-picker";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useCreateAccountApiKey } from "@/hooks/useAccountApiKeys";

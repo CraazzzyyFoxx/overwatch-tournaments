@@ -6,8 +6,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
@@ -15,7 +15,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { useDragSensors } from "@/hooks/useDragSensors";
 import type { RosterShape } from "@/lib/roster/shape";
 import { cn } from "@/lib/utils";

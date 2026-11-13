@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { cn } from "@/lib/utils";
 
 const COMPLETE_TIME = /^\d{1,2}:\d{2}$/;

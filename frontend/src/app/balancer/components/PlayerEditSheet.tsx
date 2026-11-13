@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { SortableRows } from "@/components/kit/SortableRows";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -21,7 +21,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";

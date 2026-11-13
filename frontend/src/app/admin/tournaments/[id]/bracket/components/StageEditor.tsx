@@ -25,9 +25,9 @@ import {
 import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { ConfirmDialog, type ConfirmIntent } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingsGrid } from "@/components/kit/SettingRow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,6 +76,7 @@ import { tabFallback } from "../../hubQueries";
 import { useTabAccess } from "../../sub-tabs";
 import { useStageOperations } from "./stage-editor/useStageOperations";
 import { MatchesView } from "../../matches/MatchesView";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 // The standings tables are the heaviest thing the editor can show and only one
 // tab of four needs them, so they are split out of the Bracket tab's bundle.
@@ -148,6 +149,7 @@ export function StageEditor({
   onChanged,
   onSelect
 }: Readonly<StageEditorProps>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminBracket.editor");
   const tRoot = useTranslations("adminBracket");
   const formatRound = useBracketRoundLabel();
@@ -523,6 +525,7 @@ export function StageEditor({
         ) : null}
 
         <SaveBar
+          onDirtyChange={reportUnsaved}
           dirty={changes.length > 0 || schedule.dirty || advancement.dirty}
           summary={
             <Fragment>

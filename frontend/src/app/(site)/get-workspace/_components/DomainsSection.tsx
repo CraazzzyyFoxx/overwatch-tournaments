@@ -1,5 +1,5 @@
 import { Section } from "@/components/site/open-layout";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { PLATFORM_ZONE } from "@/lib/site/host";
 import { getPublicCommunities, type PublicCommunity } from "@/lib/site/public-data";
 import { deriveWorkspacePalette } from "@/lib/workspace/theme";

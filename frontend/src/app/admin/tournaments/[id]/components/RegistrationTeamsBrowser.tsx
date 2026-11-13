@@ -9,7 +9,7 @@ import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
 import { useFilters, type FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { usePermissions } from "@/hooks/usePermissions";

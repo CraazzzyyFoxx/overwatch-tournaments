@@ -7,7 +7,7 @@ import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { PersonLabel } from "@/components/PlayerName";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { useRoleName } from "@/hooks/useRoleName";
 import { characterClass } from "@/lib/catalog/attrs";

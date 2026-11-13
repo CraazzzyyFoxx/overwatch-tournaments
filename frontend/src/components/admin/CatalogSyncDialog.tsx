@@ -5,7 +5,7 @@ import { Check, Circle, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import type { CatalogSync } from "@/hooks/useCatalogSync";
 import { useKindLabel } from "@/hooks/useKindLabel";

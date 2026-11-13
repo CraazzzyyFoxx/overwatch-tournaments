@@ -7,8 +7,8 @@ import { useRouter } from "next/navigation";
 import { useSyncExternalStore } from "react";
 
 import InviteAcceptWizard, { InviteAcceptWizardSkeleton } from "@/components/registration/InviteAcceptWizard";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";

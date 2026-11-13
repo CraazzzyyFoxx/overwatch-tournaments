@@ -4,8 +4,8 @@ import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import type { DryRunResult } from "../_hooks/useAchievementRuleActions";

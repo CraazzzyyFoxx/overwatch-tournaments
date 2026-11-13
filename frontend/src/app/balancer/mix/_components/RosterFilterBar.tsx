@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
 
 import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import type { RosterAuthor } from "@/services/workspace-player.service";
 

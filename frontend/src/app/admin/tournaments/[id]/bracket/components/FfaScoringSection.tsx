@@ -7,9 +7,9 @@ import { Trash2 } from "lucide-react";
 import { ffaErrorEntries, useFfaErrorMessage } from "@/components/admin/ffa/FfaGameResultsDialog";
 import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import {
@@ -18,7 +18,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   FFA_COLUMN_KEY_MAX,

@@ -5,7 +5,7 @@ import { Clock, Trophy, Zap } from "lucide-react";
 import { Section, SectionHead } from "@/components/site/open-layout";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import type { Formatter } from "@/lib/datetime";
 import { getFormatter } from "@/lib/datetime/server";

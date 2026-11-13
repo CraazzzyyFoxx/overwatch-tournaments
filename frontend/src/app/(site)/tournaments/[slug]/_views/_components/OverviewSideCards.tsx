@@ -9,7 +9,7 @@ import { useTranslations } from "next-intl";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { kindOf } from "@/lib/flow/kinds";

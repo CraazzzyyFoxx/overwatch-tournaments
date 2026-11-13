@@ -2,14 +2,14 @@
 
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { MatchReportForm, matchReportDraftKey } from "@/components/tournaments/MatchReportForm";
 import { seatsBySlot } from "@/lib/encounter/seats";
 import type { Encounter } from "@/types/encounter.types";

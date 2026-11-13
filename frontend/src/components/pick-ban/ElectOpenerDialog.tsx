@@ -5,7 +5,7 @@ import { Shuffle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -13,7 +13,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/alert-dialog";
 import { notify } from "@/lib/notify";
 import pickBanService from "@/services/pickBan.service";
 import type { PickBanKind } from "@/types/tournament.types";

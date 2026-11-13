@@ -12,7 +12,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { SettingRow } from "@/components/kit/SettingRow";
 import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";

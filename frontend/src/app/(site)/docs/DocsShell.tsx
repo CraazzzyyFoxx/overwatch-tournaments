@@ -13,7 +13,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { cn } from "@/lib/utils";
 

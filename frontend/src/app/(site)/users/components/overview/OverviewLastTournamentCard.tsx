@@ -11,7 +11,7 @@ import { type MapResultPip } from "@/app/(site)/users/components/overview/map-re
 import { UserTournamentStat } from "@/types/statistics.types";
 import { CardSurface } from "@/components/profile/atoms";
 import { ResTag, type ResTagKind } from "@/components/match/cells";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { isRankedEntry, LobbyStatGrid, type LobbyStatTile } from "@/components/profile/LobbyStatGrid";

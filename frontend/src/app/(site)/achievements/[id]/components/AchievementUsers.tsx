@@ -12,7 +12,7 @@ import PlayerName from "@/components/PlayerName";
 import TeamName from "@/components/TeamName";
 import { DataPagination } from "@craazzzyyfoxx/admin-kit/ui/data-pagination";
 import { CardSurface } from "@/components/profile/atoms";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { achievementQueryKeys } from "@/lib/achievements/query-keys";
 import { canonicalDisplay } from "@/lib/player";
 import type { StatsScope } from "@/lib/site/stats-scope";

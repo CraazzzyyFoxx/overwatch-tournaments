@@ -11,7 +11,7 @@ import { DataTable } from "@craazzzyyfoxx/admin-kit/data-table";
 import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import adminService from "@/services/admin.service";

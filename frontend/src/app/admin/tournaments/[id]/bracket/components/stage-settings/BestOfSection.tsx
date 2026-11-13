@@ -4,7 +4,7 @@ import { useId } from "react";
 import { useTranslations } from "next-intl";
 
 import { SettingRow } from "@/components/kit/SettingRow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import {
   Select,
@@ -12,7 +12,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { BEST_OF_OPTIONS } from "@/lib/tournament/best-of";
 
 import { FFA_STAGE_TYPES } from "@/lib/bracket/projection";

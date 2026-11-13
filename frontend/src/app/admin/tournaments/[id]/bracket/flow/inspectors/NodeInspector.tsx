@@ -4,8 +4,8 @@ import { Trash2, X } from "lucide-react";
 import type { ComponentProps } from "react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { STAGE_TYPE_LABELS } from "@/lib/bracket/projection";
 import { isLifecycle } from "@/lib/flow/kinds";

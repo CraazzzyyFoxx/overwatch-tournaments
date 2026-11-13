@@ -8,7 +8,7 @@ import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import { StatTileGridSkeleton } from "@/components/admin/StatTileGridSkeleton";
 import { formatInterval, formatRelative } from "@/components/kit/format-time";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useFormatter } from "@/lib/datetime/client";

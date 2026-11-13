@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { ConfirmDialog, type ConfirmIntent } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogTitle } from "@craazzzyyfoxx/admin-kit/ui/dialog";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import InviteHistorySection from "@/components/registration/InviteHistorySection";
 import MyTeamHeader from "@/components/registration/MyTeamHeader";

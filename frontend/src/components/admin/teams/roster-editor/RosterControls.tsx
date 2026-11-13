@@ -5,15 +5,15 @@ import { useTranslations } from "next-intl";
 import { Sparkles } from "lucide-react";
 
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { roleChoices, type RoleOntology } from "@/lib/roster/ontology";

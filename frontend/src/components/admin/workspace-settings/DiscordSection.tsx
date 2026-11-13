@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingsGrid } from "@/components/kit/SettingRow";
 import {
   Dialog,
@@ -13,7 +13,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { useDiscordGuildInfo } from "@/hooks/useDiscordEntities";
 import { notify } from "@/lib/notify";
 import workspaceService from "@/services/workspace.service";
@@ -28,6 +28,7 @@ import { ServerCard } from "./discord/ServerCard";
 import { ServerPicker } from "./discord/ServerPicker";
 import { userQueryKeys } from "@/lib/users/query-keys";
 import { workspaceQueryKeys } from "@/lib/workspace/query-keys";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 /**
  * The bound server's name: Discord's answer, else the picker's, else plain
@@ -68,6 +69,7 @@ function boundIcon(
  * their whole body, so there is no per-field save to make instant.
  */
 export function DiscordSection({ workspaceId }: Readonly<{ workspaceId: number | null }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminWorkspace.workspaceSettings.discord");
   const saveBarT = useTranslations("admin.saveBar");
   const settings = useWorkspaceSettingsForm(workspaceId, "discord");
@@ -171,6 +173,7 @@ export function DiscordSection({ workspaceId }: Readonly<{ workspaceId: number |
                   <MixesCard workspaceId={workspace.id} mixes={mixes} />
                 </SettingsGrid>
                 <SaveBar
+                  onDirtyChange={reportUnsaved}
                   dirty={announcements.dirty || mixes.dirty}
                   summary={saveBarT("changedFields", { count: changedCount })}
                   // Announcements explain their own refusal inside their group.

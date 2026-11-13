@@ -7,7 +7,7 @@ import { ChevronRight } from "lucide-react";
 
 import { SetupChecklist } from "@/components/admin/workspace-settings/SetupChecklist";
 import { WorkspaceIcon } from "@/components/admin/workspaces/WorkspaceCells";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { PLATFORM_ZONE } from "@/lib/site/host";

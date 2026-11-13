@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { HeroStat } from "@/components/site/PageHero";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useFormatter } from "@/lib/datetime/client";
 import type { GlossaryTerm } from "@/disciplines/overwatch/analytics/analytics-glossary";
 import type { KpiTone, KpiVM } from "@/disciplines/overwatch/analytics/analytics.helpers";

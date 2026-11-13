@@ -17,8 +17,8 @@ import { LineupRow } from "@/app/balancer/mix/_components/LineupRow";
 import { LobbyStage } from "@/app/balancer/mix/_components/LobbyStage";
 import { StartMatchButton } from "@/app/balancer/mix/_components/StartMatchButton";
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,

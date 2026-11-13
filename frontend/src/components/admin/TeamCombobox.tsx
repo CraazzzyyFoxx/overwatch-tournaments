@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import type { Team } from "@/types/team.types";
-import { Combobox, ComboboxCheck, ComboboxMeta } from "@/components/ui/combobox";
+import { Combobox, ComboboxCheck, ComboboxMeta } from "@craazzzyyfoxx/admin-kit/ui/combobox";
 import TeamName from "@/components/TeamName";
 import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 

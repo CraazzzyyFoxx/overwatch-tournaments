@@ -8,23 +8,24 @@ import {
   PermissionPicker,
   type PermissionCatalogEntry
 } from "@/components/admin/access/PermissionPicker";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { notify } from "@/lib/notify";
 import { rbacService } from "@/services/rbac.service";
 import type { RbacPermission, RbacRole, RbacRoleDetail } from "@/types/rbac.types";
 import { accessQueryKeys } from "@/lib/access/query-keys";
 import { useTranslations } from "next-intl";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 interface RoleDraft {
   name: string;
@@ -98,6 +99,7 @@ function RoleForm({
   onRequestDelete,
   onDirtyChange
 }: Readonly<Omit<RoleEditorProps, "role"> & { detail: RbacRoleDetail }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminAccess.roleEditorUi");
   const tc = useTranslations("adminAccess.common");
   const queryClient = useQueryClient();
@@ -237,6 +239,7 @@ function RoleForm({
       />
 
       <SaveBar
+        onDirtyChange={reportUnsaved}
         dirty={dirty}
         saving={saveMutation.isPending}
         primaryLabel={tc("saveRole")}

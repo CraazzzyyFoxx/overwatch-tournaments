@@ -8,7 +8,7 @@ import MatchEventsTimeline from "@/components/match/MatchEventsTimeline";
 import { useSegmentLabel } from "@/components/match/segment-label";
 import StatsTableView from "@/components/match/StatsTable";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DisciplineWidget } from "@/disciplines/DisciplineWidget";
 import { loadMatchUI } from "@/disciplines/registry/match";

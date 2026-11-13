@@ -7,7 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import TeamName from "@/components/TeamName";
 import { TeamPlacement } from "@/components/TournamentTeamCard";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { Separator } from "@/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";

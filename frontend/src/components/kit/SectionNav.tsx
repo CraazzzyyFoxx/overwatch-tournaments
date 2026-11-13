@@ -13,7 +13,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { SettingsOutlineList } from "@/components/kit/SettingsOutline";
 import { playEnter, type Edge } from "@/components/kit/SettingsContinuation";

@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 
 import MatchLogIndicator, { RawLogStatus } from "@/components/match/MatchLogIndicator";
 import { SectionHead } from "@/components/match/EncounterAtoms";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import type { Match } from "@/types/encounter.types";
 import { mapWithModeName } from "@/lib/catalog/mode";
 

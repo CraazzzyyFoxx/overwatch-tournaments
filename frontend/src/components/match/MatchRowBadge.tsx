@@ -3,8 +3,8 @@
 import { RotateCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { DisciplineWidget } from "@/disciplines/DisciplineWidget";
 import { loadMatchUI } from "@/disciplines/registry/match";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";

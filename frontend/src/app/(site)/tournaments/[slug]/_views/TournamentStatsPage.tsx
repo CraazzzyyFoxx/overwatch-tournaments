@@ -12,7 +12,7 @@ import { characterClassOf } from "@/components/pick-ban/pick-ban-model";
 import PlayerName from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { CardSurface, ProfileStat } from "@/components/profile/atoms";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import Image from "@/components/ui/image";

@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { ApiError, errorBodyFields, getApiErrorMessage } from "@/lib/api/error";
 import { notify } from "@/lib/notify";

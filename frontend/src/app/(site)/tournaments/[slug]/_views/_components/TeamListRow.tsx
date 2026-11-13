@@ -19,7 +19,7 @@ import {
 import { PersonLabel } from "@/components/PlayerName";
 import TeamName from "@/components/TeamName";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { disclosureChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { sortTeamPlayers } from "@/lib/player";
 import { groupDisplayName, groupHue } from "@/lib/tournament/group";

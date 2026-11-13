@@ -5,8 +5,8 @@ import Image from "@/components/ui/image";
 import { ChevronDown, ChevronUp, Merge, Scissors } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { cn } from "@/lib/utils";
 

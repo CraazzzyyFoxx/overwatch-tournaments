@@ -7,8 +7,8 @@ import { Check, CircleAlert, Lock, LogIn } from "lucide-react";
 
 import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { owtButton } from "@/components/site/owt-button";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { usePermissions } from "@/hooks/usePermissions";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";

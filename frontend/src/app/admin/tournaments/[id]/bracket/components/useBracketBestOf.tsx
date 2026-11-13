@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 
 import type { LayoutHeader } from "@/components/bracket/layout";
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,

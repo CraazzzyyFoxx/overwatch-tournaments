@@ -1,4 +1,4 @@
-import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { IconTooltip } from "@craazzzyyfoxx/admin-kit/ui/icon-tooltip";
 import { cn } from "@/lib/utils";
 import { TONE_TEXT, type Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import type { LucideIcon } from "lucide-react";

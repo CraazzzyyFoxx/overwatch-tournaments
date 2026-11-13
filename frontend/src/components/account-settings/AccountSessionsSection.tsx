@@ -6,10 +6,10 @@ import { useFormatter } from "@/lib/datetime/client";
 
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { disclosureChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useAccountSessions, useRevokeAccountSession } from "@/hooks/useAccountSessions";
 import { notify } from "@/lib/notify";
 import { detectBrowser, detectPlatform } from "@/lib/user-agent";

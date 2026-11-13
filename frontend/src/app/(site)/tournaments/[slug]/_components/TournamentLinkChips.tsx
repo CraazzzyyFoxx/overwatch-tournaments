@@ -4,7 +4,7 @@ import { FileText, Link2, ListVideo, MessagesSquare, Network } from "lucide-reac
 import { useTranslations } from "next-intl";
 import type { ComponentType } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import type { TournamentLink, TournamentLinkKind } from "@/types/stream.types";
 
 type TournamentLinkChipsProps = {

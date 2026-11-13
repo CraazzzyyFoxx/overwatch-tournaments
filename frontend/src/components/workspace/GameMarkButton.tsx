@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { GameMark } from "@/components/workspace/GameMark";
 import { cn } from "@/lib/utils";
 import type { DisciplineDescriptor } from "@/types/discipline.types";

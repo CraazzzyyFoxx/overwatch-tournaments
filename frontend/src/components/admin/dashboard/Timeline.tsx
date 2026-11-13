@@ -6,7 +6,7 @@ import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { formatDate, formatRelative } from "@/components/kit/format-time";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { GameIcon } from "@/components/workspace/GameIcon";
 import { useFormatter } from "@/lib/datetime/client";

@@ -6,8 +6,8 @@ import { useFormatter } from "@/lib/datetime/client";
 import { LayoutGrid, Table2 } from "lucide-react";
 
 import { DivisionCombobox } from "@/components/DivisionCombobox";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { GameFilterHint } from "@/components/workspace/GameFilterHint";

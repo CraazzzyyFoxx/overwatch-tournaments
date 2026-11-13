@@ -8,11 +8,11 @@ import { useTranslations } from "next-intl";
 import { Check, Copy, Download, ExternalLink } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { RawLogStatus, matchLogDownloadUrl } from "@/components/match/MatchLogIndicator";
 import MatchStatistics from "@/components/match/MatchStatistics";
 import { TeamLogo } from "@/components/TeamName";

@@ -3,9 +3,9 @@
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { Workspace } from "@/types/workspace.types";
 import type { WorkspaceSettingsFormState } from "./fields";

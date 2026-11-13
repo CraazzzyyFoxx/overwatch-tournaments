@@ -14,8 +14,8 @@ import { StartMatchButton } from "@/app/balancer/mix/_components/StartMatchButto
 import { PickupResultControls } from "@/app/balancer/mix/PickupResultControls";
 import { CAPTION_CLASS, CARD_TITLE_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";

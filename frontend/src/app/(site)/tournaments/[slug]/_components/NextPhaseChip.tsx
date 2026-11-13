@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
 import { useMinuteClock } from "@/hooks/useMinuteClock";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import type { Tournament } from "@/types/tournament.types";
 
 import { nextPhaseBoundary, phaseTitleKey } from "../_views/tournamentSchedule.model";

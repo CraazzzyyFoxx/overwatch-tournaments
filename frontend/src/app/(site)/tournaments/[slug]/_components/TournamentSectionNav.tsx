@@ -19,7 +19,7 @@ import {
   Table as TableIcon,
   Users
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";

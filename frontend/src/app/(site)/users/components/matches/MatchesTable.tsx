@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useDebounce } from "use-debounce";
 import { EncounterWithUserStats } from "@/types/user.types";
 import { DataPagination } from "@craazzzyyfoxx/admin-kit/ui/data-pagination";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { CardSurface } from "@/components/profile/atoms";
 import MatchRow from "@/app/(site)/users/components/matches/MatchRow";

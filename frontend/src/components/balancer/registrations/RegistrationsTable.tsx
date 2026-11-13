@@ -25,7 +25,7 @@ import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { usePermissions } from "@/hooks/usePermissions";
 import { mergeStatusOptions } from "@/lib/registration/balancer-statuses";

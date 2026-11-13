@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { Check, ClipboardCheck, Lock, Play, RotateCcw, Undo2, Users, type LucideIcon } from "lucide-react";
 
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";

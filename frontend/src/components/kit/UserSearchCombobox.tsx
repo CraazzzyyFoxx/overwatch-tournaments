@@ -6,7 +6,7 @@ import {
   ServerSearchCombobox,
   type ServerSearchComboboxProps
 } from "@craazzzyyfoxx/admin-kit/kit/ServerSearchCombobox";
-import { ComboboxMeta } from "@/components/ui/combobox";
+import { ComboboxMeta } from "@craazzzyyfoxx/admin-kit/ui/combobox";
 import { rbacService } from "@/services/rbac.service";
 import userService from "@/services/user.service";
 import type { AuthUserLookup } from "@/types/rbac.types";

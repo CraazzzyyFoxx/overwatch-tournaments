@@ -12,7 +12,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { PickBanKind, PickBanParamSpec } from "@/types/tournament.types";
 

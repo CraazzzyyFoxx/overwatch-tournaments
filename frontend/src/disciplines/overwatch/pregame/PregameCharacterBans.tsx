@@ -5,7 +5,7 @@ import { Ban, Check, ClipboardCopy, History, Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import TeamName from "@/components/TeamName";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { classRank, lobbyCopyText } from "@/components/pick-ban/pick-ban-model";
 import { PickBanItemThumb } from "@/components/pick-ban/PickBanItemThumb";

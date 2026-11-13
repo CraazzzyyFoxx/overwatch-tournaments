@@ -9,7 +9,7 @@ import { ApiKeyQuotaDialog } from "@/components/admin/quota/ApiKeyQuotaDialog";
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {

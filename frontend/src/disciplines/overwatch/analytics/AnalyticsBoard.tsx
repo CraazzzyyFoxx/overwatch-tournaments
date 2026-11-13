@@ -6,13 +6,13 @@ import { useQuery } from "@tanstack/react-query";
 import { CircleHelp } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { SelectContent, SelectGroup, SelectItem } from "@/components/ui/select";
+import { SelectContent, SelectGroup, SelectItem } from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { TooltipSelect } from "@/components/ui/tooltip-select";
 import type { SlotProps } from "@/disciplines/types";
 import { analyticsQueryKeys } from "@/lib/analytics/query-keys";

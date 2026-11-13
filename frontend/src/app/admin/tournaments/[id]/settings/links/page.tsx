@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { NumberInput } from "@/components/ui/number-input";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -11,6 +11,7 @@ import type { Tournament } from "@/types/tournament.types";
 import { tabFallback } from "../../hubQueries";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 const TournamentLinksTab = dynamic(
   () =>
@@ -53,6 +54,7 @@ function PovStreamDelayForm({
   tournamentId,
   disabled
 }: Readonly<{ tournament: Tournament; tournamentId: number; disabled: boolean }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminTournament.povStreams");
   const { form, patch, dirty, summary, saving, save, discard, error } = useTournamentSettingsForm(
     tournament,
@@ -80,7 +82,7 @@ function PovStreamDelayForm({
       </SettingGroup>
       </SettingsGrid>
 
-      <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
+      <SaveBar onDirtyChange={reportUnsaved} dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>
   );
 }

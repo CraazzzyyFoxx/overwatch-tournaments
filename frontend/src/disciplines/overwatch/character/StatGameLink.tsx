@@ -8,7 +8,7 @@ import { PersonLabel } from "@/components/PlayerName";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
-import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { Popover, PopoverAnchor, PopoverContent } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { useHoverIntent } from "@/hooks/useHoverIntent";
 import type { CharacterStatBest } from "@/types/user.types";
 

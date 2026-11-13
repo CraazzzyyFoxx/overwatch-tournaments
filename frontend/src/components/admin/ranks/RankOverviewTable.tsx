@@ -29,7 +29,7 @@ import { formatDate } from "@/components/kit/format-time";
 import { useFilters, type FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { GameScopeControl } from "@/components/workspace/GameScopeControl";
 import { RowGameLabel, gameColumn } from "@/components/workspace/game-column";
 import { useGameScope } from "@/hooks/useGameScope";

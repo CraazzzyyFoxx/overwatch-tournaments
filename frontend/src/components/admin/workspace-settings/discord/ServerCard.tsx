@@ -6,7 +6,7 @@ import { MoreHorizontal, Users } from "lucide-react";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,

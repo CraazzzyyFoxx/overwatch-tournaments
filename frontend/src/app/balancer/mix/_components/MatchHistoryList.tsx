@@ -15,7 +15,7 @@ import { LogUploadDialog } from "@/components/logs/LogUploadDialog";
 import MatchStatsDialog from "@/components/match/MatchStatsDialog";
 import { MatchImport } from "@/components/pick-ban/MatchImport";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -23,9 +23,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { IconTooltip } from "@craazzzyyfoxx/admin-kit/ui/icon-tooltip";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { useCatalogEntities } from "@/hooks/useCatalogEntities";

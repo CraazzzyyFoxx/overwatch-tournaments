@@ -23,7 +23,7 @@ import {
   RefreshCw
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
 import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";

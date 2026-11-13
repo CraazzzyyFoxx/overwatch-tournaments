@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { BuildPath } from "./Build";
 import { lobbyFirsts, rivals, shopPurchases, sourceKey, type DlPlayer, type MatchFeed, type Rival } from "./model";

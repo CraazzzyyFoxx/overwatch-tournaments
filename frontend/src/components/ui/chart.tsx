@@ -3,7 +3,7 @@
 import * as React from "react";
 import * as RechartsPrimitive from "recharts";
 
-import { floatingPanelClass } from "@/components/ui/popover";
+import { floatingPanelClass } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { cn } from "@/lib/utils";
 
 // Format: { THEME_NAME: CSS_SELECTOR }

@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import {
   Select,
@@ -18,7 +18,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { ratedDimension, selectableRoles } from "@/lib/roster/ontology";
 import { useGameScope } from "@/hooks/useGameScope";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";

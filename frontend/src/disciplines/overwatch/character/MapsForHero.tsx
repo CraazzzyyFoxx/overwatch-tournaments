@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import { LoadErrorNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { CardSurface } from "@/components/profile/atoms";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { LOW_SAMPLE_GAMES, winrateColor } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 

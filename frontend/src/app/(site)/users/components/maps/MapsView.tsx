@@ -14,7 +14,7 @@ import MapsFilters from "@/app/(site)/users/components/maps/MapsFilters";
 import { DataPagination } from "@craazzzyyfoxx/admin-kit/ui/data-pagination";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { winrateColor } from "@/lib/colors";
 import { userQueryKeys } from "@/lib/users/query-keys";
 import type { StatsScope } from "@/lib/site/stats-scope";

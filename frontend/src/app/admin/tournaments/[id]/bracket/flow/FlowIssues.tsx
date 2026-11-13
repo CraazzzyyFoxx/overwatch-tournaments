@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { CanvasPanel, useFocusNode } from "@/components/graph-canvas/GraphCanvas";
 import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { floatingPanelClass } from "@/components/ui/popover";
+import { floatingPanelClass } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import type { FlowDraft, KeyedValidation } from "@/lib/flow/flowDraft";

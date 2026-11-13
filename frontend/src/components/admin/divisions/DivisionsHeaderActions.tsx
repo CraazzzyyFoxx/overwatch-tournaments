@@ -5,7 +5,7 @@ import { Building2, ChevronDown, FileJson, Import, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { SettingsHeaderActions } from "@/components/admin/workspace-settings/WorkspaceSettingsShell";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,

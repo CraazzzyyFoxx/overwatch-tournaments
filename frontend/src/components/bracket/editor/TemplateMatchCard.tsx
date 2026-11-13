@@ -5,7 +5,7 @@ import { useDndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { ArrowDown, ArrowUp, GripVertical, MoreHorizontal, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,

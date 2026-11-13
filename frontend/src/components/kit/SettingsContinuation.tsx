@@ -34,14 +34,12 @@ export function useInSettingsPreview(): boolean {
   return useContext(PreviewContext);
 }
 
-/** Tells the enclosing `SettingsContinuation` whether leaving now would lose edits. */
-export function useReportUnsaved(unsaved: boolean) {
-  const report = useContext(UnsavedReportContext);
-  useEffect(() => {
-    if (!report) return;
-    report(unsaved);
-    return () => report(false);
-  }, [report, unsaved]);
+/**
+ * How a form tells the enclosing `SettingsContinuation` whether leaving now would lose edits;
+ * `undefined` outside one. Pass it to `SaveBar`'s `onDirtyChange`.
+ */
+export function useUnsavedReporter(): ((unsaved: boolean) => void) | undefined {
+  return useContext(UnsavedReportContext) ?? undefined;
 }
 
 export interface SettingsAdjacentPage {

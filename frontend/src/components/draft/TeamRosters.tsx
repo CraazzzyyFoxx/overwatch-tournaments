@@ -6,7 +6,7 @@ import { useEffect, useRef, type CSSProperties } from "react";
 
 import { RankCrest } from "@/components/RankCrest";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";

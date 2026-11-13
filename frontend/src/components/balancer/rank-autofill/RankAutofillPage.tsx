@@ -15,10 +15,10 @@ import {
   setStageOwValue
 } from "./rank-autofill-stages";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";

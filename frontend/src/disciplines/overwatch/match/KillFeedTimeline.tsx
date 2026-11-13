@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import { ArrowRight, Crosshair, Plus, RotateCw, Skull, Zap, ZapOff } from "lucide-react";
 import type { MatchWithStats } from "@/types/encounter.types";
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { FightFocus } from "./MatchStats";
 import {

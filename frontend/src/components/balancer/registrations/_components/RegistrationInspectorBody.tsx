@@ -12,7 +12,7 @@ import {
   builtinAnswerLabel
 } from "@/components/balancer/registrations/_components/registrationsTranslator";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useFormatter } from "@/lib/datetime/client";
 import { formatAdmissionReason, type AdmissionTranslator } from "@/lib/registration/admission";

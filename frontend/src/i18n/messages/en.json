@@ -1536,12 +1536,6 @@
       "label": "{kind, select, registration {Registration} other {Formation}}"
     },
     "saveBar": {
-      "unsavedChanges": "Unsaved changes",
-      "save": "Save changes",
-      "discard": "Discard",
-      "discardTitle": "Discard unsaved changes?",
-      "discardDescription": "You have unsaved changes on this page. Leave now and the current edits will be lost.",
-      "discardConfirm": "Discard changes",
       "changedFields": "{count, plural, one {# changed field} other {# changed fields}}",
       "saved": "Settings saved",
       "saveFailed": "Could not save these settings",

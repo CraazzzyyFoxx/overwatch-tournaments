@@ -6,7 +6,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Trash2 } from "lucide-react";
 import { createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
+import { Combobox, ComboboxCheck } from "@craazzzyyfoxx/admin-kit/ui/combobox";
 import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 import { notify } from "@/lib/notify";
 import { initials } from "@/lib/utils";

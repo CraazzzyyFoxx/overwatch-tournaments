@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Ban, Check, History, Shield, type LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";

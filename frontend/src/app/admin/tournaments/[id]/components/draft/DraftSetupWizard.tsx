@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { ConfirmDialog, type ConfirmIntent } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { WizardShell, type WizardStep } from "@/components/kit/WizardShell";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useFlowErrorNotifier } from "@/hooks/useFlowErrorNotifier";

@@ -3,13 +3,13 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { Combobox, ComboboxCheck, ComboboxMeta } from "@/components/ui/combobox";
+import { Combobox, ComboboxCheck, ComboboxMeta } from "@craazzzyyfoxx/admin-kit/ui/combobox";
 import { TeamCombobox } from "@/components/admin/TeamCombobox";
 import DivisionIcon from "@/components/DivisionIcon";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import {
@@ -18,7 +18,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { resolveDivisionFromRank } from "@/lib/divisions/grid";

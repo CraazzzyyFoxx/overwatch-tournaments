@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 import { DataTable, type TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { useFilters, type FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { useInvalidation } from "@/hooks/useInvalidation";

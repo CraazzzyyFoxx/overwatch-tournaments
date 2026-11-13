@@ -18,7 +18,7 @@ import {
   ModalCloseButton,
   PANEL_CONTENT_CLASS,
   type PanelVariant
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { cn } from "@/lib/utils";
 
 // A sheet is a `Dialog` docked to an edge: the same Radix primitive, scrim,
@@ -43,7 +43,7 @@ interface SheetContentProps
     React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
     VariantProps<typeof sheetVariants> {
   /** Panels that put their own close control in a header pass `false`. */
-  closeButton?: boolean;
+  showCloseButton?: boolean;
   /** `panel`: the flush work-surface chrome `DialogContent variant="panel"` documents. */
   variant?: PanelVariant;
 }
@@ -53,7 +53,7 @@ const SheetContent = React.forwardRef<
   SheetContentProps
 >(
   (
-    { side = "right", variant = "default", className, children, closeButton = true, ...props },
+    { side = "right", variant = "default", className, children, showCloseButton = true, ...props },
     ref
   ) => (
     <DialogPortal>
@@ -68,7 +68,7 @@ const SheetContent = React.forwardRef<
         {...props}
       >
         {children}
-        {closeButton && <ModalCloseButton variant={variant} />}
+        {showCloseButton && <ModalCloseButton variant={variant} />}
       </SheetPrimitive.Content>
     </DialogPortal>
   )

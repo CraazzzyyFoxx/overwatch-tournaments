@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import SubscriptionProvidersCard, {
   type ProviderDraft
 } from "@/components/admin/subscriptions/SubscriptionProviderCard";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingsGrid } from "@/components/kit/SettingRow";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -18,6 +18,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { SubscriptionRequirement } from "@/types/registration.types";
 
 import { WorkspaceRequirementCard } from "./_components/workspace-requirement";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 /**
  * Subscription entitlements: which providers this workspace checks against, and
@@ -65,6 +66,7 @@ export default function WorkspaceSubscriptionsSettingsPage() {
  * miss and leaving with unsaved edits goes through one guard.
  */
 function SubscriptionsSettings({ workspaceId }: Readonly<{ workspaceId: number }>) {
+  const reportUnsaved = useUnsavedReporter();
   const tBar = useTranslations("admin.saveBar");
   const tProviders = useTranslations("subscriptionProviders");
   const tRequirement = useTranslations("subscriptionWorkspace");
@@ -142,6 +144,7 @@ function SubscriptionsSettings({ workspaceId }: Readonly<{ workspaceId: number }
         />
       </SettingsGrid>
       <SaveBar
+        onDirtyChange={reportUnsaved}
         dirty={dirty}
         summary={summary}
         saving={save.isPending}

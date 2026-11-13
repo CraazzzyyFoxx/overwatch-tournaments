@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import { GraphCanvasSkeleton } from "@/components/graph-canvas/GraphCanvasSkeleton";
 import { LoadErrorNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SettingGroup } from "@/components/kit/SettingRow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 

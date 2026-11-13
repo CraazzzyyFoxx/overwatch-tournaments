@@ -11,7 +11,7 @@ import { useTranslations } from "next-intl";
 import SubscriptionRequirementEditor from "@/components/admin/subscriptions/SubscriptionRequirementEditor";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import balancerAdminService from "@/services/balancer-admin.service";
 import type { SubscriptionRequirement } from "@/types/registration.types";
 import { workspaceQueryKeys } from "@/lib/workspace/query-keys";

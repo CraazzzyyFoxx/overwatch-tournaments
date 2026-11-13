@@ -6,7 +6,7 @@ import { Checkbox as CheckboxPrimitive } from "radix-ui";
 import { Check } from "lucide-react";
 
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";

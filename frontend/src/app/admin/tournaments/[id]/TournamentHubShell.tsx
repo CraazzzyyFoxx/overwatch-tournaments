@@ -9,7 +9,7 @@ import { formatDateRange } from "@/lib/datetime";
 import { useFormatter } from "@/lib/datetime/client";
 import { isNotFoundError } from "@/lib/api/error";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { usePermissions } from "@/hooks/usePermissions";

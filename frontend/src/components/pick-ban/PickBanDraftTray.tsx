@@ -3,7 +3,7 @@
 import { Lock, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { cn } from "@/lib/utils";

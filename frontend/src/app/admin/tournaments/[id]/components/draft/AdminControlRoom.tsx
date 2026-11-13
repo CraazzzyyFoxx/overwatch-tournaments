@@ -12,7 +12,7 @@ import { StatusPill } from "@/components/kit/StatusPill";
 import { type Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { HeroCoord, HeroFrame } from "@/components/site/PageHero";
 import { FLOW_NODE_PARAM } from "@/hooks/useFlowNodeParam";

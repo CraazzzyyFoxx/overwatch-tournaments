@@ -1,7 +1,7 @@
 import { CheckCircle2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { cn } from "@/lib/utils";
 
 type WorkflowStepStatus = "done" | "active" | "pending";

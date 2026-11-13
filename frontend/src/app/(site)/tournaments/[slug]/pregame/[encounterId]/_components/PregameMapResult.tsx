@@ -6,8 +6,8 @@ import { AlertTriangle, Check, Equal, Hourglass, Lock, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { TeamLogo, type TeamNameInput } from "@/components/TeamName";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card, CardContent } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { MapReportDialog } from "@/components/pick-ban/MapReportDialog";
 import { acceptedScore, pickBanSeats } from "@/components/pick-ban/pick-ban-model";

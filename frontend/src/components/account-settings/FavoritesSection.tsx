@@ -5,9 +5,9 @@ import { useTranslations } from "next-intl";
 
 import FavoriteStarButton from "@/components/FavoriteStarButton";
 import { PersonLabel } from "@/components/PlayerName";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useFavoritePlayers } from "@/hooks/useFavoritePlayers";
 import { canonicalDisplay, getPlayerSlug } from "@/lib/player";
 

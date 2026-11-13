@@ -11,7 +11,7 @@ import {
   Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import {
   Dialog,
@@ -19,7 +19,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import type { BalanceVariant } from "@/components/balancer/workspace-helpers";
 
 const INLINE_VARIANT_LIMIT = 8;

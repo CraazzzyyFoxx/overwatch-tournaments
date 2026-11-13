@@ -17,7 +17,7 @@ import type {
   UserMergePreviewResponse
 } from "@/types/admin.types";
 import { UserSearchCombobox } from "@/components/kit/UserSearchCombobox";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import {
@@ -27,7 +27,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";

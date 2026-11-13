@@ -10,7 +10,7 @@ import {
   SectionHead
 } from "@/components/site/open-layout";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { getFormatLocale } from "@/lib/datetime/server";
 import { getPlayerSlug } from "@/lib/player";
 import { tournamentHref } from "@/lib/tournament/url";

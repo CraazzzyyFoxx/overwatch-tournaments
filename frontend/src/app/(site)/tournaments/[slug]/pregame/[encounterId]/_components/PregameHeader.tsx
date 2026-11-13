@@ -16,7 +16,7 @@ import { useTranslations } from "next-intl";
 import { TeamLogo, type TeamNameInput } from "@/components/TeamName";
 import { PickBanItemThumb } from "@/components/pick-ban/PickBanItemThumb";
 import type { PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Separator } from "@/components/ui/separator";
 import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";

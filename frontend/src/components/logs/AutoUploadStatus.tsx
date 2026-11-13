@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { TONE_TEXT, type Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { directoryErrorCode } from "@/lib/logs/browser-directory";
 import { useLogAutoUploadStore } from "@/lib/logs/use-log-auto-upload";

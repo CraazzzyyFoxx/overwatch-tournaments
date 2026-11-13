@@ -1,14 +1,14 @@
 "use client";
 
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
 import type {

@@ -11,10 +11,10 @@ import {
   type ResolvedAction
 } from "@/components/notifications/NotificationActions";
 import { KIND_FALLBACK, KIND_VISUAL } from "@/components/notifications/notification-kinds";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import Image from "@/components/ui/image";
 import { SheetTitle } from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import { SITE_NAME } from "@/config/site";

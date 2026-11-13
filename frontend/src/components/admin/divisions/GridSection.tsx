@@ -16,7 +16,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import type { DivisionGridEntity, DivisionGridVersion } from "@/types/workspace.types";
 
 import { editorHref } from "./model";

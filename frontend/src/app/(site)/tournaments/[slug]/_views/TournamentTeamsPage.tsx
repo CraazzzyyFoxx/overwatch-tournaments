@@ -14,7 +14,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";

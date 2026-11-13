@@ -13,7 +13,7 @@ import {
   TOURNAMENT_QUERY_PARAM,
   parseTournamentQueryParam
 } from "@/components/admin/tournament-filter";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { cn } from "@/lib/utils";

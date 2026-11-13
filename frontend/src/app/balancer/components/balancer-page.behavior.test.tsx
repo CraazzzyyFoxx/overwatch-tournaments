@@ -18,7 +18,7 @@ import { PresetRunPanel } from "./PresetRunPanel";
 import { EXPORT_TO_TOURNAMENT_STEPS } from "./useBalancerLayout";
 import { VariantSelector } from "./VariantSelector";
 
-vi.mock("@/components/ui/dialog", () => {
+vi.mock("@craazzzyyfoxx/admin-kit/ui/dialog", () => {
   const Part = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
   return { Dialog: Part, DialogContent: Part, DialogDescription: Part, DialogFooter: Part, DialogHeader: Part, DialogTitle: Part };
 });

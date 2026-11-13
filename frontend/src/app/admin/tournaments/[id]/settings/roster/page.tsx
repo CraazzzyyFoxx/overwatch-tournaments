@@ -4,7 +4,7 @@ import { useId, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { TeamFormatEditor } from "@/components/roster-shape/TeamFormatEditor";
 import { teamFormatPayload, teamFormatErrors, teamFormatsEqual, type TeamFormatWrite } from "@/lib/roster/team-format";
@@ -22,6 +22,7 @@ import { SettingsSectionPage } from "../SettingsSection";
 import { FlowNodeScope } from "../FlowNodeScope";
 import { useRegistrationNodeConfig } from "../useRegistrationNodeConfig";
 import type { TournamentFlowNode } from "@/types/flow.types";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 export default function RosterSettingsPage() {
   return (
@@ -60,6 +61,7 @@ function RosterForm({
   node: TournamentFlowNode | null;
   disabled: boolean;
 }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("registrationFormAdmin.page");
   const formatT = useTranslations("common.roleOntology");
   const ids = useId();
@@ -135,6 +137,7 @@ function RosterForm({
       ) : null}
 
       <SaveBar
+        onDirtyChange={reportUnsaved}
         dirty={dirty || benchDirty}
         summary={
           totalError

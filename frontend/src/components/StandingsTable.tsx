@@ -21,7 +21,7 @@ import TeamName from "@/components/TeamName";
 import { ResTag, type ResTagKind } from "@/components/match/cells";
 import { Badge } from "@/components/ui/badge";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 
 interface StandingTableProps {
   standings: Standings[];

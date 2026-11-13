@@ -19,10 +19,10 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import TeamName from "@/components/TeamName";
 import { TeamPlacement } from "@/components/TournamentTeamCard";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
-import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { IconTooltip } from "@craazzzyyfoxx/admin-kit/ui/icon-tooltip";
 import {
   Table,
   TableBody,
@@ -30,7 +30,7 @@ import {
   TableHead,
   TableHeader,
   TableRow
-} from "@/components/ui/table";
+} from "@craazzzyyfoxx/admin-kit/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useFormatter } from "@/lib/datetime/client";

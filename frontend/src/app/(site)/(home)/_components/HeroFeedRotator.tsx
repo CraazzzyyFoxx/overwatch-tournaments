@@ -4,9 +4,9 @@ import { type ReactNode, useLayoutEffect, useRef } from "react";
 import { Pause, Play } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useAutoplay } from "@/hooks/useAutoplay";
 import { useOffscreen } from "@/hooks/useOffscreen";
 import { cn } from "@/lib/utils";

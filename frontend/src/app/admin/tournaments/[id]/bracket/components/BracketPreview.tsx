@@ -10,8 +10,8 @@ import { BracketView, type BracketSlotRef } from "@/components/bracket/BracketVi
 import { previewToBracketMatches, type BracketMatch } from "@/lib/bracket/view";
 import { seatAt } from "@/lib/encounter/seats";
 import { notify } from "@/lib/notify";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@craazzzyyfoxx/admin-kit/ui/select";
 import { BEST_OF_OPTIONS } from "@/lib/tournament/best-of";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";

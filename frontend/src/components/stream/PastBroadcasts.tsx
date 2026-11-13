@@ -7,7 +7,7 @@ import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { TwitchEmbed } from "@/components/stream/TwitchEmbed";
 import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { useFormatter } from "@/lib/datetime/client";
 import { getSocialProviderConfig } from "@/lib/social/providers";

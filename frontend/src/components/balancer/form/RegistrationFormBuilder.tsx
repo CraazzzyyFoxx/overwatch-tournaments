@@ -13,19 +13,19 @@ import { useTranslations } from "next-intl";
 
 import SchemaForm from "@/components/forms/SchemaForm";
 import type { FieldRendererContext } from "@/components/forms/types";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SortableGrip, useSortableRow } from "@/components/kit/SortableRows";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { registrationRenderers } from "@/components/registration/registrationRenderers";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useDragSensors } from "@/hooks/useDragSensors";
@@ -64,6 +64,7 @@ import {
 } from "./_components/schemaEdits";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { balancerQueryKeys } from "@/lib/balancer/query-keys";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 // ---------------------------------------------------------------------------
 // The editor
@@ -575,6 +576,7 @@ export default function RegistrationFormBuilder({
   identityProviderError?: Error | null;
   onRetryIdentityProvider?: () => void;
 }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("registrationFormAdmin.page");
   const tBuilder = useTranslations("registrationFormAdmin.builder");
   const tErrors = useTranslations("forms.errors");
@@ -738,6 +740,7 @@ export default function RegistrationFormBuilder({
           reachable before any edit; the navigation guard stays off in that
           untouched state so the page does not prompt on every tab switch. */}
       <SaveBar
+        onDirtyChange={reportUnsaved}
         dirty={draft !== null || saved === null}
         guardNavigation={draft !== null}
         summary={blocked.size > 0 ? tBuilder("blocked") : draft !== null ? t("unsavedChanges") : ""}

@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { useFilters, type FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";

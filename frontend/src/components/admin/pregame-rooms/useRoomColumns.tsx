@@ -10,7 +10,7 @@ import { columnMeta } from "@craazzzyyfoxx/admin-kit/data-table";
 import { ScheduledAtCell } from "@/components/admin/encounters/EncounterCells";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { StatusPill } from "@/components/kit/StatusPill";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { pregameRoomHref } from "@/lib/encounter/pregame-room";
 import { cn } from "@/lib/utils";
 import type { PregameKindSummary, PregameRoomRow } from "@/types/admin.types";

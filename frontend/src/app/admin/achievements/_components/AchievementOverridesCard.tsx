@@ -4,7 +4,7 @@ import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { SettingGroup } from "@/components/kit/SettingRow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Table,
   TableBody,
@@ -12,7 +12,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@craazzzyyfoxx/admin-kit/ui/table";
 import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { useFormatter } from "@/lib/datetime/client";
 import type { AchievementOverrideRead, AchievementRule } from "@/types/admin.types";

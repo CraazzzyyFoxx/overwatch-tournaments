@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import adminService from "@/services/admin.service";
 import encounterService from "@/services/encounter.service";
 import teamService from "@/services/team.service";

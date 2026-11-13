@@ -11,21 +11,21 @@ import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { invalidProps, settingErrorId } from "@/components/kit/SettingRow";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { SocialIcon } from "@/components/social/SocialIcon";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { getApiErrorMessage } from "@/lib/api/error";

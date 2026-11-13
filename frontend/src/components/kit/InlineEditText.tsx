@@ -4,8 +4,8 @@ import { useState, type KeyboardEvent } from "react";
 import { useTranslations } from "next-intl";
 import { Check, Pencil, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 

@@ -5,15 +5,15 @@ import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { FilePlus, FileUp, FolderOpen, RefreshCw, Settings } from "lucide-react";
 import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { FileButton } from "@/components/ui/file-button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle, DialogTrigger
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TONE_TEXT, type Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";

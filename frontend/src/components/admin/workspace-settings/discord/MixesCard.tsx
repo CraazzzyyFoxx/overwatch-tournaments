@@ -11,7 +11,7 @@ import {
 } from "@/components/kit/useScopedSettingsForm";
 import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { DiscordChannelSelect } from "@/components/discord/DiscordChannelSelect";
 import { useDiscordChannels } from "@/hooks/useDiscordEntities";
 import balancerAdminService from "@/services/balancer-admin.service";

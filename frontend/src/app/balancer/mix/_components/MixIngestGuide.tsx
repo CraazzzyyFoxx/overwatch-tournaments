@@ -5,7 +5,7 @@ import { ChevronDown, TriangleAlert } from "lucide-react";
 
 import { IngestLinks } from "@/components/IngestLinks";
 import { Alert } from "@/components/ui/alert";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { IngestClient } from "@/types/discipline.types";

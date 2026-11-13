@@ -4,7 +4,7 @@ import type { MouseEvent } from "react";
 import { Star } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { cn } from "@/lib/utils";
 import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
 import { useAuthModalStore } from "@/stores/auth-modal.store";

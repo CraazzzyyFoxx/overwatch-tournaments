@@ -22,7 +22,7 @@ import UserAchievementPage from "@/app/(site)/users/_views/UserAchievementPage";
 import { SITE_NAME, SITE_URL_OBJ } from "@/config/site";
 import { isDivisionGridRequired, isNotFoundError } from "@/lib/api/error";
 import { decodePlayerSlug } from "@/lib/player";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import UserTabsClient from "@/app/(site)/users/components/tabs/UserTabsClient";
 import UserHeaderSkeleton from "@/app/(site)/users/components/header/UserHeaderSkeleton";
 import { ProfileJsonLd } from "@/app/(site)/users/components/shared/profile-jsonld";

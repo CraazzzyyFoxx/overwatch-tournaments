@@ -11,7 +11,7 @@ import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { ColorSwatch } from "@/components/ui/color-swatch";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
@@ -19,7 +19,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 
 import adminService from "@/services/admin.service";
 import type { CatalogEntityRead } from "@/types/catalog.types";

@@ -4,10 +4,11 @@ import { useTranslations } from "next-intl";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { WorkspaceSettingsFrame } from "./WorkspaceSettingsFrame";
 import { useWorkspaceSettingsForm } from "./useWorkspaceSettingsForm";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 const NEWCOMER_SCOPES = [
   { value: "global", label: "platformWide", help: "platformWideHelp" },
@@ -25,6 +26,7 @@ const NEWCOMER_SCOPES = [
  * difference lived in one paragraph the reader had to map back onto them.
  */
 export function VisibilitySection({ workspaceId }: Readonly<{ workspaceId: number | null }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminWorkspace.workspaceSettings.visibility");
   const settings = useWorkspaceSettingsForm(workspaceId, "visibility");
   const { patch } = settings;
@@ -81,6 +83,7 @@ export function VisibilitySection({ workspaceId }: Readonly<{ workspaceId: numbe
           </SettingsGrid>
 
           <SaveBar
+            onDirtyChange={reportUnsaved}
             dirty={settings.dirty}
             summary={settings.summary}
             error={settings.error}

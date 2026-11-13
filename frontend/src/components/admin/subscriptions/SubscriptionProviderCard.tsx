@@ -6,17 +6,17 @@ import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { DiscordRoleSelect } from "@/components/discord/DiscordRoleSelect";
 import { DiscordServerStatus } from "@/components/discord/DiscordServerStatus";
 import { cn } from "@/lib/utils";
@@ -31,7 +31,7 @@ import type {
   VerificationMethod,
 } from "@/types/registration.types";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 
 interface MethodOption {
   value: VerificationMethod;

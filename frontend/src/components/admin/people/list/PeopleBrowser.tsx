@@ -16,7 +16,7 @@ import { Inspector } from "@/components/kit/Inspector";
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { TOURNAMENT_QUERY_PARAM } from "@/components/admin/tournament-filter";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";

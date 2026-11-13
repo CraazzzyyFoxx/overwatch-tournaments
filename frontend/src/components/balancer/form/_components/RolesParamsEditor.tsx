@@ -6,9 +6,9 @@ import { ArrowRight, Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { SettingRow } from "@/components/kit/SettingRow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
@@ -16,8 +16,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { registrationRoles, type RoleOntology } from "@/lib/roster/ontology";

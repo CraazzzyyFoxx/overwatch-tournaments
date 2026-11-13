@@ -3,11 +3,11 @@
 import { useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import type { CssVarMap } from "@/lib/workspace/theme";
 import { BrandColorField } from "./BrandColorField";
@@ -15,6 +15,7 @@ import { BrandPalettePreview, previewPalette } from "./BrandPalettePreview";
 import type { WorkspaceSettingsFormState } from "./fields";
 import { WorkspaceSettingsFrame } from "./WorkspaceSettingsFrame";
 import { useWorkspaceSettingsForm } from "./useWorkspaceSettingsForm";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 /** Two colour fields per line from `sm`; the group title labels the grid. */
 const COLOUR_GRID_CLASS = "grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2";
@@ -74,6 +75,7 @@ const OVERRIDES: readonly ColourField[] = [
  * need them, and six blank fields read as six things left undone.
  */
 export function BrandingSection({ workspaceId }: Readonly<{ workspaceId: number | null }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminWorkspace.workspaceSettings.branding");
   const settings = useWorkspaceSettingsForm(workspaceId, "branding");
   const { patch, errors, reveal } = settings;
@@ -143,6 +145,7 @@ export function BrandingSection({ workspaceId }: Readonly<{ workspaceId: number 
             </SettingsGrid>
 
             <SaveBar
+              onDirtyChange={reportUnsaved}
               dirty={settings.dirty}
               summary={settings.summary}
               error={settings.error}

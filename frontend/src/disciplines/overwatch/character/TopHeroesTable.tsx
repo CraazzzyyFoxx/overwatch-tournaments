@@ -13,7 +13,7 @@ import { formatStatValue, getOverall, heroWinrate, statAvg10 } from "./utils";
 import { LOW_SAMPLE_GAMES, winrateColor } from "@/lib/colors";
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import { HeroStatsPopover } from "./HeroUserStatsPopover";
 import { useHeroClass } from "./classes";
 

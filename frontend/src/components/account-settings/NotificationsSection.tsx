@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 
 import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SettingGroup, SettingRow, settingHintId, settingLabelId } from "@/components/kit/SettingRow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { notificationQueryKeys } from "@/lib/notifications/query-keys";
 import { notify } from "@/lib/notify";

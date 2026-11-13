@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { FactList } from "@/components/kit/FactList";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { FLOW_NODE_PARAM } from "@/hooks/useFlowNodeParam";
 import type { DraftFeasibility, DraftSession } from "@/types/draft.types";

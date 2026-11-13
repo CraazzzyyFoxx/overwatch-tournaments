@@ -4,8 +4,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
-import { Button } from "@/components/ui/button";
-import { Card, CardTitle } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card, CardTitle } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { cn } from "@/lib/utils";
 

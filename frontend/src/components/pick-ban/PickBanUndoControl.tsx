@@ -4,7 +4,7 @@ import { Check, Undo2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import pickBanService from "@/services/pickBan.service";

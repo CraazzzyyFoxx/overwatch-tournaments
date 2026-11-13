@@ -7,7 +7,7 @@ import { ChevronDown } from "lucide-react";
 
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { StatusPill } from "@/components/kit/StatusPill";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";

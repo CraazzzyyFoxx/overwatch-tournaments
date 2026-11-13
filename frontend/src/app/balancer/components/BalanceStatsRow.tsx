@@ -4,10 +4,10 @@ import { AlertCircle, Armchair, BarChart2, CheckCircle2, ChevronDown, Shuffle, S
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Table, TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
+import { Table, TableBody, TableCell, TableHead, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import { cn } from "@/lib/utils";
 import type { FeasibilityReport } from "@/types/balancer.types";
 

@@ -8,7 +8,7 @@ import { InspectorField, InspectorSection } from "@/components/kit/InspectorFiel
 import { StatusPill } from "@/components/kit/StatusPill";
 import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { formatDate } from "@/components/kit/format-time";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import adminService from "@/services/admin.service";
 import { observedScore } from "@/lib/encounter/detail";
 import { seatsBySlot } from "@/lib/encounter/seats";

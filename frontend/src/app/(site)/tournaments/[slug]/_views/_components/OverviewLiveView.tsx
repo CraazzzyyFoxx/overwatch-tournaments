@@ -18,7 +18,7 @@ import {
   TableHead,
   TableHeader,
   TableRow
-} from "@/components/ui/table";
+} from "@craazzzyyfoxx/admin-kit/ui/table";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useFormatter } from "@/lib/datetime/client";
 import { isEncounterCompleted, isEncounterLive } from "@/lib/encounter/status";

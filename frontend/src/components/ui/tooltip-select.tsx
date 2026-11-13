@@ -2,7 +2,7 @@
 
 import React from "react";
 
-import { Select, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectTrigger, SelectValue } from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 
 interface TooltipSelectProps {

@@ -9,9 +9,9 @@ import { ArrowRight } from "lucide-react";
 import type { TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
 import { adminDetailTableStyles as tableStyles } from "@/components/admin/AdminDetailTable";
 import { WizardShell } from "@/components/kit/WizardShell";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@craazzzyyfoxx/admin-kit/ui/dialog";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -19,7 +19,7 @@ import {
   TableHead,
   TableHeader,
   TableRow
-} from "@/components/ui/table";
+} from "@craazzzyyfoxx/admin-kit/ui/table";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type {

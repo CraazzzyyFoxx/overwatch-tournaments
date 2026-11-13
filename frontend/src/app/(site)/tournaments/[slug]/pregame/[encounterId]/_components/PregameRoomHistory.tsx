@@ -5,8 +5,8 @@ import { History } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 import { useFormatter } from "@/lib/datetime/client";
 import adminService from "@/services/admin.service";

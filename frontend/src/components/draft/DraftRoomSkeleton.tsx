@@ -1,9 +1,9 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 /**

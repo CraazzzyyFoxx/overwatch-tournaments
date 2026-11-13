@@ -13,7 +13,7 @@ import { useTranslations } from "next-intl";
 
 import { SectionHead } from "@/components/site/open-layout";
 import { owtButton } from "@/components/site/owt-button";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { cn } from "@/lib/utils";
 

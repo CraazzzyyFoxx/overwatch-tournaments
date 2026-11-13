@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { UserOverviewPageSkeleton } from "@/app/(site)/users/_views/UserOverviewPage";
 import UserHeaderSkeleton from "@/app/(site)/users/components/header/UserHeaderSkeleton";
 
