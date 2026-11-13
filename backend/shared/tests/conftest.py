@@ -16,4 +16,5 @@ from shared.testing import apply_test_env_defaults
 # local ``.env`` win; committed ``shared/testing/test.env`` fills the rest.
 apply_test_env_defaults()
 
+from shared.testing import forbid_redis_dials  # noqa: E402,F401
 from shared.testing.stats_parity import stats_parity_database, stats_parity_template  # noqa: E402,F401

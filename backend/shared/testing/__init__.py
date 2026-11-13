@@ -16,12 +16,13 @@ things:
    unreachable, and refuses to ever run against a production database.
 
 Import what you need from here in a service's ``tests/conftest.py``; do not
-re-implement these in individual test modules.
+re-implement these in individual test modules. A conftest must import ``forbid_redis_dials`` too (autouse): it
+fails any test that tried to reach Redis (:mod:`shared.testing.redis_guard`).
 """
 
 from __future__ import annotations
 
-from shared.testing.cache import configure_test_cache
+from shared.testing.cache import configure_test_cache, pin_cache_in_memory
 from shared.testing.db import (
     PROTECTED_DB_NAMES,
     create_test_async_engine,
@@ -31,7 +32,13 @@ from shared.testing.db import (
 )
 from shared.testing.env import apply_test_env_defaults
 from shared.testing.factories import division_grid, division_tier
+from shared.testing.redis_guard import forbid_redis_dials, install_redis_guard
 from shared.testing.sqlite_dialect import create_sqlite_tables, install_postgres_type_shims
+
+# No test ever dials Redis: see :mod:`shared.testing.redis_guard`. Installed here so that importing anything from this
+# package (every conftest does) is enough.
+pin_cache_in_memory()
+install_redis_guard()
 
 __all__ = (
     "PROTECTED_DB_NAMES",
@@ -43,6 +50,7 @@ __all__ = (
     "division_grid",
     "division_tier",
     "ensure_test_postgres",
+    "forbid_redis_dials",
     "install_postgres_type_shims",
     "real_db_sessionmaker",
 )
