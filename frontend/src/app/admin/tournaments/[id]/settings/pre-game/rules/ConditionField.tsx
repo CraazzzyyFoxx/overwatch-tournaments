@@ -5,14 +5,14 @@ import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import { Filter, RotateCcw } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { GraphCanvasSkeleton } from "@/components/graph-canvas/GraphCanvasSkeleton";
 import type { RuleLeafFieldsProps, RulePaletteGroup } from "@/components/rule-builder";
 import { LOGICAL_COLORS } from "@/components/rule-builder/rule-tree";

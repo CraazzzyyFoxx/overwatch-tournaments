@@ -5,13 +5,14 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { AnswerValue, RoleRankList } from "@/components/forms/AnswerValue";
+import { AnswerValue } from "@/components/forms/AnswerValue";
+import { RoleRankRows } from "@/components/RoleRankRows";
 import {
   admissionDecisionLabel,
   builtinAnswerLabel
 } from "@/components/balancer/registrations/_components/registrationsTranslator";
-import { eyebrowClass } from "@/components/ui/eyebrow";
-import { Button } from "@/components/ui/button";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useFormatter } from "@/lib/datetime/client";
 import { formatAdmissionReason, type AdmissionTranslator } from "@/lib/registration/admission";
@@ -43,21 +44,23 @@ function RolesCell({
   }
 
   return (
-    <RoleRankList
+    <RoleRankRows
       grid={grid}
       ontology={ontology}
-      entries={active
+      rows={active
         .slice()
         .sort((left, right) => left.priority - right.priority)
         .map((role) => ({
           role: role.role,
           rank: role.rank_value,
-          // A leaf the dictionary knows is named by `RoleRankList` itself; the catalog label only covers one it does not.
+          // A leaf the dictionary knows is named by `RoleRankRows` itself; the catalog label only covers one it does not.
           subrole:
             subRoleSlugOf(role.role) && !(ontology && findRole(ontology, role.role))
               ? getSubroleLabel(catalog, roleOf(role.role), subRoleSlugOf(role.role)!)
               : null,
-          dimmed: !role.is_active
+          primary: role.is_primary,
+          source: role.rank_source,
+          gameRank: role.ow_rank_value
         }))}
     />
   );

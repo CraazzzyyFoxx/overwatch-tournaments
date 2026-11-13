@@ -3,15 +3,15 @@
 import { useId } from "react";
 import { useTranslations } from "next-intl";
 
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import type { TournamentLinkKind } from "@/types/stream.types";
 import { LINK_KINDS, type LinkForm } from "./model";
 

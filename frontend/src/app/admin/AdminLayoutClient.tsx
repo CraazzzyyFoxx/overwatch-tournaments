@@ -23,8 +23,8 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { Skeleton } from "@/components/ui/skeleton";
+import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { hasAdminPanelAccessForProfile, usePermissions } from "@/hooks/usePermissions";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";

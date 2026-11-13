@@ -13,8 +13,8 @@ import {
 } from "@/app/balancer/components/RoleRankControls";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import RankHistory from "@/components/RankHistory";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { Label } from "@/components/ui/label";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Sheet,
   SheetContent,

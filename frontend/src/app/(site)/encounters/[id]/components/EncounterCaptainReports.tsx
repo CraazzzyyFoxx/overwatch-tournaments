@@ -17,7 +17,7 @@ import type {
 import { duelSeats, type DuelSlot } from "@/lib/encounter/seats";
 import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
 import { Alert } from "@/components/ui/alert";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { CARD_SUB, SIDE_TEXT, SectionHead } from "@/components/match/EncounterAtoms";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 

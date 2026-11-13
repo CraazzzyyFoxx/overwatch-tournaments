@@ -2,7 +2,7 @@
 
 import React from "react";
 import Image from "@/components/ui/image";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { usePathname } from "next/navigation";
 import { ExternalLink, Radio } from "lucide-react";

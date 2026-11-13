@@ -4,16 +4,16 @@ import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { DataTable } from "@/components/data-table";
+import { DataTable } from "@craazzzyyfoxx/admin-kit/data-table";
 import { ResolveResultDialog } from "@/components/admin/ResolveResultDialog";
-import { FilterBar } from "@/components/kit/FilterBar";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
-import { useFilters } from "@/components/kit/useFilters";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import {
   TOURNAMENT_QUERY_PARAM,
   parseTournamentQueryParam
 } from "@/components/admin/tournament-filter";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { cn } from "@/lib/utils";

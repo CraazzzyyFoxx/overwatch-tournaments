@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { Progress } from "@/components/ui/progress";
 import type { QuotaScopeUsage, QuotaUsage } from "@/types/auth.types";

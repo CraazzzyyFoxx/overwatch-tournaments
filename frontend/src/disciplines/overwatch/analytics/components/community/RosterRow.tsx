@@ -2,7 +2,7 @@
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import type { PlayerVM } from "@/disciplines/overwatch/analytics/useAnalyticsViewModel";

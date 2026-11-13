@@ -53,10 +53,11 @@ vi.mock("@/lib/notify", () => ({
 vi.mock("next-intl", async (importOriginal) => {
   const actual = await importOriginal<typeof import("next-intl")>();
   const { default: en } = await import("@/i18n/messages/en.json");
+  const { en: kit } = await import("@craazzzyyfoxx/admin-kit/messages");
   return {
     ...actual,
     useTranslations: (namespace?: string) =>
-      actual.createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
+      actual.createTranslator({ locale: "en", messages: { ...en, ...kit }, namespace: namespace as never }),
     useLocale: () => "en",
     useTimeZone: () => "UTC"
   };

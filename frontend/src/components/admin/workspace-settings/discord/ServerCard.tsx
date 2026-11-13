@@ -6,13 +6,13 @@ import { MoreHorizontal, Users } from "lucide-react";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { DISCORD_CLIENT_ID } from "@/config/site";
 import { initials } from "@/lib/utils";
 import type { DiscordGuildInfo } from "@/types/discord.types";

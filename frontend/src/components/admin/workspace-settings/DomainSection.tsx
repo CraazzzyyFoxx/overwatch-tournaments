@@ -5,19 +5,19 @@ import { useTranslations } from "next-intl";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Copy } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
   InputGroupText
 } from "@/components/ui/input-group";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { PhaseStrip, type PhaseState } from "@/components/kit/PhaseStrip";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { useInSettingsPreview } from "@/components/kit/SettingsContinuation";
 import { SettingGroup, SettingRow, SettingsGrid, invalidProps } from "@/components/kit/SettingRow";
 import { getApiErrorMessage } from "@/lib/api/error";
@@ -29,6 +29,7 @@ import { customDomainIssue } from "./fields";
 import { WorkspaceSettingsFrame } from "./WorkspaceSettingsFrame";
 import { useFieldIssueText, useWorkspaceSettingsForm } from "./useWorkspaceSettingsForm";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 /** DNS propagation is minutes, not seconds; re-checking faster only burns
  * requests on a resolver that has not refreshed yet. */
@@ -59,6 +60,7 @@ const domainStateOf = (ws: Workspace): DomainState => ({
  * says which of the three states the domain is in, and nothing else repeats it.
  */
 export function DomainSection({ workspaceId }: Readonly<{ workspaceId: number | null }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminWorkspace.workspaceSettings.domain");
   const settings = useWorkspaceSettingsForm(workspaceId, "domain");
   const { patch, invalidate, workspace, errors, reveal } = settings;
@@ -353,6 +355,7 @@ export function DomainSection({ workspaceId }: Readonly<{ workspaceId: number | 
           </SettingsGrid>
 
           <SaveBar
+            onDirtyChange={reportUnsaved}
             dirty={settings.dirty}
             summary={settings.summary}
             error={settings.error}

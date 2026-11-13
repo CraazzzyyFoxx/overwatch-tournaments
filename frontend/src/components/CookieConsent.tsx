@@ -7,7 +7,7 @@ import Cookies from "js-cookie";
 import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { SITE_NAME } from "@/config/site";
 import {
   COOKIE_CONSENT_COOKIE,

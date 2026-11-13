@@ -12,10 +12,10 @@ import ProfileWidget from "@/components/profile/ProfileWidget";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Card } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { PlaceBadge } from "@/components/ui/place-badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import EncounterRow from "@/app/(site)/users/components/tournaments/EncounterRow";
 import {
   SummaryStrip,

@@ -6,8 +6,8 @@ import { Brain, CheckCircle2, PlayCircle, XCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -15,9 +15,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { Label } from "@/components/ui/label";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
@@ -33,7 +33,7 @@ import type {
   AnalyticsJobProgressStage,
   AnalyticsJobRealtimePayload
 } from "@/types/analytics.types";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { analyticsQueryKeys } from "@/lib/analytics/query-keys";
 
 interface MLAdminToolbarProps {

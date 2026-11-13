@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
@@ -16,7 +16,7 @@ import { tabFallback, useHubTournamentQuery } from "../hubQueries";
 import { AdminControlRoom } from "./draft/AdminControlRoom";
 import { DraftHistoryPanel } from "./draft/DraftHistoryPanel";
 import { DraftSetupWizard } from "./draft/DraftSetupWizard";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 
 interface DraftSessionDashboardProps {
   tournamentId: number;

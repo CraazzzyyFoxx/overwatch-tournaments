@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { navigation } from "@/test/url-navigation";
 
@@ -44,7 +44,7 @@ vi.mock("./_hooks/useAchievementCatalog", () => ({
 vi.mock("@/components/admin/AdminPageHeader", () => ({
   AdminPageHeader: ({ actions }: { actions?: ReactNode }) => <div>{actions}</div>
 }));
-vi.mock("@/components/kit/ConfirmDialog", () => ({ ConfirmDialog: () => null }));
+vi.mock("@craazzzyyfoxx/admin-kit/kit/ConfirmDialog", () => ({ ConfirmDialog: () => null }));
 vi.mock("@/components/admin/achievements/EvaluationRunSummary", () => ({ EvaluationRunSummary: () => null }));
 // `data-form-game` is the game the open create/edit form files the rule under.
 vi.mock("./_components/AchievementFormDialog", () => ({

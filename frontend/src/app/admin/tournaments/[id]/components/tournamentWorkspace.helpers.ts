@@ -1,5 +1,5 @@
 import type { Tournament, TournamentDisplayStatus } from "@/types/tournament.types";
-import type { Tone } from "@/components/ui/tone";
+import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import type { TournamentUpdateInput } from "@/types/admin.types";
 import { normalizeChallongeSlug } from "@/lib/tournament/challonge";
 

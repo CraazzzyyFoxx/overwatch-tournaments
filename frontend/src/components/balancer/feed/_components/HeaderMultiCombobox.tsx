@@ -3,9 +3,9 @@
 import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Combobox, ComboboxCheck } from "@craazzzyyfoxx/admin-kit/ui/combobox";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 
 interface HeaderMultiComboboxProps {
   /** Available header keys to choose from. */

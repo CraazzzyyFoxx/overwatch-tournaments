@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-import { eyebrowClass } from "@/components/ui/eyebrow";
-import { TONE_TEXT, type Tone } from "@/components/ui/tone";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { TONE_TEXT, type Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { cn } from "@/lib/utils";
 
 const VALUE_SIZE = {

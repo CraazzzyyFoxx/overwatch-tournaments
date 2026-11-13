@@ -16,6 +16,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { en as kitEn } from "@craazzzyyfoxx/admin-kit/messages";
 import en from "@/i18n/messages/en.json";
 import type { QuotaLimitsPayload } from "@/types/auth.types";
 
@@ -190,7 +191,7 @@ describe("WorkspaceQuotaCard", () => {
     });
 
     const bar = document.body.querySelector<HTMLElement>(
-      `[role="region"][aria-label="${en.admin.saveBar.unsavedChanges}"]`
+      `[role="region"][aria-label="${kitEn.adminKit.saveBar.unsavedChanges}"]`
     );
     expect(bar?.textContent).toContain("Workspace, Session");
     const save = [...bar!.querySelectorAll("button")].find((button) =>

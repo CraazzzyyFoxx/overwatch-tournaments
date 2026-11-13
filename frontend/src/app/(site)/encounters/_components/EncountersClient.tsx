@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
-import { DataPagination } from "@/components/ui/data-pagination";
+import { DataPagination } from "@craazzzyyfoxx/admin-kit/ui/data-pagination";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { EncountersDataTable } from "@/components/EncountersTable";
 import { GameScopeControl } from "@/components/workspace/GameScopeControl";

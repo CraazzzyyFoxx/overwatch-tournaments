@@ -4,7 +4,7 @@ import { roleOf, subRoleSlugOf } from "@/lib/roster/role-ref";
 import { useMemo } from "react";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -12,8 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Eyebrow } from "@/components/ui/eyebrow";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { useFormatter } from "@/lib/datetime/client";

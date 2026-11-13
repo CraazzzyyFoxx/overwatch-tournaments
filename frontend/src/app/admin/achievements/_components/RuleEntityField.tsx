@@ -3,14 +3,14 @@
 import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { achievementQueryKeys } from "@/lib/achievements/query-keys";
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";

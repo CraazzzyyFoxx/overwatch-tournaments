@@ -18,7 +18,7 @@ vi.mock("next-intl", () => ({
 }));
 // Radix portals and pointer measurement do not work under happy-dom; these two
 // primitives are stood in by the contracts the form actually uses.
-vi.mock("@/components/ui/select", () => ({
+vi.mock("@craazzzyyfoxx/admin-kit/ui/select", () => ({
   Select: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   SelectTrigger: ({ children, ...rest }: { children: ReactNode }) => (
     <button type="button" {...rest}>
@@ -35,7 +35,7 @@ vi.mock("@/components/ui/switch", () => ({
 // Radix portals do not work under happy-dom: the popover is an open/closed switch driven through its trigger (the
 // hero roster opens on a click; the organizer's account search stays closed, as it needs `ResizeObserver`).
 const PopoverCtx = createContext<{ open: boolean; setOpen: (open: boolean) => void }>({ open: false, setOpen: () => {} });
-vi.mock("@/components/ui/popover", () => ({
+vi.mock("@craazzzyyfoxx/admin-kit/ui/popover", () => ({
   Popover: ({ children, open = false, onOpenChange = () => {} }: {
     children: ReactNode;
     open?: boolean;

@@ -14,8 +14,8 @@ import {
   isMachineActor,
   useAuditTranslator
 } from "@/components/kit/audit-log";
-import type { FilterState } from "@/components/kit/useFilters";
-import { Button } from "@/components/ui/button";
+import type { FilterState } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";
 import type { AuditLogRead } from "@/types/admin.types";

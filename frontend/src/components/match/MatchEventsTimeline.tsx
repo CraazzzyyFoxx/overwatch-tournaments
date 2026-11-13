@@ -6,9 +6,9 @@ import { useTranslations } from "next-intl";
 
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import { useSegmentLabel } from "@/components/match/segment-label";
-import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { buildEventRows, type EventParty } from "@/lib/stats/events";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 import encounterService from "@/services/encounter.service";

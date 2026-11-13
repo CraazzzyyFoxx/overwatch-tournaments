@@ -4,10 +4,10 @@ import { Fragment, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ChevronRight } from "lucide-react";
 
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { StatusPill } from "@/components/kit/StatusPill";
-import { Button } from "@/components/ui/button";
-import type { Tone } from "@/components/ui/tone";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";
 import { useFlowPath } from "@/hooks/useFlowPath";
 import { getApiErrorMessage } from "@/lib/api/error";

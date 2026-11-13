@@ -9,10 +9,10 @@ import { PickupRoleOrderEditor } from "@/app/balancer/mix/PickupRoleOrderEditor"
 import { PersonLabel } from "@/components/PlayerName";
 import { CAPTION_CLASS, lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
 import RankHistory from "@/components/RankHistory";
-import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { IconTooltip } from "@/components/ui/icon-tooltip";
-import { Label } from "@/components/ui/label";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { IconTooltip } from "@craazzzyyfoxx/admin-kit/ui/icon-tooltip";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Sheet,
   SheetContent,

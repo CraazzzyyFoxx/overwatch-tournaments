@@ -3,7 +3,7 @@
 import { useMemo, type ReactNode } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
-import { columnMeta } from "@/components/data-table";
+import { columnMeta } from "@craazzzyyfoxx/admin-kit/data-table";
 import { AdminReportPairCell } from "@/components/admin/AdminReportPairCell";
 import { ResultStatusPill, encounterStatusKey } from "@/components/admin/encounters/EncounterCells";
 import type { DateFormatter } from "@/components/kit/format-time";

@@ -13,10 +13,10 @@ import { act, forwardRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SectionNav } from "@/components/kit/SectionNav";
 import { SettingGroup } from "@/components/kit/SettingRow";
-import { SettingsContinuation } from "@/components/kit/SettingsContinuation";
+import { SettingsContinuation, useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 import { SettingsOutlineProvider } from "@/components/kit/SettingsOutline";
 
 declare global {
@@ -77,11 +77,25 @@ async function render({ dirty = false }: { dirty?: boolean } = {}) {
               <p>{id}</p>
             </SettingGroup>
           ))}
-          <SaveBar dirty={dirty} summary="1 changed field" onDiscard={() => {}} onSave={() => {}} />
+          <FormBar dirty={dirty} />
         </SettingsContinuation>
       </SettingsOutlineProvider>
     );
   });
+}
+
+/** A form's save bar, wired to the continuation the way every settings form wires it. */
+function FormBar({ dirty }: Readonly<{ dirty: boolean }>) {
+  const reportUnsaved = useUnsavedReporter();
+  return (
+    <SaveBar
+      dirty={dirty}
+      summary="1 changed field"
+      onDiscard={() => {}}
+      onSave={() => {}}
+      onDirtyChange={reportUnsaved}
+    />
+  );
 }
 
 async function wheel(deltaY: number, times: number) {

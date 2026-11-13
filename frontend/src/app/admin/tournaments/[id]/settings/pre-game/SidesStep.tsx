@@ -3,7 +3,7 @@
 import { RotateCcw } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Field, FieldDescription, FieldLabel, FieldTitle } from "@/components/ui/field";
 import {
   Select,
@@ -11,7 +11,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { PICK_BAN_ROTATIONS, type PickBanDraft } from "@/lib/tournament/pick-ban-config";
 import type { PickBanFirstBanRotation } from "@/types/tournament.types";
 

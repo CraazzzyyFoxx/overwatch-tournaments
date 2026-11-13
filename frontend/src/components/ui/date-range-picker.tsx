@@ -6,10 +6,10 @@ import { type DateTimeFormatOptions, useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 import { type DateRange } from "react-day-picker";
 
-import { selectTriggerClass } from "@/components/ui/button";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { selectTriggerClass } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 
 /**
  * The slice of next-intl's formatter this trigger needs. `useFormatter()` and

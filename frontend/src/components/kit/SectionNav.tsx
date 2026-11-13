@@ -13,8 +13,8 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { SettingsOutlineList } from "@/components/kit/SettingsOutline";
 import { playEnter, type Edge } from "@/components/kit/SettingsContinuation";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";

@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { SocialIcon } from "@/components/social/SocialIcon";
 import Image from "@/components/ui/image";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { TwitchEmbed } from "@/components/stream/TwitchEmbed";
 import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { getSocialProviderConfig } from "@/lib/social/providers";

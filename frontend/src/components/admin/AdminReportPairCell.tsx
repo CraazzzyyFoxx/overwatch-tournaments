@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { StatusPill } from "@/components/kit/StatusPill";
-import { TONE_TEXT } from "@/components/ui/tone";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { reportOf, scoreline } from "@/lib/encounter/reports";
 import { seatsBySlot } from "@/lib/encounter/seats";
 import { cn } from "@/lib/utils";

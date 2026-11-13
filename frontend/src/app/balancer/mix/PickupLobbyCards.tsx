@@ -16,17 +16,17 @@ import { useLiveMinutes } from "@/app/balancer/mix/_hooks/useLiveMinutes";
 import { LineupRow } from "@/app/balancer/mix/_components/LineupRow";
 import { LobbyStage } from "@/app/balancer/mix/_components/LobbyStage";
 import { StartMatchButton } from "@/app/balancer/mix/_components/StartMatchButton";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { Spinner } from "@/components/ui/spinner";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { slotCodeOrder } from "@/lib/roster/ontology";
 import { RoomLink } from "@/app/balancer/mix/_room/room-navigation";
 import { cn } from "@/lib/utils";

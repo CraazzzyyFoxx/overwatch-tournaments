@@ -5,10 +5,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
 
 import { AccountSection, invalidateAccount } from "@/components/admin/access/AccountCard";
-import { Combobox } from "@/components/ui/combobox";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
-import { FilterChip } from "@/components/ui/filter-chip";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Combobox } from "@craazzzyyfoxx/admin-kit/ui/combobox";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
+import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { accessQueryKeys } from "@/lib/access/query-keys";
 import { notify } from "@/lib/notify";
 import { rbacService } from "@/services/rbac.service";

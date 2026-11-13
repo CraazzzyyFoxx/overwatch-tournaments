@@ -2,16 +2,16 @@
 
 import { useId, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { AuthUserSearchCombobox, type AuthUserOption } from "@/components/kit/ServerSearchCombobox";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { Label } from "@/components/ui/label";
+import { AuthUserSearchCombobox, type AuthUserOption } from "@/components/kit/UserSearchCombobox";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { notify } from "@/lib/notify";
 import workspaceService from "@/services/workspace.service";
 import type { WorkspaceSystemRole } from "@/types/workspace.types";

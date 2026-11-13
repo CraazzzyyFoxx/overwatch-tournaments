@@ -4,7 +4,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { Pin } from "lucide-react";
 
 import { CAPTION_CLASS } from "@/app/balancer/mix/pickup-chrome";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { cn } from "@/lib/utils";
 import type {
   CustomGamePlayer,

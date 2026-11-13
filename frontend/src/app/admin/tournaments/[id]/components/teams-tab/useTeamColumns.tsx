@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import TeamName from "@/components/TeamName";
-import { columnMeta } from "@/components/data-table";
+import { columnMeta } from "@craazzzyyfoxx/admin-kit/data-table";
 import type { Team } from "@/types/team.types";
 
 export function useTeamColumns(): ColumnDef<Team>[] {

@@ -6,10 +6,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingsGrid } from "@/components/kit/SettingRow";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
 import workspaceService from "@/services/workspace.service";
@@ -19,6 +19,7 @@ import { QuotaLimitFields } from "./QuotaLimitFields";
 import { QuotaUsagePanel } from "./QuotaUsagePanel";
 import { useQuotaDraft, type QuotaDraft } from "./useQuotaDraft";
 import { workspaceQueryKeys } from "@/lib/workspace/query-keys";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 /** In table order: the tenant pool first, then the two per-principal buckets. */
 const SCOPES: readonly QuotaScope[] = ["workspace", "key", "session"];
@@ -35,6 +36,7 @@ const SCOPE_PARAM = "tab";
  * still unsaved work the bar counts and the guard protects.
  */
 export function WorkspaceQuotaCard({ workspaceId }: Readonly<{ workspaceId: number }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("quota");
   const { isSuperuser } = usePermissions();
   const router = useRouter();
@@ -187,6 +189,7 @@ export function WorkspaceQuotaCard({ workspaceId }: Readonly<{ workspaceId: numb
       </SettingsGrid>
 
       <SaveBar
+        onDirtyChange={reportUnsaved}
         dirty={changed.length > 0}
         saving={saving}
         primaryLabel={t("save")}

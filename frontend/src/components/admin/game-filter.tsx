@@ -1,4 +1,4 @@
-import type { FilterDef, FilterValue } from "@/components/kit/useFilters";
+import type { FilterDef, FilterValue } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { GameMark } from "@/components/workspace/GameMark";
 import { DISCIPLINE_PARAM } from "@/lib/site/discipline-scope";
 import type { DisciplineDescriptor } from "@/types/discipline.types";

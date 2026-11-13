@@ -2,7 +2,7 @@ import { ChartColumn, Lock } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { owtButton } from "@/components/site/owt-button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
 import { Separator } from "@/components/ui/separator";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";

@@ -4,10 +4,10 @@ import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 
-import { DataTable } from "@/components/data-table";
-import { FilterBar } from "@/components/kit/FilterBar";
+import { DataTable } from "@craazzzyyfoxx/admin-kit/data-table";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
-import { useFilters } from "@/components/kit/useFilters";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";

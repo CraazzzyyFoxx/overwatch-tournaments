@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { StatusDot } from "@/components/ui/status-dot";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { cn } from "@/lib/utils";
 import type { RealtimeConnectionState } from "@/types/realtime.types";
 

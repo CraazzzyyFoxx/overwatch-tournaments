@@ -6,7 +6,7 @@ import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import CharacterCard, { CharacterMapStats } from "@/components/profile/CharacterCard";
 import ProfileWidget from "@/components/profile/ProfileWidget";
 import { AvatarStack } from "@/components/ui/avatar";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Progress } from "@/components/ui/progress";
 import { winrateColor, winrateTone } from "@/lib/colors";
 import type { WorkspaceAxis } from "@/lib/site/discipline-scope";

@@ -4,6 +4,7 @@
 /* Successor to the v3 `tailwindcss-animate` plugin (`animate-in`, `fade-in-0`,
    `zoom-in-95`, `slide-in-from-*` … — the classes shadcn's overlays ship with). */
 @import "tw-animate-css";
+@import "@craazzzyyfoxx/admin-kit/styles.css";
 
 /* ── Theme, CSS-first ──────────────────────────────────────────────────────
    Translated from the deleted v3 `tailwind.config.ts`. Tailwind 4 has no JS
@@ -336,15 +337,6 @@
 .aqt-tnum {
   font-family: var(--aqt-data);
   font-variant-numeric: tabular-nums;
-}
-
-/* DataTable's row-state tint (`components/data-table/body-rows.tsx`): typed so
-   a change of state fades, on the row and on the pinned cells that inherit
-   and repaint it, together. A utility cannot register a property. */
-@property --admin-row-tint {
-  syntax: "<color>";
-  inherits: true;
-  initial-value: transparent;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

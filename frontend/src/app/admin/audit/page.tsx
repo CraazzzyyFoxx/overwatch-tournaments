@@ -7,7 +7,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { PermissionGate } from "@/components/admin/PermissionGate";
 import { AuditBrowser } from "@/components/admin/audit/AuditBrowser";
 import { ALL_WORKSPACES, LEGACY_ALL_WORKSPACES, SCOPE_PARAM } from "@/components/admin/audit/model";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { useWorkspaceStore } from "@/stores/workspace.store";

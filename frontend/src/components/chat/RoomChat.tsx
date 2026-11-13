@@ -6,7 +6,7 @@ import { useFormatter } from "@/lib/datetime/client";
 import { useId, useState, type KeyboardEvent } from "react";
 
 import { PlayerAvatar } from "@/components/PlayerAvatar";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Dock } from "@/components/ui/dock";
 import {
   ContextMenu,
@@ -15,7 +15,7 @@ import {
   ContextMenuLabel,
   ContextMenuSeparator,
   ContextMenuTrigger
-} from "@/components/ui/context-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/context-menu";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthProfile } from "@/hooks/useAuthProfile";

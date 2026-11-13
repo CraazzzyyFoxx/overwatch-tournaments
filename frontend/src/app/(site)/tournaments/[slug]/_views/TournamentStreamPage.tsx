@@ -9,7 +9,7 @@ import { PastBroadcasts, VodTheater, type VodPick } from "@/components/stream/Pa
 import { StreamRow } from "@/components/stream/StreamRow";
 import { StreamTheater } from "@/components/stream/StreamTheater";
 import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";

@@ -5,8 +5,8 @@ import { UsersRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { slotCodesOf } from "@/lib/roster/shape";
 import { isSignUpOpen, nodesOfKind } from "@/lib/tournament/flow-nodes";

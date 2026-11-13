@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { getTournamentStatusMeta, displayStatus } from "@/lib/tournament/status";
 import { pickCurrentStage } from "@/lib/tournament/stages";
 import type { Tournament } from "@/types/tournament.types";

@@ -4,7 +4,7 @@ import { BaseEdge, EdgeLabelRenderer, getBezierPath, useReactFlow, type EdgeProp
 import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 
 /**
  * The one edge every canvas draws: a 2px bezier in the colour its `style.stroke` names, rose and moving while

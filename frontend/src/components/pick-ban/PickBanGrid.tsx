@@ -5,11 +5,11 @@ import { useEffect, useRef, useState } from "react";
 import { Ban, Check, History, Shield, type LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
-import { RowButton } from "@/components/ui/row-button";
-import { SearchField } from "@/components/ui/search-field";
-import { StatusDot } from "@/components/ui/status-dot";
+import { Card, CardContent, CardHeader, CardTitle } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { cn } from "@/lib/utils";
 import { catalogInitials } from "@/lib/catalog/initials";
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";

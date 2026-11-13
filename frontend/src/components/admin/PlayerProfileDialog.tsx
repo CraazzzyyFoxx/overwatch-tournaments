@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
 import {
   Dialog,
@@ -11,7 +11,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 
 import { SocialAccountsEditor } from "@/components/admin/SocialAccountsEditor";
 import { usePersonEdit } from "@/components/admin/people/usePersonEdit";

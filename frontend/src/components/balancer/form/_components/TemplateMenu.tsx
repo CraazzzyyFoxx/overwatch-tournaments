@@ -5,8 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Save, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { Button } from "@/components/ui/button";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -14,22 +14,22 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RowButton } from "@/components/ui/row-button";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { fieldErrorsFrom } from "@/lib/forms/form-errors";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import registrationFormTemplatesService from "@/services/registration-form-templates.service";
 import type { FormSchema } from "@/types/forms.types";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 
 export const registrationFormTemplatesKey = (workspaceId: number) =>

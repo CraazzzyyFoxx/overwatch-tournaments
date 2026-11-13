@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { FactsRow, GLASS_CLASS, StageBar, tournamentFacts } from "@/components/tournaments/TournamentFacts";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import Image from "@/components/ui/image";
 import { WorkspaceAvatar, type WorkspaceAvatarSource } from "@/components/workspace/WorkspaceAvatar";
 import { useAutoplay } from "@/hooks/useAutoplay";

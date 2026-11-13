@@ -5,8 +5,8 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { findGuideArticle, toDocLocale } from "@/app/(site)/docs/nav";
 import { MoreLink, Section, SectionHead } from "@/components/site/open-layout";
-import { disclosureChevronClass } from "@/components/ui/chevron";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { disclosureChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { cn } from "@/lib/utils";
 
 const TITLE_ID = "gw-faq-title";

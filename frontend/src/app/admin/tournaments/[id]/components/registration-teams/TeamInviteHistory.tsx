@@ -7,11 +7,11 @@ import { useTranslations } from "next-intl";
 
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import type { RoleOntology } from "@/lib/roster/ontology";
-import { Button } from "@/components/ui/button";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useFormatter } from "@/lib/datetime/client";
 import { translateRegistrationTeamError } from "@/lib/registration/team-errors";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";

@@ -7,10 +7,10 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { ArrowLeftRight, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 
-import { DataTable, columnMeta, createKebabColumn } from "@/components/data-table";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { DataTable, columnMeta, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import {
   PlayerForm,
   emptyPlayerForm,
@@ -21,11 +21,11 @@ import {
   type PlayerFormMode,
   type PlayerFormState
 } from "@/components/admin/people/PlayerForm";
-import { LoadErrorNote } from "@/components/kit/EmptyNote";
+import { LoadErrorNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import DivisionIcon from "@/components/DivisionIcon";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useDisciplineMetadata, useDisciplines } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";

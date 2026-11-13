@@ -19,8 +19,8 @@ import {
   SectionHead
 } from "@/components/site/open-layout";
 import { owtButton } from "@/components/site/owt-button";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { getFormatter } from "@/lib/datetime/server";
 import { getPlayerSlug } from "@/lib/player";
 import { playStartsAt, registrationClosesAt, registrationIntake } from "@/lib/tournament/flow-nodes";

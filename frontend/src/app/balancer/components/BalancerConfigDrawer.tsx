@@ -3,9 +3,9 @@
 import { Fragment } from "react";
 import { Save, RotateCcw } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { Label } from "@/components/ui/label";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import {
   Sheet,

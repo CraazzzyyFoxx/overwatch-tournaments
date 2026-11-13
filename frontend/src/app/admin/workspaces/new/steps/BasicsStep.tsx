@@ -3,14 +3,14 @@
 import { useTranslations } from "next-intl";
 
 import { EditableAvatar } from "@/components/ui/editable-avatar";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
   InputGroupText
 } from "@/components/ui/input-group";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { notify } from "@/lib/notify";
 import { PLATFORM_ZONE } from "@/lib/site/host";

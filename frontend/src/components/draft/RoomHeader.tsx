@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { ConnectionIndicator } from "@/components/realtime/ConnectionIndicator";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { StatusDot } from "@/components/ui/status-dot";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import type { DraftGating } from "@/lib/draft/logic";
 import { seatOf, viewerCount } from "@/lib/draft/room-model";
 import type { DraftBoard, DraftPresenceState } from "@/types/draft.types";

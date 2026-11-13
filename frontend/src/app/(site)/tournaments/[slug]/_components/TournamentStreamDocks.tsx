@@ -6,7 +6,7 @@ import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { TwitchEmbed } from "@/components/stream/TwitchEmbed";
 import { StreamWatchContext, type StreamWatch } from "@/components/stream/stream-watch";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Dock } from "@/components/ui/dock";
 import {
   embeddableTwitchChannel,

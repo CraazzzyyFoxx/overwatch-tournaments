@@ -6,16 +6,16 @@ import { useFormatter } from "@/lib/datetime/client";
 
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { disclosureChevronClass } from "@/components/ui/chevron";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { disclosureChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useAccountSessions, useRevokeAccountSession } from "@/hooks/useAccountSessions";
 import { notify } from "@/lib/notify";
 import { detectBrowser, detectPlatform } from "@/lib/user-agent";
 import { cn } from "@/lib/utils";
 import type { AccountSession } from "@/types/auth.types";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 /** One body row of the sessions group: hairlines come from the group's `divide-y`. */
 const ROW_CLASS = "flex items-center gap-3 py-3 first:pt-0 last:pb-0";

@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { useFormatter } from "@/lib/datetime/client";

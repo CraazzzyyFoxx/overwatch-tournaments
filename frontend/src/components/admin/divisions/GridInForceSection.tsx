@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import type { Band, Ladder } from "@/app/admin/settings/divisions/editor/draftReducer";
 import { LadderBar } from "@/app/admin/settings/divisions/LadderBar";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { useFormatter } from "@/lib/datetime/client";
 import type { DivisionGridEntity, DivisionGridVersion } from "@/types/workspace.types";
 

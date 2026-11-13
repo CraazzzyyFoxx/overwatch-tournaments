@@ -3,9 +3,9 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { notify } from "@/lib/notify";
 import { formatShortfall, type SlotLabelTranslator } from "@/lib/registration/team-shortfall";
 import {

@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { CircleCheck, CircleDashed } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { TONE_TEXT } from "@/components/ui/tone";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { PLATFORM_ZONE } from "@/lib/site/host";
 import { cn } from "@/lib/utils";
 import { workspaceSetupChecklist } from "@/lib/workspace/setup-checklist";

@@ -3,7 +3,7 @@ import { useTranslations } from "next-intl";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerName from "@/components/PlayerName";
-import { TableCell, TableRow } from "@/components/ui/table";
+import { TableCell, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import { getDivisionLabel } from "@/lib/divisions/grid";
 import { formatSeconds } from "@/lib/format";
 import { cn } from "@/lib/utils";

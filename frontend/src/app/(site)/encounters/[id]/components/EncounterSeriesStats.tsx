@@ -4,9 +4,9 @@ import { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import LabelledSelect from "@/components/match/LabelledSelect";
 import StatsTableView from "@/components/match/StatsTable";
 import { DisciplineWidget } from "@/disciplines/DisciplineWidget";

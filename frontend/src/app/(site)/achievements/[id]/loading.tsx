@@ -2,7 +2,7 @@ import { useTranslations } from "next-intl";
 
 import { CardSurface } from "@/components/profile/atoms";
 import { HeroFrame } from "@/components/site/PageHero";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 
 /**
  * Mirrors the detail page: the crest hero (`AchievementDetailHeader`), "How to

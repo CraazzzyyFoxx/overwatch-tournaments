@@ -7,9 +7,9 @@ import { useFormatter } from "@/lib/datetime/client";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { StatusPill } from "@/components/kit/StatusPill";
-import { TONE_CLASS } from "@/components/ui/tone";
+import { TONE_CLASS } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { Badge } from "@/components/ui/badge";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { formatAdmissionReason, primaryAdmissionReason } from "@/lib/registration/admission";
 import { cn } from "@/lib/utils";
 import { getSubroleLabel } from "@/lib/roster/roles";

@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 
 import { BalanceActionsBar } from "./BalanceActionsBar";
 import { downloadPayload, type BalanceVariant } from "@/components/balancer/workspace-helpers";

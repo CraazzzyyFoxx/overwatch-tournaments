@@ -6,14 +6,14 @@ import { useTranslations } from "next-intl";
 
 import { useRequirementDescription } from "@/components/registration/useRequirementDescription";
 import { SocialIcon } from "@/components/social/SocialIcon";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { PROVIDER_LABELS } from "@/lib/registration/subscription-requirement";
 import type {

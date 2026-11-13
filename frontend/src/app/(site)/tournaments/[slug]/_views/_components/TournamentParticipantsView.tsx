@@ -15,20 +15,20 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle
-} from "@/components/ui/alert-dialog";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+} from "@craazzzyyfoxx/admin-kit/ui/alert-dialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { Alert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { FilterChip } from "@/components/ui/filter-chip";
-import { SearchField } from "@/components/ui/search-field";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { getApiErrorMessage } from "@/lib/api/error";
 import { formatAdmissionRefusal } from "@/lib/registration/admission";
 import { isCheckInOpen, registrationIntake, registrationNodeConfig } from "@/lib/tournament/flow-nodes";

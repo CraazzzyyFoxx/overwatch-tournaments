@@ -11,8 +11,8 @@ import { useTranslations } from "next-intl";
 import { useMutation } from "@tanstack/react-query";
 
 import { EditableAvatar } from "@/components/ui/editable-avatar";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatAliasesInput, parseAliasesInput } from "@/lib/catalog-aliases";
 import { notify } from "@/lib/notify";

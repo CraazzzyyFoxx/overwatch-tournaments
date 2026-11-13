@@ -9,7 +9,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import type { RankOverviewListParams } from "@/services/workspace-player.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { navigation } from "@/test/url-navigation";

@@ -11,7 +11,7 @@
 
 import { ColumnDef } from "@tanstack/react-table";
 
-import { columnMeta } from "@/components/data-table";
+import { columnMeta } from "@craazzzyyfoxx/admin-kit/data-table";
 
 /**
  * "Aliases" column: the alias count as plain text, nothing when there are

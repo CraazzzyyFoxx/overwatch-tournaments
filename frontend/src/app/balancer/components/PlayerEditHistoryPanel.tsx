@@ -6,15 +6,15 @@ import { useTranslations } from "next-intl";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { cn } from "@/lib/utils";
 import type { PlayerRankHistoryPreviewEntry } from "@/components/balancer/workspace-helpers";
 import { useWorkspaceStore } from "@/stores/workspace.store";

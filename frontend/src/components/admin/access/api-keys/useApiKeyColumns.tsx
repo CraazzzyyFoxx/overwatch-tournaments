@@ -6,9 +6,9 @@ import { Gauge, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { AccessStatusCell } from "@/components/admin/access/AccessStatusCell";
-import { columnMeta, createKebabColumn } from "@/components/data-table";
+import { columnMeta, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { InlineEditText } from "@/components/kit/InlineEditText";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import { useFormatter } from "@/lib/datetime/client";
 import { notify } from "@/lib/notify";
 import type { AccountApiKey } from "@/types/auth.types";

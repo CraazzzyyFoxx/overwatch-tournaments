@@ -1,4 +1,4 @@
-import type { FilterDef } from "@/components/kit/useFilters";
+import type { FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import type { CatalogEntityRead } from "@/types/catalog.types";
 
 import { activeFilterDef } from "../shared";

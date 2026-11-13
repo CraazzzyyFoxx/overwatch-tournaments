@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import StandingsTable from "@/components/StandingsTable";
 import type { BracketSlotRef } from "@/components/bracket/BracketView";

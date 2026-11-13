@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { HeroStat } from "@/components/site/PageHero";
 import { OpenEmptyRow, OpenLoadError } from "@/components/site/open-layout";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { getFormatter } from "@/lib/datetime/server";
 import { isTenantHost } from "@/lib/site/tenant-host";
 import statisticsService from "@/services/statistics.service";

@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { useLiveMinutes } from "@/app/balancer/mix/_hooks/useLiveMinutes";
-import { StatusDot } from "@/components/ui/status-dot";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { cn } from "@/lib/utils";
 import type { MixLobbyState } from "@/services/custom-game.service";
 

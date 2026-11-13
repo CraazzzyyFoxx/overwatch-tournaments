@@ -3,9 +3,9 @@
 import { LayoutGrid, List } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Card } from "@/components/ui/card";
-import { FilterChip } from "@/components/ui/filter-chip";
-import { SearchField } from "@/components/ui/search-field";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import type { TournamentStatus } from "@/types/tournament.types";
 import {
@@ -14,7 +14,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 /** A stored status, or `registration`: tournaments whose registration node is open or in check-in (a derived phase). */

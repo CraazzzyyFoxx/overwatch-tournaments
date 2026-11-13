@@ -10,7 +10,7 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { ProfileStat } from "@/components/profile/atoms";
 import TeamName, { TeamLogo } from "@/components/TeamName";
 import { Badge } from "@/components/ui/badge";
-import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import {
   Table,
   TableBody,
@@ -18,7 +18,7 @@ import {
   TableHead,
   TableHeader,
   TableRow
-} from "@/components/ui/table";
+} from "@craazzzyyfoxx/admin-kit/ui/table";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useFormatter } from "@/lib/datetime/client";
 import { isEncounterCompleted, isEncounterLive } from "@/lib/encounter/status";

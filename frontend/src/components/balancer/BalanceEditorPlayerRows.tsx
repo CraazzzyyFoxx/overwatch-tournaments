@@ -8,14 +8,14 @@ import { useTranslations } from "next-intl";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
-import { Card } from "@/components/ui/card";
-import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import {
   Table,
   TableBody,
   TableCell,
   TableRow,
-} from "@/components/ui/table";
+} from "@craazzzyyfoxx/admin-kit/ui/table";
 import { resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { cn } from "@/lib/utils";
 import { formatSubRoleLabel } from "@/lib/player";

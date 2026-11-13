@@ -7,9 +7,9 @@ import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 
-import { DataTable, columnMeta } from "@/components/data-table";
-import { FilterBar } from "@/components/kit/FilterBar";
-import { useFilters, type FilterDef } from "@/components/kit/useFilters";
+import { DataTable, columnMeta } from "@craazzzyyfoxx/admin-kit/data-table";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
+import { useFilters, type FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { useFormatter } from "@/lib/datetime/client";

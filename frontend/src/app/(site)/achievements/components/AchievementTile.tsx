@@ -5,7 +5,7 @@ import { Users } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { AchievementArt } from "@/components/achievements/AchievementArt";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { GameLabel } from "@/components/workspace/GameLabel";
 import { cn } from "@/lib/utils";
 import { classifyRarity, localizedText, rarityVarClass } from "@/lib/achievements/rarity";

@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
-import { controlSurfaceClass, Input } from "@/components/ui/input";
+import { controlSurfaceClass, Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 
 type InputGroupSize = "sm" | "default";
 

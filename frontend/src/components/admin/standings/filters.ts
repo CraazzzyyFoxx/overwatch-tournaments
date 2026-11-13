@@ -1,6 +1,6 @@
 import type { useTranslations } from "next-intl";
 
-import type { FilterDef } from "@/components/kit/useFilters";
+import type { FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { TOURNAMENT_QUERY_PARAM } from "@/components/admin/tournament-filter";
 import type { Stage, StageItem } from "@/types/tournament.types";
 

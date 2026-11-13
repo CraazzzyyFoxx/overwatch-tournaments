@@ -3,9 +3,9 @@
 import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import type { RegistrationTeam } from "@/types/registration-team.types";
 
 import type { RegistrationTeamActions } from "./useRegistrationTeamActions";

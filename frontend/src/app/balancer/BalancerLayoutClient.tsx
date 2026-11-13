@@ -10,7 +10,7 @@ import { BalancerShell } from "@/app/balancer/components/BalancerShell";
 import { useToolContext } from "@/app/balancer/useToolContext";
 import { Footer } from "@/components/Footer";
 import Header from "@/components/Header";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { adminEntryPermissions } from "@/lib/auth/admin-permissions";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useWorkspaceStore } from "@/stores/workspace.store";

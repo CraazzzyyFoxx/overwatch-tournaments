@@ -6,8 +6,8 @@ import { X } from "lucide-react";
 
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { PlayerAvatar, type PlayerIdentity } from "@/components/PlayerAvatar";
-import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { OverlayBar } from "@/components/ui/overlay-bar";
 
 /** The compare tool takes exactly two players. */

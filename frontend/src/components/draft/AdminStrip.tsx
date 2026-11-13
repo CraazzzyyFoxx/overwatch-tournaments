@@ -5,8 +5,8 @@ import Link from "next/link";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { useDraftFeasibilityQuery, useDraftJournalQuery, type DraftMutations } from "@/hooks/useDraftData";
 import { notify } from "@/lib/notify";
 import { captainsOnline, lastResolvedPick } from "@/lib/draft/room-model";

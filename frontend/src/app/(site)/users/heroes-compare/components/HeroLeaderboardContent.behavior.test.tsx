@@ -332,7 +332,7 @@ describe("the server render", () => {
     client.setQueryData(disciplineQueryKeys.list("all"), GAMES);
     useWorkspaceStore.setState({ lastGame: "lol" });
     const host = document.body.appendChild(document.createElement("div"));
-    host.innerHTML = html;
+    host.innerHTML = html.replaceAll("&gt;", ">").replaceAll("&#x27;", "'"); // happy-dom leaves these undecoded in attribute values
     const recoverable: unknown[] = [];
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     let hydrated: Root | undefined;

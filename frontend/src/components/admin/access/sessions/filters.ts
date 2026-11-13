@@ -1,4 +1,4 @@
-import type { FilterDef } from "@/components/kit/useFilters";
+import type { FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import type { AdminSessionStatus } from "@/types/rbac.types";
 
 import { SESSION_STATUSES } from "./model";

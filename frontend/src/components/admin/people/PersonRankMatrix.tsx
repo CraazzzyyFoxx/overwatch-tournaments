@@ -13,12 +13,12 @@ import {
   type MatrixLine,
   type RankMatrix
 } from "@/components/admin/people/personRanks.model";
-import { EmptyNote, LoadErrorNote } from "@/components/kit/EmptyNote";
+import { EmptyNote, LoadErrorNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { formatDate } from "@/components/kit/format-time";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";

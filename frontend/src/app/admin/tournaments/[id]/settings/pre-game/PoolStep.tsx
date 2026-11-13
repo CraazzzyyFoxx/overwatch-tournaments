@@ -9,8 +9,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import {
   PICK_BAN_MODES,
   type PickBanDraft,

@@ -5,9 +5,9 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { Button } from "@/components/ui/button";
-import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { ContextMenuItem, ContextMenuSeparator } from "@craazzzyyfoxx/admin-kit/ui/context-menu";
 import { cn } from "@/lib/utils";
 import type { AdminRegistration, BalancerPlayerRecord } from "@/types/balancer-admin.types";
 import type { RoleOntology } from "@/lib/roster/ontology";

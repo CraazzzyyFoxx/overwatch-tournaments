@@ -13,7 +13,7 @@ import {
   wildcardCovers
 } from "@/components/admin/access/PermissionPicker";
 import { RoleScopeSelect, useRoleScope } from "@/components/admin/access/RoleScopeSelect";
-import { DataTable, columnMeta, type DataTableGroup } from "@/components/data-table";
+import { DataTable, columnMeta, type DataTableGroup } from "@craazzzyyfoxx/admin-kit/data-table";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { accessQueryKeys } from "@/lib/access/query-keys";

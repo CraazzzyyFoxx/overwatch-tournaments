@@ -6,10 +6,10 @@ import { useEffect, useRef, type CSSProperties } from "react";
 
 import { RankCrest } from "@/components/RankCrest";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
-import { RowButton } from "@/components/ui/row-button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useDraftLayerPad } from "@/hooks/useDraftLayerPad";
 import { tint } from "@/lib/colors";

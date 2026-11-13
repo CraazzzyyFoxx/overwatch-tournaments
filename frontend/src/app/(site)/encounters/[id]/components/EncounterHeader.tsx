@@ -4,8 +4,8 @@ import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import type { Encounter, EncounterTeam } from "@/types/encounter.types";
 import { TeamLogo } from "@/components/TeamName";
-import { Card } from "@/components/ui/card";
-import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { acceptedScore } from "@/components/pick-ban/pick-ban-model";
 import {
   BOARD,

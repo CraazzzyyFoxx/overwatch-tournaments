@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { controlSurfaceClass } from "@/components/ui/input";
+import { controlSurfaceClass } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { cn } from "@/lib/utils";
 
 interface TextareaProps extends React.ComponentProps<"textarea"> {

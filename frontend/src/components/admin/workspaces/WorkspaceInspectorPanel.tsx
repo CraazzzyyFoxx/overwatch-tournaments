@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { InspectorField } from "@/components/kit/InspectorField";
 import { WorkspaceOwnerValue } from "@/components/admin/workspace-owner";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import type { WorkspaceListItem } from "@/types/workspace.types";
 
 /**

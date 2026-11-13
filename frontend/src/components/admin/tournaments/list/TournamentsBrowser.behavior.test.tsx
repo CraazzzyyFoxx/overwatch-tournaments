@@ -8,6 +8,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { en as kitEn } from "@craazzzyyfoxx/admin-kit/messages";
 import en from "@/i18n/messages/en.json";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { navigation } from "@/test/url-navigation";
@@ -94,6 +95,7 @@ const ENTITIES = ["stages", "participants_count", "flow_nodes"];
 
 beforeEach(() => {
   viewport.mobile = false;
+  Object.defineProperty(window, "innerWidth", { value: 1280, configurable: true });
   getAll.mockReset().mockImplementation(async (workspace?: number | null, discipline?: string | null) => {
     const results = (workspace === 1 ? POOL : [...POOL, ELSEWHERE]).filter(
       (entry) => !discipline || entry.discipline === discipline
@@ -141,7 +143,7 @@ describe("admin tournaments list across games", () => {
   it("offers the Game chip first, and a picked game asks the server for that game's tournaments", async () => {
     await mount("/admin/tournaments?status=registration");
 
-    await click(container.querySelector(`button[aria-label="${en.kit.actions.addFilter}"]`));
+    await click(container.querySelector(`button[aria-label="${kitEn.adminKit.actions.addFilter}"]`));
     expect(commandItems()[0]?.textContent?.trim()).toBe(en.common.discipline.column);
     await click(commandItems()[0]);
     // An option reads as the game's mark then its name.
@@ -194,6 +196,8 @@ describe("admin tournaments list across games", () => {
       }
     });
     viewport.mobile = true;
+    // The kit's table reads the viewport through `matchMedia`, not the mocked hook.
+    Object.defineProperty(window, "innerWidth", { value: 375, configurable: true });
     await mount("/admin/tournaments");
 
     const cards = [...container.querySelectorAll("ul[aria-label='Rows'] > li")].map((card) => card.textContent ?? "");

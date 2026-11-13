@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 
 import { AccessStatusCell } from "@/components/admin/access/AccessStatusCell";
-import { columnMeta, createKebabColumn } from "@/components/data-table";
+import { columnMeta, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { useFormatter } from "@/lib/datetime/client";
 import type { AdminAuthSession } from "@/types/rbac.types";
 

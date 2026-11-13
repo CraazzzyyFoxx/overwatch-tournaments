@@ -6,15 +6,15 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { FileX2, Plus } from "lucide-react";
 
-import { DataTable, type TableCommand } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { RowGameLabel, gameColumn } from "@/components/workspace/game-column";
 import { EncounterForm } from "@/components/admin/EncounterForm";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { FilterBar } from "@/components/kit/FilterBar";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { useFilters } from "@/components/kit/useFilters";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { gameFilterDefs } from "@/components/admin/game-filter";
 import { hasChallongeSource } from "@/components/admin/tournament-checklist";
 import {

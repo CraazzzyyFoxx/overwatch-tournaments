@@ -1,6 +1,6 @@
 import type { SortingFn } from "@tanstack/react-table";
 
-import type { Tone } from "@/components/ui/tone";
+import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import type {
   PregameKindSummary,
   PregameRoomAttention,

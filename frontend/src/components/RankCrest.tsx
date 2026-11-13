@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 
 import DivisionIcon from "@/components/DivisionIcon";
-import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { IconTooltip } from "@craazzzyyfoxx/admin-kit/ui/icon-tooltip";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { cn } from "@/lib/utils";
 import type { DivisionGrid, DivisionGridVersion } from "@/types/workspace.types";

@@ -3,9 +3,9 @@
 import { useId, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
 
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useApiKeyQuota, useSetApiKeyQuota } from "@/hooks/useAccountApiKeys";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";

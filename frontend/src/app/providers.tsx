@@ -7,12 +7,13 @@ import {
   QueryClient,
   QueryClientProvider
 } from "@tanstack/react-query";
+import { AdminKitProvider, type ErrorDescription } from "@craazzzyyfoxx/admin-kit/provider";
 import React from "react";
 
 import AuthBootstrap from "@/components/auth/AuthBootstrap";
 import WorkspaceBootstrap from "@/components/workspace/WorkspaceBootstrap";
 import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";
-import { ApiError, isDivisionGridRequired } from "@/lib/api/error";
+import { ApiError, getApiErrorMessage, isDivisionGridRequired } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
 
 /** The translated message of a known flow refusal; set by `Providers`, which sits under the intl provider. */
@@ -23,6 +24,11 @@ function toastError(error: unknown) {
   const known = flowMessageRef.current?.(error);
   if (known) notify.error(known);
   else notify.apiError(error);
+}
+
+/** What the kit's tables and dialogs show for a failed request. */
+function describeError(error: unknown): ErrorDescription {
+  return { message: getApiErrorMessage(error), status: error instanceof ApiError ? error.status : undefined };
 }
 
 export function makeQueryClient() {
@@ -85,9 +91,11 @@ export function Providers({ children }: Readonly<{ children: React.ReactNode }>)
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthBootstrap />
-      <WorkspaceBootstrap />
-      {children}
+      <AdminKitProvider describeError={describeError}>
+        <AuthBootstrap />
+        <WorkspaceBootstrap />
+        {children}
+      </AdminKitProvider>
     </QueryClientProvider>
   );
 }

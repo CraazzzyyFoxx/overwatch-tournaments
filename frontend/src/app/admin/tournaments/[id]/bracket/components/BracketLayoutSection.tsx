@@ -11,12 +11,12 @@ import {
   draftToTemplate,
   type Draft
 } from "@/components/bracket/editor/templateDraft";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { TONE_TEXT } from "@/components/ui/tone";
-import { eyebrowClass } from "@/components/ui/eyebrow";
-import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { ApiError, errorBodyFields } from "@/lib/api/error";
 import { notify } from "@/lib/notify";

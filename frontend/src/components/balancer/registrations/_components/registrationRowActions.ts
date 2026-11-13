@@ -1,7 +1,7 @@
 import { Check, History, Pencil, ShieldX, Trash2, Undo2, X } from "lucide-react";
 import type { RegistrationsTranslator } from "@/components/balancer/registrations/_components/registrationsTranslator";
 
-import type { KebabAction } from "@/components/data-table";
+import type { KebabAction } from "@craazzzyyfoxx/admin-kit/data-table";
 import type { AppPermission } from "@/hooks/usePermissions";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 

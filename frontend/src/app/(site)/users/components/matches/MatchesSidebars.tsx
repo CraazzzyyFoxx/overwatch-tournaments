@@ -2,8 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { CardSurface } from "@/components/profile/atoms";
-import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import { winrateColor } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 import { ArrowRight } from "lucide-react";
@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 
 export interface OpponentStat {
   name: string;

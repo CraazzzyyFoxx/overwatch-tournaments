@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useEffect, useState } from "react";
 
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { cn } from "@/lib/utils";
 
 interface NumberInputProps extends Omit<

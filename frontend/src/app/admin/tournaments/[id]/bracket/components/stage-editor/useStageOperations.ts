@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import type { ConfirmIntent } from "@/components/kit/ConfirmDialog";
+import type { ConfirmIntent } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { useFlowErrorMessage } from "@/hooks/useFlowErrorNotifier";
 import { useFlowPath } from "@/hooks/useFlowPath";
 import { notify } from "@/lib/notify";

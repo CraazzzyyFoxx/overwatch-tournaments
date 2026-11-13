@@ -12,17 +12,17 @@ import {
 } from "@/app/balancer/mix/pickup-chrome";
 import { teamNamesByIndex } from "@/app/balancer/mix/pickup-lineup";
 import { busyVoices, voiceBlocker, voicePatch, type BusyVoice } from "@/app/balancer/mix/pickup-voice";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { controlSurfaceClass } from "@/components/ui/input";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { controlSurfaceClass } from "@craazzzyyfoxx/admin-kit/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { cn } from "@/lib/utils";
 import type {
   CustomGame,

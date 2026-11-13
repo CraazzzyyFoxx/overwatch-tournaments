@@ -9,13 +9,13 @@ import {
   AdminDetailTableShell,
   adminDetailTableStyles as tableStyles
 } from "@/components/admin/AdminDetailTable";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { UserSearchCombobox } from "@/components/kit/ServerSearchCombobox";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { UserSearchCombobox } from "@/components/kit/UserSearchCombobox";
 import DivisionIcon from "@/components/DivisionIcon";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { PersonLabel } from "@/components/PlayerName";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import {
   Table,
   TableBody,
@@ -23,7 +23,7 @@ import {
   TableHead,
   TableHeader,
   TableRow
-} from "@/components/ui/table";
+} from "@craazzzyyfoxx/admin-kit/ui/table";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { ratedDimension, subRoleOptions } from "@/lib/roster/ontology";
 import { roleOf, subRoleOf, toRoleRef } from "@/lib/roster/role-ref";

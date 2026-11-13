@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import SettingsRootPage from "@/app/admin/settings/page";
 import WorkspaceRootPage from "@/app/admin/workspaces/[id]/page";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import type { Workspace } from "@/types/workspace.types";
 
 declare global {
@@ -69,7 +69,7 @@ vi.mock("@/stores/workspace.store", () => ({
   ) => selector({ currentWorkspaceId: 8, fetchWorkspaces: vi.fn() })
 }));
 
-vi.mock("@/components/kit/SaveBar", () => ({
+vi.mock("@craazzzyyfoxx/admin-kit/kit/SaveBar", () => ({
   SaveBar: () => <div data-save-bar />
 }));
 

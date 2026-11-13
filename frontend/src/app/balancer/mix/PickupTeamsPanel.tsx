@@ -20,24 +20,24 @@ import {
 import { RoomLink } from "@/app/balancer/mix/_room/room-navigation";
 import { CAPTION_CLASS, CARD_TITLE_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import { PickupResultControls } from "@/app/balancer/mix/PickupResultControls";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { IconTooltip } from "@craazzzyyfoxx/admin-kit/ui/icon-tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useNodeCapture } from "@/hooks/useNodeCapture";
 import { cn } from "@/lib/utils";
 import type { CustomGame, CustomGameLobby, CustomGameMatch } from "@/services/custom-game.service";
 import type { CatalogEntityRead } from "@/types/catalog.types";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import { MatchHistoryList } from "./_components/MatchHistoryList";
 import type { MixLogUpload } from "./useMixLogUpload";

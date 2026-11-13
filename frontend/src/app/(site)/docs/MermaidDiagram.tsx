@@ -4,8 +4,8 @@ import { useTranslations } from "next-intl";
 import { Maximize2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { TONE_TEXT } from "@/components/ui/tone";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { cn } from "@/lib/utils";
 
 type MermaidApi = (typeof import("mermaid"))["default"];

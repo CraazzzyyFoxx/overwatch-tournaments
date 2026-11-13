@@ -9,10 +9,10 @@ import { EncounterScoreControls } from "@/components/tournaments/EncounterScoreC
 import { getApiErrorMessage } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";

@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { PageHero } from "@/components/site/PageHero";
-import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 
 import { isTournamentOverviewPath } from "./tournament-section-nav";
 

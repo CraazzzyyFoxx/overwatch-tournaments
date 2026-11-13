@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
 
-import { FilterChip } from "@/components/ui/filter-chip";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { RowButton } from "@/components/ui/row-button";
+import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import type { RosterAuthor } from "@/services/workspace-player.service";
 
 import type { RosterFilter } from "../_hooks/useRosterPicker";

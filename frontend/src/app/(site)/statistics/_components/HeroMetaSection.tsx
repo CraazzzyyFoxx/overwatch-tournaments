@@ -8,7 +8,7 @@ import { characterClassOf, classRank } from "@/components/pick-ban/pick-ban-mode
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { OpenEmptyRow, OpenLoadError, Section, SectionHead } from "@/components/site/open-layout";
 import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { getFormatter } from "@/lib/datetime/server";
 import { findRole, ratedDimension, roleName, roleTint } from "@/lib/roster/ontology";
 import type { WorkspaceAxis } from "@/lib/site/discipline-scope";

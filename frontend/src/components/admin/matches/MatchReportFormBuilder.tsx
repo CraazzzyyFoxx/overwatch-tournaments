@@ -5,14 +5,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@craazzzyyfoxx/admin-kit/ui/select";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { notify } from "@/lib/notify";
 import reportFormService from "@/services/report-form.service";
@@ -22,6 +22,7 @@ import {
   type ReportBuiltInFieldConfig,
   type ReportCustomFieldDefinition
 } from "@/types/encounter.types";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 type BuiltInKey = keyof MatchReportForm["built_in_fields"];
 
@@ -131,6 +132,7 @@ function BuiltInRow({
  * organizer sees a bad key before a 422 does.
  */
 export function MatchReportFormBuilder({ tournamentId }: Readonly<{ tournamentId: number }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("matchReportFormAdmin");
   const queryClient = useQueryClient();
   const idBase = useId();
@@ -439,6 +441,7 @@ export function MatchReportFormBuilder({ tournamentId }: Readonly<{ tournamentId
       </SettingsGrid>
 
       <SaveBar
+        onDirtyChange={reportUnsaved}
         dirty={hasChanges}
         summary={t("unsavedChanges")}
         error={blockingError}

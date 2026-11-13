@@ -8,15 +8,15 @@ import {
   VersionHistory,
   type VersionHistoryProps
 } from "@/app/admin/settings/divisions/VersionHistory";
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import type { DivisionGridEntity, DivisionGridVersion } from "@/types/workspace.types";
 
 import { editorHref } from "./model";

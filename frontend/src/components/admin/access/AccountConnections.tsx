@@ -6,11 +6,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AccountSection, invalidateAccount } from "@/components/admin/access/AccountCard";
 import { ProviderMark } from "@/components/admin/OAuthProviderMark";
-import { LoadErrorNote } from "@/components/kit/EmptyNote";
-import { UserSearchCombobox } from "@/components/kit/ServerSearchCombobox";
+import { LoadErrorNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { UserSearchCombobox } from "@/components/kit/UserSearchCombobox";
 import { StatusPill } from "@/components/kit/StatusPill";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { accessQueryKeys } from "@/lib/access/query-keys";
 import { getSingleLinkedPlayer } from "@/lib/auth/profile-links";
 import { notify } from "@/lib/notify";

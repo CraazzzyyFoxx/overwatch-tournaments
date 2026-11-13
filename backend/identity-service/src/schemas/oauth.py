@@ -111,6 +111,8 @@ class OAuthLinkResult(BaseModel):
     message: str | None = None
     provider: str | None = None
     username: str | None = None
+    # The caller already owned this provider account; the link was refreshed (and re-verified), not created.
+    already_linked: bool = False
     ticket: str | None = None
     origin: str
     redirect: str

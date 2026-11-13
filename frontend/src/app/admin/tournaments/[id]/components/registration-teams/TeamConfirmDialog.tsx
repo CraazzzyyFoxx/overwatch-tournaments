@@ -3,8 +3,8 @@
 import { useId, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
-import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
-import { Label } from "@/components/ui/label";
+import { ConfirmDialog, type ConfirmIntent } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 

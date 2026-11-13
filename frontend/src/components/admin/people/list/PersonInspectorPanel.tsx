@@ -6,7 +6,7 @@ import Link from "next/link";
 import { InspectorField, InspectorSection } from "@/components/kit/InspectorField";
 import { SocialAccountList } from "./SocialAccountList";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { initials } from "@/lib/utils";
 import type { AuthAdminUser } from "@/types/rbac.types";
 import type { User } from "@/types/user.types";

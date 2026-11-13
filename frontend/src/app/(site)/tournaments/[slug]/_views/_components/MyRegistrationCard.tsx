@@ -23,10 +23,10 @@ import {
   RefreshCw
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
-import { StatusDot } from "@/components/ui/status-dot";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { LateSignUpBadge, OnCallBadge } from "@/components/status/RegistrationBadges";
 import { cn, hexToRgba } from "@/lib/utils";
 import { ApiError, getApiErrorMessage } from "@/lib/api/error";
@@ -60,7 +60,7 @@ import { useTranslations } from "next-intl";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { getStatusIcon } from "@/lib/registration/status-icons";
 import { formatSubroleSlug } from "@/lib/roster/roles";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 
 // arbitrary values it can see verbatim in the source.

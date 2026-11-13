@@ -4,7 +4,7 @@ import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Clock, UserX } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import type { PickBanKind, PickBanState } from "@/types/tournament.types";
 

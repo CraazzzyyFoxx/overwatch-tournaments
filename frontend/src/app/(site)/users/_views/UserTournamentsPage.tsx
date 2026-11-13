@@ -1,6 +1,6 @@
 import { User, UserProfile } from "@/types/user.types";
 import type { StatsScope } from "@/lib/site/stats-scope";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import userService from "@/services/user.service";
 import TournamentsHistory from "@/app/(site)/users/components/tournaments/TournamentsHistory";
 

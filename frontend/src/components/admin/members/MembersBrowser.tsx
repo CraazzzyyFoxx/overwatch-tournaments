@@ -3,10 +3,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { DataTable, type TableCommand } from "@/components/data-table";
-import { FilterBar } from "@/components/kit/FilterBar";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { useFilters } from "@/components/kit/useFilters";
+import { DataTable, type TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { notify } from "@/lib/notify";
 import { usePermissions } from "@/hooks/usePermissions";
 import { rbacService } from "@/services/rbac.service";

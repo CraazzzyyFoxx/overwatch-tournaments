@@ -6,16 +6,16 @@ import { SortableGrip, useSortableRow } from "@/components/kit/SortableRows";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Button } from "@/components/ui/button";
-import { RowButton } from "@/components/ui/row-button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type {

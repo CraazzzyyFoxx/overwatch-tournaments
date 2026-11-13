@@ -1,4 +1,4 @@
-import type { FilterOption, FilterValue } from "@/components/kit/useFilters";
+import type { FilterOption, FilterValue } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { RowGameMark } from "@/components/workspace/game-column";
 
 /**

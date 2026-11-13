@@ -5,10 +5,10 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { encounterScopeLabel } from "@/components/admin/encounters/EncounterCells";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { Button } from "@/components/ui/button";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { SearchableImageSelect } from "@/components/ui/searchable-image-select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useBracketRoundLabel, type BracketRoundLabelFormatter } from "@/hooks/useBracketRoundLabel";
 import { UNKNOWN_ROUND_SHAPE } from "@/lib/bracket/round-name";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";

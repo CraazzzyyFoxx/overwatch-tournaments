@@ -7,9 +7,9 @@ import { Crosshair, Crown, Flame, Timer, Zap, type LucideIcon } from "lucide-rea
 import { RecordContext, RecordHolder, useRecordFigure } from "@/app/(site)/statistics/_components/records";
 import { PersonLabel } from "@/components/PlayerName";
 import { MoreLink, OpenEmptyRow, OpenLoadError, Section, SectionHead } from "@/components/site/open-layout";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { ServerGameScopeNotice } from "@/components/workspace/ServerGameScopeNotice";
 import type { Formatter } from "@/lib/datetime";
 import { getFormatter } from "@/lib/datetime/server";

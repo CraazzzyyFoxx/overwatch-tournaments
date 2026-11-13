@@ -5,11 +5,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { DataTable, type TableCommand } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { FilterBar } from "@/components/kit/FilterBar";
-import { useFilters, type FilterDef } from "@/components/kit/useFilters";
-import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
+import { useFilters, type FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
+import { ConfirmDialog, type ConfirmIntent } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { notificationQueryKeys } from "@/lib/notifications/query-keys";
 import { notify } from "@/lib/notify";
 import notificationService from "@/services/notification.service";

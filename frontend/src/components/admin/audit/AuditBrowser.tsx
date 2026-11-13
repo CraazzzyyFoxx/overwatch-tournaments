@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 
-import { DataTable } from "@/components/data-table";
+import { DataTable } from "@craazzzyyfoxx/admin-kit/data-table";
 import {
   auditHistoryStartQuery,
   describeAuditAction,
@@ -14,9 +14,9 @@ import {
   formatAuditTimestamp,
   useAuditTranslator
 } from "@/components/kit/audit-log";
-import { FilterBar } from "@/components/kit/FilterBar";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
-import { useFilters } from "@/components/kit/useFilters";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";

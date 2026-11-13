@@ -49,7 +49,7 @@ const PopoverCtx = createContext<{ open: boolean; setOpen: (open: boolean) => vo
   open: false,
   setOpen: () => {},
 });
-vi.mock("@/components/ui/popover", () => ({
+vi.mock("@craazzzyyfoxx/admin-kit/ui/popover", () => ({
   Popover: ({
     children,
     open = false,
@@ -76,7 +76,7 @@ vi.mock("@/components/ui/popover", () => ({
 // Radix passes the root's `disabled` down to the trigger through context; the
 // stand-in has to do the same or a disabled specialization cell looks enabled.
 const SelectCtx = createContext<boolean>(false);
-vi.mock("@/components/ui/select", () => ({
+vi.mock("@craazzzyyfoxx/admin-kit/ui/select", () => ({
   Select: ({ children, disabled = false }: { children: ReactNode; disabled?: boolean }) => (
     <SelectCtx.Provider value={disabled}>
       <div>{children}</div>

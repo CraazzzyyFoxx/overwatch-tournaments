@@ -1606,7 +1606,7 @@ describe("Settings › Pre-game phase only guards edits an organizer made", () =
 
     await click(treeLink("Round 2"));
 
-    expect(document.body.textContent).not.toContain("Discard unsaved changes?");
+    expect(document.body.textContent).not.toContain("Discard changes?");
     expect(editor().textContent).toContain("Group stage · round 2");
   });
 
@@ -1620,7 +1620,7 @@ describe("Settings › Pre-game phase only guards edits an organizer made", () =
     await click(only("Hollywood"));
     await click(treeLink("Round 2"));
 
-    expect(document.body.textContent).toContain("Discard unsaved changes?");
+    expect(document.body.textContent).toContain("Discard changes?");
     expect(editor().textContent).toContain("Group stage · round 1");
   });
 });

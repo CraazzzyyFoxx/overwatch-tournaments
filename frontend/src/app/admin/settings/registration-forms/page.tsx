@@ -15,23 +15,23 @@ import {
   sanitizeSchema
 } from "@/components/balancer/form/_components/schemaEdits";
 import { registrationFormTemplatesKey } from "@/components/balancer/form/_components/TemplateMenu";
-import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
-import { FilterBar } from "@/components/kit/FilterBar";
+import { ConfirmDialog, type ConfirmIntent } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import { MasterDetail, MasterList, MasterListSkeleton } from "@/components/kit/MasterDetail";
-import { SaveBar } from "@/components/kit/SaveBar";
-import { useFilters } from "@/components/kit/useFilters";
-import { Button } from "@/components/ui/button";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { GameField } from "@/components/workspace/GameField";
 import { GameIcon } from "@/components/workspace/GameIcon";
 import { GameScopeControl } from "@/components/workspace/GameScopeControl";
@@ -47,6 +47,7 @@ import { defaultCreationGame, showsGameMarks } from "@/lib/site/discipline-scope
 import registrationFormTemplatesService from "@/services/registration-form-templates.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { FormSchema } from "@/types/forms.types";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 /**
  * Saved questionnaires of the workspace (T4), each owned by one game (spec §6.13, §8.4).
@@ -64,6 +65,7 @@ import type { FormSchema } from "@/types/forms.types";
  * `MasterDetail` shows the list or the editor, and its Back is `history.back()`.
  */
 export default function WorkspaceRegistrationFormsSettingsPage() {
+  const reportUnsaved = useUnsavedReporter();
   const workspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
   const scope = useGameScope({ pageClass: "multi", axis: workspaceId ?? "all" });
   const kind = scope.resolution?.game.kind;
@@ -410,6 +412,7 @@ export default function WorkspaceRegistrationFormsSettingsPage() {
 
       {selected && schema && (
         <SaveBar
+          onDirtyChange={reportUnsaved}
           dirty={draft !== null}
           summary={blocked && blocked.size > 0 ? t("fixQuestions") : t("unsavedChanges")}
           saving={saveMutation.isPending}

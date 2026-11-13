@@ -5,13 +5,13 @@ import { Building2, ChevronDown, FileJson, Import, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { SettingsHeaderActions } from "@/components/admin/workspace-settings/WorkspaceSettingsShell";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 
 /**
  * The page's own actions, beside its title: a new grid, and the two ways a grid comes in from elsewhere. Both make a

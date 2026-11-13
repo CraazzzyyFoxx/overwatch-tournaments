@@ -4,14 +4,14 @@ import { useId } from "react";
 import { useTranslations } from "next-intl";
 
 import { FieldDescription } from "@/components/ui/field";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { DraftFormat, DraftFormatSettings } from "@/types/draft.types";

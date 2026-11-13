@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 const subscribeNoop = () => () => {};
 

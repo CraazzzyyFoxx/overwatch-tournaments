@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 
 import { ChartEmptyState, RankHistorySkeleton } from "@/components/RankHistoryState";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import {
   ChartContainer,
   ChartLegend,
@@ -17,7 +17,7 @@ import {
   type ChartConfig
 } from "@/components/ui/chart";
 import Image from "@/components/ui/image";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@craazzzyyfoxx/admin-kit/ui/select";
 import type { SlotProps } from "@/disciplines/types";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";

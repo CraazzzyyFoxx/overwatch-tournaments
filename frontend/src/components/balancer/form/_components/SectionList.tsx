@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 
 import { SortableGrip, useSortableRow } from "@/components/kit/SortableRows";
-import { eyebrowClass } from "@/components/ui/eyebrow";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { RowButton } from "@/components/ui/row-button";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { cn } from "@/lib/utils";
 import type { FormSection } from "@/types/forms.types";
 

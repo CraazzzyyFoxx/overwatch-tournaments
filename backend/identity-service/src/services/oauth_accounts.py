@@ -624,14 +624,17 @@ class OAuthAccountService:
         auth_user: models.AuthUser,
         oauth_info: schemas.OAuthUserInfo,
         token_data: dict[str, Any],
-    ) -> models.OAuthConnection:
+    ) -> tuple[models.OAuthConnection, bool]:
         """Attach a proven provider identity to an already-authenticated account.
 
-        Idempotent for a re-link of the SAME provider account to the SAME
-        account (tokens are refreshed). Rejected with 409 only when a surviving
-        connection for this exact provider subject belongs to a DIFFERENT
-        account -- the detail spells out the way out, because there is no
-        self-service way to break someone else's link from here: sign in with
+        Returns ``(connection, created)``. Idempotent for a re-link of the SAME
+        provider account to the SAME account: tokens are refreshed and the
+        social identity is re-verified (it may have lost its mark -- admin edit,
+        a player linked only after the first OAuth link), with ``created=False``
+        so the caller can say "already linked". Rejected with 409 only when a
+        surviving connection for this exact provider subject belongs to a
+        DIFFERENT account -- the detail spells out the way out, because there is
+        no self-service way to break someone else's link from here: sign in with
         that provider (it lands on that other account), delete it in account
         settings, then link again.
         """
@@ -647,7 +650,8 @@ class OAuthAccountService:
                 _store_tokens(existing_conn, oauth_info.provider.value, token_data)
                 await session.commit()
                 await session.refresh(existing_conn)
-                return existing_conn
+                await self._attach_verified_social_account(session, auth_user, oauth_info, claim_subject=True)
+                return existing_conn, False
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
@@ -664,7 +668,7 @@ class OAuthAccountService:
         logger.success(f"{oauth_info.provider.value.title()} account linked to user {auth_user.username}")
 
         await self._attach_verified_social_account(session, auth_user, oauth_info, claim_subject=True)
-        return oauth_conn
+        return oauth_conn, True
 
 
 oauth_accounts = OAuthAccountService()

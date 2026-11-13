@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PRESET_IDS, type PresetId } from "@/lib/flow/presets";

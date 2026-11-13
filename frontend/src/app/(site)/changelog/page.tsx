@@ -4,7 +4,7 @@ import { ArrowUpRight } from "lucide-react";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { PageHero } from "@/components/site/PageHero";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { REPO_URL } from "@/config/site";
 import { RELEASES } from "@/lib/changelog/releases";
 import { getFormatter } from "@/lib/datetime/server";
