@@ -94,7 +94,7 @@ async def _guild_text_channel(bot: discord.Client, guild_id: str | None, raw_cha
     if channel is None:
         try:
             channel = await bot.fetch_channel(channel_id)
-        except (discord.NotFound, discord.Forbidden):
+        except discord.NotFound, discord.Forbidden:
             channel = None
         except discord.HTTPException as exc:
             raise HTTPException(status_code=503, detail="discord_unavailable") from exc

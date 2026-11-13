@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -857,7 +858,7 @@ def test_baseline_inputs_load_a_bounded_window_with_the_documented_shape(stats_p
                         await session.execute(
                             sa.select(models.Player.role)
                             .where(models.Player.tournament_id == ids["tournament"], models.Player.rank.is_not(None))
-                            .distinct(models.Player.workspace_member_id)
+                            .ext(distinct_on(models.Player.workspace_member_id))
                             .order_by(
                                 models.Player.workspace_member_id,
                                 models.Player.is_substitution.asc(),

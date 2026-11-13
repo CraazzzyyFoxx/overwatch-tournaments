@@ -78,7 +78,7 @@ def register(broker: Any, logger: Any) -> None:
             return rpc_error("forbidden", "Not authenticated")
         try:
             user_id = int(data.get("user_id"))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return rpc_error("bad_request", "Invalid user id")
 
         async def run() -> None:

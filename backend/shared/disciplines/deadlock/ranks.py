@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.social import SocialProvider
@@ -59,7 +60,7 @@ def _latest(user_ids: Any) -> Any:
             snap.discipline == DISCIPLINE,
             snap.social_account_id.in_(sa.select(SocialAccount.id).where(SocialAccount.user_id.in_(user_ids))),
         )
-        .distinct(snap.social_account_id)
+        .ext(distinct_on(snap.social_account_id))
         .order_by(snap.social_account_id, snap.captured_at.desc(), snap.id.desc())
         .subquery("deadlock_latest")
     )
@@ -104,7 +105,7 @@ async def ranks_at(session: AsyncSession, user_ids: Sequence[int], at: datetime)
             SocialAccount.provider == SocialProvider.STEAM,
             SocialAccount.user_id.in_(list(user_ids)),
         )
-        .distinct(snap.social_account_id)
+        .ext(distinct_on(snap.social_account_id))
         .order_by(snap.social_account_id, snap.captured_at.desc(), snap.id.desc())
         .subquery("deadlock_held")
     )

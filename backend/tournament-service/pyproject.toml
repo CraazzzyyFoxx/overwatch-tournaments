@@ -5,30 +5,16 @@ description = "Tournament domain API and worker service"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "alembic>=1.14.0",
     "apscheduler>=3.10.4",
-    "asyncpg>=0.30.0",
     "cashews>=7.4.0",
     "faststream[rabbit,cli]>=0.6.7",
     "loguru>=0.7.3",
-    "opentelemetry-api>=1.27.0",
-    "opentelemetry-exporter-otlp>=1.27.0",
-    "opentelemetry-instrumentation-httpx>=0.48b0",
-    "opentelemetry-instrumentation-sqlalchemy>=0.48b0",
-    "opentelemetry-sdk>=1.27.0",
-    "psycopg[binary]>=3.2.3",
-    "pydantic-settings>=2.7.1",
     "pydantic[email]>=2.10.5",
     "redis>=5.2.1",
-    "sentry-sdk>=2.20.0",
-    "setuptools>=75.8.0",
-    "sqlalchemy>=2.0.37",
-    "sqlalchemy-utils>=0.41.2",
-    "tenacity>=9.0.0",
-    "uvloop; platform_system == 'Linux'",
+    "sqlalchemy>=2.1",
+    "pydantic-core>=2.27.1",
     "shared",
-    "aiobotocore>=3.0.0",
-    "httpx[socks]>=0.28.1",
+    "httpx>=0.28.1",
 ]
 
 [tool.ty.environment]

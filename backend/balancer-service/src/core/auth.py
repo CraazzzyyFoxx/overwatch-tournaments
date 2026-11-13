@@ -77,7 +77,7 @@ def _build_workspace_cache(
         workspace_id_raw = item.get("workspace_id")
         try:
             workspace_id = int(workspace_id_raw)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
 
         rbac_roles = item.get("rbac_roles")

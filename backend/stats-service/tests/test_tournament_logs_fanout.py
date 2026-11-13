@@ -29,6 +29,11 @@ ingest = importlib.import_module("src.services.ingest.consumers")
 BROKER = object()
 
 
+def _undeliverable() -> DeliveryError:
+    # aiormq's DeliveryError.__str__ reads frame.name, so a frameless one cannot even be logged.
+    return DeliveryError(None, SimpleNamespace(name="Basic.Return"))
+
+
 async def _fan_out() -> None:
     await logs.process_tournament_log(
         {"tournament_id": 42},
@@ -110,7 +115,7 @@ class TournamentLogsFanoutTests(IsolatedAsyncioTestCase):
                 AsyncMock(return_value=TournamentRequeue(discipline="overwatch", queue=[], replay={601: 3})),
             ),
             patch.object(logs, "declare_replay_queues", AsyncMock()),
-            patch.object(logs, "publish_required", AsyncMock(side_effect=DeliveryError(None, None))),
+            patch.object(logs, "publish_required", AsyncMock(side_effect=_undeliverable())),
             self.assertRaises(DeliveryError),
         ):
             await _fan_out()
@@ -122,7 +127,7 @@ class TournamentLogsFanoutTests(IsolatedAsyncioTestCase):
             async def publish(self, message, routing_key, mandatory):
                 published.append((routing_key, mandatory, message.delivery_mode, message.body))
                 if routing_key == "gone":
-                    raise DeliveryError(None, None)
+                    raise _undeliverable()
 
         channel = SimpleNamespace(default_exchange=Exchange())
         asked = []

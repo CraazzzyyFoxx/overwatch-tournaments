@@ -17,7 +17,7 @@ def extract_progress_percent(progress: Any) -> float | None:
     if percent is not None:
         try:
             return float(percent)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
     current = progress.get("current")
     total = progress.get("total")
@@ -25,7 +25,7 @@ def extract_progress_percent(progress: Any) -> float | None:
         return None
     try:
         return (float(current) / float(total)) * 100.0
-    except (TypeError, ValueError, ZeroDivisionError):
+    except TypeError, ValueError, ZeroDivisionError:
         return None
 
 

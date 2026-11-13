@@ -39,7 +39,7 @@ def _decode(data: dict[str, Any]) -> bytes:
         raise jobs.IngestRejected(413, "match_document_too_large", "Document exceeds the maximum size")
     try:
         return base64.b64decode(encoded, validate=True)
-    except (binascii.Error, ValueError):
+    except binascii.Error, ValueError:
         raise jobs.IngestRejected(400, "invalid_request", "raw_base64 is not valid base64") from None
 
 

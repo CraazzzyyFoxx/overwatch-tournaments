@@ -61,7 +61,7 @@ NOW = datetime(2026, 9, 2, tzinfo=UTC)
 
 
 class _Result:
-    """Stands in for both shapes this module reads: ``.all()`` and ``.tuples().all()``."""
+    """Stands in for the rows this module reads through ``.all()``."""
 
     def __init__(self, rows: list[tuple[Any, ...]]) -> None:
         self._rows = rows

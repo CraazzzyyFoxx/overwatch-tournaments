@@ -12,6 +12,7 @@ from datetime import timedelta
 from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.social import SocialProvider
@@ -60,7 +61,7 @@ def _latest_solo(user_ids: Any) -> Any:
             snap.queue == "solo",
             snap.social_account_id.in_(sa.select(SocialAccount.id).where(SocialAccount.user_id.in_(user_ids))),
         )
-        .distinct(snap.social_account_id)
+        .ext(distinct_on(snap.social_account_id))
         .order_by(snap.social_account_id, snap.captured_at.desc(), snap.id.desc())
         .subquery("lol_solo_latest")
     )

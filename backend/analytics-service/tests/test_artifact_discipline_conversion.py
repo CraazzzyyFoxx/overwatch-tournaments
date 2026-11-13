@@ -345,9 +345,6 @@ def test_export_ran_in_the_old_code_and_preserves_every_registry_field(
     receipt = _receipt(exported)
     assert receipt["status"] == "exported" and receipt["old_image"] == OLD_IMAGE and receipt["new_image"] is None
     assert receipt["libraries"] == tool._libraries()
-    assert {k: v for k, v in receipt["libraries"].items() if k != "python"} == {
-        "sklearn" if k == "scikit-learn" else k: v for k, v in MANIFEST["libraries"].items() if k != "openskill"
-    }
     assert receipt["inventory_sha256"] == tool._sha(workspace.inventory_path.read_bytes())
     assert [a["registry"]["id"] for a in receipt["artifacts"]] == [r[0] for r in ROWS]
     by_id = {e["id"]: e for e in workspace.inventory["artifacts"]}

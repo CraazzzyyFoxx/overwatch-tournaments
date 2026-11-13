@@ -222,7 +222,7 @@ def process_identity(pid: int) -> int | None:
     try:
         stat = Path(f"/proc/{pid}/stat").read_text()
         return int(stat.rsplit(")", 1)[1].split()[19])  # field 22: starttime, after the parenthesised comm
-    except (OSError, ValueError, IndexError):
+    except OSError, ValueError, IndexError:
         return None
 
 
@@ -1105,9 +1105,11 @@ def start_processes(live: Live, *, apps: bool = False) -> None:
     answer = stack.ready(
         "identity",
         "validate_token answers for a real API key",
-        lambda: (r := stack.rpc("rpc.identity.validate_token", {"token": live.key("off_ok")}, timeout=10))
-        and r.get("ok")
-        and r,
+        lambda: (
+            (r := stack.rpc("rpc.identity.validate_token", {"token": live.key("off_ok")}, timeout=10))
+            and r.get("ok")
+            and r
+        ),
     )
     assert (
         answer["data"]["api_key_workspace_id"] == live.world["workspaces"]["OFF"]

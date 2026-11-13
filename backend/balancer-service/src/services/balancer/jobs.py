@@ -94,7 +94,7 @@ def _count_input_players(player_data: dict[str, Any]) -> int:
 def _upload_size(uploaded_file) -> int | None:
     try:
         return int(getattr(uploaded_file, "size", None))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 

@@ -28369,22 +28369,7 @@ export interface components {
             upper: number;
         };
         /** BracketTemplate */
-        "tournament.BracketTemplate-Input": {
-            /** Lower Seeds */
-            lower_seeds: number;
-            /** Matches */
-            matches: components["schemas"]["tournament.TemplateMatch"][];
-            /** Upper Seeds */
-            upper_seeds: number;
-            /**
-             * Version
-             * @default 1
-             * @constant
-             */
-            version: 1;
-        };
-        /** BracketTemplate */
-        "tournament.BracketTemplate-Output": {
+        "tournament.BracketTemplate": {
             /** Lower Seeds */
             lower_seeds: number;
             /** Matches */
@@ -28410,7 +28395,7 @@ export interface components {
             custom: boolean;
             seeds: components["schemas"]["tournament.BracketSeedCounts"];
             /** @default null */
-            template: components["schemas"]["tournament.BracketTemplate-Output"] | null;
+            template: components["schemas"]["tournament.BracketTemplate"] | null;
         };
         /** BulkApproveResponse */
         "tournament.BulkApproveResponse": {
@@ -29188,31 +29173,7 @@ export interface components {
             warnings?: components["schemas"]["tournament.DivisionGridMarketplaceImportWarning"][];
         };
         /** DivisionGridPortableDocument */
-        "tournament.DivisionGridPortableDocument-Input": {
-            /**
-             * Description
-             * @default null
-             */
-            description: string | null;
-            /** Discipline */
-            discipline: string;
-            /** Mappings */
-            mappings?: components["schemas"]["tournament.DivisionGridPortableMapping"][];
-            /** Name */
-            name: string;
-            /**
-             * Schema Version
-             * @default division-grid/v2
-             * @constant
-             */
-            schema_version: "division-grid/v2";
-            /** Slug */
-            slug: string;
-            /** Versions */
-            versions: components["schemas"]["tournament.DivisionGridPortableVersion"][];
-        };
-        /** DivisionGridPortableDocument */
-        "tournament.DivisionGridPortableDocument-Output": {
+        "tournament.DivisionGridPortableDocument": {
             /**
              * Description
              * @default null
@@ -29237,7 +29198,7 @@ export interface components {
         };
         /** DivisionGridPortableImportRequest */
         "tournament.DivisionGridPortableImportRequest": {
-            document: components["schemas"]["tournament.DivisionGridPortableDocument-Input"];
+            document: components["schemas"]["tournament.DivisionGridPortableDocument"];
             /**
              * Mode
              * @default library
@@ -30143,7 +30104,7 @@ export interface components {
             visible_when: components["schemas"]["tournament.Condition"] | null;
         };
         /** FormSchema */
-        "tournament.FormSchema-Input": {
+        "tournament.FormSchema": {
             /**
              * Schema Version
              * @default 1
@@ -30151,38 +30112,10 @@ export interface components {
              */
             schema_version: 1;
             /** Sections */
-            sections: components["schemas"]["tournament.FormSection-Input"][];
-        };
-        /** FormSchema */
-        "tournament.FormSchema-Output": {
-            /**
-             * Schema Version
-             * @default 1
-             * @constant
-             */
-            schema_version: 1;
-            /** Sections */
-            sections: components["schemas"]["tournament.FormSection-Output"][];
+            sections: components["schemas"]["tournament.FormSection"][];
         };
         /** FormSection */
-        "tournament.FormSection-Input": {
-            /**
-             * Description
-             * @default null
-             */
-            description: string | null;
-            /** Fields */
-            fields?: components["schemas"]["tournament.FormField"][];
-            /** Key */
-            key: string;
-            /**
-             * Title
-             * @default null
-             */
-            title: string | null;
-        };
-        /** FormSection */
-        "tournament.FormSection-Output": {
+        "tournament.FormSection": {
             /**
              * Description
              * @default null
@@ -31203,7 +31136,7 @@ export interface components {
         "tournament.RegistrationFormRead": {
             /** Discipline */
             discipline: string;
-            form_schema: components["schemas"]["tournament.FormSchema-Output"];
+            form_schema: components["schemas"]["tournament.FormSchema"];
             /**
              * Hide Registrations
              * @default false
@@ -31260,7 +31193,7 @@ export interface components {
         "tournament.RegistrationFormTemplateRead": {
             /** Discipline */
             discipline: string;
-            form_schema: components["schemas"]["tournament.FormSchema-Output"];
+            form_schema: components["schemas"]["tournament.FormSchema"];
             /** Id */
             id: number;
             /** Name */
@@ -31288,13 +31221,13 @@ export interface components {
              * @default null
              */
             discipline: string | null;
-            form_schema: components["schemas"]["tournament.FormSchema-Input"];
+            form_schema: components["schemas"]["tournament.FormSchema"];
             /** Name */
             name: string;
         };
         /** RegistrationFormUpsert */
         "tournament.RegistrationFormUpsert": {
-            form_schema: components["schemas"]["tournament.FormSchema-Input"];
+            form_schema: components["schemas"]["tournament.FormSchema"];
             /**
              * Hide Registrations
              * @default false
@@ -61488,7 +61421,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["tournament.BracketTemplate-Input"];
+                "application/json": components["schemas"]["tournament.BracketTemplate"];
             };
         };
         responses: {
@@ -79594,7 +79527,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["tournament.DivisionGridPortableDocument-Output"];
+                    "application/json": components["schemas"]["tournament.DivisionGridPortableDocument"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */

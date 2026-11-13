@@ -186,7 +186,7 @@ def provenance_classifier(s3: S3Client):
     async def classify(row: models.IngestJob) -> Literal["canonical", "raw"]:
         try:
             _, producer = await load_document(s3, row.document_ref)
-        except (LookupError, ValueError):
+        except LookupError, ValueError:
             raise IngestRejected(
                 409, "stored_document_invalid", "The existing job's stored document is missing or invalid"
             ) from None
@@ -221,7 +221,7 @@ def decode_error(stored: str | None) -> IngestError | None:
         data = json.loads(stored)
         if isinstance(data, dict) and {"code", "message", "issues"} <= data.keys():
             return IngestError.model_validate(data)
-    except (ValueError, ValidationError):
+    except ValueError, ValidationError:
         pass
     return IngestError(code="historical", message=stored)
 

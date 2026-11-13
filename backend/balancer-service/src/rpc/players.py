@@ -39,7 +39,7 @@ def _member_id(data: dict[str, Any]) -> int:
     )
     try:
         return int(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="member_id is required") from None
 
 
@@ -66,11 +66,11 @@ def _list_params(data: dict[str, Any]) -> pagination.PaginationSortSearchParams:
 
     try:
         page = max(int(first("page") or 1), 1)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         page = 1
     try:
         per_page = int(first("per_page") or 30)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         per_page = 30
     per_page = min(max(per_page, 1), 100)
     search = str(first("query") or "").strip()
@@ -95,7 +95,7 @@ def _author_to_read(data: dict[str, Any], actor_user_id: int) -> int:
         return actor_user_id
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="author_user_id must be an integer"
         ) from None

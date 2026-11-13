@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 ENV PYTHONUNBUFFERED=1
 
@@ -6,7 +6,7 @@ WORKDIR /app/
 
 # Install uv.
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#installing-uv
-COPY --from=ghcr.io/astral-sh/uv:0.9.24 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.8 /uv /uvx /bin/
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV UV_COMPILE_BYTECODE=1
@@ -61,12 +61,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev --package analytics-service \
         --no-install-package xgboost-cpu
 
-ARG XGBOOST_VERSION=3.2.0
+ARG XGBOOST_VERSION=3.4.1
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install "xgboost==${XGBOOST_VERSION}"
 
-ARG LIGHTGBM_VERSION=4.6.0
+ARG LIGHTGBM_VERSION=4.7.0
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install \

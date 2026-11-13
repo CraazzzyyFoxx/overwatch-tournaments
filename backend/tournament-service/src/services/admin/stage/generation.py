@@ -400,7 +400,7 @@ class StageGenerationMixin(StageServiceBase):
             .where(models.BracketEncounter.stage_id == stage.id)
             .order_by(models.BracketEncounter.round, models.Encounter.id)
         )
-        rows = result.tuples().all()
+        rows = result.all()
         existing = [encounter for encounter, _round in rows]
         if not existing or any(encounter.status != enums.EncounterStatus.OPEN for encounter in existing):
             return None

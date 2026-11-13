@@ -144,7 +144,7 @@ class StageServiceBase:
         item_orders = await session.execute(
             select(models.StageItem.id, models.StageItem.order).where(models.StageItem.id.in_(source_item_ids))
         )
-        source_item_order = dict(item_orders.tuples().all())
+        source_item_order = dict(item_orders.all())
         return plan_seats(
             sources,
             ranking=SeedRanking(stage.seed_ranking),

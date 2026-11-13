@@ -51,7 +51,7 @@ from shared.services.user_cache import COMPARE_GENERATIONS
 # The merge calls the flow engine, which is tournament-service code.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tournament-service"))
 
-from src.services.flow.league_merge import (  # noqa: E402  # ty: ignore[unresolved-import]
+from src.services.flow.league_merge import (  # noqa: E402  # ty: ignore[import-not-found]
     GrantSnapshot,
     MappingError,
     MergeError,
@@ -69,7 +69,7 @@ from src.services.flow.league_merge import (  # noqa: E402  # ty: ignore[unresol
 
 def _session_maker() -> async_sessionmaker[AsyncSession]:
     # Lazy: building the engine needs the database environment, which a file check does not.
-    from src.core.db import async_session_maker  # noqa: PLC0415  # ty: ignore[unresolved-import]
+    from src.core.db import async_session_maker  # noqa: PLC0415  # ty: ignore[import-not-found]
 
     return async_session_maker
 
@@ -161,7 +161,7 @@ async def _after_merge(
     snapshot.run_ids = [*snapshot.run_ids, *run_ids]
     path.write_text(snapshot.to_json(), encoding="utf-8")
 
-    from src.core.config import settings  # noqa: PLC0415  # ty: ignore[unresolved-import]
+    from src.core.config import settings  # noqa: PLC0415  # ty: ignore[import-not-found]
 
     configure_generations(str(settings.redis_url))
     await bump(*COMPARE_GENERATIONS)

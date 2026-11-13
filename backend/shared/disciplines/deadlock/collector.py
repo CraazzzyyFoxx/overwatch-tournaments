@@ -24,6 +24,7 @@ import sqlalchemy as sa
 from faststream.rabbit import RabbitQueue
 from loguru import logger
 from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
@@ -307,7 +308,7 @@ async def _latest_ranks(session: AsyncSession, social_account_ids: Sequence[int]
     rows = await session.execute(
         sa.select(snap.social_account_id, snap.division, snap.tier, snap.rank_value, snap.is_ranked)
         .where(snap.discipline == DISCIPLINE, snap.social_account_id.in_(list(social_account_ids)))
-        .distinct(snap.social_account_id)
+        .ext(distinct_on(snap.social_account_id))
         .order_by(snap.social_account_id, snap.captured_at.desc(), snap.id.desc())
     )
     return {row[0]: AccountRank(*row[1:]) for row in rows.all()}

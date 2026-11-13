@@ -806,9 +806,7 @@ class PlayoffWiringTests(StageLayerCase):
                             BracketEncounter.stage_id == playoff.id
                         )
                     )
-                )
-                .tuples()
-                .all()
+                ).all()
             )
             first_round = [
                 [seat.team_id for seat in await active_teams(s, encounter_id)]

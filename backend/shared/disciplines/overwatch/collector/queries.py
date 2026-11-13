@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
@@ -90,7 +91,7 @@ class RankQueries:
             opening = (
                 _apply_filters(sa.select(snap), **scope, date_from=None, date_to=None)
                 .where(snap.captured_at < date_from)
-                .distinct(*series_key)
+                .ext(distinct_on(*series_key))
                 .order_by(*series_key, snap.captured_at.desc())
             )
             rows.extend((await session.scalars(opening)).all())
@@ -156,7 +157,7 @@ class RankQueries:
             date_from=None,
             date_to=None,
         )
-        query = query.distinct(snap.social_account_id, snap.role, snap.platform).order_by(
+        query = query.ext(distinct_on(snap.social_account_id, snap.role, snap.platform)).order_by(
             snap.social_account_id, snap.role, snap.platform, snap.captured_at.desc()
         )
         rows = (await session.scalars(query)).all()

@@ -86,9 +86,7 @@ async def load_auth_user_ids(session: AsyncSession, registrations: Sequence[Any]
         .join(models.User, models.WorkspaceMember.player_id == models.User.id)
         .where(models.Registration.id.in_(reg_ids))
     )
-    # `.tuples()` is what makes this a real 2-tuple: without it a `Row` is not an
-    # `Iterable[tuple[...]]` and `dict()` does not type-check.
-    mapped = dict(rows.tuples().all())
+    mapped = dict(rows.all())
     return {reg_id: mapped.get(reg_id) for reg_id in reg_ids}
 
 

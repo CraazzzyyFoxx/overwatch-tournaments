@@ -1,6 +1,6 @@
 # Backend
 
-The OWT backend is a Python 3.14 monorepo of **headless [FastStream](https://faststream.ag2.ai/)
+The OWT backend is a Python 3.15 monorepo of **headless [FastStream](https://faststream.ag2.ai/)
 workers**. Each service is a long-running RabbitMQ RPC worker (not an HTTP server) that shares one
 ORM/schema layer through [`shared/`](./shared/README.md). The **only** HTTP/WebSocket entry point is
 the Go [`gateway/`](../gateway/README.md), which terminates HTTP, validates JWTs, and translates REST
@@ -35,7 +35,7 @@ they are **not** HTTP APIs. HTTP is served exclusively by the gateway (`:8080`).
 ## Requirements
 
 * [Docker](https://www.docker.com/) and Docker Compose.
-* [uv](https://docs.astral.sh/uv/) for Python package and environment management (Python 3.14, pinned by `backend/.python-version`).
+* [uv](https://docs.astral.sh/uv/) for Python package and environment management (Python 3.15, pinned by `backend/.python-version`).
 
 ## General workflow
 

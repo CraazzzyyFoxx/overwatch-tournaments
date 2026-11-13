@@ -263,9 +263,7 @@ async def _heroes(s: AsyncSession) -> list[int]:
                     CatalogEntity.discipline == "overwatch",
                 )
             )
-        )
-        .tuples()
-        .all()
+        ).all()
     )
     for slug in HERO_SLUGS:
         if slug in existing:

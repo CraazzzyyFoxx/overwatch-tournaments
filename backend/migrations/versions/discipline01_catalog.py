@@ -562,9 +562,7 @@ def _rewrite_pick_ban(kind: str) -> None:
     ids = dict(
         bind.execute(
             sa.text("SELECT legacy_id, entity_id FROM catalog.entity_legacy WHERE legacy_kind = :kind"), {"kind": kind}
-        )
-        .tuples()
-        .all()
+        ).all()
     )
     _rewrite_documents(
         bind,

@@ -55,7 +55,7 @@ class AttachmentProcessor:
         if channel is None:
             try:
                 channel = await self._client.fetch_channel(channel_id)
-            except (discord.NotFound, discord.Forbidden):
+            except discord.NotFound, discord.Forbidden:
                 return None
         return channel if isinstance(channel, discord.abc.Messageable) else None
 

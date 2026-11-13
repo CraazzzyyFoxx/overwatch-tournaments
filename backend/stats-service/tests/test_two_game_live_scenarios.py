@@ -139,7 +139,7 @@ def token(live: Live, ids: dict[str, Any], who: str, *, fresh: bool = False) -> 
 def code_of(response: Response) -> str | None:
     try:
         return err(response)
-    except (ValueError, AttributeError, KeyError, TypeError, IndexError):
+    except ValueError, AttributeError, KeyError, TypeError, IndexError:
         return None
 
 
@@ -1126,9 +1126,11 @@ def _round_opened(live: Live, eid: int) -> int:
 
 def _wait_round(live: Live, ids: dict[str, Any], enc: dict[str, Any], number: int) -> dict[str, Any]:
     return wait_until(
-        lambda: (state := _state(live, ids, enc["encounter_id"])).get("current_round") == number
-        and state.get("acting_team_ids")
-        and state,
+        lambda: (
+            (state := _state(live, ids, enc["encounter_id"])).get("current_round") == number
+            and state.get("acting_team_ids")
+            and state
+        ),
         f"hero round {number} of encounter {enc['encounter_id']}",
         timeout=60,
     )

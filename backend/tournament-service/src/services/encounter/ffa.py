@@ -343,17 +343,13 @@ class FfaEncounterService:
         """
         participants: dict[int, list[int]] = {}
         seats = (
-            (
-                await session.execute(
-                    sa.select(EncounterTeam, BracketEncounter.stage_item_id)
-                    .join(BracketEncounter, BracketEncounter.encounter_id == EncounterTeam.encounter_id)
-                    .where(BracketEncounter.stage_id == stage_id, EncounterTeam.active.is_(True))
-                    .order_by(EncounterTeam.encounter_id, EncounterTeam.slot)
-                )
+            await session.execute(
+                sa.select(EncounterTeam, BracketEncounter.stage_item_id)
+                .join(BracketEncounter, BracketEncounter.encounter_id == EncounterTeam.encounter_id)
+                .where(BracketEncounter.stage_id == stage_id, EncounterTeam.active.is_(True))
+                .order_by(EncounterTeam.encounter_id, EncounterTeam.slot)
             )
-            .tuples()
-            .all()
-        )
+        ).all()
         for seat, stage_item_id in seats:
             if stage_item_id is None or seat.team_id is None:
                 continue
@@ -366,21 +362,17 @@ class FfaEncounterService:
         grouped: dict[int, list[list[GameLine]]] = {}
         current: tuple[int, int] | None = None
         rows = (
-            (
-                await session.execute(
-                    sa.select(EncounterGameTeam, EncounterGame.position, BracketEncounter.stage_item_id)
-                    .join(EncounterGame, EncounterGame.id == EncounterGameTeam.game_id)
-                    .join(BracketEncounter, BracketEncounter.encounter_id == EncounterGame.encounter_id)
-                    .where(
-                        BracketEncounter.stage_id == stage_id,
-                        EncounterGame.state == EncounterGameState.CONFIRMED,
-                    )
-                    .order_by(EncounterGame.encounter_id, EncounterGame.position, EncounterGameTeam.encounter_team_id)
+            await session.execute(
+                sa.select(EncounterGameTeam, EncounterGame.position, BracketEncounter.stage_item_id)
+                .join(EncounterGame, EncounterGame.id == EncounterGameTeam.game_id)
+                .join(BracketEncounter, BracketEncounter.encounter_id == EncounterGame.encounter_id)
+                .where(
+                    BracketEncounter.stage_id == stage_id,
+                    EncounterGame.state == EncounterGameState.CONFIRMED,
                 )
+                .order_by(EncounterGame.encounter_id, EncounterGame.position, EncounterGameTeam.encounter_team_id)
             )
-            .tuples()
-            .all()
-        )
+        ).all()
         for line, position, stage_item_id in rows:
             if stage_item_id is None or line.encounter_team_id not in team_by_participation:
                 continue
