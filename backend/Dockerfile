@@ -13,7 +13,7 @@
 # venv. Nothing that changes per release may be copied before it.
 # Digest-pinned: a re-published 3.14-slim rebuilds every layer above it and the
 # host re-pulls every venv. Dependabot (docker, /backend) bumps it as a PR.
-FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS base
+FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d AS base
 
 ENV PYTHONUNBUFFERED=1
 
