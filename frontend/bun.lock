@@ -5,7 +5,7 @@
     "": {
       "name": "anak-tournament-frontend",
       "dependencies": {
-        "@craazzzyyfoxx/admin-kit": "^0.1.0",
+        "@craazzzyyfoxx/admin-kit": "^0.2.0",
         "@deadlock-api/ui-core": "^1.7.0",
         "@deadlock-api/ui-react": "^1.7.0",
         "@dnd-kit/core": "^6.3.1",
@@ -107,7 +107,7 @@
 
     "@chevrotain/types": ["@chevrotain/types@11.1.2", "", {}, "sha512-U+HFai5+zmJCkK86QsaJtoITlboZHBqrVketcO2ROv865xfCMSFpELQoz1GkX5GzME8pTa+3kbKrZHQtI0gdbw=="],
 
-    "@craazzzyyfoxx/admin-kit": ["@craazzzyyfoxx/admin-kit@0.1.0", "", { "dependencies": { "@dnd-kit/core": "^6.3.1", "@dnd-kit/sortable": "^10.0.0", "@dnd-kit/utilities": "^3.2.2", "@tanstack/react-virtual": "^3.14.9", "class-variance-authority": "^0.7.1", "clsx": "^2.1.1", "cmdk": "^1.1.1", "tailwind-merge": "^3.7.0", "use-debounce": "^10.0.1" }, "peerDependencies": { "@tanstack/react-query": "^5.90.0", "@tanstack/react-table": "^8.21.0", "lucide-react": "^1.28.0", "next": "^16.0.0", "next-intl": "^4.13.0", "radix-ui": "^1.8.0", "react": "^19.2.0", "react-dom": "^19.2.0", "sonner": "^2.0.0" } }, "sha512-/0Yf10ay6EXu6BDj5W76rNEEB8WB8dILBGhVHy7+k+cBU6RACtQ5PbMQ7LqoYzTUFG+RuH4eP1VcZoJuOO7pjg=="],
+    "@craazzzyyfoxx/admin-kit": ["@craazzzyyfoxx/admin-kit@0.2.0", "", { "dependencies": { "@dnd-kit/core": "^6.3.1", "@dnd-kit/sortable": "^10.0.0", "@dnd-kit/utilities": "^3.2.2", "@tanstack/react-virtual": "^3.14.9", "class-variance-authority": "^0.7.1", "clsx": "^2.1.1", "cmdk": "^1.1.1", "tailwind-merge": "^3.7.0", "use-debounce": "^10.0.1" }, "peerDependencies": { "@tanstack/react-query": "^5.90.0", "@tanstack/react-table": "^8.21.0", "lucide-react": "^1.28.0", "next": "^16.0.0", "next-intl": "^4.13.0", "radix-ui": "^1.8.0", "react": "^19.2.0", "react-dom": "^19.2.0", "sonner": "^2.0.0" } }, "sha512-LyYiNAYy0Q17miRHSsGE71aIA+2eOLhtkf8reP6Rv/hVYh1eu8x1/xjo4oiOtLfgYf/+/dHEGGI93hTAueAMvA=="],
 
     "@date-fns/tz": ["@date-fns/tz@1.4.1", "", {}, "sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA=="],
 
