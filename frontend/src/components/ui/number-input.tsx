@@ -53,13 +53,11 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
     const [rawValue, setRawValue] = useState(() => toRawValue(value));
     const [isFocused, setIsFocused] = useState(false);
 
-    /* eslint-disable react-hooks/set-state-in-effect -- Keep the editable string in sync with external value changes while preserving in-progress typing. */
     useEffect(() => {
       if (!isFocused) {
         setRawValue(toRawValue(value));
       }
     }, [isFocused, value]);
-    /* eslint-enable react-hooks/set-state-in-effect */
 
     const sign = min === undefined || min < 0 ? "-?" : "";
     const pattern = integer ? new RegExp(`^${sign}\\d*$`) : new RegExp(`^${sign}\\d*(?:\\.\\d*)?$`);

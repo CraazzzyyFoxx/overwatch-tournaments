@@ -107,8 +107,8 @@ const ContributionChart = ({ home, away, round }: ContributionChartProps) => {
               // dark surface. Force readable colours on both label and items.
               labelStyle={{ color: "var(--aqt-fg)", fontWeight: 600, marginBottom: 2 }}
               itemStyle={{ color: "var(--aqt-fg)" }}
-              formatter={(value: number) => [
-                formatStat(metric, value, format),
+              formatter={(value) => [
+                formatStat(metric, Number(value), format),
                 t((STAT_META[metric]?.labelKey ?? metric) as Parameters<typeof t>[0])
               ]}
             />

@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-import { act, useRef, type ReactNode } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it, vi } from "vitest";
-import type { ImperativePanelHandle } from "react-resizable-panels";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { usePanelRef } from "react-resizable-panels";
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
@@ -36,13 +36,14 @@ async function mount(node: ReactNode) {
   return container;
 }
 
+// A panel's share of the group is its flex-grow.
 function panelSize(scope: HTMLElement, panelId: string): number {
-  const panel = scope.querySelector(`[data-panel-id="${panelId}"]`);
-  return Number(panel?.getAttribute("data-panel-size"));
+  const panel = scope.querySelector<HTMLElement>(`[data-panel][id="${panelId}"]`);
+  return Number(panel?.style.flexGrow);
 }
 
-function Harness({ onCollapse, onExpand }: { onCollapse: () => void; onExpand: () => void }) {
-  const sidebarRef = useRef<ImperativePanelHandle>(null);
+function Harness() {
+  const sidebarRef = usePanelRef();
 
   return (
     <div>
@@ -52,22 +53,20 @@ function Harness({ onCollapse, onExpand }: { onCollapse: () => void; onExpand: (
       <button type="button" onClick={() => sidebarRef.current?.expand()}>
         expand
       </button>
-      <ResizablePanelGroup direction="horizontal">
+      <ResizablePanelGroup orientation="horizontal">
         <ResizablePanel
-          ref={sidebarRef}
+          panelRef={sidebarRef}
           id="sidebar"
-          defaultSize={30}
-          minSize={20}
-          maxSize={50}
+          defaultSize="30%"
+          minSize="20%"
+          maxSize="50%"
           collapsible
-          collapsedSize={5}
-          onCollapse={onCollapse}
-          onExpand={onExpand}
+          collapsedSize="5%"
         >
           sidebar-content
         </ResizablePanel>
         <ResizableHandle withHandle />
-        <ResizablePanel id="content" minSize={40}>
+        <ResizablePanel id="content" minSize="40%">
           main-content
         </ResizablePanel>
       </ResizablePanelGroup>
@@ -75,9 +74,20 @@ function Harness({ onCollapse, onExpand }: { onCollapse: () => void; onExpand: (
   );
 }
 
+// happy-dom does no layout, and react-resizable-panels sizes its panels from the
+// group's measured width; give every element one so the layout can be computed.
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, value: 1000 });
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, value: 600 });
+});
+afterAll(() => {
+  Reflect.deleteProperty(HTMLElement.prototype, "offsetWidth");
+  Reflect.deleteProperty(HTMLElement.prototype, "offsetHeight");
+});
+
 describe("Resizable", () => {
   it("renders both panels split by a keyboard-focusable separator", async () => {
-    const scope = await mount(<Harness onCollapse={() => {}} onExpand={() => {}} />);
+    const scope = await mount(<Harness />);
 
     expect(scope.textContent).toContain("sidebar-content");
     expect(scope.textContent).toContain("main-content");
@@ -88,7 +98,7 @@ describe("Resizable", () => {
   });
 
   it("grows the sidebar panel when the handle is resized with the arrow keys", async () => {
-    const scope = await mount(<Harness onCollapse={() => {}} onExpand={() => {}} />);
+    const scope = await mount(<Harness />);
     const handle = scope.querySelector<HTMLElement>("[role='separator']");
     expect(handle).not.toBeNull();
 
@@ -106,9 +116,7 @@ describe("Resizable", () => {
   });
 
   it("collapses and re-expands the sidebar panel imperatively, like the pool sidebar's toggle button", async () => {
-    const onCollapse = vi.fn();
-    const onExpand = vi.fn();
-    const scope = await mount(<Harness onCollapse={onCollapse} onExpand={onExpand} />);
+    const scope = await mount(<Harness />);
     const buttons = [...scope.querySelectorAll("button")];
     const collapseButton = buttons.find((button) => button.textContent === "collapse");
     const expandButton = buttons.find((button) => button.textContent === "expand");
@@ -116,17 +124,11 @@ describe("Resizable", () => {
     await act(async () => {
       collapseButton?.click();
     });
-    expect(onCollapse).toHaveBeenCalledTimes(1);
     expect(panelSize(scope, "sidebar")).toBeCloseTo(5, 1);
 
     await act(async () => {
       expandButton?.click();
     });
-    // react-resizable-panels' `expand()` can re-fire `onExpand` once more
-    // while it re-clamps the panel back above `minSize`; the call itself
-    // (not a fixed count) is the contract that keeps `isPoolSidebarCollapsed`
-    // in sync with the real panel state.
-    expect(onExpand).toHaveBeenCalled();
     expect(panelSize(scope, "sidebar")).toBeCloseTo(30, 1);
   });
 });

@@ -5,21 +5,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url)),
-      // `react-resizable-panels` conditionally exports a stripped-down
-      // "edge-light" build under the `node` condition (no layout effects — it
-      // targets edge runtimes without a DOM). Node's own module resolution
-      // picks that condition once the package is externalized/required by
-      // Vitest, even under `@vitest-environment happy-dom`, so every
-      // imperative call (`collapse()`/`resize()`) throws "Panel size not
-      // found". Alias straight to the real browser build, matching what
-      // Next.js's client bundler resolves in production.
-      "react-resizable-panels": fileURLToPath(
-        new URL(
-          "./node_modules/react-resizable-panels/dist/react-resizable-panels.browser.development.js",
-          import.meta.url
-        )
-      )
+      "@": fileURLToPath(new URL("./src", import.meta.url))
     },
     dedupe: ["react", "react-dom"]
   },
@@ -29,12 +15,15 @@ export default defineConfig({
     // hooks, so every `useReactTable` render threw "Invalid hook call" until it
     // was inlined through Vite alongside the app code. `cmdk` calls `useRef` the
     // same way, so every combobox popover threw the moment it opened. The admin kit's
-    // ESM imports `next/navigation` and `next/link`, which Node cannot resolve itself.
-    server: { deps: { inline: ["@tanstack/react-table", "cmdk", "@craazzzyyfoxx/admin-kit"] } },
+    // ESM imports `next/navigation` and `next/link`, which Node cannot resolve itself;
+    // `@uiw/*` ESM imports `.css` files, which only Vite can load.
+    server: {
+      deps: { inline: ["@tanstack/react-table", "cmdk", "@craazzzyyfoxx/admin-kit", /@uiw\//] }
+    },
     environment: "node",
-    // Node 25 ships a global `localStorage` stub (no methods without
+    // Node 25+ ships a global `localStorage` stub (no methods without
     // `--localstorage-file`) that shadows happy-dom's, so every
-    // `localStorage.getItem` threw. Node 22 (CI) has it off already.
+    // `localStorage.getItem` threw.
     execArgv: ["--no-experimental-webstorage"],
     // A plain glob, not an allow-list. The frontend used to run two runners
     // (vitest plus `bun test` on the complement), which forced a hand-kept
