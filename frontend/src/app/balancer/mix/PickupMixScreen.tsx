@@ -513,6 +513,8 @@ function PickupMixDetail({ initialGame }: Readonly<{ initialGame: CustomGame }>)
               canDelete={isAdminHere}
               deleting={hardDeleteMix.isPending}
               onDeleteMix={() => hardDeleteMix.mutate(undefined, { onSuccess: () => router.push("/balancer/mix") })}
+              closingMix={closeMix.isPending}
+              onCloseMix={() => closeMix.mutate()}
               onRename={(name) => renameMix.mutateAsync(name)}
               onSetSelfService={(patch) => setSelfService.mutate(patch)}
               savingSelfService={setSelfService.isPending}

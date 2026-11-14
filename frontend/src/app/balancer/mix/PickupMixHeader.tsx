@@ -4,6 +4,7 @@ import { forwardRef, useRef, useState, type ComponentPropsWithoutRef } from "rea
 import { useTranslations } from "next-intl";
 import {
   AlertTriangle,
+  Archive,
   CheckCircle2,
   ChevronDown,
   ExternalLink,
@@ -99,6 +100,9 @@ type PickupMixHeaderProps = {
   canDelete?: boolean;
   deleting?: boolean;
   onDeleteMix?: () => void;
+  /** Omitted -- the menu offers no close; it is the only way to end a mix that never balanced a lineup. */
+  onCloseMix?: () => void;
+  closingMix?: boolean;
   /** Omitted -- the self-service row is not offered at all. */
   onSetSelfService?: (patch: { self_signup?: MixSelfSignup; self_role_edit?: boolean }) => void;
   savingSelfService?: boolean;
@@ -152,6 +156,8 @@ export function PickupMixHeader({
   canDelete = false,
   deleting = false,
   onDeleteMix,
+  onCloseMix,
+  closingMix = false,
   onRename,
   onSetSelfService,
   savingSelfService = false,
@@ -172,11 +178,13 @@ export function PickupMixHeader({
   const tm = useTranslations("mixes");
   const tl = useTranslations("mixes.lobbies");
   const th = useTranslations("mixes.header");
+  const tTeams = useTranslations("mixes.teams");
   const tb = useTranslations("pickBan.mixBans");
   const banPresetName = useBanPresetName();
   const clocks = useMixPresetClocks(game?.discipline, game?.hero_ban_preset ?? null);
   const pickers = useMixPresetPickers(game?.discipline, game?.hero_ban_preset ?? null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
   const [dropLobbyOpen, setDropLobbyOpen] = useState(false);
   const lobbyCount = game?.lobby_count ?? 1;
   // What the slider shows while it is being dragged. The request only goes out
@@ -197,6 +205,7 @@ export function PickupMixHeader({
     (_, i) => tl("tab", { letter: lobbyLetter(draftLobbyCount + i) })
   ).join(", ");
   const offerDelete = canDelete && onDeleteMix != null;
+  const offerClose = canWrite && onCloseMix != null;
   // One lobby: its stage is the mix's, said beside the name. Several: each lobby card says its own, so nothing here.
   const onlyLobby = lobbyCount === 1 ? game?.lobbies.find((row) => row.lobby_index === 0) : undefined;
   const offerRules =
@@ -310,6 +319,12 @@ export function PickupMixHeader({
                   {th("access")}
                 </DropdownMenuItem>
               ) : null}
+              {offerClose ? (
+                <DropdownMenuItem disabled={closingMix} onSelect={() => setCloseOpen(true)}>
+                  <Archive aria-hidden="true" />
+                  {tTeams("close")}
+                </DropdownMenuItem>
+              ) : null}
               {offerDelete ? (
                 <>
                   {canWrite ? <DropdownMenuSeparator /> : null}
@@ -404,6 +419,24 @@ export function PickupMixHeader({
           onConfirm={() => {
             setDropLobbyOpen(false);
             onLobbyCountChange(draftLobbyCount);
+          }}
+        />
+      ) : null}
+
+      {offerClose ? (
+        <ConfirmDialog
+          open={closeOpen}
+          onOpenChange={setCloseOpen}
+          intent={{
+            title: tTeams("closeTitle"),
+            description: tTeams("closeDescription"),
+            confirmLabel: tTeams("closeConfirm"),
+            tone: "danger"
+          }}
+          pending={closingMix}
+          onConfirm={() => {
+            setCloseOpen(false);
+            onCloseMix?.();
           }}
         />
       ) : null}
