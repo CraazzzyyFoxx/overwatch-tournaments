@@ -33,8 +33,8 @@ for svc in "${suites[@]}"; do
 done
 
 if [[ "$combine" == 1 ]]; then
-  # The suites above already synced the environment: nothing left to build.
-  uv run --no-build coverage combine -q
-  uv run --no-build coverage report
-  uv run --no-build coverage html -q --title "OWT"
+  # The suites above already synced the environment: install and build nothing more.
+  uv run --no-sync coverage combine -q
+  uv run --no-sync coverage report
+  uv run --no-sync coverage html -q --title "OWT"
 fi
