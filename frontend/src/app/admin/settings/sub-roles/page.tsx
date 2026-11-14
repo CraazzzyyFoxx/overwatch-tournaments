@@ -446,14 +446,17 @@ function SubRoleRow({
 
   return (
     <li className="relative flex items-center gap-3 px-4 py-2.5">
-      <SubRoleMark icon={effective(own.icon, parent.icon)} color={effective(own.color, parent.color)} />
-      <div className="min-w-0 flex-1">
-        <p className={cn("truncate text-sm font-medium", entry.is_active ? "text-foreground" : "text-muted-foreground")}>
-          {entry.label}
-        </p>
-        {entry.description ? (
-          <p className="truncate text-caption text-muted-foreground">{entry.description}</p>
-        ) : null}
+      {/* Positioned so the row button's hover fill paints beneath it; clicks pass through to the button. */}
+      <div className="pointer-events-none relative flex min-w-0 flex-1 items-center gap-3">
+        <SubRoleMark icon={effective(own.icon, parent.icon)} color={effective(own.color, parent.color)} />
+        <div className="min-w-0 flex-1">
+          <p className={cn("truncate text-sm font-medium", entry.is_active ? "text-foreground" : "text-muted-foreground")}>
+            {entry.label}
+          </p>
+          {entry.description ? (
+            <p className="truncate text-caption text-muted-foreground">{entry.description}</p>
+          ) : null}
+        </div>
       </div>
       {canEdit ? (
         // The whole row opens the editor; "Restore" comes after it and sits above its box.

@@ -437,7 +437,7 @@ function StageCard({
         <span className="sr-only">{stage.name}</span>
       </RowButton>
 
-      <div className="pointer-events-none min-w-0 flex-1">
+      <div className="pointer-events-none relative min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <p aria-hidden className="min-w-0 truncate text-sm font-semibold text-foreground">
             {stage.name}
