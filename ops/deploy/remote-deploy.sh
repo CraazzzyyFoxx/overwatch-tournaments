@@ -97,6 +97,15 @@ make prod-pgbouncer-reconnect </dev/null
 docker compose -f "${COMPOSE_FILE}" --profile tools run --rm --no-deps -T discord-emoji </dev/null \
     || echo "warning: discord-emoji did not finish cleanly; the bot keeps its Unicode fallbacks"
 
+# faststream 0.7 declares the rpc.* queues durable and RabbitMQ refuses to
+# redeclare a queue with different arguments, so the non-durable ones 0.6 left
+# behind would crash every service at start
+# (docs/releases/2026-11-14-faststream-0.7-durable-queues.md). Delete them; the
+# new containers recreate them durable. A no-op once none are left.
+docker compose -f "${COMPOSE_FILE}" exec -T rabbitmq sh -c '
+    rabbitmqctl list_queues -q name durable | awk "\$2 == \"false\" && \$1 ~ /^rpc\\./ {print \$1}" |
+        while read -r q; do rabbitmqctl -q delete_queue "$q" >/dev/null; done' </dev/null
+
 make prod-up PROD_SIZE="${PROD_SIZE}"
 
 docker compose -f "${COMPOSE_FILE}" ps --format '{{.Service}}|{{.State}}|{{.Health}}' | sort
