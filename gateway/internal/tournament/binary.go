@@ -23,6 +23,10 @@ const (
 	// maxUpload bounds the multipart request: one image plus its part headers
 	// and boundaries (the only form field is "file").
 	maxUpload = maxImage + 64<<10
+	// maxNoteFile is the worker's note-attachment cap (MAX_ATTACHMENT_SIZE in
+	// src/services/registration/notes.py); maxNoteUpload its multipart bound.
+	maxNoteFile   = 10 << 20
+	maxNoteUpload = maxNoteFile + 64<<10
 )
 
 // Binary serves the tournament-service endpoints the generic JSON edge.Dispatcher
@@ -51,7 +55,7 @@ func (b *Binary) TeamImageUpload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	body, release, ok := b.fileBody(w, r, data)
+	body, release, ok := b.fileBody(w, r, data, maxUpload, false)
 	if !ok {
 		return
 	}
@@ -67,7 +71,7 @@ func (b *Binary) RegistrationTeamImageUpload(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	body, release, ok := b.fileBody(w, r, data)
+	body, release, ok := b.fileBody(w, r, data, maxUpload, false)
 	if !ok {
 		return
 	}
@@ -85,12 +89,30 @@ func (b *Binary) TournamentImageUpload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	body, release, ok := b.fileBody(w, r, data)
+	body, release, ok := b.fileBody(w, r, data, maxUpload, false)
 	if !ok {
 		return
 	}
 	defer release()
 	b.relayJSON(w, r, "rpc.tournament.tournaments.image_upload", body, http.StatusOK)
+}
+
+// RegistrationNoteAttachmentUpload: POST
+// /api/v1/admin/balancer/tournaments/{tournament_id}/registration-notes/{note_id}/attachments
+// (note author + registration/team update in the worker). Unlike the image
+// uploads it relays the part's filename: the worker types and names the stored
+// file by it.
+func (b *Binary) RegistrationNoteAttachmentUpload(w http.ResponseWriter, r *http.Request) {
+	data, ok := b.identityInto(w, r, map[string]any{"id": r.PathValue("tournament_id"), "note_id": r.PathValue("note_id")})
+	if !ok {
+		return
+	}
+	body, release, ok := b.fileBody(w, r, data, maxNoteUpload, true)
+	if !ok {
+		return
+	}
+	defer release()
+	b.relayJSON(w, r, "rpc.tournament.regnote_attachment_upload", body, http.StatusOK)
 }
 
 // identityInto resolves the bearer identity (required) and injects it into data.
@@ -117,10 +139,11 @@ func (b *Binary) identityInto(w http.ResponseWriter, r *http.Request, data map[s
 
 // fileBody admits the upload against the gateway's memory budget, parses the
 // multipart "file" part and returns the RPC message: data plus content_type and
-// content_b64, the file base64'd straight into the message. On success the
+// content_b64 (and filename, when withFilename), the file base64'd straight into
+// the message. maxBody bounds the whole multipart request. On success the
 // caller must defer release, which frees the reservation once the RPC is done.
-func (b *Binary) fileBody(w http.ResponseWriter, r *http.Request, data map[string]any) (body []byte, release func(), ok bool) {
-	rel, admitted := upload.Admit(w, r, maxUpload)
+func (b *Binary) fileBody(w http.ResponseWriter, r *http.Request, data map[string]any, maxBody int64, withFilename bool) (body []byte, release func(), ok bool) {
+	rel, admitted := upload.Admit(w, r, maxBody)
 	if !admitted {
 		return nil, nil, false
 	}
@@ -129,8 +152,8 @@ func (b *Binary) fileBody(w http.ResponseWriter, r *http.Request, data map[strin
 			rel()
 		}
 	}()
-	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
-	if err := r.ParseMultipartForm(maxUpload); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBody)
+	if err := r.ParseMultipartForm(maxBody); err != nil {
 		writeDetail(w, http.StatusBadRequest, "invalid multipart form")
 		return nil, nil, false
 	}
@@ -141,6 +164,9 @@ func (b *Binary) fileBody(w http.ResponseWriter, r *http.Request, data map[strin
 	}
 	defer func() { _ = f.Close() }()
 	data["content_type"] = hdr.Header.Get("Content-Type")
+	if withFilename {
+		data["filename"] = hdr.Filename
+	}
 	body, err = upload.Body(data, "content_b64", upload.Base64Len(hdr.Size), func(out []byte) ([]byte, error) {
 		return upload.AppendBase64(out, f)
 	})

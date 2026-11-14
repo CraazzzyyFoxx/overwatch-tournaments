@@ -176,8 +176,8 @@ func TestGroups_BinaryRoutesDocumentTheirWireFormat(t *testing.T) {
 			}
 		}
 	}
-	if uploads != 10 {
-		t.Errorf("checked %d uploads, want the 10 bespoke multipart routes", uploads)
+	if uploads != 11 {
+		t.Errorf("checked %d uploads, want the 11 bespoke multipart routes", uploads)
 	}
 	log := ops["get /api/v1/matches/{match_id}/log"].Responses["200"].Content
 	if _, ok := log["application/octet-stream"]; !ok || len(log) != 1 {

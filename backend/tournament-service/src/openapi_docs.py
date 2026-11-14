@@ -1146,6 +1146,68 @@ DOCS: dict[str, dict] = {
             "Staff-only notes on a registered team; never returned on the public roster."
         ),
     },
+    "rpc.tournament.regnote_list": {
+        "summary": "List organizer notes of a registration or registration team",
+        "description": (
+            "Permission: workspace `registration.read` (for `registration_id`) or `team.read` (for "
+            "`registration_team_id`) on the tournament's workspace; exactly one of the two query params. "
+            "Staff-only notes, oldest first, each with its attachments' metadata. 404 when the target is not "
+            "in this tournament."
+        ),
+    },
+    "rpc.tournament.regnote_counts": {
+        "summary": "Count organizer notes per registration and team",
+        "description": (
+            "Permission: workspace `registration.read` or `team.read` on the tournament's workspace. "
+            "Note counts keyed by registration id and by registration-team id; targets without notes are absent."
+        ),
+    },
+    "rpc.tournament.regnote_create": {
+        "summary": "Add an organizer note",
+        "description": (
+            "Permission: workspace `registration.update` (registration target) or `team.update` (team target). "
+            "Adds a Markdown note (up to 20 000 characters) to exactly one registration or registration team "
+            "of this tournament; the caller becomes its author."
+        ),
+    },
+    "rpc.tournament.regnote_update": {
+        "summary": "Edit an organizer note",
+        "description": (
+            "Permission: the note's author, holding `registration.update` / `team.update`. "
+            "Replaces the note's body and stamps `edited_at`."
+        ),
+    },
+    "rpc.tournament.regnote_delete": {
+        "summary": "Delete an organizer note",
+        "description": (
+            "Permission: the note's author with `registration.update` / `team.update`, or anyone holding "
+            "`registration.delete` / `team.delete`. Deletes the note and its attachments; the stored files are "
+            "removed after the row commits."
+        ),
+    },
+    "rpc.tournament.regnote_attachment_upload": {
+        "summary": "Attach a file to an organizer note",
+        "description": (
+            "Permission: the note's author, holding `registration.update` / `team.update`. Multipart `file`, "
+            "up to 10 MiB (the gateway refuses a larger body with 400), at most 5 per note. Allowed: png, jpg, "
+            "jpeg, webp, gif, pdf, txt, csv, zip -- decided by the file extension, 422 otherwise. Stored as a "
+            "private object."
+        ),
+    },
+    "rpc.tournament.regnote_attachment_delete": {
+        "summary": "Remove a file from an organizer note",
+        "description": (
+            "Permission: the note's author with `registration.update` / `team.update`, or anyone holding "
+            "`registration.delete` / `team.delete`. Returns the note without the file."
+        ),
+    },
+    "rpc.tournament.regnote_attachment_url": {
+        "summary": "Get a download link for a note attachment",
+        "description": (
+            "Permission: workspace `registration.read` / `team.read`. A presigned URL valid for 5 minutes; "
+            "images, pdf and txt open inline, everything else downloads under its original name."
+        ),
+    },
     "rpc.tournament.regteam_place_admin": {
         "summary": "Place a player on a registration team (organizer)",
         "description": (

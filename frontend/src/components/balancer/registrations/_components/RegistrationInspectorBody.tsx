@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 
 import { AnswerValue } from "@/components/forms/AnswerValue";
 import { RoleRankRows } from "@/components/RoleRankRows";
+import { RegistrationNotesPanel } from "@/components/registration/RegistrationNotesPanel";
 import {
   admissionDecisionLabel,
   builtinAnswerLabel
@@ -74,6 +75,8 @@ export default function RegistrationInspectorBody({
   catalog,
   schemaFields,
   schemaKnown,
+  canWriteNotes,
+  canModerateNotes,
   t
 }: Readonly<{
   registration: AdminRegistration;
@@ -85,6 +88,10 @@ export default function RegistrationInspectorBody({
   /** Whether the tournament's schema has actually been read. While it has not,
    *  no answer may be called dropped — there is nothing to have dropped it. */
   schemaKnown: boolean;
+  /** `registration.update`: add organizer notes. */
+  canWriteNotes: boolean;
+  /** `registration.delete`: remove other organizers' notes. */
+  canModerateNotes: boolean;
   t: AdmissionTranslator;
 }>) {
   const i18n = useTranslations("registrationsAdmin");
@@ -196,6 +203,14 @@ export default function RegistrationInspectorBody({
           ) : null}
         </dl>
       </section>
+
+      <RegistrationNotesPanel
+        key={registration.id}
+        tournamentId={registration.tournament_id}
+        target={{ registrationId: registration.id }}
+        canWrite={canWriteNotes}
+        canModerate={canModerateNotes}
+      />
 
       {/* The chart itself lives on the person: a 380px panel is the wrong
           canvas for a time series, and the person page already draws it. */}

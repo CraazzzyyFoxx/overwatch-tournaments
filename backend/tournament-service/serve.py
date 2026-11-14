@@ -60,6 +60,7 @@ from src.rpc import (
     pick_ban_admin,
     public_rpc,
     registration_admin,
+    registration_notes,
     registration_team_binary,
     scrim,
     stage_admin,
@@ -155,6 +156,8 @@ match_import.register(broker, logger)
 team_binary.register(broker, logger)
 # Registered-team crest upload/delete — same wire format, captain-gated.
 registration_team_binary.register(broker, logger)
+# Organizer notes with private file attachments on registrations and registration teams.
+registration_notes.register(broker, logger)
 # Tournament cover/logo upload/delete — same wire format, two slots.
 tournament_binary.register(broker, logger)
 team_format.register(broker, logger)

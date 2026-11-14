@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`pbprog01_progressive_pool_mode`** (187 revisions in `backend/migrations/versions/`).
+Alembic head: **`regnote01_registration_notes`** (188 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -2092,6 +2092,28 @@ erDiagram
         varchar(255) handle
         varchar(255) handle_normalized
     }
+    REGISTRATION_NOTE {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint tournament_id FK
+        bigint registration_id FK "nullable"
+        bigint registration_team_id FK "nullable"
+        bigint author_id FK "nullable"
+        text body
+        timestamptz edited_at "nullable"
+    }
+    REGISTRATION_NOTE_ATTACHMENT {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint note_id FK
+        varchar(512) s3_key
+        varchar(255) filename
+        varchar(127) content_type
+        int size_bytes
+        bigint uploaded_by FK "nullable"
+    }
     REGISTRATION_REGISTRATION {
         bigint id PK
         timestamptz created_at
@@ -2221,6 +2243,8 @@ erDiagram
 
     AUTH_USER |o--o{ REGISTRATION_FORM_TEMPLATE : "created_by"
     AUTH_USER |o--o{ REGISTRATION_FORM_VERSION : "created_by"
+    AUTH_USER |o--o{ REGISTRATION_NOTE : "author_id"
+    AUTH_USER |o--o{ REGISTRATION_NOTE_ATTACHMENT : "uploaded_by"
     AUTH_USER |o--o{ REGISTRATION_REGISTRATION : "deleted_by"
     AUTH_USER |o--o{ REGISTRATION_REGISTRATION_ENTRY : "checked_in_by"
     AUTH_USER |o--o{ REGISTRATION_REGISTRATION_ENTRY : "deleted_by"
@@ -2246,6 +2270,8 @@ erDiagram
     REGISTRATION_FORM_VERSION |o--o{ REGISTRATION_FORM : "current_version_id"
     REGISTRATION_FORM_VERSION |o--o{ REGISTRATION_REGISTRATION : "form_version_id"
     REGISTRATION_GOOGLE_SHEET_FEED ||--o{ REGISTRATION_GOOGLE_SHEET_BINDING : "feed_id"
+    REGISTRATION_NOTE ||--o{ REGISTRATION_NOTE_ATTACHMENT : "note_id"
+    REGISTRATION_REGISTRATION |o--o{ REGISTRATION_NOTE : "registration_id"
     REGISTRATION_REGISTRATION |o--o{ REGISTRATION_TEAM : "captain_registration_id"
     REGISTRATION_REGISTRATION |o--o{ REGISTRATION_TEAM_INVITE : "accepted_registration_id"
     REGISTRATION_REGISTRATION ||--o{ REGISTRATION_IDENTITY : "registration_id"
@@ -2253,12 +2279,14 @@ erDiagram
     REGISTRATION_REGISTRATION ||--o{ REGISTRATION_ROLE : "registration_id"
     REGISTRATION_REGISTRATION ||--o| REGISTRATION_GOOGLE_SHEET_BINDING : "registration_id"
     REGISTRATION_ROLE ||--o{ REGISTRATION_ROLE_ENTITY : "role_id"
+    REGISTRATION_TEAM |o--o{ REGISTRATION_NOTE : "registration_team_id"
     REGISTRATION_TEAM |o--o{ REGISTRATION_REGISTRATION : "registration_team_id"
     REGISTRATION_TEAM ||--o{ REGISTRATION_TEAM_INVITE : "team_id"
     TOURNAMENT_FLOW_NODE ||--o{ REGISTRATION_GOOGLE_SHEET_FEED : "registration_node_id"
     TOURNAMENT_FLOW_NODE ||--o{ REGISTRATION_REGISTRATION_ENTRY : "registration_node_id"
     TOURNAMENT_FLOW_NODE ||--o{ REGISTRATION_TEAM : "registration_node_id"
     TOURNAMENT_TEAM |o--o{ REGISTRATION_TEAM : "exported_team_id"
+    TOURNAMENT_TOURNAMENT ||--o{ REGISTRATION_NOTE : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ REGISTRATION_REGISTRATION : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o{ REGISTRATION_TEAM : "tournament_id"
     TOURNAMENT_TOURNAMENT ||--o| REGISTRATION_FORM : "tournament_id"

@@ -41,6 +41,8 @@ import { nodesOfKind, registrationNodeConfig } from "@/lib/tournament/flow-nodes
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import adminService from "@/services/admin.service";
+import registrationNoteService from "@/services/registration-note.service";
+import { notesCountColumn } from "@/components/registration/notesCountColumn";
 
 import { ADMISSION_LABELS, adminRoleForm } from "./registrationsTable.model";
 
@@ -57,6 +59,7 @@ export default function RegistrationsTable({
   // as English literals like the rest of this admin table.
   const t = useTranslations();
   const tRegistrations = useTranslations("registrationsAdmin");
+  const tNotes = useTranslations("registrationNotes");
   // `id` (the inspector) is navigation, not narrowing: it must not drop the
   // filters the way a narrowing change does.
   const { searchParams, setParams } = useQueryParams({ resetOnChange: [], shallow: true });
@@ -89,6 +92,13 @@ export default function RegistrationsTable({
       }),
     enabled: tournamentId !== null && registrationNodeId !== null
   });
+
+  const noteCountsQuery = useQuery({
+    queryKey: tournamentQueryKeys.registrationNoteCounts(tournamentId ?? 0),
+    queryFn: () => registrationNoteService.counts(tournamentId as number),
+    enabled: tournamentId !== null
+  });
+  const noteCounts = noteCountsQuery.data?.registrations;
 
   const publicFormQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationFormPublic(tournamentId),
@@ -225,6 +235,11 @@ export default function RegistrationsTable({
         adminNotesEdit,
         ontology
       ),
+      notesCountColumn<AdminRegistration>({
+        header: tNotes("column"),
+        count: (registration) => noteCounts?.[String(registration.id)] ?? 0,
+        label: (count) => tNotes("count", { count })
+      }),
       createKebabColumn<AdminRegistration>(
         (registration) =>
           buildRegistrationRowActions(
@@ -266,7 +281,9 @@ export default function RegistrationsTable({
       setCheckIn,
       canAccessPermission,
       openAuditTrail,
-      tRegistrations
+      tRegistrations,
+      noteCounts,
+      tNotes
     ]
   );
 
@@ -414,6 +431,8 @@ export default function RegistrationsTable({
             catalog={subroleCatalog}
             schemaFields={schemaFields}
             schemaKnown={schemaLoaded}
+            canWriteNotes={canAccessPermission("registration.update", workspaceId)}
+            canModerateNotes={canAccessPermission("registration.delete", workspaceId)}
             t={t}
           />
         ) : null}

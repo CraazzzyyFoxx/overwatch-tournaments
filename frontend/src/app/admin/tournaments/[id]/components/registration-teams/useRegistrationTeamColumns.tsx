@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 
 import { columnMeta, createKebabColumn, type KebabAction } from "@craazzzyyfoxx/admin-kit/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
+import { notesCountColumn } from "@/components/registration/notesCountColumn";
 import { PersonLabel } from "@/components/PlayerName";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { formatShortfall } from "@/lib/registration/team-shortfall";
@@ -43,7 +44,8 @@ export function useRegistrationTeamColumns({
   canManageTeams,
   canExport,
   slotLabel,
-  handlers
+  handlers,
+  noteCounts
 }: Readonly<{
   canManageTeams: boolean;
   canExport: boolean;
@@ -52,8 +54,11 @@ export function useRegistrationTeamColumns({
   /** Stable identity required: the kebab column closes over it, so a fresh
    *  object per render would rebuild every column. */
   handlers: TeamRowHandlers;
+  /** Organizer notes per team id (as a string key); absent while loading. */
+  noteCounts?: Record<string, number>;
 }>): ColumnDef<RegistrationTeam>[] {
   const t = useTranslations("registrationTeams");
+  const tNotes = useTranslations("registrationNotes");
 
   return useMemo<ColumnDef<RegistrationTeam>[]>(() => {
     const rowActions = (team: RegistrationTeam): KebabAction[] => {
@@ -203,7 +208,12 @@ export function useRegistrationTeamColumns({
         },
         meta: columnMeta<RegistrationTeam>({ category: "core", className: "min-w-[10rem]" })
       },
+      notesCountColumn<RegistrationTeam>({
+        header: tNotes("column"),
+        count: (team) => noteCounts?.[String(team.id)] ?? 0,
+        label: (count) => tNotes("count", { count })
+      }),
       createKebabColumn<RegistrationTeam>(rowActions, { rowLabel: (team) => team.name })
     ];
-  }, [canExport, canManageTeams, handlers, slotLabel, t]);
+  }, [canExport, canManageTeams, handlers, slotLabel, t, tNotes, noteCounts]);
 }

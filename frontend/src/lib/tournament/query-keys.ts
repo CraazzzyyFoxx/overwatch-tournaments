@@ -117,6 +117,12 @@ export const tournamentQueryKeys = {
    *  by tournament would make every team share — and invalidate — one entry. */
   registrationInviteHistory: (workspaceId: number, teamId: number) =>
     ["registration-invite-history", workspaceId, teamId] as const,
+  /** Organizer notes. All under `registrationNotesAll`, so one invalidation
+   *  refreshes a thread and the list badges together. */
+  registrationNotesAll: (tournamentId: number) => ["registration-notes", tournamentId] as const,
+  registrationNotes: (tournamentId: number, target: "registration" | "team", targetId: number) =>
+    ["registration-notes", tournamentId, target, targetId] as const,
+  registrationNoteCounts: (tournamentId: number) => ["registration-notes", tournamentId, "counts"] as const,
   subscriptionStatus: (tournamentId: number, registrationNodeId: number) =>
     ["subscription-status", tournamentId, registrationNodeId] as const,
   /** The formation node's current draft (active, else the latest). */

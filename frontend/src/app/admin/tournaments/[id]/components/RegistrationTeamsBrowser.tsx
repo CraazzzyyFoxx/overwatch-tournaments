@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 
@@ -16,7 +17,9 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { translateRegistrationTeamError } from "@/lib/registration/team-errors";
 import { getRegistrationTeamStatus } from "@/lib/registration/team-tone";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { cn } from "@/lib/utils";
+import registrationNoteService from "@/services/registration-note.service";
 import type { RegistrationTeam } from "@/types/registration-team.types";
 
 import { EXPORT_SKIP_CODES, isExportEligible, type PendingConfirm } from "./registration-teams/model";
@@ -190,7 +193,17 @@ export function RegistrationTeamsBrowser({
     [setActionError]
   );
 
-  const columns = useRegistrationTeamColumns({ canManageTeams, canExport, slotLabel, handlers: rowHandlers });
+  const noteCountsQuery = useQuery({
+    queryKey: tournamentQueryKeys.registrationNoteCounts(tournamentId),
+    queryFn: () => registrationNoteService.counts(tournamentId)
+  });
+  const columns = useRegistrationTeamColumns({
+    canManageTeams,
+    canExport,
+    slotLabel,
+    handlers: rowHandlers,
+    noteCounts: noteCountsQuery.data?.teams
+  });
 
   return (
     <>
@@ -333,6 +346,7 @@ export function RegistrationTeamsBrowser({
               tournamentId={tournamentId}
               workspaceId={workspaceId}
               canManageTeams={canManageTeams}
+              canModerateNotes={canAccessPermission("team.delete", workspaceId)}
               disabled={disabled}
               ontology={ontology}
               inlineError={inlineError}

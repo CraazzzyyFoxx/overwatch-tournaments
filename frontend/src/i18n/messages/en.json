@@ -1784,6 +1784,31 @@
     },
     "loadError": "Failed to load the report form"
   },
+  "registrationNotes": {
+    "title": "Organizer notes",
+    "column": "Notes",
+    "count": "{count, plural, one {# note} other {# notes}}",
+    "empty": "No notes yet.",
+    "loadFailed": "Failed to load notes.",
+    "newNote": "New note",
+    "placeholder": "What happened, what was agreed, what to check… Markdown works.",
+    "hint": "Only organizers see notes. Up to 5 files per note, 10 MB each: images, PDF, TXT, CSV, ZIP.",
+    "add": "Add note",
+    "addFiles": "Attach files",
+    "attach": "Attach a file",
+    "edit": "Edit note",
+    "edited": "edited",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete note",
+    "deleteTitle": "Delete this note?",
+    "deleteDescription": "The note and its attached files are deleted for every organizer.",
+    "deletedUser": "Deleted user",
+    "removeFile": "Remove {name}",
+    "fileTooLarge": "{name} is larger than 10 MB.",
+    "tooManyFiles": "A note holds at most {max} files.",
+    "openFailed": "Could not open the file."
+  },
   "registrationsAdmin": {
     "table": {
       "selectTournament": "Select a tournament",
