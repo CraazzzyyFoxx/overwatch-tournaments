@@ -77,14 +77,15 @@ def _ensure_impact_badge_fixture(db: Session) -> dict[str, int]:
 
     # A fresh database (CI, an xdist worker's clone) holds no ``overperformance_badge`` stat until it is projected.
     asyncio.run(_project_vocabulary())
-    map_row = (
-        db.query(models.CatalogEntity.id)
-        .filter_by(discipline="overwatch", kind="map")
-        .order_by(models.CatalogEntity.id)
-        .first()
-    )
-    assert map_row is not None, "no map seeded in dev DB"
-    map_id = map_row[0]
+    # Its own map: a fresh database has none until some other test (or the collector) adds one.
+    map_ = db.query(models.CatalogEntity).filter_by(discipline="overwatch", kind="map", slug="impact-badge-map").first()
+    if map_ is None:
+        map_ = models.CatalogEntity(
+            discipline="overwatch", kind="map", slug="impact-badge-map", name="Impact Badge Map"
+        )
+        db.add(map_)
+        db.flush()
+    map_id = map_.id
 
     db.add(models.Workspace(id=ids["workspace"], slug="impact-badge-ws", name="Impact Badge Workspace"))
     db.flush()
