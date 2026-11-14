@@ -5,8 +5,8 @@
         }
     ],
     "settings": {
-        "python.defaultInterpreterPath": "${workspaceFolder:anak-tournaments}/backend/.venv/Scripts/python.exe",
-        "ty.interpreter": "${workspaceFolder:anak-tournaments}/backend/.venv/Scripts/python.exe",
+        "python.defaultInterpreterPath": "${workspaceFolder:overwatch-tournaments}/backend/.venv/Scripts/python.exe",
+        "ty.interpreter": "${workspaceFolder:overwatch-tournaments}/backend/.venv/Scripts/python.exe",
         "ty.configuration": {
             "environment": {
                 "python": "backend/.venv",
