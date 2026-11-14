@@ -96,14 +96,15 @@ Each service loads `backend/env/common.env` plus its own `backend/env/<service>.
 
 ## Tests
 
-Run the backend test suite (pytest, executed inside `app-svc`):
+Run every backend suite with coverage, as CI does (`scripts/test.sh`; needs `uv` and Docker for the
+ephemeral test Postgres, which starts on demand):
 
 ```console
-$ make test
+$ make test                            # all suites, then a report and htmlcov/index.html
+$ make test SUITES=stats-service       # or: bash scripts/test.sh stats-service tournament-service
 ```
 
-The lower-level `bash ./scripts/test.sh` still exists, but prefer `make test`. A coverage report is
-generated at `htmlcov/index.html`.
+A suite is a workspace member (`shared`, `app-service`, …) or `tests`, the root cross-service suite.
 
 A single suite runs directly against the ephemeral test Postgres from `docker-compose.test.yml`
 (started on demand):

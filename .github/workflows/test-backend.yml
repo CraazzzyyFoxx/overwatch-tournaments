@@ -75,26 +75,13 @@ jobs:
         env:
           OWT_APPLY_LEGACY_DROP: "1"
         run: uv run --env-file shared/testing/test.env alembic upgrade head
-      # Each service is its own uv-workspace package with its own `src`, so the
-      # suites run one package at a time (a single pytest over all of them would
-      # collide on the duplicate top-level `src`). Coverage follows the xdist
-      # workers through `patch = ["subprocess"]` (pyproject [tool.coverage.run]).
+      # One pytest per suite (scripts/test.sh); combined in the test-backend job below.
+      # Coverage follows the xdist workers through `patch = ["subprocess"]` (pyproject [tool.coverage.run]).
       - name: Run ${{ matrix.suites }}
         working-directory: backend
-        run: |
-          set -e
-          for svc in ${{ matrix.suites }}; do
-            case "$svc" in
-              shared) src="shared"; path="shared/tests" ;;
-              # The cross-service gates (module boundaries, D99 literals, repository
-              # boundaries, migration/script tests) live in the root suite.
-              tests) src="scripts"; path="tests" ;;
-              *) src="$svc/src"; path="$svc/tests" ;;
-            esac
-            echo "::group::pytest $svc"
-            uv run coverage run --parallel-mode --source="$src" -m pytest "$path"
-            echo "::endgroup::"
-          done
+        env:
+          COVERAGE_COMBINE: "0"
+        run: bash scripts/test.sh ${{ matrix.suites }}
       - name: Store coverage data
         uses: actions/upload-artifact@v7
         with:
