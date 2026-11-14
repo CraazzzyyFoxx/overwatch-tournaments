@@ -179,6 +179,8 @@
   --text-figure--letter-spacing: -0.045em;
   /* Uppercase labels (eyebrows, table heads, chips). One value for Inter. */
   --tracking-label: 0.08em;
+  /* Elevation on a dark surface is never a shadow: admin-kit's cards and tables lie flat. */
+  --shadow-surface: none;
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -244,6 +246,27 @@
     --chart-3: 262 83% 58%;
     --chart-4: 42 63% 60%;
     --chart-5: 337 81% 66%;
+
+    /* admin-kit's theme (README "Theming"): its tables, filters and fields on the
+       --aqt-* palette. On `.dark`, not :root: the theme class sits on <body>, and
+       `hsl(var(--card))` must resolve against its tokens. */
+    --admin-surface: color-mix(in srgb, hsl(var(--card)) 50%, hsl(var(--background)));
+    --admin-border: hsl(var(--border) / 0.4);
+    --admin-row-border: transparent;
+    --admin-head-bg: color-mix(in srgb, hsl(var(--muted)) 20%, var(--admin-surface));
+    --admin-row-hover: var(--aqt-overlay-2);
+    --admin-row-selected: var(--aqt-overlay-3);
+    --admin-fg-muted: var(--aqt-fg-muted);
+    --admin-fg-dim: var(--aqt-fg-dim);
+    --admin-fg-faint: var(--aqt-fg-faint);
+    --admin-head-fg: var(--aqt-fg-faint);
+    --admin-head-weight: 600;
+    --admin-head-case: uppercase;
+    --admin-head-tracking: var(--tracking-label);
+    --admin-data-font: var(--aqt-data);
+    --admin-control-bg: var(--aqt-overlay-2);
+    --admin-control-border: var(--aqt-border-2);
+    --admin-chip-bg: var(--aqt-overlay-3);
   }
 }
 
