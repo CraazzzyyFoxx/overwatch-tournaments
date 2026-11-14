@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { AlertTriangle, CheckCircle2, Shuffle, Users } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, Shuffle, Upload, Users } from "lucide-react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 
 import {
@@ -17,7 +17,8 @@ import { TeamDistributionPanel } from "@/app/balancer/components/TeamDistributio
 import { VariantSelector } from "@/app/balancer/components/VariantSelector";
 import { useBalancerTournamentId } from "@/app/balancer/components/useBalancerTournamentId";
 import { FlowNodeSelect } from "@/components/kit/FlowNodeSelect";
-import { FlowPathPanel } from "@/components/tournaments/FlowPathPanel";
+import { FlowNodeControls } from "@/components/tournaments/FlowNodeControls";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   UnlinkedRegistrationsNotice,
   countUnlinkedRegistrations
@@ -136,6 +137,7 @@ export function BalancerMainPageClient() {
   const flowErrorMessage = useFlowErrorMessage();
   const flowPath = useFlowPath(tournamentId);
   const tPath = useTranslations("common.flowPath");
+  const tActions = useTranslations("balancerTool.actions");
   const currentUserId = useAuthProfileStore((state) => state.user?.id ?? null);
   const queryClient = useQueryClient();
   const sidebarRef = useRef<BalancingPoolSidebarHandle>(null);
@@ -830,19 +832,37 @@ export function BalancerMainPageClient() {
     // right-hand cards, the variant strip and the actions bar the moment the
     // pool sidebar is widened.
     <div className="flex min-h-0 min-w-0 flex-col gap-3">
-      <FlowNodeSelect
-        tournament={tournamentQuery.data}
-        kind="formation"
-        value={formationNodeId}
-        onChange={(nodeId) => setParams({ [FLOW_NODE_PARAM]: nodeId })}
-      />
-      {formationNode && tournamentId !== null ? (
-        <FlowPathPanel
-          tournamentId={tournamentId}
-          focusNodeId={formationNode.id}
-          canUpdate={canAccessPermission("tournament.update", workspaceId)}
-          teamsExported={savedBalanceQuery.data?.exported_at != null}
+      <div className="flex flex-wrap items-center gap-2">
+        <FlowNodeSelect
+          tournament={tournamentQuery.data}
+          kind="formation"
+          value={formationNodeId}
+          onChange={(nodeId) => setParams({ [FLOW_NODE_PARAM]: nodeId })}
         />
+        {formationNode && tournamentQuery.data ? (
+          <FlowNodeControls
+            tournament={tournamentQuery.data}
+            node={formationNode}
+            canUpdate={canAccessPermission("tournament.update", workspaceId)}
+          />
+        ) : null}
+      </div>
+      {/* Completing a forming formation waits for its teams: until the export, say so where the export is one click. */}
+      {formationNode?.status === "forming" && savedBalanceQuery.data?.exported_at == null ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[color:var(--aqt-border)] p-3 text-caption">
+          <span className="flex items-center gap-2">
+            <Info aria-hidden className="size-4 shrink-0 text-[color:var(--aqt-fg-dim)]" />
+            {tPath("balancerExportHint")}
+          </span>
+          <Button
+            size="sm"
+            onClick={startTournamentExport}
+            disabled={!activeVariant || exportToTournamentMutation.isPending || saveBalanceMutation.isPending}
+          >
+            <Upload className="size-4" aria-hidden />
+            {tActions("export")}
+          </Button>
+        </div>
       ) : null}
       <UnlinkedRegistrationsNotice count={countUnlinkedRegistrations(registrations)} />
       <PresetRunPanel

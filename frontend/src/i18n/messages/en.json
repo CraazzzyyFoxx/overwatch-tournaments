@@ -507,11 +507,12 @@
     },
     "saving": "Saving…",
     "flowPath": {
-      "title": "Tournament steps",
-      "next": "Next step",
+      "planTitle": "To start “{name}”:",
+      "doFirst": "Do step 1",
       "needs": "First:",
       "run": "Do it",
-      "done": "Nothing to do here; the next step starts on its own as the tournament plays.",
+      "waitStageMatches": "“{name}” has to finish first: {count, plural, one {# match} other {# matches}} left.",
+      "balancerExportHint": "The teams are not in the tournament yet. Once exported, forming can be completed.",
       "exportTeams": "Next: put the teams into the tournament (export the balance or the draft); then forming can be completed.",
       "blocked": "This step cannot move further right now: check the tournament flow.",
       "status": {

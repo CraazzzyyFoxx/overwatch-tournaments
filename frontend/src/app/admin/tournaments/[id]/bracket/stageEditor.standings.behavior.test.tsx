@@ -202,7 +202,7 @@ async function mount(selected: Stage): Promise<void> {
           tournament={undefined}
           teams={[]}
           isTeamsLoading={false}
-          progress={undefined}
+          progressByStageId={new Map()}
           isSuperuser
           encountersHref="/admin/tournaments/84/matches/encounters"
           onChanged={() => {}}
