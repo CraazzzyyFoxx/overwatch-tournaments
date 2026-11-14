@@ -12,12 +12,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 suites=("$@")
-if [ ${#suites[@]} -eq 0 ]; then
+if [[ ${#suites[@]} -eq 0 ]]; then
   suites=(shared app-service stats-service balancer-service tournament-service analytics-service
     identity-service discord-service stream-service tests)
 fi
 combine="${COVERAGE_COMBINE:-1}"
-if [ "$combine" = 1 ]; then rm -f .coverage .coverage.*; fi
+if [[ "$combine" == 1 ]]; then rm -f .coverage .coverage.*; fi
 
 for svc in "${suites[@]}"; do
   case "$svc" in
@@ -26,14 +26,15 @@ for svc in "${suites[@]}"; do
     tests) src=scripts path=tests ;;
     *) src="$svc/src" path="$svc/tests" ;;
   esac
-  if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::group::pytest $svc"; else echo "== pytest $svc"; fi
+  if [[ -n "${GITHUB_ACTIONS:-}" ]]; then echo "::group::pytest $svc"; else echo "== pytest $svc"; fi
   # test.env in the process environment: it wins over a local backend/.env that may point elsewhere.
   uv run --env-file shared/testing/test.env coverage run --parallel-mode --source="$src" -m pytest "$path"
-  if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::endgroup::"; fi
+  if [[ -n "${GITHUB_ACTIONS:-}" ]]; then echo "::endgroup::"; fi
 done
 
-if [ "$combine" = 1 ]; then
-  uv run coverage combine -q
-  uv run coverage report
-  uv run coverage html -q --title "OWT"
+if [[ "$combine" == 1 ]]; then
+  # The suites above already synced the environment: nothing left to build.
+  uv run --no-build coverage combine -q
+  uv run --no-build coverage report
+  uv run --no-build coverage html -q --title "OWT"
 fi
