@@ -7,12 +7,16 @@ explicit, separate operation against the frozen old service source.
 
 from __future__ import annotations
 
+import functools
 import hashlib
+import inspect
+import json
 import os
 import subprocess
 import sys
+import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -1240,15 +1244,9 @@ def upgrade_database(url: str, target: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-@contextmanager
-def legacy_database(*, template_url: str | None = None) -> Iterator[str]:
-    """One fresh database or cheap clone; never reset the shared anak_test DB."""
-    if not is_ephemeral_test_dsn():
-        pytest.skip("stats migration fixtures require the committed ephemeral test PostgreSQL")
-    ensure_test_postgres()
+def _database_url(name: str) -> str:
     env = postgres_env()
-    name = f"{_PREFIX}{uuid.uuid4().hex[:16]}"
-    url = URL.create(
+    return URL.create(
         "postgresql+psycopg",
         username=env["user"],
         password=env["password"],
@@ -1256,15 +1254,30 @@ def legacy_database(*, template_url: str | None = None) -> Iterator[str]:
         port=int(env["port"]),
         database=name,
     ).render_as_string(hide_password=False)
-    template = _owned_url(template_url).database if template_url else None
-    with psycopg.connect(
+
+
+def _admin() -> psycopg.Connection:
+    env = postgres_env()
+    return psycopg.connect(
         host=env["host"],
         port=int(env["port"]),
         user=env["user"],
         password=env["password"],
         dbname="postgres",
         autocommit=True,
-    ) as admin:
+    )
+
+
+@contextmanager
+def legacy_database(*, template_url: str | None = None) -> Iterator[str]:
+    """One fresh database or cheap clone; never reset the shared anak_test DB."""
+    if not is_ephemeral_test_dsn():
+        pytest.skip("stats migration fixtures require the committed ephemeral test PostgreSQL")
+    ensure_test_postgres()
+    name = f"{_PREFIX}{uuid.uuid4().hex[:16]}"
+    url = _database_url(name)
+    template = _owned_url(template_url).database if template_url else None
+    with _admin() as admin:
         statement = sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name))
         if template:
             statement += sql.SQL(" TEMPLATE {}").format(sql.Identifier(template))
@@ -1277,6 +1290,106 @@ def legacy_database(*, template_url: str | None = None) -> Iterator[str]:
             yield url
         finally:
             admin.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name)))
+
+
+# Populated templates outlive the test run: ``<prefix>tpl_<family>_<digest>`` is a finished, immutable template
+# (renamed into place only after a successful build, so a crashed build is never cloned). The digest covers
+# everything the build reads, so any change builds a new template and prunes the family's old ones.
+_TEMPLATE_PREFIX = f"{_PREFIX}tpl_"
+_BUILD_PREFIX = f"{_PREFIX}bld_"
+#: Names of the templates this process actually built (a cache hit builds nothing).
+TEMPLATE_BUILDS: list[str] = []
+
+
+@functools.cache
+def _digest(family: str, build_source: str, sources: tuple[Path, ...]) -> str:
+    digest = hashlib.sha256(f"{family}\0{build_source}".encode())
+    files: set[Path] = set()
+    for root in (Path(__file__).resolve(), _BACKEND / "migrations", *(p.resolve() for p in sources)):
+        files.update(
+            [root]
+            if root.is_file()
+            else (p for p in root.rglob("*.py") if not {"tests", "testing"} & set(p.relative_to(root).parts))
+        )
+    for path in sorted(files):
+        digest.update(f"\0{path.relative_to(_BACKEND).as_posix()}\0".encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()[:16]
+
+
+def _template_payload(admin: psycopg.Connection, name: str) -> Any | None:
+    row = admin.execute(
+        "SELECT shobj_description(oid, 'pg_database') FROM pg_database WHERE datname = %s", (name,)
+    ).fetchone()
+    return None if row is None else json.loads(row[0])["payload"]
+
+
+def _drop_stale(admin: psycopg.Connection, family: str, keep: str) -> None:
+    # Held under the family lock, so any build database left over is an orphan of a crashed builder.
+    for (orphan,) in admin.execute(
+        "SELECT datname FROM pg_database WHERE starts_with(datname, %s)", (f"{_BUILD_PREFIX}{family}_",)
+    ).fetchall():
+        admin.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(orphan)))
+    for (old,) in admin.execute(
+        "SELECT datname FROM pg_database WHERE starts_with(datname, %s) AND datname <> %s",
+        (f"{_TEMPLATE_PREFIX}{family}_", keep),
+    ).fetchall():
+        identifier = sql.Identifier(old)
+        admin.execute(sql.SQL("ALTER DATABASE {} WITH IS_TEMPLATE false").format(identifier))
+        try:
+            admin.execute(sql.SQL("DROP DATABASE {}").format(identifier))  # no FORCE: leave one still being cloned
+        except psycopg.errors.ObjectInUse:
+            admin.execute(sql.SQL("ALTER DATABASE {} WITH IS_TEMPLATE true").format(identifier))
+
+
+def _build_template(admin: psycopg.Connection, family: str, name: str, build: Callable[[str], Any]) -> Any:
+    scratch = f"{_BUILD_PREFIX}{family}_{uuid.uuid4().hex[:12]}"
+    started = time.monotonic()
+    admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(scratch)))
+    try:
+        url = _database_url(scratch)
+        result = upgrade_database(url, "discipline01c")
+        if result.returncode:
+            raise RuntimeError(f"legacy fixture migration failed:\n{result.stdout}\n{result.stderr}")
+        payload = build(url)
+        document = json.dumps({"payload": payload, "built_s": round(time.monotonic() - started, 1)})
+        if json.loads(document)["payload"] != payload:
+            raise TypeError("a template payload must survive a JSON round trip unchanged")
+        identifier = sql.Identifier(scratch)
+        admin.execute(sql.SQL("COMMENT ON DATABASE {} IS {}").format(identifier, sql.Literal(document)))
+        admin.execute(sql.SQL("ALTER DATABASE {} WITH IS_TEMPLATE true ALLOW_CONNECTIONS false").format(identifier))
+        admin.execute(sql.SQL("ALTER DATABASE {} RENAME TO {}").format(identifier, sql.Identifier(name)))
+    except BaseException:
+        admin.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(scratch)))
+        raise
+    TEMPLATE_BUILDS.append(name)
+    _drop_stale(admin, family, name)
+    return payload
+
+
+def cached_template(family: str, build: Callable[[str], Any], *sources: Path) -> tuple[str, Any]:
+    """Clone source URL + JSON payload of the persistent template ``build`` produces, built once per digest.
+
+    ``build(url)`` receives a fresh database at ``discipline01c`` and returns a JSON-able payload (the seeded ids).
+    The digest covers the migrations, this module, ``build``'s source and ``sources`` (files or trees of ``*.py``).
+    Concurrent callers (xdist workers, parallel suites) serialise on an advisory lock: one builds, the rest wait.
+    """
+    if not is_ephemeral_test_dsn():
+        pytest.skip("stats migration fixtures require the committed ephemeral test PostgreSQL")
+    ensure_test_postgres()
+    name = f"{_TEMPLATE_PREFIX}{family}_{_digest(family, inspect.getsource(build), sources)}"
+    _owned_url(_database_url(name))
+    with _admin() as admin:
+        payload = _template_payload(admin, name)
+        if payload is None:
+            admin.execute("SELECT pg_advisory_lock(hashtext(%s))", (name,))
+            try:
+                payload = _template_payload(admin, name)
+                if payload is None:
+                    payload = _build_template(admin, family, name, build)
+            finally:
+                admin.execute("SELECT pg_advisory_unlock(hashtext(%s))", (name,))
+    return _database_url(name), payload
 
 
 def _json_default(value: Any) -> Any:
@@ -1295,26 +1408,25 @@ def _json_default(value: Any) -> Any:
     raise TypeError(f"unsupported golden value: {type(value).__name__}")
 
 
-def _populated_template(target: str) -> Iterator[tuple[str, dict[str, int]]]:
-    with legacy_database() as url:
-        engine = sa.create_engine(url)
-        try:
-            with engine.begin() as conn:
-                ids = seed_legacy(conn)
-        finally:
-            engine.dispose()
-        result = upgrade_database(url, target)
-        if result.returncode:
-            raise RuntimeError(f"stats parity upgrade failed:\n{result.stdout}\n{result.stderr}")
-        yield url, ids
+def _build_parity_template(url: str) -> dict[str, int]:
+    engine = sa.create_engine(url)
+    try:
+        with engine.begin() as conn:
+            ids = seed_legacy(conn)
+    finally:
+        engine.dispose()
+    # Head, not ``stats01``: the ORM selects every current model column (``tournament.logs_official``
+    # arrives with ``ingest01``), so a template frozen at ``stats01`` cannot serve a later model.
+    result = upgrade_database(url, "head")
+    if result.returncode:
+        raise RuntimeError(f"stats parity upgrade failed:\n{result.stdout}\n{result.stderr}")
+    return ids
 
 
 @pytest.fixture(scope="module")
-def stats_parity_template() -> Iterator[tuple[str, dict[str, int]]]:
-    """One populated native template shared by a service's parity cases."""
-    # Head, not ``stats01``: the ORM selects every current model column (``tournament.logs_official``
-    # arrives with ``ingest01``), so a template frozen at ``stats01`` cannot serve a later model.
-    yield from _populated_template("head")
+def stats_parity_template() -> tuple[str, dict[str, int]]:
+    """The populated native template (persistent, read-only) shared by a service's parity cases."""
+    return cached_template("parity", _build_parity_template)
 
 
 @pytest.fixture

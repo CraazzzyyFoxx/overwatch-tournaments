@@ -96,14 +96,31 @@ Each service loads `backend/env/common.env` plus its own `backend/env/<service>.
 
 ## Tests
 
-Run the backend test suite (pytest, executed inside `app-svc`):
+Run every backend suite with coverage, as CI does (`scripts/test.sh`; needs `uv` and Docker for the
+ephemeral test Postgres, which starts on demand):
 
 ```console
-$ make test
+$ make test                            # all suites, then a report and htmlcov/index.html
+$ make test SUITES=stats-service       # or: bash scripts/test.sh stats-service tournament-service
 ```
 
-The lower-level `bash ./scripts/test.sh` still exists, but prefer `make test`. A coverage report is
-generated at `htmlcov/index.html`.
+A suite is a workspace member (`shared`, `app-service`, …) or `tests`, the root cross-service suite.
+
+A single suite runs directly against the ephemeral test Postgres from `docker-compose.test.yml`
+(started on demand):
+
+```console
+$ uv run --env-file shared/testing/test.env pytest stats-service/tests
+```
+
+* The heavy suites (shared, app, stats, balancer, tournament, analytics) run on every CPU
+  (`pytest-xdist`, `-n auto --dist loadfile`); each worker gets its own clone of `anak_test` for the
+  run. Pass `-n 0` to run serially, e.g. one test under a debugger.
+* The populated stats/ingest template databases (`p4_stats01_tpl_*`) persist in the test Postgres
+  and are rebuilt only when the migrations or their seed code change.
+* Tests never reach Redis: clients are fakeredis and cashews stays in memory; a real connect fails
+  the test (`shared/testing/redis_guard.py`, `OWT_TEST_ALLOW_REDIS=1` to lift).
+* asyncio debug mode is off; `PYTHONASYNCIODEBUG=1` turns it back on.
 
 The historical migration cutover proofs in `tests/` skip their scratch-database tests by default
 (`shared.testing.db.migration_proofs_enabled()`): they build databases at old revisions and take

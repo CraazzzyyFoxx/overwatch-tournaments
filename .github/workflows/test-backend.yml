@@ -12,11 +12,24 @@ on:
   workflow_call:
 
 jobs:
-  test-backend:
+  # One job per heavy suite, the light ones together; each suite also runs on
+  # every runner CPU (pytest-xdist, `-n auto --dist loadfile` in its config).
+  suite:
+    name: test-backend (${{ matrix.name }})
     runs-on: ubuntu-26.04
-    # The DB-integration suites really run now (Postgres below): ~45 min on
-    # Windows Docker Desktop locally, expect a third to a half of that here.
-    timeout-minutes: 60
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: stats
+            suites: stats-service
+          - name: tournament
+            suites: tournament-service
+          - name: analytics-balancer
+            suites: analytics-service balancer-service
+          - name: rest
+            suites: shared app-service identity-service discord-service stream-service tests
     services:
       # docker-compose.test.yml's container on the DSN shared/testing/test.env
       # commits (127.0.0.1:55432/anak_test). shared.testing.db probes it and
@@ -38,10 +51,6 @@ jobs:
           --health-timeout 5s
           --health-retries 30
           --health-start-period 5s
-    env:
-      # Optional PAT (gist scope) used only to publish the coverage badge on
-      # pushes to master. Absent on forks/PRs — the badge step is skipped then.
-      GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -66,33 +75,58 @@ jobs:
         env:
           OWT_APPLY_LEGACY_DROP: "1"
         run: uv run --env-file shared/testing/test.env alembic upgrade head
-      # Each service is its own uv-workspace package with its own `src`, so the
-      # suites run one package at a time (a single pytest over all of them would
-      # collide on the duplicate top-level `src`).
-      - name: Run backend test suites (with coverage)
+      # One pytest per suite (scripts/test.sh); combined in the test-backend job below.
+      # Coverage follows the xdist workers through `patch = ["subprocess"]` (pyproject [tool.coverage.run]).
+      - name: Run ${{ matrix.suites }}
+        working-directory: backend
+        env:
+          COVERAGE_COMBINE: "0"
+        run: bash scripts/test.sh ${{ matrix.suites }}
+      - name: Store coverage data
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-data-${{ matrix.name }}
+          path: backend/.coverage.*
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # Same job name as before the split: the deploy gate and branch rules see one result.
+  test-backend:
+    needs: suite
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    env:
+      # Optional PAT (gist scope) used only to publish the coverage badge on
+      # pushes to master. Absent on forks/PRs — the badge step is skipped then.
+      GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.15"
+      - name: Collect coverage data
+        uses: actions/download-artifact@v7
+        with:
+          pattern: coverage-data-*
+          path: backend
+          merge-multiple: true
+      # Only coverage is needed here, not the workspace (whose dev group compiles lupa).
+      - name: Combine coverage
         working-directory: backend
         run: |
-          set -e
-          for svc in shared app-service stats-service balancer-service tournament-service analytics-service identity-service discord-service stream-service; do
-            if [ "$svc" = "shared" ]; then src="shared"; else src="$svc/src"; fi
-            echo "::group::pytest $svc"
-            uv run coverage run --parallel-mode --source="$src" -m pytest "$svc/tests"
-            echo "::endgroup::"
-          done
-          # The cross-service gates (module boundaries, D99 literals, repository
-          # boundaries, migration/script tests) live in the root suite.
-          echo "::group::pytest backend/tests"
-          uv run coverage run --parallel-mode --source=scripts -m pytest tests
-          echo "::endgroup::"
-          uv run coverage combine
-          uv run coverage report
-          uv run coverage json -o coverage.json
+          version=$(grep -A1 '^name = "coverage"$' uv.lock | sed -n 's/^version = "\(.*\)"$/\1/p')
+          python -m pip install --quiet "coverage==$version"
+          coverage combine
+          coverage report
+          coverage json -o coverage.json
       - name: Compute coverage percentage
         id: cov
         if: ${{ github.event_name == 'push' }}
         working-directory: backend
         run: |
-          pct=$(uv run python -c "import json; print(round(json.load(open('coverage.json'))['totals']['percent_covered']))")
+          pct=$(python -c "import json; print(round(json.load(open('coverage.json'))['totals']['percent_covered']))")
           echo "pct=$pct" >> "$GITHUB_OUTPUT"
       # Publishes the shields.io endpoint JSON to the coverage gist. Runs only on
       # master pushes and only when the GIST_TOKEN secret is configured, so PRs

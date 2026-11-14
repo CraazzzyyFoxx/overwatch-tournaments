@@ -101,7 +101,7 @@ help:
 	@echo "  make backup-logs    - Follow local rustfs logs"
 	@echo ""
 	@echo "  make migrate        - Run backend migrations"
-	@echo "  make test           - Run backend tests"
+	@echo "  make test           - Run backend test suites with coverage (SUITES='stats-service ...')"
 	@echo "  make jwt-public-key - Print the gateway's JWT_PUBLIC_KEY (prod-jwt-public-key: production stack)"
 	@echo "  make e2e-up         - Start the isolated e2e stack and migrate its empty DB"
 	@echo "  make e2e            - Run the Playwright suite against it (E2E_ARGS='--project=api')"
@@ -256,8 +256,10 @@ discord-emoji:
 prod-discord-emoji:
 	$(PROD_COMPOSE) run --rm --no-deps discord-emoji
 
+# Every backend suite with coverage, as CI runs them (backend/scripts/test.sh; needs uv, starts the test Postgres).
+# One suite: make test SUITES=stats-service
 test:
-	$(COMPOSE) exec app-svc pytest
+	cd backend && bash scripts/test.sh $(SUITES)
 
 
 # Locust load tests against the running edge (see loadtests/README.md).

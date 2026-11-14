@@ -15,6 +15,8 @@ dev-dependencies = [
     # two-scope charge is the one piece of this codebase that only a Redis
     # script interpreter can verify.
     "fakeredis[lua]>=2.38",
+    # Parallel suites (`-n auto --dist loadfile` in each heavy suite's pytest config; `-n 0` runs serially).
+    "pytest-xdist>=3.8",
     # The type-check gate (scripts/typecheck.sh). Pinned: ty is pre-1.0 and its
     # diagnostics move between releases; bump on purpose, recalibrate ty-gate.toml.
     "ty==0.0.103",
@@ -105,8 +107,11 @@ known-first-party = ["shared", "src"]
 
 [tool.coverage.run]
 # Per-service suites run with --parallel-mode + --source, then `coverage combine`
-# merges them. relative_files keeps paths portable across the matrix/checkout.
-relative_files = true
+# merges them. Paths stay absolute: every CI job checks out to the same path, and
+# subprocesses (xdist workers, a test's `python -c` in a service dir) would record
+# an ambiguous relative `src/...`.
+# Measure subprocesses too (each writes its own parallel data file).
+patch = ["subprocess"]
 omit = [
     "*/tests/*",
     "*/.venv/*",
