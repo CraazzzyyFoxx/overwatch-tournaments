@@ -236,3 +236,46 @@ func TestNewLoggerWithoutSentryReturnsPlainHandler(t *testing.T) {
 		t.Fatal("expected a plain stdout handler when DSN is empty, got fanout")
 	}
 }
+
+func TestIssueHandlerCapturesErrorsAsIssues(t *testing.T) {
+	var mu sync.Mutex
+	var events []*sentry.Event
+	client, err := sentry.NewClient(sentry.ClientOptions{
+		Dsn: "https://public@example.com/1",
+		BeforeSend: func(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
+			mu.Lock()
+			events = append(events, event)
+			mu.Unlock()
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("sentry client: %v", err)
+	}
+	ctx := sentry.SetHubOnContext(context.Background(), sentry.NewHub(client, sentry.NewScope()))
+
+	logger := slog.New(&issueHandler{}).With("service", "gateway").WithGroup("req")
+	logger.InfoContext(ctx, "routine")
+	logger.WarnContext(ctx, "degraded")
+	logger.ErrorContext(ctx, "upstream failed", "err", errors.New("boom"), "route", "/x")
+	logger.Log(ctx, slog.Level(12), "fatal")
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(events) != 2 {
+		t.Fatalf("got %d events, want 2 (error + fatal only)", len(events))
+	}
+	e := events[0]
+	if e.Message != "upstream failed" || e.Level != sentry.LevelError {
+		t.Fatalf("event = %q/%s, want upstream failed/error", e.Message, e.Level)
+	}
+	if len(e.Exception) == 0 || e.Exception[len(e.Exception)-1].Value != "boom" {
+		t.Fatalf("exception = %+v, want boom", e.Exception)
+	}
+	if attrs := e.Contexts["slog"]; attrs["service"] != "gateway" || attrs["req.route"] != "/x" {
+		t.Fatalf("slog context = %v, want service + grouped route", attrs)
+	}
+	if events[1].Level != sentry.LevelFatal {
+		t.Fatalf("second event level = %s, want fatal", events[1].Level)
+	}
+}

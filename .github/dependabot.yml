@@ -22,8 +22,3 @@ updates:
       interval: weekly
     commit-message:
       prefix: ⬆
-    # Python minor bumps go with uv.lock/requires-python, not alone: 3.15 shipped
-    # before psycopg-binary had cp315 wheels and broke every backend build.
-    ignore:
-      - dependency-name: python
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]

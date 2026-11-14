@@ -90,7 +90,7 @@ def parse_code_tiers(config: dict[str, Any] | None) -> tuple[CodeTier, ...]:
             continue
         try:
             tier_rank = int(row.get("tier_rank"))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
         parsed.append(
             CodeTier(

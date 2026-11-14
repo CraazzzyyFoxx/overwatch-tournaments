@@ -227,7 +227,7 @@ class DivisionGridService:
             .where(models.DivisionGrid.workspace_id == workspace_id)
             .group_by(models.DivisionGridVersion.grid_id)
         )
-        return dict(rows.tuples().all())
+        return dict(rows.all())
 
     async def create_grid(
         self,

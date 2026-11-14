@@ -72,9 +72,7 @@ class FlowCorrectionsDbTests(GroupsToPlayoffCase):
                             Standing.team_id.in_([t[first], t[second]])
                         )
                     )
-                )
-                .tuples()
-                .all()
+                ).all()
             )
             for one, other in ((first, second), (second, first)):
                 await s.execute(

@@ -22,6 +22,7 @@ import sqlalchemy as sa
 from faststream.rabbit import RabbitQueue
 from loguru import logger
 from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
@@ -315,7 +316,7 @@ async def _latest_queue_ranks(session: AsyncSession, social_account_id: int) -> 
             snap.queue, snap.division, snap.tier, snap.lp, snap.wins, snap.losses, snap.rank_value, snap.is_ranked
         )
         .where(snap.discipline == DISCIPLINE, snap.social_account_id == social_account_id)
-        .distinct(snap.queue)
+        .ext(distinct_on(snap.queue))
         .order_by(snap.queue, snap.captured_at.desc(), snap.id.desc())
     )
     return {row[0]: QueueRank(*row) for row in rows.all()}

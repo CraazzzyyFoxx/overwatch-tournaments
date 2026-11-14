@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import HERO_TYPE_CLASSES
@@ -64,7 +65,7 @@ async def fetch_latest_ow_ranks_by_account(
             UserRankSnapshot.social_account_id == SocialAccount.id,
             UserRankSnapshot.role == roles.c.role,
         )
-        .distinct(UserRankSnapshot.platform)
+        .ext(distinct_on(UserRankSnapshot.platform))
         .order_by(UserRankSnapshot.platform, UserRankSnapshot.captured_at.desc())
         .lateral("latest")
     )

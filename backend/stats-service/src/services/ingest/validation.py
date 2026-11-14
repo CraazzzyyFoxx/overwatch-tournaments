@@ -164,7 +164,7 @@ async def _definitions(session: AsyncSession, model: type, discipline: str, code
             model.discipline == discipline, model.active.is_(True), model.code == _any(codes)
         )
     )
-    return dict(rows.tuples().all())
+    return dict(rows.all())
 
 
 def _leaf_resolves(ontology: Ontology, node: RoleNode) -> bool:

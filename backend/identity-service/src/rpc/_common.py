@@ -143,7 +143,7 @@ def opt_int(data: dict, key: str) -> int | None:
         return None
     try:
         return int(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise HTTPException(status_code=422, detail=f"{key} must be an integer")
 
 

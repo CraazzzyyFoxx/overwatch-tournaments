@@ -3237,7 +3237,7 @@ erDiagram
         bigint tournament_id FK
         bigint algorithm_id FK
         bigint player_id FK
-        float shift
+        float8 shift
         float shift_sd "nullable"
         float effective_evidence
         int sample_tournaments

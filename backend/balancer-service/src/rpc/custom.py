@@ -88,7 +88,7 @@ def _int(data: dict[str, Any], key: str) -> int:
     raw = body.get(key, data.get(key))
     try:
         return int(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{key} is required") from None
 
 
@@ -101,7 +101,7 @@ def _opt_int(data: dict[str, Any], key: str) -> int | None:
         return None
     try:
         return int(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{key} is required") from None
 
 
@@ -134,7 +134,7 @@ def _game_id(data: dict[str, Any]) -> int:
     raw = body.get("custom_game_id", data.get("custom_game_id", body.get("id", data.get("id"))))
     try:
         return int(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="custom_game_id is required"
         ) from None

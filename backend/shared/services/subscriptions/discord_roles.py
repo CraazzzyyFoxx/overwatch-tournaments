@@ -55,7 +55,7 @@ def parse_role_tiers(config: dict[str, Any] | None) -> tuple[RoleTier, ...]:
             continue
         try:
             tier_rank = int(row.get("tier_rank"))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
         parsed.append(
             RoleTier(

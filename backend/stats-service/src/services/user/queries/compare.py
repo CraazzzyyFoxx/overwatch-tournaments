@@ -564,7 +564,7 @@ class UserCompareQueries(DisciplineQueries):
             return value
         try:
             return float(value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
 
     async def get_compare_population(

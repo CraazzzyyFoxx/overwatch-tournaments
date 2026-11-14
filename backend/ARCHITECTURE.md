@@ -191,7 +191,9 @@ singletons, one shared injected `feasibility_service`.
 
 ```python
 def resolve_pick_slot(
-    shape: RosterShape, counts: Mapping[str, int], roster: PlayerRoster | None,
+    shape: RosterShape,
+    counts: Mapping[str, int],
+    roster: PlayerRoster | None,
     target_role: str | None,
 ) -> SlotDecision:
     """Validate a pick against module role codes and the remaining projected slots."""
@@ -364,8 +366,13 @@ its collaborators' own singleton defaults:
 
 ```python
 class DraftSelectionService:
-    def __init__(self, *, teams_repo: DraftTeamRepository = DraftTeamRepository(), feasibility: DraftFeasibilityService = feasibility_service) -> None:
-        ...
+    def __init__(
+        self,
+        *,
+        teams_repo: DraftTeamRepository = DraftTeamRepository(),
+        feasibility: DraftFeasibilityService = feasibility_service,
+    ) -> None: ...
+
 
 selection_service = DraftSelectionService()
 ```

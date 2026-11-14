@@ -545,7 +545,7 @@ class WorkspaceMemberRepository(BaseRepository[models.WorkspaceMember]):
                 models.WorkspaceMember.player_id.in_(player_ids),
             )
         )
-        return dict(rows.tuples().all())
+        return dict(rows.all())
 
 
 async def insert_missing_workspace_members(
@@ -572,7 +572,7 @@ async def insert_missing_workspace_members(
             sa.tuple_(models.WorkspaceMember.workspace_id, models.WorkspaceMember.player_id).in_(pairs)
         )
     )
-    missing = sorted(set(pairs) - set(existing.tuples().all()))
+    missing = sorted(set(pairs) - set(existing.all()))
     created = {}
     for offset in range(0, len(missing), OWNER_BATCH):
         batch = missing[offset : offset + OWNER_BATCH]

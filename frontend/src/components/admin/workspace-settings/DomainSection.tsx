@@ -88,7 +88,6 @@ export function DomainSection({ workspaceId }: Readonly<{ workspaceId: number | 
     if (!workspace) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDomain(domainStateOf(workspace));
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraftDomain(workspace.custom_domain ?? "");
   }, [workspace]);
 

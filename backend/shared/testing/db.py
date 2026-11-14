@@ -170,7 +170,7 @@ def _docker_compose_up() -> bool:
             text=True,
             timeout=COMPOSE_TIMEOUT,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except FileNotFoundError, subprocess.TimeoutExpired:
         return False
     return completed.returncode == 0
 

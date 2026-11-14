@@ -75,9 +75,9 @@ def _api_key_user(*, scopes: list[str], workspace_id: int = 77) -> SimpleNamespa
         _api_key_id=42,
         _api_key_workspace_id=workspace_id,
         _api_key_scopes=scopes,
-        has_workspace_permission=lambda ws_id, resource, action: ws_id == workspace_id
-        and resource == "team"
-        and action == "create",
+        has_workspace_permission=lambda ws_id, resource, action: (
+            ws_id == workspace_id and resource == "team" and action == "create"
+        ),
     )
 
 

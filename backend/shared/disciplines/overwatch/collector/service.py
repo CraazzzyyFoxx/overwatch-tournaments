@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
@@ -413,7 +414,7 @@ class RankStateService:
         rows = await session.execute(
             sa.select(snap.platform, snap.role, snap.division, snap.tier, snap.is_ranked, snap.rank_value)
             .where(snap.discipline == DISCIPLINE, snap.social_account_id == social_account_id)
-            .distinct(snap.platform, snap.role)
+            .ext(distinct_on(snap.platform, snap.role))
             .order_by(snap.platform, snap.role, snap.captured_at.desc(), snap.id.desc())
         )
         return {

@@ -22,7 +22,7 @@ async def _placements(session, tournament_id: int) -> dict[int, int | None]:
     rows = await session.execute(
         sa.select(PR.workspace_member_id, PR.placement).where(PR.tournament_id == tournament_id)
     )
-    return dict(rows.tuples().all())
+    return dict(rows.all())
 
 
 async def _evaluations(session, tournament_id: int) -> list[tuple[int, dict]]:

@@ -72,7 +72,7 @@ class EncounterGameTeamRepository(BaseRepository[models.EncounterGameTeam]):
             )
         )
         games: dict[int, list[models.EncounterGameTeam]] = {}
-        for line, game_id in result.tuples():
+        for line, game_id in result:
             games.setdefault(game_id, []).append(line)
         return list(games.values())
 
@@ -369,7 +369,7 @@ class EncounterResultAuditRepository(BaseRepository[models.EncounterResultAudit]
             .order_by(self.model.created_at.desc(), self.model.id.desc())
             .limit(limit)
         )
-        return result.tuples().all()
+        return result.all()
 
 
 class EncounterRoomEventRepository(BaseRepository[models.EncounterRoomEvent]):
@@ -393,7 +393,7 @@ class EncounterRoomEventRepository(BaseRepository[models.EncounterRoomEvent]):
             .order_by(self.model.created_at.desc(), self.model.id.desc())
             .limit(limit)
         )
-        return result.tuples().all()
+        return result.all()
 
     async def receipts_for_evidence(
         self, session: AsyncSession, encounter_id: int, *, action: str, game_id: int, evidence_id: int
@@ -412,7 +412,7 @@ class EncounterRoomEventRepository(BaseRepository[models.EncounterRoomEvent]):
                 data["evidence_id"].as_integer() == evidence_id,
             )
         )
-        return result.tuples().all()
+        return result.all()
 
 
 class EncounterReportFormRepository(BaseRepository[models.EncounterReportForm]):

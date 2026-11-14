@@ -103,7 +103,7 @@ class AdminStandingService:
                 models.StandingPin.stage_item_id.is_not_distinct_from(stage_item_id),
             )
         )
-        return dict(result.tuples().all())
+        return dict(result.all())
 
     async def set_pins(
         self,

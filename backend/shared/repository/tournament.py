@@ -465,7 +465,7 @@ class PlayerRepository(BaseRepository[models.Player]):
                 models.Player.tournament_id == tournament_id, models.Player.workspace_member_id == workspace_member_id
             )
         )
-        return result.tuples().all()
+        return result.all()
 
     async def list_by_related_player(self, session: AsyncSession, player_id: int) -> Sequence[models.Player]:
         """Roster rows that name ``player_id`` as the player they substitute for.

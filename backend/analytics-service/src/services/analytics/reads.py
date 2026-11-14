@@ -164,7 +164,7 @@ def _anomaly_to_pydantic(
             reasons=reasons,
             encounter_id=int(raw_encounter_id) if raw_encounter_id is not None else None,
         )
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 

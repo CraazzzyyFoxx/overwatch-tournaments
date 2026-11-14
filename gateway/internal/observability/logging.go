@@ -26,18 +26,16 @@ func NewLogger(cfg *config.Config) *slog.Logger {
 	}
 	var handler slog.Handler = slog.NewJSONHandler(logWriter(cfg.Log.File), opts)
 	if cfg.Sentry.DSN != "" {
-		handler = newFanout(handler, dropAccessLogs(newSentryHandler()))
+		handler = newFanout(handler, dropAccessLogs(newSentryHandler()), dropAccessLogs(&issueHandler{}))
 	}
 	return slog.New(handler).With(slog.String("service", "gateway"))
 }
 
 func newSentryHandler() slog.Handler {
 	return sentryslog.Option{
-		// EventLevel turns logged errors into Sentry Issues; deprecated in
-		// sentry-go and slated for removal in 0.48.0 (see project notes).
-		EventLevel: []slog.Level{slog.LevelError, sentryslog.LevelFatal},
-		// LogLevel ships these to the Sentry Logs product. Info is omitted: the
-		// gateway is a high-throughput edge and Info would flood Logs ingest.
+		// Sentry Logs product only; Issues come from issueHandler. Info is
+		// omitted: the gateway is a high-throughput edge and Info would flood
+		// Logs ingest.
 		LogLevel:  []slog.Level{slog.LevelWarn, slog.LevelError},
 		AddSource: true,
 	}.NewSentryHandler(context.Background())

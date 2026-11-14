@@ -149,7 +149,7 @@ class UserProfileQueries(DisciplineQueries):
         )
         if workspace_id is not None:
             query = query.where(models.Tournament.workspace_id == workspace_id)
-        return dict((await session.execute(query)).tuples().all())
+        return dict((await session.execute(query)).all())
 
     async def get_roles(
         self, session: AsyncSession, user_id: int, workspace_id: int | None = None

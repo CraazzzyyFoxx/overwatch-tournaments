@@ -48,7 +48,7 @@ class IndividualSwissReadsService:
                 models.Stage.stage_type == enums.StageType.INDIVIDUAL_SWISS,
             )
         )
-        rows = result.tuples().all()
+        rows = result.all()
         roles = await role_order(session, tournament_id)
         rows = sorted(
             rows,
@@ -77,17 +77,13 @@ class IndividualSwissReadsService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stage not found")
 
         placed = (
-            (
-                await session.execute(
-                    sa.select(models.BracketEncounter.round, models.Encounter)
-                    .join(models.Encounter, models.Encounter.id == models.BracketEncounter.encounter_id)
-                    .where(models.BracketEncounter.stage_id == stage_id)
-                    .order_by(models.BracketEncounter.round, models.Encounter.id)
-                )
+            await session.execute(
+                sa.select(models.BracketEncounter.round, models.Encounter)
+                .join(models.Encounter, models.Encounter.id == models.BracketEncounter.encounter_id)
+                .where(models.BracketEncounter.stage_id == stage_id)
+                .order_by(models.BracketEncounter.round, models.Encounter.id)
             )
-            .tuples()
-            .all()
-        )
+        ).all()
         encounter_ids = [encounter.id for _, encounter in placed]
         seats = (
             (
@@ -119,9 +115,7 @@ class IndividualSwissReadsService:
                         models.PlayerStanding.stage_id == stage_id
                     )
                 )
-            )
-            .tuples()
-            .all()
+            ).all()
         )
         roles = await role_order(session, tournament_id)
 

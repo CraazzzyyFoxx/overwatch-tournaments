@@ -212,9 +212,7 @@ class FlowService:
                 await session.execute(
                     sa.select(FlowNode.id, FlowNode.status).where(FlowNode.tournament_id == tournament_id)
                 )
-            )
-            .tuples()
-            .all()
+            ).all()
         )
         stored = {n.id: n for n in stored_nodes}
         deleted, deleted_edges = set(changes.delete_node_ids), set(changes.delete_edge_ids)

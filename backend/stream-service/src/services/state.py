@@ -83,7 +83,7 @@ class StreamStateStore:
         for field, value in raw.items():
             try:
                 decoded = json.loads(value)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 # A malformed field is a bug in the writer, not a reason to blank
                 # the whole block for every viewer. Skip it; the next tick
                 # overwrites.
@@ -121,7 +121,7 @@ class StreamStateStore:
             return None
         try:
             return float(raw)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
 
     async def set_last_run(self, timestamp: float) -> None:
@@ -138,7 +138,7 @@ class StreamStateStore:
             return None
         try:
             decoded = json.loads(raw)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
         return decoded if isinstance(decoded, dict) else None
 
@@ -159,7 +159,7 @@ class StreamStateStore:
         for raw in await self._redis.lrange(POLL_HISTORY_KEY, 0, POLL_HISTORY_LIMIT - 1):
             try:
                 decoded = json.loads(raw)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
             if isinstance(decoded, dict):
                 history.append(decoded)

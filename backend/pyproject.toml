@@ -1,18 +1,23 @@
 [tool.uv]
+# faststream[cli] caps watchfiles<1.2, but only 1.3+ ships a cp315 (abi3) wheel;
+# 1.1.x would need a Rust toolchain in every image (PyO3 0.26 rejects 3.15).
+# Only the cli's `--reload` uses it (watchfiles.watch / DefaultFilter), stable API.
+override-dependencies = ["watchfiles>=1.3.0"]
 dev-dependencies = [
-    "pytest<8.0.0,>=7.4.3",
-    "ruff<1.0.0,>=0.2.2",
-    "pre-commit<4.0.0,>=3.6.2",
-    "types-passlib<2.0.0.0,>=1.7.7.20240106",
-    "coverage<8.0.0,>=7.4.3",
+    "pytest>=7.4.3",
+    "ruff>=0.2.2",
+    "pre-commit>=3.6.2",
+    "coverage>=7.4.3",
     "import-linter>=2.0",
+    # Imported by tests only (stats-service/tests/test_tournament_logs_fanout.py); pinned by aio-pika.
+    "aiormq>=7.2.5",
     # Runs the quota gate's Lua for real in unit tests: the all-or-nothing
     # two-scope charge is the one piece of this codebase that only a Redis
     # script interpreter can verify.
     "fakeredis[lua]>=2.38",
     # The type-check gate (scripts/typecheck.sh). Pinned: ty is pre-1.0 and its
     # diagnostics move between releases; bump on purpose, recalibrate ty-gate.toml.
-    "ty==0.0.92",
+    "ty==0.0.103",
 ]
 
 [tool.uv.workspace]
@@ -78,6 +83,7 @@ ignore = [
     "F405", # may be undefined, or defined from star imports (companion to F403; aggregators re-export via `*`)
     "UP046", # non-pep695 generic class — hold off on PEP 695 syntax (pydantic generics)
     "UP047", # non-pep695 generic function — hold off on PEP 695 syntax
+    "UP042", # (str, Enum) -> StrEnum is an unsafe fix: str()/format() of members change; wire values may depend on it
 ]
 
 [tool.ruff.lint.per-file-ignores]

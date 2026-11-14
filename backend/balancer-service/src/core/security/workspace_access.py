@@ -26,7 +26,7 @@ class WorkspaceAccessPolicy:
             try:
                 user_workspace_id = int(user_workspace_id)
                 user_api_key_id = int(user_api_key_id)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key principal")
             if user_workspace_id != int(workspace_id):
                 raise HTTPException(

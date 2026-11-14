@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { AlertTriangle, CheckCircle2, Shuffle, Users } from "lucide-react";
-import type { ImperativePanelHandle } from "react-resizable-panels";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 
 import {
   BalancingPoolSidebar,
@@ -92,13 +92,16 @@ import {
 } from "@/components/balancer/workspace-helpers";
 import { balancerQueryKeys } from "@/lib/balancer/query-keys";
 import {
+  CONTENT_PANEL_ID,
   EXPORT_TO_TOURNAMENT_STEPS,
   IMPORT_JSON_STEPS,
+  PLAYERS_PANEL_ID,
+  POOL_PANEL_ID,
   RAIL_WIDTH_PX,
   SIDEBAR_MIN_PX,
   getErrorMessage,
-  useGroupWidth,
-  useIsWideBalancerLayout
+  useIsWideBalancerLayout,
+  usePersistedPanelLayout
 } from "./useBalancerLayout";
 
 /** Until the tournament's grid resolves: crests render their neutral missing state, never another grid's. */
@@ -138,13 +141,9 @@ export function BalancerMainPageClient() {
   const sidebarRef = useRef<BalancingPoolSidebarHandle>(null);
   const balanceEditorRef = useRef<HTMLDivElement | null>(null);
   const variantsRef = useRef<BalanceVariant[]>([]);
-  const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
-  const playersPanelRef = useRef<ImperativePanelHandle>(null);
-  const panelGroupRef = useRef<HTMLDivElement | null>(null);
+  const sidebarPanelRef = useRef<PanelImperativeHandle>(null);
+  const playersPanelRef = useRef<PanelImperativeHandle>(null);
   const isWideLayout = useIsWideBalancerLayout();
-  const groupWidth = useGroupWidth(panelGroupRef);
-  const railPercent = Math.min(12, Math.max(2, (RAIL_WIDTH_PX / groupWidth) * 100));
-  const sidebarMinPercent = Math.min(40, Math.max(12, (SIDEBAR_MIN_PX / groupWidth) * 100));
 
   const [selectedPreset, setSelectedPreset] = useState("DEFAULT");
   const [jobState, dispatchJob] = useBalancerJob();
@@ -177,21 +176,19 @@ export function BalancerMainPageClient() {
   const [lastJsonImportFile, setLastJsonImportFile] = useState<File | null>(null);
   const [draftConfig, setDraftConfig] = useState<BalancerConfig>({});
   const [savedTournamentConfig, setSavedTournamentConfig] = useState<BalancerConfig>({});
-
-  // `collapse()` snaps to the CURRENT `collapsedSize`, so an already-collapsed rail
-  // has to be re-collapsed after the group is measured or resized. Panels the user
-  // left expanded are untouched, which is what keeps `autoSaveId` meaningful.
-  useEffect(() => {
-    if (isPoolSidebarCollapsed) sidebarPanelRef.current?.collapse();
-    if (isPlayersSidebarCollapsed) playersPanelRef.current?.collapse();
-  }, [railPercent, isPoolSidebarCollapsed, isPlayersSidebarCollapsed]);
-
   // Owner metadata supplies both roster shape and the player editor's grid pin.
   // Reuse the public shell's query and embedded version rather than refetching it.
   const tournamentQuery = useQuery({
     ...tournamentOverviewQueryOptions(tournamentId as number),
     enabled: tournamentId !== null
   });
+  // Only a loaded tournament renders the players panel; the saved layout is keyed by the panel set.
+  const hasPlayersPanel = workspaceId != null && Boolean(tournamentQuery.data);
+  const panelLayout = usePersistedPanelLayout(
+    "balancer-pool-panel-layout",
+    hasPlayersPanel ? [POOL_PANEL_ID, CONTENT_PANEL_ID, PLAYERS_PANEL_ID] : [POOL_PANEL_ID, CONTENT_PANEL_ID],
+    isWideLayout
+  );
   // The balance, its config and every export belong to one formation node of the tournament.
   const formationNodeId = useFlowNodeParam(tournamentQuery.data, "formation", "balancer");
   const formationNode = nodesOfKind(tournamentQuery.data, "formation").find((node) => node.id === formationNodeId);
@@ -1049,52 +1046,46 @@ export function BalancerMainPageClient() {
       <BalancerPresenceStack userIds={presenceUserIds} workspaceId={workspaceId} />
 
       {/* The shell already insets the tool with `p-3 md:p-4`; a second bottom pad just wasted space. */}
-      <div ref={panelGroupRef} className="flex min-h-0 w-full flex-1 flex-col gap-3">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-3">
         {isWideLayout ? (
           <ResizablePanelGroup
-            direction="horizontal"
-            autoSaveId="balancer-pool-panel-layout"
+            orientation="horizontal"
             className="min-h-0 flex-1"
+            groupRef={panelLayout.groupRef}
+            onLayoutChanged={panelLayout.onLayoutChanged}
           >
+            {/* Sizes are px/% strings: v4 reads a bare number as pixels. A sidebar is collapsed
+                exactly when it sits at the rail width, which `onResize` reports. */}
             <ResizablePanel
-              ref={sidebarPanelRef}
-              id="balancer-pool-sidebar-panel"
-              defaultSize={27}
-              minSize={sidebarMinPercent}
-              maxSize={45}
+              panelRef={sidebarPanelRef}
+              id={POOL_PANEL_ID}
+              defaultSize="27%"
+              minSize={SIDEBAR_MIN_PX}
+              maxSize="45%"
               collapsible
-              collapsedSize={railPercent}
-              onCollapse={() => setIsPoolSidebarCollapsed(true)}
-              onExpand={() => setIsPoolSidebarCollapsed(false)}
+              collapsedSize={RAIL_WIDTH_PX}
+              onResize={({ inPixels }) => setIsPoolSidebarCollapsed(inPixels <= RAIL_WIDTH_PX + 1)}
               className="grid min-h-0"
             >
               {sidebarElement}
             </ResizablePanel>
             <ResizableHandle withHandle />
-            <ResizablePanel
-              id="balancer-pool-content-panel"
-              minSize={40}
-              className="grid min-h-0 pl-3"
-            >
+            <ResizablePanel id={CONTENT_PANEL_ID} minSize="40%" className="grid min-h-0 pl-3">
               {balancerContentElement}
             </ResizablePanel>
             {playersElement ? (
               <>
                 <ResizableHandle withHandle />
                 <ResizablePanel
-                  ref={playersPanelRef}
-                  id="balancer-players-sidebar-panel"
-                  // `defaultSize === collapsedSize` starts the panel collapsed on a
-                  // first visit and fires `onCollapse`; a mount-time `collapse()` call
-                  // instead re-collapsed it on every mount, so `autoSaveId` could never
-                  // restore a sidebar the user had expanded.
-                  defaultSize={railPercent}
-                  minSize={sidebarMinPercent}
-                  maxSize={36}
+                  panelRef={playersPanelRef}
+                  id={PLAYERS_PANEL_ID}
+                  // `defaultSize === collapsedSize` starts the panel collapsed on a first visit.
+                  defaultSize={RAIL_WIDTH_PX}
+                  minSize={SIDEBAR_MIN_PX}
+                  maxSize="36%"
                   collapsible
-                  collapsedSize={railPercent}
-                  onCollapse={() => setIsPlayersSidebarCollapsed(true)}
-                  onExpand={() => setIsPlayersSidebarCollapsed(false)}
+                  collapsedSize={RAIL_WIDTH_PX}
+                  onResize={({ inPixels }) => setIsPlayersSidebarCollapsed(inPixels <= RAIL_WIDTH_PX + 1)}
                   className="grid min-h-0 pl-3"
                 >
                   {playersElement}

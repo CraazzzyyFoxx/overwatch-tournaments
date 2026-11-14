@@ -463,7 +463,7 @@ class RiotOAuthProvider(OAuthProviderBase):
             if response.status_code != 200:
                 return None
             payload = response.json()
-        except (httpx.HTTPError, ValueError):
+        except httpx.HTTPError, ValueError:
             return None
         cpid = payload.get("cpid") if isinstance(payload, dict) else None
         return cpid if isinstance(cpid, str) else None

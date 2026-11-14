@@ -5,16 +5,20 @@ description = "Shared ORM models, schemas, clients, and utilities used across OW
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "sqlalchemy>=2.0.37",
-    "sqlalchemy-utils>=0.41.2",
+    # `asyncio` extra: SQLAlchemy 2.1 no longer installs greenlet by default. >=2.1 for
+    # `Select.ext(postgresql.distinct_on(...))` (the old `.distinct(expr)` is deprecated).
+    "sqlalchemy[asyncio]>=2.1",
     "asyncpg>=0.30.0",
     "psycopg[binary]>=3.2.3",
     "pydantic[email]>=2.10.5",
+    "pydantic-core>=2.27.1",
     "pydantic-settings>=2.7.1",
     "python-dotenv>=1.0.0",
     "loguru>=0.7.3",
     "orjson>=3.10.14",
-    "httpx>=0.28.1",
+    # `socks` extra: the proxy sidecar (shared/core/config.py proxy_url) speaks SOCKS5, so every
+    # httpx client built from it needs socksio; declared once here, not per service.
+    "httpx[socks]>=0.28.1",
     # ASGI toolkit (NOT FastAPI): observability HTTP middleware + balancer's
     # multipart UploadFile reconstruction. Was transitively provided by fastapi
     # before its removal; declared explicitly now.
@@ -26,6 +30,7 @@ dependencies = [
     # worker uses. Was transitively provided by fastapi[standard] (fastapi-cli -> typer)
     # before its removal; declared explicitly now.
     "faststream[rabbit,cli]>=0.6.4",
+    "aio-pika>=9.4.0",
     "opentelemetry-api>=1.27.0",
     "opentelemetry-sdk>=1.27.0",
     # Worker metrics (start_worker_metrics_server / balancer metrics). Was
@@ -38,6 +43,17 @@ dependencies = [
     # AES-GCM for OAuth provider tokens at rest (shared/core/secretbox.py, read by
     # identity and the services that check Twitch subscriptions).
     "cryptography>=44.0.0",
+    # Imported by shared (S3 client, scheduler, Sentry init, OTel instrumentation); every service
+    # needs them, so they are declared here once instead of in each service.
+    "aiobotocore>=2.17.0",
+    "botocore>=1.36.0",
+    "apscheduler>=3.10.4",
+    "sentry-sdk>=2.20.0",
+    "opentelemetry-instrumentation-httpx>=0.48b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.48b0",
+    "opentelemetry-exporter-otlp>=1.27.0",
+    # `faststream run` picks it up when installed (faststream/_internal/cli/main.py).
+    "uvloop; platform_system == 'Linux'",
 ]
 
 [build-system]

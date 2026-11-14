@@ -18,6 +18,7 @@ from typing import Any, ClassVar
 from uuid import UUID
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, noload, selectinload
 from sqlalchemy.orm.strategy_options import _AbstractLoad
@@ -670,7 +671,7 @@ class RefreshTokenRepository(BaseRepository[models.RefreshToken]):
                 self._is_live(now).label("live"),
             )
             .where(models.RefreshToken.user_id == user_id)
-            .distinct(models.RefreshToken.session_id)
+            .ext(distinct_on(models.RefreshToken.session_id))
             .order_by(models.RefreshToken.session_id, models.RefreshToken.created_at.desc())
             .subquery()
         )
@@ -898,7 +899,7 @@ class RefreshTokenRepository(BaseRepository[models.RefreshToken]):
         """
         latest_ids = (
             sa.select(models.RefreshToken.id)
-            .distinct(models.RefreshToken.session_id)
+            .ext(distinct_on(models.RefreshToken.session_id))
             .order_by(models.RefreshToken.session_id, models.RefreshToken.created_at.desc())
         )
         if user_id is not None:

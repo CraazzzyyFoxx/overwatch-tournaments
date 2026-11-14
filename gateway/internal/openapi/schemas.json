@@ -9984,7 +9984,7 @@
       "description": "Permission: workspace `division_grid.read` on the grid's workspace. Exports every version and slug-based mapping as a portable division-grid/v1 document. A grid, version or job the caller cannot see (another workspace's, unless the caller is a member or holds `division_grid.read` there) is 404, checked before the permission (403).",
       "response": {
         "array": false,
-        "ref": "tournament.DivisionGridPortableDocument-Output"
+        "ref": "tournament.DivisionGridPortableDocument"
       },
       "summary": "Export a portable division grid"
     },
@@ -11807,7 +11807,7 @@
       "description": "Permission: workspace `stage.update`. Validates the template (spec rules) and stores it; refused with 409 while the stage has matches. An invalid template is a 422 whose `details.fields[0]` carries `code: \"invalid_bracket_template\"` plus a `problems` array of `{match_id, slot, code, message}`.",
       "request": {
         "array": false,
-        "ref": "tournament.BracketTemplate-Input"
+        "ref": "tournament.BracketTemplate"
       },
       "response": {
         "array": false,
@@ -43261,46 +43261,7 @@
       "title": "BracketSeedCounts",
       "type": "object"
     },
-    "tournament.BracketTemplate-Input": {
-      "additionalProperties": false,
-      "properties": {
-        "lower_seeds": {
-          "maximum": 512,
-          "minimum": 0,
-          "title": "Lower Seeds",
-          "type": "integer"
-        },
-        "matches": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.TemplateMatch"
-          },
-          "maxItems": 256,
-          "minItems": 1,
-          "title": "Matches",
-          "type": "array"
-        },
-        "upper_seeds": {
-          "maximum": 512,
-          "minimum": 2,
-          "title": "Upper Seeds",
-          "type": "integer"
-        },
-        "version": {
-          "const": 1,
-          "default": 1,
-          "title": "Version",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "upper_seeds",
-        "lower_seeds",
-        "matches"
-      ],
-      "title": "BracketTemplate",
-      "type": "object"
-    },
-    "tournament.BracketTemplate-Output": {
+    "tournament.BracketTemplate": {
       "additionalProperties": false,
       "properties": {
         "lower_seeds": {
@@ -43352,7 +43313,7 @@
         "template": {
           "anyOf": [
             {
-              "$ref": "#/components/schemas/tournament.BracketTemplate-Output"
+              "$ref": "#/components/schemas/tournament.BracketTemplate"
             },
             {
               "type": "null"
@@ -45942,71 +45903,7 @@
       "title": "DivisionGridMarketplacePreflightResult",
       "type": "object"
     },
-    "tournament.DivisionGridPortableDocument-Input": {
-      "additionalProperties": false,
-      "properties": {
-        "description": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Description"
-        },
-        "discipline": {
-          "maxLength": 32,
-          "minLength": 1,
-          "title": "Discipline",
-          "type": "string"
-        },
-        "mappings": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.DivisionGridPortableMapping"
-          },
-          "title": "Mappings",
-          "type": "array"
-        },
-        "name": {
-          "maxLength": 255,
-          "minLength": 1,
-          "title": "Name",
-          "type": "string"
-        },
-        "schema_version": {
-          "const": "division-grid/v2",
-          "default": "division-grid/v2",
-          "title": "Schema Version",
-          "type": "string"
-        },
-        "slug": {
-          "maxLength": 128,
-          "minLength": 1,
-          "title": "Slug",
-          "type": "string"
-        },
-        "versions": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.DivisionGridPortableVersion"
-          },
-          "minItems": 1,
-          "title": "Versions",
-          "type": "array"
-        }
-      },
-      "required": [
-        "discipline",
-        "slug",
-        "name",
-        "versions"
-      ],
-      "title": "DivisionGridPortableDocument",
-      "type": "object"
-    },
-    "tournament.DivisionGridPortableDocument-Output": {
+    "tournament.DivisionGridPortableDocument": {
       "additionalProperties": false,
       "properties": {
         "description": {
@@ -46074,7 +45971,7 @@
       "additionalProperties": false,
       "properties": {
         "document": {
-          "$ref": "#/components/schemas/tournament.DivisionGridPortableDocument-Input"
+          "$ref": "#/components/schemas/tournament.DivisionGridPortableDocument"
         },
         "mode": {
           "default": "library",
@@ -50792,7 +50689,7 @@
       "title": "FormField",
       "type": "object"
     },
-    "tournament.FormSchema-Input": {
+    "tournament.FormSchema": {
       "properties": {
         "schema_version": {
           "const": 1,
@@ -50802,7 +50699,7 @@
         },
         "sections": {
           "items": {
-            "$ref": "#/components/schemas/tournament.FormSection-Input"
+            "$ref": "#/components/schemas/tournament.FormSection"
           },
           "minItems": 1,
           "title": "Sections",
@@ -50815,74 +50712,7 @@
       "title": "FormSchema",
       "type": "object"
     },
-    "tournament.FormSchema-Output": {
-      "properties": {
-        "schema_version": {
-          "const": 1,
-          "default": 1,
-          "title": "Schema Version",
-          "type": "integer"
-        },
-        "sections": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.FormSection-Output"
-          },
-          "minItems": 1,
-          "title": "Sections",
-          "type": "array"
-        }
-      },
-      "required": [
-        "sections"
-      ],
-      "title": "FormSchema",
-      "type": "object"
-    },
-    "tournament.FormSection-Input": {
-      "properties": {
-        "description": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Description"
-        },
-        "fields": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.FormField"
-          },
-          "title": "Fields",
-          "type": "array"
-        },
-        "key": {
-          "title": "Key",
-          "type": "string"
-        },
-        "title": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Title"
-        }
-      },
-      "required": [
-        "key"
-      ],
-      "title": "FormSection",
-      "type": "object"
-    },
-    "tournament.FormSection-Output": {
+    "tournament.FormSection": {
       "properties": {
         "description": {
           "anyOf": [
@@ -55059,7 +54889,7 @@
           "type": "string"
         },
         "form_schema": {
-          "$ref": "#/components/schemas/tournament.FormSchema-Output"
+          "$ref": "#/components/schemas/tournament.FormSchema"
         },
         "hide_registrations": {
           "default": false,
@@ -55162,7 +54992,7 @@
           "type": "string"
         },
         "form_schema": {
-          "$ref": "#/components/schemas/tournament.FormSchema-Output"
+          "$ref": "#/components/schemas/tournament.FormSchema"
         },
         "id": {
           "title": "Id",
@@ -55224,7 +55054,7 @@
           "title": "Discipline"
         },
         "form_schema": {
-          "$ref": "#/components/schemas/tournament.FormSchema-Input"
+          "$ref": "#/components/schemas/tournament.FormSchema"
         },
         "name": {
           "maxLength": 64,
@@ -55243,7 +55073,7 @@
     "tournament.RegistrationFormUpsert": {
       "properties": {
         "form_schema": {
-          "$ref": "#/components/schemas/tournament.FormSchema-Input"
+          "$ref": "#/components/schemas/tournament.FormSchema"
         },
         "hide_registrations": {
           "default": false,

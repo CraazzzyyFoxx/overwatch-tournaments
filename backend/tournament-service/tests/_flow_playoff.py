@@ -173,7 +173,7 @@ class GroupsToPlayoffCase(EncounterLayerCase):
             rows = await s.execute(
                 sa.select(FlowNodeResult.team_id, FlowNodeResult.id).where(FlowNodeResult.node_id == node_id)
             )
-            return dict(rows.tuples().all())
+            return dict(rows.all())
 
     async def _status(self, node_id: int) -> str:
         async with self.Session() as s:

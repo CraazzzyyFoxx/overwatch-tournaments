@@ -621,5 +621,3 @@ deployment slice: its schedules are Redis leader-locked, so extra replicas are s
 - **Cache invalidation is broad on purpose.** A `cache.invalidated` event carries no user list, so every
   `/users/*` and rarity key misses after any tournament write. Expect a cold-cache burst of heavy
   aggregation queries on stats-svc right after tournament ingestion.
-- **`ortools` is declared in `pyproject.toml` but never imported** — there is no OR-Tools
-  optimisation in this service.

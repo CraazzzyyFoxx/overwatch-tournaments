@@ -595,7 +595,7 @@ class DiscordRabbitGateway:
                 channel = await self._processor.get_text_channel(event.channel_id)
                 try:
                     message = await channel.fetch_message(event.message_id) if channel is not None else None
-                except (discord.NotFound, discord.Forbidden):
+                except discord.NotFound, discord.Forbidden:
                     message = None
                 if message is None:
                     observation.set_status("not_found")

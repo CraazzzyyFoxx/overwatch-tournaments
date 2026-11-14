@@ -55,7 +55,7 @@ def stage_max_rounds(stage: models.Stage) -> int:
     raw_value = getattr(stage, "max_rounds", DEFAULT_STAGE_MAX_ROUNDS)
     try:
         value = int(raw_value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return DEFAULT_STAGE_MAX_ROUNDS
     return max(1, value)
 

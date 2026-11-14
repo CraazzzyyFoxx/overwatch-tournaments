@@ -311,7 +311,7 @@ class BalancerJobStore:
         raw_id = meta.get("api_key_id") if is_api_key else meta.get("created_by")
         try:
             principal_id = int(raw_id)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return
         raw_workspace_id = meta.get("workspace_id")
         await quota.release_ids(
