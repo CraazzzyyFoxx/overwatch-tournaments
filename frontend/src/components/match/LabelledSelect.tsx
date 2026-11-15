@@ -2,14 +2,14 @@
 
 import { useId } from "react";
 
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 
 /** A visible label and a select whose trigger is named by it, so assistive technology hears what it chooses. */
 export default function LabelledSelect({

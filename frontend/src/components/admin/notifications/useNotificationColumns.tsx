@@ -6,8 +6,8 @@ import { Archive } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { columnMeta } from "@/components/data-table";
-import { Button } from "@/components/ui/button";
+import { columnMeta } from "@craazzzyyfoxx/admin-kit/data-table";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { useFormatter } from "@/lib/datetime/client";
 import type { NotificationAdminItem } from "@/types/notification.types";
 

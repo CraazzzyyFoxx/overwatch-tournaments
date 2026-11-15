@@ -18,7 +18,8 @@ import { act, useEffect, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
+import { en as kitMessages } from "@craazzzyyfoxx/admin-kit/messages";
 import en from "@/i18n/messages/en.json";
 import type { Encounter } from "@/types/encounter.types";
 import AdminMatchesPage from "./page";
@@ -42,6 +43,7 @@ const MESSAGES = {
   kit: en.kit,
   kitAudit: en.kitAudit,
   kitTable: en.kitTable,
+  ...kitMessages,
   bracket: en.bracket,
   accountSettings: { logDirectory: en.accountSettings.logDirectory },
   adminTournaments: { standings: en.adminTournaments.standings },

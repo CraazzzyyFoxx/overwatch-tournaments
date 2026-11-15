@@ -50,6 +50,17 @@ var RegistrationAdminRoutes = []edge.RouteSpec{
 	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/withdraw", Queue: "rpc.tournament.reg_withdraw", IDParam: "registration_id", Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
 	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}/restore", Queue: "rpc.tournament.reg_restore", IDParam: "registration_id", Query: []string{"registration_node_id"}, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/v1/admin/balancer/registrations/{registration_id}", Queue: "rpc.tournament.reg_delete", IDParam: "registration_id", Query: []string{"registration_node_id"}, Auth: edge.AuthRequired, Success: 204},
+	// Organizer notes (registration_notes.py). Tournament-scoped like the team
+	// routes: IDParam is the tournament the worker authorizes against; note and
+	// attachment ids ride in Path because the worker checks they belong to it.
+	// The multipart attachment upload is binary.go (+ BinaryDocRoutes).
+	{Method: "GET", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registration-notes", Queue: "rpc.tournament.regnote_list", IDParam: "tournament_id", Query: []string{"registration_id", "registration_team_id"}, Auth: edge.AuthRequired, Timeout: regReadTimeout},
+	{Method: "GET", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registration-notes/counts", Queue: "rpc.tournament.regnote_counts", IDParam: "tournament_id", Auth: edge.AuthRequired, Timeout: regReadTimeout},
+	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registration-notes", Queue: "rpc.tournament.regnote_create", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired, Success: 201},
+	{Method: "PATCH", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registration-notes/{note_id}", Queue: "rpc.tournament.regnote_update", IDParam: "tournament_id", Path: []string{"note_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "DELETE", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registration-notes/{note_id}", Queue: "rpc.tournament.regnote_delete", IDParam: "tournament_id", Path: []string{"note_id"}, Auth: edge.AuthRequired, Success: 204},
+	{Method: "DELETE", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registration-notes/{note_id}/attachments/{attachment_id}", Queue: "rpc.tournament.regnote_attachment_delete", IDParam: "tournament_id", Path: []string{"note_id", "attachment_id"}, Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registration-notes/{note_id}/attachments/{attachment_id}/url", Queue: "rpc.tournament.regnote_attachment_url", IDParam: "tournament_id", Path: []string{"note_id", "attachment_id"}, Auth: edge.AuthRequired, Timeout: regReadTimeout},
 	// registration-teams: the organizer's incomplete-team view (§8/§12.5) and
 	// rejection. `IDParam` carries the tournament (that is what
 	// `_tournament_ctx` authorizes against, via `data["id"]`); `team_id` rides in

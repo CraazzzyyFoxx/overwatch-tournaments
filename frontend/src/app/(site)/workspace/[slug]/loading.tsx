@@ -1,6 +1,6 @@
 import { HeroFrame } from "@/components/site/PageHero";
 import { SectionStack } from "@/components/site/open-layout";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 
 import { HallOfFameSkeleton } from "../_components/HallOfFame";
 

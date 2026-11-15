@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { ApiError, getApiErrorMessage } from "@/lib/api/error";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";

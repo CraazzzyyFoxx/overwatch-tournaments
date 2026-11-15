@@ -39,6 +39,7 @@ from src.schemas import pick_ban_outcomes as pick_ban_outcomes_schemas
 from src.schemas import pregame_rooms as pregame_rooms_schemas
 from src.schemas import registration as reg_schemas
 from src.schemas import registration_form as reg_form_schemas
+from src.schemas import registration_note as reg_note_schemas
 from src.schemas import registration_team as reg_team_schemas
 from src.schemas import voice as voice_schemas
 from src.services.encounter import room_journal
@@ -472,6 +473,25 @@ OPERATIONS: dict[str, Op] = {
         request=reg_team_schemas.RegistrationTeamAttachAdminRequest,
         response=reg_team_schemas.RegistrationTeamRead,
     ),
+    # ── registration notes (staff-only, with private attachments) ─────────
+    "rpc.tournament.regnote_list": Op(
+        response=reg_note_schemas.RegistrationNoteRead,
+        response_array=True,
+        query_params=(
+            QueryParam("registration_id", "integer", description="The registration whose notes to list."),
+            QueryParam("registration_team_id", "integer", description="The registration team whose notes to list."),
+        ),
+    ),
+    "rpc.tournament.regnote_counts": Op(response=reg_note_schemas.RegistrationNoteCounts),
+    "rpc.tournament.regnote_create": Op(
+        request=reg_note_schemas.RegistrationNoteCreate, response=reg_note_schemas.RegistrationNoteRead
+    ),
+    "rpc.tournament.regnote_update": Op(
+        request=reg_note_schemas.RegistrationNoteUpdate, response=reg_note_schemas.RegistrationNoteRead
+    ),
+    "rpc.tournament.regnote_attachment_upload": Op(response=reg_note_schemas.RegistrationNoteRead),
+    "rpc.tournament.regnote_attachment_delete": Op(response=reg_note_schemas.RegistrationNoteRead),
+    "rpc.tournament.regnote_attachment_url": Op(response=reg_note_schemas.RegistrationNoteAttachmentUrl),
     # ── encounter saved-view write ─────────────────────────────────────────
     "rpc.tournament.saved_view_create": Op(
         request=schemas.EncounterSavedViewCreate, response=schemas.EncounterSavedViewRead

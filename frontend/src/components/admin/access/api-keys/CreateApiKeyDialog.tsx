@@ -4,10 +4,10 @@ import { useId, useState, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
 
 import { PermissionPicker } from "@/components/admin/access/PermissionPicker";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { DateTimePicker } from "@/components/ui/date-picker";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useCreateAccountApiKey } from "@/hooks/useAccountApiKeys";
 import { notify } from "@/lib/notify";

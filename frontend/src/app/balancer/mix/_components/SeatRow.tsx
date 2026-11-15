@@ -9,9 +9,9 @@ import { AWAY_CHIP_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { IconTooltip } from "@craazzzyyfoxx/admin-kit/ui/icon-tooltip";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { cn } from "@/lib/utils";
 

@@ -804,8 +804,8 @@ services:
   # 1G per replica rather than 2GB. Normal working set is 100-400 MB; the
   # 2026-09-30 flood took a replica to 1.23 GB and the host (12.5 GB, ~27 GB of
   # container limits) into full swap before any limit was near. A replica that
-  # passes 1G now restarts on its own instead of swapping the host. Node 22 sizes
-  # its heap to half the cgroup limit (549 MB at 1G), the rest is native memory.
+  # passes 1G now restarts on its own instead of swapping the host. Node sizes
+  # its heap to half the cgroup limit (549 MB at 1G, measured on Node 22), the rest is native memory.
   frontend:
     image: ghcr.io/craazzzyyfoxx/owt-frontend:${IMAGE_TAG:-latest}
     logging: *log-rotate

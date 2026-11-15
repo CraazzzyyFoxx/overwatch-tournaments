@@ -23,6 +23,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
@@ -387,7 +388,7 @@ class AdminEncounterReportsService:
                 )
                 .outerjoin(models.User, models.User.id == audit.actor_user_id)
                 .where(audit.encounter_id.in_(ids))
-                .distinct(audit.encounter_id)
+                .ext(distinct_on(audit.encounter_id))
                 .order_by(audit.encounter_id, audit.created_at.desc(), audit.id.desc())
             )
         ).all():

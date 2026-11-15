@@ -278,7 +278,7 @@ def _stage_max_rounds(stage: models.Stage) -> int:
     raw_value = getattr(stage, "max_rounds", DEFAULT_STAGE_MAX_ROUNDS)
     try:
         value = int(raw_value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return DEFAULT_STAGE_MAX_ROUNDS
     return max(1, value)
 
@@ -1151,17 +1151,13 @@ class StandingsService:
         afterwards, which is what keeps it testable without a database.
         """
         rows = (
-            (
-                await session.execute(
-                    sa.select(models.Encounter, models.BracketEncounter)
-                    .join(models.BracketEncounter, models.BracketEncounter.encounter_id == models.Encounter.id)
-                    .where(models.BracketEncounter.stage_id == stage_id)
-                    .order_by(models.Encounter.id)
-                )
+            await session.execute(
+                sa.select(models.Encounter, models.BracketEncounter)
+                .join(models.BracketEncounter, models.BracketEncounter.encounter_id == models.Encounter.id)
+                .where(models.BracketEncounter.stage_id == stage_id)
+                .order_by(models.Encounter.id)
             )
-            .tuples()
-            .all()
-        )
+        ).all()
         seats = await self._seats_by_encounter(session, [encounter.id for encounter, _position in rows])
         third_place = set(
             await session.scalars(
@@ -1225,7 +1221,7 @@ class StandingsService:
                 models.Encounter.id.asc(),
             )
         )
-        rows = (await session.execute(query)).tuples().all()
+        rows = (await session.execute(query)).all()
         by_id = {encounter.id: (encounter, position) for encounter, position in rows}
         by_scope: defaultdict[tuple[int | None, int | None], list[StageEncounter]] = defaultdict(list)
         for encounter, position in rows:

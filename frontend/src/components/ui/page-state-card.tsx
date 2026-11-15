@@ -4,8 +4,8 @@ import * as React from "react";
 import { AlertCircle, Inbox, SearchX, FileQuestion } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { cn } from "@/lib/utils";
 
 type PageStateKind = "error" | "empty" | "filtered-empty" | "not-found";

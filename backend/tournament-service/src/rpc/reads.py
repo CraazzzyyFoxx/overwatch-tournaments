@@ -58,7 +58,7 @@ def _identity_user_id(data: dict[str, Any]) -> int | None:
     raw = identity.get("user_id", identity.get("sub"))
     try:
         return int(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 

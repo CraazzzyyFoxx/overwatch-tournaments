@@ -7,7 +7,7 @@ import { Plus } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { PermissionGate } from "@/components/admin/PermissionGate";
 import { WorkspacesBrowser } from "@/components/admin/workspaces/WorkspacesBrowser";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
 
 export default function WorkspacesPage() {

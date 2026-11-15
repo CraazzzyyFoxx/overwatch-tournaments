@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 
-import { TONE_CLASS, TONE_TINT, type Tone } from "@/components/ui/tone";
+import { TONE_CLASS, TONE_TINT, type Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(

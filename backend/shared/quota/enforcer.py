@@ -150,14 +150,14 @@ def principal_of(user: Any) -> tuple[str, int] | None:
     if credential_type(user) == "api_key":
         try:
             return ("api_key", int(getattr(user, "_api_key_id", None)))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid API key principal",
             ) from None
     try:
         return ("user", int(getattr(user, "id", None)))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -172,7 +172,7 @@ def _namespace(principal_kind: str) -> str:
 def _api_key_workspace(user: Any) -> int | None:
     try:
         return int(getattr(user, "_api_key_workspace_id", None))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -574,7 +574,7 @@ class QuotaEnforcer:
                     continue
                 try:
                     measured = int(value)
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     break
                 if measured > cap:
                     QUOTA_REJECTIONS_TOTAL.labels(operation=operation, limit_name=dimension, scope=scope).inc()

@@ -18,13 +18,13 @@ import {
   useSubscriptionLabels
 } from "@/components/admin/collectors/subscription-shared";
 import { collapseCheckRuns } from "@/components/admin/people/check-runs";
-import { EmptyNote, LoadErrorNote } from "@/components/kit/EmptyNote";
+import { EmptyNote, LoadErrorNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { formatDate, formatRelative } from "@/components/kit/format-time";
-import { Button } from "@/components/ui/button";
-import { disclosureChevronClass } from "@/components/ui/chevron";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { disclosureChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { useFormatter } from "@/lib/datetime/client";
 import { notify } from "@/lib/notify";

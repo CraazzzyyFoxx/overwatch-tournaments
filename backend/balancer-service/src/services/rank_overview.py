@@ -24,6 +24,7 @@ from datetime import datetime
 from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
@@ -234,7 +235,7 @@ def _ow_latest_cte(members: Any, game: str) -> Any:
             RankAccountState.last_success_at >= sa.func.now() - OW_RANK_MAX_AGE,
             snapshot.role.in_(REGISTRATION_ROLE_CODES),
         )
-        .distinct(models.SocialAccount.id, snapshot.role, snapshot.platform)
+        .ext(distinct_on(models.SocialAccount.id, snapshot.role, snapshot.platform))
         .order_by(models.SocialAccount.id, snapshot.role, snapshot.platform, snapshot.captured_at.desc())
         .subquery(f"rank_ow_series_{game}")
     )

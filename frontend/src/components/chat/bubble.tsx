@@ -46,11 +46,12 @@ function Bubble({
 }: ComponentProps<"div"> & VariantProps<typeof bubbleVariants> & { align?: "start" | "end" }) {
   return (
     <div
-      data-slot="bubble"
       data-variant={variant}
       data-align={align}
       className={cn(bubbleVariants({ variant }), className)}
       {...props}
+      // After the spread: a kit trigger's `asChild` hands this its own `data-slot`.
+      data-slot="bubble"
     />
   );
 }

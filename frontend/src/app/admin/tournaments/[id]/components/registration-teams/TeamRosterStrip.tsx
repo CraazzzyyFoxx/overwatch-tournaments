@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { PersonLabel } from "@/components/PlayerName";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import type { RoleOntology } from "@/lib/roster/ontology";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";
 import type { RegistrationTeam } from "@/types/registration-team.types";

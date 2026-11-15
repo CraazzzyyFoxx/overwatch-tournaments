@@ -5,7 +5,7 @@ import { CodeXml, KeyRound, User, type LucideIcon } from "lucide-react";
 
 import { HeroFrame } from "@/components/site/PageHero";
 import { LEDE_CLASS, SectionStack } from "@/components/site/open-layout";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { buildSiteRouteMetadata } from "@/lib/site/route-metadata";
 import { cn } from "@/lib/utils";
 import { ClosingCta } from "./_components/ClosingCta";

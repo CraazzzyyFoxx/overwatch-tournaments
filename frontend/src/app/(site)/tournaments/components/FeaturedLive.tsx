@@ -8,10 +8,10 @@ import { ArrowRight, Users } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
 import { SectionHead } from "@/components/match/EncounterAtoms";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { StatusDot } from "@/components/ui/status-dot";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { duelSeats, seatTeam } from "@/lib/encounter/seats";
 import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { tournamentHref } from "@/lib/tournament/url";

@@ -3,13 +3,13 @@
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 
-import type { AdminTableFilters } from "@/components/data-table";
+import type { AdminTableFilters } from "@craazzzyyfoxx/admin-kit/data-table";
 import {
   useFilters,
   type FilterDef,
   type FilterState,
   type FilterValue
-} from "@/components/kit/useFilters";
+} from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import type { AdminRegistration } from "@/types/balancer-admin.types";

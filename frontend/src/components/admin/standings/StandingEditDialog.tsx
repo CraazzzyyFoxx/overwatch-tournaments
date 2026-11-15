@@ -2,8 +2,8 @@
 
 import { useTranslations } from "next-intl";
 
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { Label } from "@/components/ui/label";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import type { StandingUpdateInput } from "@/types/admin.types";

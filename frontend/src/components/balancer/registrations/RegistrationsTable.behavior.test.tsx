@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AuditTrailProvider } from "@/components/kit/AuditTrailSheet";
+import { en as kitMessages } from "@craazzzyyfoxx/admin-kit/messages";
 import en from "@/i18n/messages/en.json";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import { notify } from "@/lib/notify";
@@ -34,6 +35,7 @@ const MESSAGES = {
   kit: en.kit,
   kitAudit: en.kitAudit,
   kitTable: en.kitTable,
+  ...kitMessages,
   registrationsAdmin: en.registrationsAdmin,
   registrationOrganizer: en.registrationOrganizer,
   rosterShape: en.rosterShape

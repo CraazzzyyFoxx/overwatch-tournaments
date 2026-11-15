@@ -5,9 +5,9 @@ import { useTranslations } from "next-intl";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useFormatter } from "@/lib/datetime/client";
 
-import { DataTable } from "@/components/data-table";
-import { FilterBar } from "@/components/kit/FilterBar";
-import { useFilters } from "@/components/kit/useFilters";
+import { DataTable } from "@craazzzyyfoxx/admin-kit/data-table";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { usePermissions } from "@/hooks/usePermissions";
 import { catalogQueryKeys } from "@/lib/catalog/query-keys";
 import { notify } from "@/lib/notify";

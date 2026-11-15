@@ -3,7 +3,7 @@
 import { Angry, Flag, TrendingDown, VenetianMask, Weight, type LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { IconTooltip } from "@craazzzyyfoxx/admin-kit/ui/icon-tooltip";
 import { cn } from "@/lib/utils";
 import type { AnalyticsAnomaly } from "@/types/analytics.types";
 

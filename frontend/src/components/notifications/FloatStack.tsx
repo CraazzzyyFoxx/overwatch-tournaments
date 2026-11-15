@@ -13,7 +13,7 @@ import {
 } from "@/components/notifications/NotificationActions";
 import { useBellSignal } from "@/components/notifications/bell-signal";
 import { ACTIONABLE_RANK, KIND_FALLBACK, KIND_VISUAL } from "@/components/notifications/notification-kinds";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { GameMark } from "@/components/workspace/GameMark";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";

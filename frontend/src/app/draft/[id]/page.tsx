@@ -16,7 +16,7 @@ import { draftFormationNode } from "@/lib/tournament/flow-nodes";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useEntityWorkspace } from "@/hooks/useEntityWorkspace";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 
 import { DRAFT_ROOM_CLASS, DraftBoardSkeleton, DraftRoomSkeleton } from "@/components/draft/DraftRoomSkeleton";
 import { shouldShowInitialDraftSkeleton } from "@/components/draft/draft-loading-state";

@@ -3,7 +3,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { dockStack, floatingGlassClass } from "@/components/ui/dock";
-import type { Tone } from "@/components/ui/tone";
+import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { cn } from "@/lib/utils";
 
 /** The rim takes the tone; `neutral` keeps the glass's own control rim. */

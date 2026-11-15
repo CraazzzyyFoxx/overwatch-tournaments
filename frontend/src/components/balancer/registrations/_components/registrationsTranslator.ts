@@ -43,12 +43,15 @@ export function builtinAnswerLabel(key: string, t: RegistrationsTranslator): str
 }
 
 const ADMISSION_LABEL_KEYS = {
-  admitted: "grouping.admitted",
-  pending_check_in: "grouping.checkInPending",
-  not_admitted: "grouping.notAdmitted"
-} as const satisfies Record<AdmissionDecision, StatusMessageKey>;
+  admitted: "common.admissionStatus.admitted",
+  pending_check_in: "common.admissionStatus.pendingCheckIn",
+  not_admitted: "common.admissionStatus.notAdmitted"
+} as const satisfies Record<AdmissionDecision, string>;
 
-/** The server's admission decision, named the way the grouping headers name it. */
-export function admissionDecisionLabel(decision: AdmissionDecision, t: RegistrationsTranslator): string {
+/** One registration's admission decision, in the singular the status badges use (the grouping headers are plural). */
+export function admissionDecisionLabel(
+  decision: AdmissionDecision,
+  t: (key: (typeof ADMISSION_LABEL_KEYS)[AdmissionDecision]) => string
+): string {
   return t(ADMISSION_LABEL_KEYS[decision]);
 }

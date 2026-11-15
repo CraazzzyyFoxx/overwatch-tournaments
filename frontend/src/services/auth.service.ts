@@ -86,6 +86,8 @@ export interface OAuthLinkResult {
   message?: string;
   provider?: string;
   username?: string;
+  /** The caller already owned this provider account: refreshed and re-verified, not newly linked. */
+  already_linked?: boolean;
   ticket?: string;
   origin: string;
   redirect: string;
@@ -243,7 +245,11 @@ export const authService = {
   // (that's exactly the reverse-CSRF this fix closes -- a victim's own live
   // session redeeming an attacker's ticket): identity-svc additionally
   // requires `guard`'s hash to match the ticket's bound hash, fail closed.
-  async completeLink(ticket: string, accessToken: string, guard: string): Promise<{ message: string; provider?: string; username?: string }> {
+  async completeLink(
+    ticket: string,
+    accessToken: string,
+    guard: string
+  ): Promise<{ message: string; provider?: string; username?: string; already_linked?: boolean }> {
     const res = await apiFetch("/api/v1/auth/link/complete", {
       method: "POST",
       token: accessToken,

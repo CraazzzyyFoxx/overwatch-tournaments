@@ -4,7 +4,7 @@ import { createElement } from "react";
 
 import { getStatusIcon } from "@/lib/registration/status-icons";
 import { Badge } from "@/components/ui/badge";
-import type { Tone } from "@/components/ui/tone";
+import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import type { StatusMeta } from "@/types/registration.types";
 
 /** Built-in status value → tone, used when the status carries no `icon_color`. */

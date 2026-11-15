@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { Switch } from "@/components/ui/switch";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import adminService from "@/services/admin.service";
 import type { Tournament } from "@/types/tournament.types";
@@ -13,6 +13,7 @@ import { TournamentVoiceSection } from "../../components/TournamentVoiceSection"
 import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 export default function DiscordSettingsPage() {
   return (
@@ -37,6 +38,7 @@ function DiscordSettings({
   tournament: Tournament;
   canUpdateTournament: boolean;
 }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminTournament.discordSettings");
   const tChannel = useTranslations("adminTournament.discord");
   const tVoice = useTranslations("adminTournament.voiceSettings");
@@ -96,7 +98,7 @@ function DiscordSettings({
       </SettingGroup>
       </SettingsGrid>
 
-      <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
+      <SaveBar onDirtyChange={reportUnsaved} dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>
   );
 }

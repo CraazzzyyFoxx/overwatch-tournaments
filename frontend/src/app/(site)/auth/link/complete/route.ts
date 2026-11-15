@@ -4,7 +4,12 @@ import { revalidateTag } from "next/cache";
 import { authService, OAuthLinkFailedError } from "@/services/auth.service";
 import { getAccessToken } from "@/lib/auth/cookies";
 import { GUARD_COOKIE } from "@/lib/auth/cookie-names";
-import { clearGuardCookie, guardTicketErrorRedirect, safeRedirectTarget } from "@/lib/auth/oauth-callback";
+import {
+  clearGuardCookie,
+  guardTicketErrorRedirect,
+  safeRedirectTarget,
+  withLinkOutcome
+} from "@/lib/auth/oauth-callback";
 import { publicOrigin } from "@/lib/site/request-origin";
 
 // Far side of the custom-domain account-linking end-ticket (Task 10R). This
@@ -76,7 +81,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    await authService.completeLink(ticket, accessToken, guard);
+    const result = await authService.completeLink(ticket, accessToken, guard);
     // Best-effort: bust the Next Data Cache "users" tag so the public profile
     // reflects the newly linked social account immediately (react-query
     // mutations use revalidateUser). The link is already committed, so a
@@ -87,7 +92,7 @@ export async function GET(request: Request) {
     } catch {
       // cache invalidation is best-effort
     }
-    const response = NextResponse.redirect(safeRedirectTarget(next, currentOrigin));
+    const response = NextResponse.redirect(withLinkOutcome(safeRedirectTarget(next, currentOrigin), result));
     clearGuardCookie(response);
     return response;
   } catch (err) {

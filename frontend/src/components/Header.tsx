@@ -13,15 +13,15 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { PlayerSearchCombobox } from "@/components/PlayerSearchCombobox";
 import { NAV_GROUPS, NAV_LINKS, currentNavHref, navItemAvailable } from "@/components/site/site-nav-groups";
-import { Button } from "@/components/ui/button";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { Eyebrow } from "@/components/ui/eyebrow";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import UserMenu from "@/components/UserMenu";
@@ -110,7 +110,7 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
               the absent description is declared absent on purpose. */}
             <SheetContent
               side="left"
-              closeButton={false}
+              showCloseButton={false}
               aria-describedby={undefined}
               className="w-[min(320px,86vw)] p-[18px_16px_24px] sm:max-w-none"
             >

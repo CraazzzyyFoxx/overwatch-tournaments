@@ -6,12 +6,12 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
-import { DataTable, type TableCommand } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
 import { gameFilterDefs } from "@/components/admin/game-filter";
 import { CreateTournamentDialog } from "@/components/admin/tournaments/CreateTournamentDialog";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { FilterBar } from "@/components/kit/FilterBar";
-import { useFilters, type FilterDef } from "@/components/kit/useFilters";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
+import { useFilters, type FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { GameScopeControl } from "@/components/workspace/GameScopeControl";
 import { useGameDescriptors } from "@/hooks/useGameDescriptors";

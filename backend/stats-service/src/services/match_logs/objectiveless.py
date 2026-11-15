@@ -51,7 +51,7 @@ async def load_producers(session: AsyncSession, s3: S3Client, encounter_id: int)
             continue
         try:
             _, producers[job_id] = await load_document(s3, document_ref)
-        except (LookupError, ValueError):
+        except LookupError, ValueError:
             producers[job_id] = "canonical"  # unreadable provenance is never rewritten
     return producers
 

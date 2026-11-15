@@ -5,21 +5,21 @@ import { Pipette } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
-import { eyebrowClass } from "@/components/ui/eyebrow";
-import { Button } from "@/components/ui/button";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { ColorSwatch } from "@/components/ui/color-swatch";
-import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Combobox, ComboboxCheck } from "@craazzzyyfoxx/admin-kit/ui/combobox";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { getStatusIcon, STATUS_ICON_OPTIONS } from "@/lib/registration/status-icons";

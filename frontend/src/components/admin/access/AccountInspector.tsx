@@ -12,7 +12,7 @@ import { AccountPermissions } from "@/components/admin/access/AccountPermissions
 import { AccountRestrictions } from "@/components/admin/access/AccountRestrictions";
 import { AccountRoles } from "@/components/admin/access/AccountRoles";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { accessQueryKeys } from "@/lib/access/query-keys";
 import { rbacService } from "@/services/rbac.service";
 import { useTranslations } from "next-intl";

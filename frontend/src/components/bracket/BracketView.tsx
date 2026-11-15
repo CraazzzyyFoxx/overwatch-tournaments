@@ -25,8 +25,8 @@ import {
   type BracketMatch
 } from "@/lib/bracket/view";
 import { isEncounterCompleted } from "@/lib/encounter/status";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { cn } from "@/lib/utils";
 import type { DuelSlot } from "@/lib/encounter/seats";

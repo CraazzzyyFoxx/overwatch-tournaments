@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import type { FormField as FormFieldSchema } from "@/types/forms.types";
 import { useTranslations } from "next-intl";
 import { SocialIcon } from "@/components/social/SocialIcon";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { normalizeAnswerText, validateAnswer } from "@/lib/forms/validate";
 import FormField from "@/components/forms/FormField";
 

@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 
 import { PersonLabel } from "@/components/PlayerName";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@craazzzyyfoxx/admin-kit/ui/select";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import type { SlotCode } from "@/lib/roster/shape";
 import type { RegistrationTeam, RegistrationTeamMember } from "@/types/registration-team.types";

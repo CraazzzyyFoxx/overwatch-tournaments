@@ -4,7 +4,7 @@ import { Ban, History, Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import TeamName from "@/components/TeamName";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { classRank } from "./pick-ban-model";
 import { PickBanItemThumb } from "./PickBanItemThumb";
 import { seatTeam, seatsBySlot } from "@/lib/encounter/seats";

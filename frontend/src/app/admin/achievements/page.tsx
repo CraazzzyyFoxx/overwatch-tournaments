@@ -8,19 +8,19 @@ import { MoreHorizontal, Play, Plus } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { EvaluationRunSummary } from "@/components/admin/achievements/EvaluationRunSummary";
 import { gameFilterDefs } from "@/components/admin/game-filter";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { FilterBar } from "@/components/kit/FilterBar";
-import { useFilters } from "@/components/kit/useFilters";
-import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Spinner } from "@/components/ui/spinner";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { GameScopeGate } from "@/components/workspace/GameScopeGate";
 import { useGameScope } from "@/hooks/useGameScope";
 import { usePermissions } from "@/hooks/usePermissions";

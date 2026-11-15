@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useViewerRegistrationNode } from "@/hooks/useViewerRegistrationNode";
 import {

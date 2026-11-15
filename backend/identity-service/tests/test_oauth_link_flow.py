@@ -82,7 +82,9 @@ def _install_fake_provider(monkeypatch: pytest.MonkeyPatch, oauth_info: OAuthUse
 def _install_link_mock(monkeypatch: pytest.MonkeyPatch, *, reason: str | None = None) -> AsyncMock:
     """Replace the one DB-touching step. ``reason`` makes it a tripwire."""
     link_mock = (
-        AsyncMock(return_value=SimpleNamespace()) if reason is None else AsyncMock(side_effect=AssertionError(reason))
+        AsyncMock(return_value=(SimpleNamespace(), True))
+        if reason is None
+        else AsyncMock(side_effect=AssertionError(reason))
     )
     monkeypatch.setattr(oauth_accounts, "link_to_user", link_mock)
     return link_mock

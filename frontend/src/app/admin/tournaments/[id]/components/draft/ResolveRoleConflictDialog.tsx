@@ -5,17 +5,17 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowRight, ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { Button } from "@/components/ui/button";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { notify } from "@/lib/notify";
@@ -34,7 +34,7 @@ import type {
 } from "@/types/draft.types";
 
 import { availableRolesForPlayer, canCommitRoleEdit, roleEditImpact } from "./admin-control-model";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 
 interface ResolveRoleConflictDialogProps {
   open: boolean;

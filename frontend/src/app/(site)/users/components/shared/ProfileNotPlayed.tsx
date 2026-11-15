@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { HeroFrame } from "@/components/site/PageHero";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { useGameScope } from "@/hooks/useGameScope";
 import { ALL_DISCIPLINES } from "@/lib/site/discipline-scope";
 import { canonicalDisplay } from "@/lib/player";

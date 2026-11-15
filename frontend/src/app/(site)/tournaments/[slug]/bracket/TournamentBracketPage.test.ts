@@ -16,7 +16,7 @@ describe("TournamentBracketPage", () => {
     const routeSource = readFileSync(join(import.meta.dirname, "page.tsx"), "utf8");
 
     expect(routeSource).not.toContain("useTournamentStagesQuery");
-    expect(routeSource).not.toContain('from "@/components/ui/skeleton"');
+    expect(routeSource).not.toContain('from "@craazzzyyfoxx/admin-kit/ui/skeleton"');
     expect(routeSource).not.toContain("BracketPageSkeleton");
     expect(routeSource).not.toContain("stagesQuery.data ?? []");
     expect(routeSource).not.toContain("stages={");

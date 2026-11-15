@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
 
 import { PageHero, HeroCoord, HeroStat } from "@/components/site/PageHero";
-import { StatusDot } from "@/components/ui/status-dot";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 
 interface TournamentsHeroProps {
   workspaceName?: string | null;

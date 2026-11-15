@@ -1,5 +1,5 @@
 import { HeroFrame } from "@/components/site/PageHero";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 
 /**
  * Loading placeholder for the player hero: the same `HeroFrame` profile shell

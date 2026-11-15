@@ -4,6 +4,7 @@ import { forwardRef, useRef, useState, type ComponentPropsWithoutRef } from "rea
 import { useTranslations } from "next-intl";
 import {
   AlertTriangle,
+  Archive,
   CheckCircle2,
   ChevronDown,
   ExternalLink,
@@ -16,14 +17,14 @@ import {
 
 import { MAX_LOBBIES, lobbyLetter } from "@/app/balancer/mix/pickup-chrome";
 import { LobbyStage } from "@/app/balancer/mix/_components/LobbyStage";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import { BanPresetSelect, useBanPresetName } from "@/components/pick-ban/BanPresetSelect";
 import { MixFormationControl } from "@/components/mix/MixFormationControl";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { BackLink } from "@/components/site/BackLink";
-import { Card } from "@/components/ui/card";
-import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { IconTooltip } from "@craazzzyyfoxx/admin-kit/ui/icon-tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,14 +32,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { Eyebrow } from "@/components/ui/eyebrow";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { NumberInput } from "@/components/ui/number-input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import {
   useMixPresetClocks,
@@ -99,6 +100,9 @@ type PickupMixHeaderProps = {
   canDelete?: boolean;
   deleting?: boolean;
   onDeleteMix?: () => void;
+  /** Omitted -- the menu offers no close; it is the only way to end a mix that never balanced a lineup. */
+  onCloseMix?: () => void;
+  closingMix?: boolean;
   /** Omitted -- the self-service row is not offered at all. */
   onSetSelfService?: (patch: { self_signup?: MixSelfSignup; self_role_edit?: boolean }) => void;
   savingSelfService?: boolean;
@@ -152,6 +156,8 @@ export function PickupMixHeader({
   canDelete = false,
   deleting = false,
   onDeleteMix,
+  onCloseMix,
+  closingMix = false,
   onRename,
   onSetSelfService,
   savingSelfService = false,
@@ -172,11 +178,13 @@ export function PickupMixHeader({
   const tm = useTranslations("mixes");
   const tl = useTranslations("mixes.lobbies");
   const th = useTranslations("mixes.header");
+  const tTeams = useTranslations("mixes.teams");
   const tb = useTranslations("pickBan.mixBans");
   const banPresetName = useBanPresetName();
   const clocks = useMixPresetClocks(game?.discipline, game?.hero_ban_preset ?? null);
   const pickers = useMixPresetPickers(game?.discipline, game?.hero_ban_preset ?? null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
   const [dropLobbyOpen, setDropLobbyOpen] = useState(false);
   const lobbyCount = game?.lobby_count ?? 1;
   // What the slider shows while it is being dragged. The request only goes out
@@ -197,6 +205,7 @@ export function PickupMixHeader({
     (_, i) => tl("tab", { letter: lobbyLetter(draftLobbyCount + i) })
   ).join(", ");
   const offerDelete = canDelete && onDeleteMix != null;
+  const offerClose = canWrite && onCloseMix != null;
   // One lobby: its stage is the mix's, said beside the name. Several: each lobby card says its own, so nothing here.
   const onlyLobby = lobbyCount === 1 ? game?.lobbies.find((row) => row.lobby_index === 0) : undefined;
   const offerRules =
@@ -310,6 +319,12 @@ export function PickupMixHeader({
                   {th("access")}
                 </DropdownMenuItem>
               ) : null}
+              {offerClose ? (
+                <DropdownMenuItem disabled={closingMix} onSelect={() => setCloseOpen(true)}>
+                  <Archive aria-hidden="true" />
+                  {tTeams("close")}
+                </DropdownMenuItem>
+              ) : null}
               {offerDelete ? (
                 <>
                   {canWrite ? <DropdownMenuSeparator /> : null}
@@ -404,6 +419,24 @@ export function PickupMixHeader({
           onConfirm={() => {
             setDropLobbyOpen(false);
             onLobbyCountChange(draftLobbyCount);
+          }}
+        />
+      ) : null}
+
+      {offerClose ? (
+        <ConfirmDialog
+          open={closeOpen}
+          onOpenChange={setCloseOpen}
+          intent={{
+            title: tTeams("closeTitle"),
+            description: tTeams("closeDescription"),
+            confirmLabel: tTeams("closeConfirm"),
+            tone: "danger"
+          }}
+          pending={closingMix}
+          onConfirm={() => {
+            setCloseOpen(false);
+            onCloseMix?.();
           }}
         />
       ) : null}

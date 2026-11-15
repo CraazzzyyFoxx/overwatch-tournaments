@@ -3,11 +3,11 @@
 import Link from "next/link";
 import Image from "@/components/ui/image";
 import type { ReactNode } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { useTranslations } from "next-intl";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useOAuthProviders } from "@/hooks/useOAuthProviders";
 import { getSocialProviderConfig } from "@/lib/social/providers";
 import { useAuthModalStore } from "@/stores/auth-modal.store";

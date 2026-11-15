@@ -6,7 +6,7 @@ import { ArrowLeft, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { TOOLBAR_BUTTON_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { getTournamentStatusMeta, displayStatus } from "@/lib/tournament/status";

@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingsGrid } from "@/components/kit/SettingRow";
 import { hasChallongeSource } from "@/components/admin/tournament-checklist";
 import type { Tournament } from "@/types/tournament.types";
@@ -10,6 +10,7 @@ import { ChallongeIntegrationSection } from "../../components/ChallongeIntegrati
 import { useHubStagesQuery } from "../../hubQueries";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 export default function ChallongeSettingsPage() {
   return (
@@ -25,6 +26,7 @@ function ChallongeSettings({
   tournament,
   tournamentId
 }: Readonly<{ tournament: Tournament; tournamentId: number }>) {
+  const reportUnsaved = useUnsavedReporter();
   const { form, patch, dirty, summary, saving, save, discard, error } = useTournamentSettingsForm(
     tournament,
     tournamentId,
@@ -48,7 +50,7 @@ function ChallongeSettings({
       </SettingGroup>
       </SettingsGrid>
 
-      <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
+      <SaveBar onDirtyChange={reportUnsaved} dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>
   );
 }

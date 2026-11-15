@@ -4,7 +4,7 @@ import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import { AchievementArt } from "@/components/achievements/AchievementArt";
 import { AchievementRarity } from "@/types/achievement.types";
 import { CARD_HEAD_LINK, CardSurface } from "@/components/profile/atoms";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { classifyRarity, rarityVarClass, type Rarity } from "@/lib/achievements/rarity";
 
 interface Props {

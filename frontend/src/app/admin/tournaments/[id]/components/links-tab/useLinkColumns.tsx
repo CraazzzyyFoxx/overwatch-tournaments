@@ -12,7 +12,7 @@ import {
   Trash2
 } from "lucide-react";
 
-import { columnMeta, createKebabColumn } from "@/components/data-table";
+import { columnMeta, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import type { TournamentLink } from "@/types/stream.types";
 import { primaryStreamLinkSortOrder } from "../tournamentLinks.helpers";

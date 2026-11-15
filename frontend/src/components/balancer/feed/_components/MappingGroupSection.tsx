@@ -12,7 +12,7 @@ import { useTranslations } from "next-intl";
 
 import { MappingFieldRow } from "./MappingFieldRow";
 import { orderedRoleSubgroups, roleSubgroupOf } from "./mappingConfig";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import { cn } from "@/lib/utils";

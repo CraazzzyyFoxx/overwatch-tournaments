@@ -23,21 +23,24 @@ import {
 } from "lucide-react";
 
 import { LinkTabs, type LinkTabItem } from "@/components/kit/LinkTabs";
-import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog, type ConfirmIntent } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingsGrid } from "@/components/kit/SettingRow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { useFlowPath } from "@/hooks/useFlowPath";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { stepsTo } from "@/lib/tournament/flow-path";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import { NODE_TRANSITIONS } from "@/lib/tournament/lifecycle";
+import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import type { Stage, StageNodeStatus, Tournament } from "@/types/tournament.types";
 import type { Team } from "@/types/team.types";
 
@@ -45,15 +48,13 @@ import {
   BRACKET_STAGE_TYPES,
   FFA_STAGE_TYPES,
   getDefaultMergedStageName,
-  getStageStatus,
-  getStageStatusTone,
   GROUP_STAGE_TYPES,
   isMergeableGroupStage,
   normalizeMaxRounds,
   projectStage,
   type StageProgress
 } from "@/lib/bracket/projection";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import {
   buildStageUpdatePayload,
   stageFormChanges,
@@ -75,7 +76,9 @@ import { useStageFeed } from "./stage-settings/useStageFeed";
 import { tabFallback } from "../../hubQueries";
 import { useTabAccess } from "../../sub-tabs";
 import { useStageOperations } from "./stage-editor/useStageOperations";
+import { StageNextStep } from "./stage-editor/StageNextStep";
 import { MatchesView } from "../../matches/MatchesView";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 // The standings tables are the heaviest thing the editor can show and only one
 // tab of four needs them, so they are split out of the Bracket tab's bundle.
@@ -107,13 +110,15 @@ const STAGE_MOVES: Record<
   "completed>live": { label: "reopen", icon: RotateCcw }
 };
 
+const STAGE_STATUS_TONE: Record<string, Tone> = { draft: "neutral", ready: "info", live: "accent", completed: "success" };
+
 interface StageEditorProps {
   stage: Stage;
   stages: Stage[];
   tournament: Tournament | undefined;
   teams: Team[];
   isTeamsLoading: boolean;
-  progress: StageProgress | undefined;
+  progressByStageId: ReadonlyMap<number, StageProgress>;
   isSuperuser: boolean;
   /** `Matches › Encounters` scoped to this stage. */
   encountersHref: string;
@@ -142,12 +147,13 @@ export function StageEditor({
   tournament,
   teams,
   isTeamsLoading,
-  progress,
+  progressByStageId,
   isSuperuser,
   encountersHref,
   onChanged,
   onSelect
 }: Readonly<StageEditorProps>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminBracket.editor");
   const tRoot = useTranslations("adminBracket");
   const formatRound = useBracketRoundLabel();
@@ -159,8 +165,8 @@ export function StageEditor({
   // server rejects by position inside a field, and a toast cannot point at one.
   const [saveError, setSaveError] = useState<unknown>(null);
 
+  const progress = progressByStageId.get(stage.id);
   const hasEncounters = (progress?.total ?? 0) > 0;
-  const stageStatus = getStageStatus(stage, hasEncounters);
   const changes = stageFormChanges(stage, form);
   // The engine's own round list: the shape the bracket will actually be
   // generated in, including an uneven upper/lower split (and, later, a custom
@@ -310,6 +316,11 @@ export function StageEditor({
     stages.some((candidate) => candidate.stage_type === "individual_swiss");
   // The lifecycle moves the server allows from here; `draft` is the confirm-guarded revert.
   const transitions = NODE_TRANSITIONS.stage[stage.status] ?? [];
+  // The stage's own next move toward live; it is pressable once the plan to live starts with it (nothing upstream waits).
+  const { graph, statusLabel } = useFlowPath(stage.tournament_id);
+  const livePlan = graph && (stage.status === "draft" || stage.status === "ready") ? stepsTo(graph, stage.node_id, "live") : [];
+  const nextMove = stage.status === "draft" ? STAGE_MOVES["draft>ready"] : stage.status === "ready" ? STAGE_MOVES["ready>live"] : null;
+  const nextMoveFree = livePlan?.[0]?.node.id === stage.node_id;
 
   const tabs: LinkTabItem[] = BRACKET_SECTIONS.map((key) => ({
     key,
@@ -324,16 +335,10 @@ export function StageEditor({
         <EntityHubHeader
           level={2}
           title={stage.name}
-          // A pill only while captains play (or are about to): draft and
-          // completed are the default ends of every stage.
-          status={
-            stageStatus === "Active" || stageStatus === "Preview"
-              ? {
-                  label: tr(`extra.statuses.${stageStatus.toLowerCase()}`),
-                  tone: getStageStatusTone(stage, hasEncounters)
-                }
-              : undefined
-          }
+          status={{
+            label: statusLabel({ id: stage.node_id, kind: "stage", name: stage.name, status: stage.status }),
+            tone: STAGE_STATUS_TONE[stage.status] ?? "neutral"
+          }}
           meta={[
             tRoot(`labels.types.${stage.stage_type}`),
             <span key="slots" className="tabular-nums">
@@ -380,6 +385,17 @@ export function StageEditor({
                 )}
                 {hasEncounters ? t("regenerate") : t("generate")}
               </Button>
+
+              {canUpdateTournament && nextMove ? (
+                <Button
+                  size="sm"
+                  disabled={!nextMoveFree || transitionMutation.isPending}
+                  onClick={() => transitionMutation.mutate(stage.status === "draft" ? "ready" : "live")}
+                >
+                  <nextMove.icon className="size-4" aria-hidden />
+                  {t(nextMove.label)}
+                </Button>
+              ) : null}
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -437,6 +453,13 @@ export function StageEditor({
               </DropdownMenu>
             </>
           }
+        />
+        <StageNextStep
+          stage={stage}
+          plan={livePlan}
+          stages={stages}
+          progressByStageId={progressByStageId}
+          canUpdate={canUpdateTournament}
         />
       </div>
 
@@ -523,6 +546,7 @@ export function StageEditor({
         ) : null}
 
         <SaveBar
+          onDirtyChange={reportUnsaved}
           dirty={changes.length > 0 || schedule.dirty || advancement.dirty}
           summary={
             <Fragment>

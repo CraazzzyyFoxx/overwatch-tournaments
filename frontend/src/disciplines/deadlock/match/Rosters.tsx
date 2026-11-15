@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
 
 import PlayerName from "@/components/PlayerName";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { triggerChevronClass } from "@/components/ui/chevron";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { BuildRow } from "./Build";
 import { heldAt, shopPurchases, statsAt, teamAt, type DlPlayer, type DlTeam, type MatchFeed } from "./model";

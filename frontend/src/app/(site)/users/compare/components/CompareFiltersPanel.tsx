@@ -9,7 +9,7 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { useRoleName } from "@/hooks/useRoleName";
 import { registrationRoles, showsRoles, type RoleOntology } from "@/lib/roster/ontology";
 import type { DivisionGridLike } from "@/lib/divisions/grid";
-import { UserSearchCombobox } from "@/components/kit/ServerSearchCombobox";
+import { UserSearchCombobox } from "@/components/kit/UserSearchCombobox";
 import { SearchableImageSelect, type SearchableImageOption } from "@/components/ui/searchable-image-select";
 import { DivisionRangePicker } from "@/components/DivisionRangePicker";
 import { TournamentCombobox } from "@/components/tournaments/TournamentCombobox";

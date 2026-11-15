@@ -29,7 +29,9 @@ src/lib  src/hooks  src/stores  src/services  src/types  src/utils  src/i18n  sr
 src/components/ui           shadcn primitives
 src/components/kit          cross-zone application kit (SaveBar, StatusPill, Inspector,
                             FilterBar, Combobox, ConfirmDialog, WizardShell, tone, …)
-src/components/data-table   the sortable/filterable/selectable table
+@craazzzyyfoxx/admin-kit    the sortable/filterable/selectable table (`/data-table`), the form kit
+                            (`/kit/*`) and the primitives it is built on (`/ui/*`); a package, so
+                            it is outside the zone graph
 src/components/*            every other feature component library (balancer, draft,
                             registration, bracket, roster-shape, tournaments, match, …)
 ```
@@ -172,8 +174,10 @@ every zone bundle is generated as a superset of `root`.
 `src/i18n/zone-namespaces.json` is **generated**: `bun run lint:zones --write-i18n` walks the
 import graph from each zone's route entries and collects every namespace any reachable module
 could address. Rule Z4 of the gate recomputes it and fails on drift, so the map cannot rot as
-code moves. A directory import (`@/components/data-table` → `…/index`) resolves to its index
-file; before it did, the edge dangled and 29 modules behind it were invisible to Z4.
+code moves. A directory import (`@/components/x` → `…/index`) resolves to its index file; before
+it did, the edge dangled and the modules behind it were invisible to Z4. The one namespace not in
+`en.json` is `adminKit`, the table and form kit's own strings, merged in by `i18n/request.ts`: any
+module importing `@craazzzyyfoxx/admin-kit/*` brings it into its zone.
 
 The collection is deliberately over-inclusive. The dominant call-site idiom is a bare
 `useTranslations()` plus absolute dotted keys — `t("users.profile.title")` — and some of those

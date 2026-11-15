@@ -171,7 +171,7 @@ def parse_requirement(blob: dict[str, Any] | None) -> SubscriptionRequirement:
             continue
         try:
             min_tier_rank = int(row.get("min_tier_rank", 1))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             min_tier_rank = 1
         min_tier_rank = max(min_tier_rank, 1)
         strictest[provider] = max(strictest.get(provider, 0), min_tier_rank)

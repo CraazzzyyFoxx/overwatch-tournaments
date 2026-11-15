@@ -160,7 +160,7 @@ async function hydrateProfile(prewarm: (client: QueryClient) => void) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   prewarm(client);
   host = document.body.appendChild(document.createElement("div"));
-  host.innerHTML = html;
+  host.innerHTML = html.replaceAll("&gt;", ">").replaceAll("&#x27;", "'"); // happy-dom leaves these undecoded in attribute values
   const recoverable: unknown[] = [];
   const errors = vi.spyOn(console, "error").mockImplementation(() => {});
   await act(async () => {
@@ -194,8 +194,8 @@ it("names the last tournament's role on the server, from its own community's met
   expect(recoverable.map(String)).toEqual([]);
   expect(mismatches).toEqual([]);
   const server = document.createElement("div");
-  server.innerHTML = html;
-  const card = [...server.querySelectorAll('[data-ui="card"]')].find((node) => node.textContent?.includes("Overwatch Open"));
+  server.innerHTML = html.replaceAll("&gt;", ">").replaceAll("&#x27;", "'"); // happy-dom leaves these undecoded in attribute values
+  const card = [...server.querySelectorAll('[data-slot="card"]')].find((node) => node.textContent?.includes("Overwatch Open"));
   expect(card?.querySelector('[title="Support"]')).toBeTruthy();
   expect(card?.textContent).toContain("Support");
   expect(html).not.toContain("Unknown role");

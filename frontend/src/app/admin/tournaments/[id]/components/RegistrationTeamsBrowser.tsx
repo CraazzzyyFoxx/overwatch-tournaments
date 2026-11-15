@@ -1,22 +1,25 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 
-import { DataTable } from "@/components/data-table";
-import { FilterBar } from "@/components/kit/FilterBar";
+import { DataTable } from "@craazzzyyfoxx/admin-kit/data-table";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
-import { useFilters, type FilterDef } from "@/components/kit/useFilters";
+import { useFilters, type FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { translateRegistrationTeamError } from "@/lib/registration/team-errors";
 import { getRegistrationTeamStatus } from "@/lib/registration/team-tone";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { cn } from "@/lib/utils";
+import registrationNoteService from "@/services/registration-note.service";
 import type { RegistrationTeam } from "@/types/registration-team.types";
 
 import { EXPORT_SKIP_CODES, isExportEligible, type PendingConfirm } from "./registration-teams/model";
@@ -190,14 +193,24 @@ export function RegistrationTeamsBrowser({
     [setActionError]
   );
 
-  const columns = useRegistrationTeamColumns({ canManageTeams, canExport, slotLabel, handlers: rowHandlers });
+  const noteCountsQuery = useQuery({
+    queryKey: tournamentQueryKeys.registrationNoteCounts(tournamentId),
+    queryFn: () => registrationNoteService.counts(tournamentId)
+  });
+  const columns = useRegistrationTeamColumns({
+    canManageTeams,
+    canExport,
+    slotLabel,
+    handlers: rowHandlers,
+    noteCounts: noteCountsQuery.data?.teams
+  });
 
   return (
     <>
       <div
         className={cn(
           "grid min-w-0 items-start gap-4",
-          selectedTeam && "lg:grid-cols-[minmax(0,1fr)_minmax(20rem,28rem)]"
+          selectedTeam && "lg:grid-cols-[minmax(0,1fr)_auto]"
         )}
       >
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
@@ -333,6 +346,7 @@ export function RegistrationTeamsBrowser({
               tournamentId={tournamentId}
               workspaceId={workspaceId}
               canManageTeams={canManageTeams}
+              canModerateNotes={canAccessPermission("team.delete", workspaceId)}
               disabled={disabled}
               ontology={ontology}
               inlineError={inlineError}

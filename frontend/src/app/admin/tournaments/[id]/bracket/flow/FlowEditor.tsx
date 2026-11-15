@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 
 import { flowNodeTypes } from "@/components/flow/FlowNodeCard";
 import { CanvasPanel, GraphCanvas } from "@/components/graph-canvas/GraphCanvas";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { SaveBar } from "@/components/kit/SaveBar";
-import { Button } from "@/components/ui/button";
-import { floatingPanelClass } from "@/components/ui/popover";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { floatingPanelClass } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { FLOW_NODE_PARAM } from "@/hooks/useFlowNodeParam";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
@@ -37,12 +37,14 @@ import { FlowIssues } from "./FlowIssues";
 import { NodeInspector } from "./inspectors/NodeInspector";
 import { PresetDialog } from "./PresetDialog";
 import { useFlowEditor } from "./useFlowEditor";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 /** A palette click lands this far right of the right-most node's card (`min-w-44`, 176 px, plus a gap). */
 const CLICK_OFFSET = 176 + 40;
 
 /** The Flow tab: canvas (with its palette) and its issues, and the save bar. A viewer without `tournament.update` gets the canvas read-only. */
 export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminTournament.flow");
   const tKind = useTranslations("common.flow.kind");
   const tPalette = useTranslations("adminTournament.flow.palette");
@@ -182,6 +184,7 @@ export function FlowEditor({ tournamentId }: Readonly<{ tournamentId: number }>)
       </div>
 
       <SaveBar
+        onDirtyChange={reportUnsaved}
         dirty={dirty}
         summary={summary}
         error={editor.error}

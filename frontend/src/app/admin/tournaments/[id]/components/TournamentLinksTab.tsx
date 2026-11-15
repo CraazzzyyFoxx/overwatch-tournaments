@@ -5,13 +5,13 @@ import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
-import { DataTable, type TableCommand } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
 import {
   entityFormError,
   onEntityDialogClose
 } from "@/components/admin/CatalogToolbarActions";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { notify } from "@/lib/notify";

@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { cn } from "@/lib/utils";
 import { RARITY_ORDER, rarityRanges, rarityVarClass, type Rarity } from "@/lib/achievements/rarity";
 

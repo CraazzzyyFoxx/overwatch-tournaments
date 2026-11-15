@@ -54,7 +54,7 @@ RUN --mount=type=cache,id=owt-next-cache,target=/app/.next/cache \
     bun run build
 
 # 3. Production runtime with Node.js (Next.js server requires Node)
-FROM node:22-alpine AS runner
+FROM node:26-alpine AS runner
 WORKDIR /app
 
 # Internal gateway base for server-side fetches (SSR + route handlers +

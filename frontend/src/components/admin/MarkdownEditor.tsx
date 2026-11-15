@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { commands, type ICommand } from "@uiw/react-md-editor";
 
 import { Markdown, MARKDOWN_REMARK_PLUGINS } from "@/components/Markdown";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 import styles from "./MarkdownEditor.module.css";

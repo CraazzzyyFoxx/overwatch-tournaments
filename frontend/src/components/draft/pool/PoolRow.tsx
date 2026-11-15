@@ -8,8 +8,8 @@ import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
 import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
-import { Button } from "@/components/ui/button";
-import { RowButton } from "@/components/ui/row-button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { getImpactColor, tint } from "@/lib/colors";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
 import {

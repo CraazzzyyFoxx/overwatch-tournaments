@@ -7,13 +7,13 @@ import { ArrowLeft, ChevronDown, FileUp, ShieldAlert, ShieldCheck, Users } from 
 import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card, CardContent } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { EncounterRostersModal } from "@/components/EncounterRostersModal";
 import { MatchImport } from "@/components/pick-ban/MatchImport";
 import { LogUploadDialog } from "@/components/logs/LogUploadDialog";

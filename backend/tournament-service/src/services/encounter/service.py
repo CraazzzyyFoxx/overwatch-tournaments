@@ -537,7 +537,7 @@ class EncounterService:
         rows = await session.execute(
             sa.select(models.Encounter.id, played_at_expr()).where(models.Encounter.id.in_(encounter_ids))
         )
-        return dict(rows.tuples().all())
+        return dict(rows.all())
 
     async def is_final_by_encounter(
         self, session: AsyncSession, encounter_ids: typing.Sequence[int]
@@ -548,7 +548,7 @@ class EncounterService:
         rows = await session.execute(
             sa.select(models.Encounter.id, _is_final_condition()).where(models.Encounter.id.in_(encounter_ids))
         )
-        return dict(rows.tuples().all())
+        return dict(rows.all())
 
     async def get_saved_views(
         self,
@@ -897,8 +897,8 @@ class EncounterService:
             "stage_kinds": sorted(
                 ((kind, count) for kind, count in stage_kinds if count), key=lambda item: item[1], reverse=True
             ),
-            "score_lines": [tuple(row) for row in score_lines.tuples()],
-            "hot_maps": [tuple(row) for row in hot_maps.tuples()],
+            "score_lines": [tuple(row) for row in score_lines],
+            "hot_maps": [tuple(row) for row in hot_maps],
             "closest": closest,
         }
 

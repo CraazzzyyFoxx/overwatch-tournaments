@@ -24,15 +24,15 @@ import {
   type AuditTrailScope,
   useAuditTranslator
 } from "@/components/kit/audit-log";
-import { Button } from "@/components/ui/button";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { ApiError } from "@/lib/api/error";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import type { AuditLogRead } from "@/types/admin.types";
-import { eyebrowClass } from "@/components/ui/eyebrow";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 /**
  * Per-line marker for the field diff.

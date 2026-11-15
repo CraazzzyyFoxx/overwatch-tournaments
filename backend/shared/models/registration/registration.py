@@ -41,6 +41,8 @@ __all__ = (
     "RegistrationGoogleSheetBinding",
     "RegistrationGoogleSheetFeed",
     "RegistrationIdentity",
+    "RegistrationNote",
+    "RegistrationNoteAttachment",
     "RegistrationRole",
     "RegistrationRoleEntity",
     "RegistrationStatus",
@@ -723,3 +725,55 @@ class RegistrationTeamInvite(db.TimeStampIntegerMixin):
     target_auth_user: Mapped[AuthUser | None] = relationship(foreign_keys=[target_auth_user_id])
     invited_by_user: Mapped[AuthUser | None] = relationship(foreign_keys=[invited_by])
     revoked_by_user: Mapped[AuthUser | None] = relationship(foreign_keys=[revoked_by])
+
+
+class RegistrationNote(db.TimeStampIntegerMixin):
+    """An organizer's internal note on one registration or one registration team.
+
+    Staff-only: never serialized on a public or player-facing read. Exactly one
+    target is set; ``tournament_id`` is denormalized so the authz gate and the
+    per-tournament counts never join through the target.
+    """
+
+    __tablename__ = "note"
+    __table_args__ = (
+        CheckConstraint(
+            "(registration_id IS NULL) <> (registration_team_id IS NULL)",
+            name="ck_registration_note_one_target",
+        ),
+        {"schema": "registration"},
+    )
+
+    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"), index=True)
+    registration_id: Mapped[int | None] = mapped_column(
+        ForeignKey("registration.registration.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    registration_team_id: Mapped[int | None] = mapped_column(
+        ForeignKey("registration.team.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    author_id: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
+    body: Mapped[str] = mapped_column(Text(), nullable=False)
+    edited_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    author: Mapped[AuthUser | None] = relationship(foreign_keys=[author_id])
+    attachments: Mapped[list[RegistrationNoteAttachment]] = relationship(
+        back_populates="note",
+        cascade="all, delete-orphan",
+        order_by=lambda: RegistrationNoteAttachment.id,
+    )
+
+
+class RegistrationNoteAttachment(db.TimeStampIntegerMixin):
+    """One file attached to a :class:`RegistrationNote`, stored as a PRIVATE S3 object (presigned on read)."""
+
+    __tablename__ = "note_attachment"
+    __table_args__ = ({"schema": "registration"},)
+
+    note_id: Mapped[int] = mapped_column(ForeignKey("registration.note.id", ondelete="CASCADE"), index=True)
+    s3_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(127), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer(), nullable=False)
+    uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
+
+    note: Mapped[RegistrationNote] = relationship(back_populates="attachments")

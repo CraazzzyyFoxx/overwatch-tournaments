@@ -1,4 +1,4 @@
-import { type Tone } from "@/components/ui/tone";
+import { type Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import type { DateFormatter } from "@/components/kit/format-time";
 import type { LogOperationErrorCode, LogProcessingRecord, LogProcessingStatus } from "@/types/admin.types";
 import { LOG_OPERATION_ERROR_CODES, getRetryKind } from "../logs.helpers";

@@ -257,7 +257,7 @@ describe("PickupLobbyCards", () => {
     expect([...scope.querySelectorAll("a")].map((link) => link.getAttribute("href"))).toContain(
       "/balancer/mix/3/lobby/B",
     );
-    expect(scope.querySelector('a[href="/balancer/mix/3/lobby/B"]')?.className).toContain("--aqt-teal");
+    expect(scope.querySelector('a[href="/balancer/mix/3/lobby/B"]')?.className).toContain("--color-primary");
   });
 
   it("keeps Balance off, with the reason, while the lobby cannot fill its seats", async () => {
@@ -352,7 +352,7 @@ describe("PickupLobbyCards", () => {
       ]),
       { canWrite: false },
     );
-    const loud = [...scope.querySelectorAll("a")].map((link) => link.className.includes("--aqt-teal"));
+    const loud = [...scope.querySelectorAll("a")].map((link) => link.className.includes("--color-primary"));
 
     expect(loud).toEqual([false, true, true, false]);
   });

@@ -5,12 +5,12 @@ import { useTranslations } from "next-intl";
 
 import TeamName, { type TeamNameInput } from "@/components/TeamName";
 import EncounterRosterPanel from "@/components/match/EncounterRosterPanel";
-import { Button } from "@/components/ui/button";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { cn } from "@/lib/utils";
 import { seatAt, seatTeam, seatsBySlot } from "@/lib/encounter/seats";
 import type { Encounter } from "@/types/encounter.types";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 interface PregameReadinessProps {
   encounter: Encounter;

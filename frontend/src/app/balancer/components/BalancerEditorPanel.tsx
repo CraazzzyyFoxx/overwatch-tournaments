@@ -5,7 +5,7 @@ import type { DivisionGrid } from "@/types/workspace.types";
 import type { RoleOntology } from "@/lib/roster/ontology";
 
 import { BalanceEditor } from "@/components/balancer/BalanceEditor";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 
 import { BalancerSetupChecklist } from "./BalancerSetupChecklist";
 import type { BalanceVariant } from "@/components/balancer/workspace-helpers";

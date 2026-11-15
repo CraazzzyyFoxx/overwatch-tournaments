@@ -3,8 +3,8 @@
 import { useTranslations } from "next-intl";
 
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
-import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { useFormatter } from "@/lib/datetime/client";
 import type { RoleOntology } from "@/lib/roster/ontology";
 import type { RegistrationTeam } from "@/types/registration-team.types";

@@ -3,8 +3,8 @@ import type { MDXComponents } from "mdx/types";
 import type { ComponentProps, ReactNode } from "react";
 
 import { Alert } from "@/components/ui/alert";
-import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardDescription, CardTitle } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import { cn } from "@/lib/utils";
 
 /** Running text: paragraphs and list items. */

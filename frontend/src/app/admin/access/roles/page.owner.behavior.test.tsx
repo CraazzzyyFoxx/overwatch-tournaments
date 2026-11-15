@@ -24,7 +24,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 
 // The real store fetches its workspaces and hydrates the active one from a
 // cookie, so it is the one module stubbed here — with the real `/api/v1/

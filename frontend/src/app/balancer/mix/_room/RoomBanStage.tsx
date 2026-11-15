@@ -28,8 +28,8 @@ import {
   type PickBanSeat
 } from "@/components/pick-ban/pick-ban-model";
 import { usePickBanController } from "@/components/pick-ban/usePickBanController";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { Card, CardContent, CardHeader, CardTitle } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";

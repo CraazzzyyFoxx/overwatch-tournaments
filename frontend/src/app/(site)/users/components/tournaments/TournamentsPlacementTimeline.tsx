@@ -3,7 +3,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { CardSurface, ProfileStat } from "@/components/profile/atoms";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { cn } from "@/lib/utils";
 import { UserTournament } from "@/types/user.types";
 

@@ -11,11 +11,16 @@ outcome in CI and in this environment. They are written to be correct against a
 populated dev DB, not merely to pass — see task-8 report for details.
 """
 
+import asyncio
+
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from shared import models
 from shared.core import enums
+from shared.services.ontology import project_disciplines
+from shared.testing import create_test_async_engine
 from tests.conftest import RpcHarness, build_query
 from tests.encounter_seed import add_duel, add_observed_game
 
@@ -43,6 +48,17 @@ _OVERPERF_B_SECOND = 1.0  # 2nd in match_with_impact, badge 0
 _OVERPERF_A_BELOW_THRESHOLD = 0.5  # sole entrant but below the stored threshold, badge 0
 
 
+async def _project_vocabulary() -> None:
+    """The stat vocabulary a deployed database carries (stats-service projects it at startup)."""
+    engine = create_test_async_engine()
+    try:
+        async with AsyncSession(engine) as session:
+            await project_disciplines(session)
+            await session.commit()
+    finally:
+        await engine.dispose()
+
+
 def _ensure_impact_badge_fixture(db: Session) -> dict[str, int]:
     """One encounter, two players, three matches carrying the stored ``overperformance_badge`` fact:
 
@@ -59,14 +75,17 @@ def _ensure_impact_badge_fixture(db: Session) -> dict[str, int]:
     if db.get(models.User, ids["user_a"]) is not None:
         return ids
 
-    map_row = (
-        db.query(models.CatalogEntity.id)
-        .filter_by(discipline="overwatch", kind="map")
-        .order_by(models.CatalogEntity.id)
-        .first()
-    )
-    assert map_row is not None, "no map seeded in dev DB"
-    map_id = map_row[0]
+    # A fresh database (CI, an xdist worker's clone) holds no ``overperformance_badge`` stat until it is projected.
+    asyncio.run(_project_vocabulary())
+    # Its own map: a fresh database has none until some other test (or the collector) adds one.
+    map_ = db.query(models.CatalogEntity).filter_by(discipline="overwatch", kind="map", slug="impact-badge-map").first()
+    if map_ is None:
+        map_ = models.CatalogEntity(
+            discipline="overwatch", kind="map", slug="impact-badge-map", name="Impact Badge Map"
+        )
+        db.add(map_)
+        db.flush()
+    map_id = map_.id
 
     db.add(models.Workspace(id=ids["workspace"], slug="impact-badge-ws", name="Impact Badge Workspace"))
     db.flush()

@@ -4,7 +4,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 
 import { useDiscordRoles } from "@/hooks/useDiscordEntities";
-import { ComboboxMeta } from "@/components/ui/combobox";
+import { ComboboxMeta } from "@craazzzyyfoxx/admin-kit/ui/combobox";
 import { cn } from "@/lib/utils";
 import { DiscordRole } from "@/types/discord.types";
 

@@ -339,7 +339,7 @@ the last-resort `global-error`) are listed in the script with their reason.
 | Tabs that are addresses     | `kit/LinkTabs.tsx` (`aria-current="page"`, `level={2}` for sub-tabs, `variant="pill"` for a segmented look)             |
 | View/mode of the same data  | `ui/toggle-group.tsx`, `pill` by default (`accent` per item; `variant="card"` for option cards), no `type` prop; group and items take any DOM prop and a `ref` (an item works under `TooltipTrigger asChild`); `aria-invalid` turns the frame red. On tournament sections `ViewSegment` (`?view=` / `?tab=`, default never written to the URL) |
 | Pagination                  | `ui/data-pagination.tsx` (`leading` slot for the range or rows-per-page); the current page is a `Button variant="accent"` |
-| Data table                  | `components/data-table/DataTable.tsx`: hover `--aqt-overlay-2`, checked rows `--aqt-overlay-3`, the inspector's current row a teal tint. A plain table is `ui/table.tsx` (`text-caption` cells, `--aqt-border` hairlines, heads in the eyebrow voice at the faint tone; a head holding user content adds `normal-case tracking-normal`), never a hand-rolled `<table>` (R10). `<caption>`, `<colgroup>` and `<tfoot>` stay native inside `Table`; its caption sits at the bottom, `caption-top` for a visible heading. A table that owns its scrolling passes `wrapperClassName`. In an editor `adminDetailTableStyles` (`admin/AdminDetailTable.tsx`) |
+| Data table                  | `DataTable` from `@craazzzyyfoxx/admin-kit/data-table`: hover `--aqt-overlay-2`, checked rows `--aqt-overlay-3`, the inspector's current row a teal tint. A plain table is `ui/table.tsx` (`text-caption` cells, `--aqt-border` hairlines, heads in the eyebrow voice at the faint tone; a head holding user content adds `normal-case tracking-normal`), never a hand-rolled `<table>` (R10). `<caption>`, `<colgroup>` and `<tfoot>` stay native inside `Table`; its caption sits at the bottom, `caption-top` for a visible heading. A table that owns its scrolling passes `wrapperClassName`. In an editor `adminDetailTableStyles` (`admin/AdminDetailTable.tsx`) |
 | Load more                   | `InfiniteScrollFooter` (`ui/infinite-scroll.tsx`): translated inside, `unit` a translated noun, `size="lg"` on the public feed |
 | URL state                   | `hooks/useQueryParams.ts`                                                                                               |
 | Button                      | `ui/button.tsx`, `type="button"` unless a form's submit passes `type="submit"`. Filled, semibold: `default` (teal, the screen's main action) · `destructive` · `positive` (check in). Tonal: `outline` (the everyday button, raised off any surface). Quiet: `ghost` · `ghost-destructive` (icon remove) · `link`. Tinted: `accent` (teal row action, and the chosen option of a choice, so picking never changes its shape). `dashed` (add one more). Sizes `default` · `sm` · `lg` · `xs` · `icon` (36px, beside form-row controls) · `icon-toolbar` (32px, beside `size="sm"` controls) · `icon-sm` (28px, icon beside text) · `icon-xs` · `inline` (a link in a sentence) · `label` (sortable header) — never `size="icon"` plus a `size-8` override. Disabled keeps pointer events (`cursor-not-allowed`, 50%) so a title or tooltip says why; hover does not react. Every button sinks on press (§10) |
@@ -690,8 +690,8 @@ community host's `/`; `/get-workspace` names its own `og` route.
 ## 14. Admin kit
 
 `/admin` is one product with one shape. Every screen is an instance of exactly
-one of seven templates, assembled from `components/kit/*`,
-`components/data-table/*` and `components/ui/*`. Pages do not write layout or
+one of seven templates, assembled from `components/kit/*`, `@craazzzyyfoxx/admin-kit`
+(`data-table`, `kit/*`, `ui/*`) and `components/ui/*`. Pages do not write layout or
 colour of their own. A screen that needs a shape no template has is a sign
 the IA is wrong — say so before inventing a surface.
 
@@ -718,7 +718,7 @@ Rules on every admin screen:
   `ui/tabs.tsx`; a view switch is a `ToggleGroup`, never a hand-rolled
   `<nav>` of pills.
 - **One row-actions convention.** `createKebabColumn`
-  (`data-table/kebab-column.tsx`); the menu is always visible. The one or two
+  (`createKebabColumn` from `@craazzzyyfoxx/admin-kit/data-table`); the menu is always visible. The one or two
   actions a reader uses on most rows (change a slot, reorder, "only this
   actor") stay inline as labelled or titled buttons; rare and destructive
   ones go in the menu, or, where the row opens an `EntityFormDialog`, at its

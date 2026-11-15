@@ -17,7 +17,7 @@ import StatusMetaBadge from "@/components/status/StatusMetaBadge";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { StatusIconBadge } from "@/components/status/StatusIconBadge";
 import { Badge } from "@/components/ui/badge";
-import type { Tone } from "@/components/ui/tone";
+import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { formatAdmissionReason } from "@/lib/registration/admission";
 import type {
   Admission,

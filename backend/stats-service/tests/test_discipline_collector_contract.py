@@ -62,7 +62,8 @@ def test_loading_the_registry_does_not_load_the_collector() -> None:
 import json, sys
 import shared.disciplines
 
-print(json.dumps({"collector": sorted(m for m in sys.modules if ".collector" in m)}))
+# coverage (measuring subprocesses in CI) brings its own ``coverage.collector``: not a discipline collector.
+print(json.dumps({"collector": sorted(m for m in sys.modules if ".collector" in m and not m.startswith("coverage."))}))
 """
     )
     assert out["collector"] == []

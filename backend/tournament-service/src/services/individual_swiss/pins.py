@@ -34,7 +34,7 @@ class IndividualSwissPinsService:
                 models.PlayerStandingPin.stage_id == stage_id
             )
         )
-        return dict(result.tuples().all())
+        return dict(result.all())
 
     async def set_pins(
         self,
@@ -70,7 +70,7 @@ class IndividualSwissPinsService:
                 models.PlayerStanding.stage_id == stage.id
             )
         )
-        role_of = dict(result.tuples().all())
+        role_of = dict(result.all())
         if not role_of:
             raise refuse(
                 status.HTTP_422_UNPROCESSABLE_ENTITY, "no_player_table", "Таблица этапа ещё не создана: запустите этап"

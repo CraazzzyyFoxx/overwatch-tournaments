@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { HeroFrame } from "@/components/site/PageHero";
 import AnalyticsPicker from "@/app/(site)/tournaments/analytics/components/AnalyticsPicker";
 import TournamentHero from "@/app/(site)/tournaments/analytics/components/TournamentHero";

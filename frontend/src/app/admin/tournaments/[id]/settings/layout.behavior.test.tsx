@@ -159,5 +159,6 @@ describe("Settings rail", () => {
     await render();
 
     expect(currentLabels()).toEqual(["General"]);
-  });
+  // Renders the General page in place: its first import pulls in the whole form kit, slow under a loaded full run.
+  }, 20_000);
 });

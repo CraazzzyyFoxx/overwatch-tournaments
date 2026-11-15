@@ -68,7 +68,7 @@ class RedisStore:
             return None
         try:
             return json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
+        except json.JSONDecodeError, TypeError:
             logger.warning(f"Corrupted {self.purpose} entry at {self.key(suffix)}, evicting")
             await self.drop(suffix)
             return None
@@ -106,7 +106,7 @@ class RedisStore:
             return None
         try:
             return json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
+        except json.JSONDecodeError, TypeError:
             logger.warning(f"Corrupted {self.purpose} payload, discarding")
             return None
 

@@ -6,8 +6,8 @@ import { useTranslations } from "next-intl";
 
 import type { CompareScope } from "@/app/(site)/users/compare/types";
 import { PageHero, HeroCoord } from "@/components/site/PageHero";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { GameFilterHint } from "@/components/workspace/GameFilterHint";
 

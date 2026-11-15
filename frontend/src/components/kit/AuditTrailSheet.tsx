@@ -25,7 +25,7 @@ import {
   type AuditTrailScope,
   useAuditTranslator
 } from "@/components/kit/audit-log";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Sheet,
   SheetContent,

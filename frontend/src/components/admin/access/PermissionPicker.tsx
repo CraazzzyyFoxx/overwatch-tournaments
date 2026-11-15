@@ -2,17 +2,17 @@
 
 import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
-import * as CheckboxPrimitive from "@radix-ui/react-checkbox";
+import { Checkbox as CheckboxPrimitive } from "radix-ui";
 import { Check } from "lucide-react";
 
-import { eyebrowClass } from "@/components/ui/eyebrow";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { FilterChip } from "@/components/ui/filter-chip";
-import { SearchField } from "@/components/ui/search-field";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
+import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 
 /**
  * One grantable permission. `key` is what travels in `value` — the RBAC

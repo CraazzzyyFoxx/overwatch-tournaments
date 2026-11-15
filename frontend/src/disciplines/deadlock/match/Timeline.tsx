@@ -5,9 +5,9 @@ import { useTranslations } from "next-intl";
 import { ArrowRight, Crosshair, RotateCw, Skull } from "lucide-react";
 
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { groupKills, type DlPlayer, type DlTeam, type Kill, type KillGroup, type MatchFeed, type MidBoss, type Objective, type Side } from "./model";
 import { LANE_KEY, OBJECTIVE_ICON, objectiveOf } from "./objectives";

@@ -1,8 +1,8 @@
 import type { ElementType, ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
-import { TONE_TEXT, type Tone } from "@/components/ui/tone";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { TONE_TEXT, type Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 
 interface StatTileProps {
   /** Uppercase eyebrow naming what is measured. */

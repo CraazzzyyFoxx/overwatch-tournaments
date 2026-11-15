@@ -14,7 +14,7 @@ vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
 vi.mock("@/lib/datetime/client", () => ({ useFormatter: () => ({ dateTime: () => "Today" }) }));
 vi.mock("@/lib/notify", () => ({ notify: { success: vi.fn(), warning: vi.fn(), apiError: vi.fn() } }));
 vi.mock("@/services/draft.service", () => ({ default: { listSessions: vi.fn(), lifecycle: vi.fn(), exportDraft: vi.fn() } }));
-vi.mock("@/components/kit/ConfirmDialog", () => ({
+vi.mock("@craazzzyyfoxx/admin-kit/kit/ConfirmDialog", () => ({
   ConfirmDialog: ({ open, onConfirm }: { open: boolean; onConfirm: () => void }) =>
     open ? <button onClick={onConfirm}>Confirm export</button> : null
 }));

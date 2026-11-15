@@ -289,9 +289,9 @@ beforeEach(() => {
   replace.mockClear();
   listRegistrations.mockReset().mockResolvedValue(POOL);
   getPublicForm.mockReset().mockResolvedValue(null);
-  // The inspector is a side panel above `lg` and a sheet below it.
+  // The inspector is a side panel above `lg` and a sheet below it; the table is a table above `md`.
   window.matchMedia = ((query: string) => ({
-    matches: true,
+    matches: !query.includes("max-width"),
     media: query,
     onchange: null,
     addEventListener: () => undefined,
@@ -406,7 +406,8 @@ describe("Registration entries", () => {
     const withInspector = await mount("?id=1");
     const inspector = withInspector.querySelector("aside[aria-label='Row inspector']");
     expect(inspector?.textContent).toContain("Player1#1234");
-    expect(inspector?.textContent).toContain("Admission");
+    // The admission verdict sits in the header now; its section shows only blockers.
+    expect(inspector?.textContent).toContain("Admitted");
   });
 
   it("still reads an answer the form no longer asks, and says it is from an older version", async () => {
@@ -455,7 +456,89 @@ describe("Registration entries", () => {
     expect(inspector?.textContent).toContain("vk.com/player");
     expect(inspector?.textContent).toContain("why_this_tournament");
     expect(inspector?.textContent).toContain("a question we dropped");
-    expect(inspector?.textContent).toContain("no longer asked");
+    expect(inspector?.textContent).toContain("No longer asked");
     expect(inspector?.textContent).toContain("older version of this form");
+  });
+
+  it("lays out the inspector: roles across with rank answers as rows, every other answer a question row", async () => {
+    const field = (key: string, kind: string, label: string) => ({
+      key,
+      kind,
+      label,
+      required: false,
+      visibility: "public",
+      params: {}
+    });
+    getPublicForm.mockResolvedValue({
+      id: 9,
+      tournament_id: 80,
+      workspace_id: 1,
+      form_schema: {
+        schema_version: 1,
+        sections: [
+          {
+            key: "details",
+            fields: [
+              field("identity_battlenet", "builtin", "Battle.net"),
+              field("peak", "role_ranks", "Peak this season"),
+              field("sub", "checkbox", "Sub"),
+              field("about", "textarea", "About you"),
+              field("matches", "number", "Matches")
+            ]
+          }
+        ]
+      },
+      version_id: 4,
+      version_number: 2
+    });
+    listRegistrations.mockResolvedValue([
+      {
+        ...registration(1, "admitted"),
+        roles: [
+          {
+            role: { dimension: "role", role: "tank" },
+            rank_value: 3500,
+            ow_rank_value: null,
+            rank_source: "none",
+            priority: 0,
+            is_primary: true,
+            is_declared_active: true
+          }
+        ],
+        answers: {
+          identity_battlenet: ["Main#1", "Smurf#2"],
+          peak: { tank: 3600, support: 3000 },
+          sub: true,
+          about: "just a sub",
+          matches: 79
+        }
+      }
+    ]);
+
+    const withInspector = await mount("?id=1");
+    const inspector = withInspector.querySelector("aside[aria-label='Row inspector']")!;
+    const rowOf = (label: string) =>
+      [...inspector.querySelectorAll("tbody tr")].find((row) => row.querySelector("th")?.textContent === label);
+    const answerOf = (label: string) =>
+      [...inspector.querySelectorAll("dt")].find((dt) => dt.textContent === label)?.nextElementSibling?.textContent;
+
+    // Roles are the columns (a role ranked but not declared gets one too); each rank answer is a row.
+    const roleHeaders = [...inspector.querySelectorAll("thead th")].map((th) => th.textContent);
+    expect(roleHeaders.some((text) => text?.includes("tank"))).toBe(true);
+    expect(roleHeaders.some((text) => text?.includes("support"))).toBe(true);
+    expect(rowOf("Declared")?.textContent).toContain("3500");
+    expect(rowOf("Peak this season")?.textContent).toContain("3600");
+    expect(rowOf("Peak this season")?.textContent).toContain("3000");
+    // Handles are their own block, the rest stay question rows in form order.
+    expect(answerOf("Battle.net")).toBe("Main#1, Smurf#2");
+    expect([...inspector.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual([
+      "Battle.net",
+      "Sub",
+      "About you",
+      "Matches"
+    ]);
+    expect(answerOf("Sub")).toBe("Yes");
+    expect(answerOf("About you")).toBe("just a sub");
+    expect(answerOf("Matches")).toBe("79");
   });
 });

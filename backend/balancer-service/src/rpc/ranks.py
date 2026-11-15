@@ -37,7 +37,7 @@ def _int(data: dict[str, Any], key: str) -> int | None:
         return None
     try:
         return int(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{key} must be an integer"
         ) from None
@@ -47,7 +47,7 @@ def _ints(data: dict[str, Any], key: str) -> tuple[int, ...]:
     raw = c.q(data, key) or []
     try:
         return tuple(int(value) for value in raw if str(value).strip() != "")
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{key} must be integers"
         ) from None

@@ -6,10 +6,10 @@ import type { FormField } from "@/types/forms.types";
 
 import FieldLabel from "@/components/forms/FieldLabel";
 import { SocialIcon } from "@/components/social/SocialIcon";
-import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
+import { Combobox, ComboboxCheck } from "@craazzzyyfoxx/admin-kit/ui/combobox";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 import { FieldError } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { normalizeAnswerText, validateAnswer } from "@/lib/forms/validate";
 
 interface AccountComboboxProps {

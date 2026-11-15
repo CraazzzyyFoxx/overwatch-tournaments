@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useMemo, useRef } from "react";
 
 import { PersonLabel } from "@/components/PlayerName";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { useDraftLayerPad } from "@/hooks/useDraftLayerPad";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { currentRound, orderGrid, pickState, picksAway, type RoundDirection } from "@/lib/draft/room-model";

@@ -1,6 +1,7 @@
 import { getRequestConfig } from "next-intl/server";
 import { cookies, headers } from "next/headers";
 import { IntlErrorCode } from "next-intl";
+import { en as kitEn, ru as kitRu } from "@craazzzyyfoxx/admin-kit/messages";
 
 import { TIME_ZONE_COOKIE, resolveTimeZone } from "@/lib/datetime";
 
@@ -14,7 +15,9 @@ export default getRequestConfig(async () => {
   );
   // Runtime-selected specifier: the locale comes from a cookie / Accept-Language,
   // so this cannot be a static import.
-  const messages = (await import(`./messages/${locale}.json`)).default;
+  const appMessages = (await import(`./messages/${locale}.json`)).default;
+  // The kit's strings sit under `adminKit`; zone bundles pick them up like any other namespace.
+  const messages = { ...appMessages, ...{ en: kitEn, ru: kitRu }[locale] };
   // The WHOLE tree, deliberately. Server rendering costs no payload for a
   // message it does not render, and `getTranslations` in any zone reads from
   // here. Narrowing happens where it is actually observable — at each

@@ -5,7 +5,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Dialog } from "@/components/ui/dialog";
+import { Dialog } from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import messages from "@/i18n/messages/en.json";
 import type { CustomGame } from "@/services/custom-game.service";
 

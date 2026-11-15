@@ -254,7 +254,7 @@ class FlowEngine:
             .join(Stage, Stage.id == StageItem.stage_id)
             .where(Stage.tournament_id == tournament_id)
         )
-        return dict(rows.tuples().all())
+        return dict(rows.all())
 
     async def _registration_rows(self, session: AsyncSession, node: FlowNode) -> list[ResultRow]:
         config = parse_node_config(FlowNodeKind.REGISTRATION, node.config)

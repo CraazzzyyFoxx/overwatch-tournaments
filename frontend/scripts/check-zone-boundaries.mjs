@@ -85,9 +85,8 @@ function resolveSpec(spec, fromFile) {
   if (spec.startsWith("@/")) id = idOf(join(SRC, spec.slice(2)));
   else if (spec.startsWith(".")) id = idOf(resolve(dirname(fromFile), spec));
   else return null; // package
-  // A directory import (`@/components/data-table`) is its `index`. Without
-  // this the edge dangles and Z4 silently loses the whole subtree behind it —
-  // 33 importers and 29 modules, in the one case that exists today.
+  // A directory import (`@/components/x`) is its `index`. Without this the edge
+  // dangles and Z4 silently loses the whole subtree behind it.
   return IDS.has(id) || !IDS.has(`${id}/index`) ? id : `${id}/index`;
 }
 
@@ -99,6 +98,10 @@ const zoneOf = (id) => {
 
 const findings = [];
 const graph = [];
+/** The package's own namespace (not in en.json) and the import specifiers that can render it. */
+const KIT_NAMESPACE = "adminKit";
+const KIT_SPEC = /^@craazzzyyfoxx\/admin-kit\/(?!messages$|styles\.css$)/;
+
 /** module id -> Set of message namespaces it could address */
 const mentions = new Map();
 /** module id -> Set of module ids it imports */
@@ -207,7 +210,13 @@ for (const file of ALL) {
   // mention every message-namespace word as a schema name).
   for (const [, , spec] of source.replace(TYPE_ONLY, "").matchAll(SPEC)) {
     const to = resolveSpec(spec, file);
-    if (to === null) continue;
+    if (to === null) {
+      // `@craazzzyyfoxx/admin-kit` reads its strings from the `adminKit` namespace, merged into the
+      // messages in `i18n/request.ts` (it is not in en.json). Any runtime import of the package may
+      // render them; over-collected on purpose, like every other mention (~4 kB per bundle).
+      if (KIT_SPEC.test(spec) && !isTest(from)) mentions.set(from, (mentions.get(from) ?? new Set()).add(KIT_NAMESPACE));
+      continue;
+    }
     graph.push([from, to]);
     if (!isTest(to)) deps.add(to);
 

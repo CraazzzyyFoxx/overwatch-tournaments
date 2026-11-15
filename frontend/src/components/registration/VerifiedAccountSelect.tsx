@@ -13,7 +13,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import FieldShell from "@/components/forms/FieldShell";
 
 interface VerifiedAccountSelectProps {

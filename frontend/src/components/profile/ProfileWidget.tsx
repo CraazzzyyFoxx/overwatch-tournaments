@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { RotateCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { DisciplineWidget } from "@/disciplines/DisciplineWidget";
 import { loadProfileUI } from "@/disciplines/registry/profile";
 import type { ProfileSlot, SlotProps } from "@/disciplines/types";

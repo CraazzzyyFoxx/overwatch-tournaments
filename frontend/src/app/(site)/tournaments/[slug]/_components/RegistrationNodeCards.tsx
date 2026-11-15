@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import type { Tournament } from "@/types/tournament.types";
 
 import { registrationCardNodes } from "./registrationCards.model";

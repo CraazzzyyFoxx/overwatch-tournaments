@@ -191,8 +191,7 @@ def standings_forecast_frame(
     df["tournament_id"] = tournament_id
     df["rank_gap"] = df["home_avg_rank"] - df["away_avg_rank"]
     df = _derive_pair_gaps(df)
-    with pd.option_context("future.no_silent_downcasting", True):
-        return df.replace([np.inf, -np.inf], np.nan).infer_objects(copy=False)
+    return df.replace([np.inf, -np.inf], np.nan).infer_objects()
 
 
 def standings_training_frame(
@@ -259,5 +258,4 @@ def standings_training_frame(
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").astype(float)
 
-    with pd.option_context("future.no_silent_downcasting", True):
-        return df.replace([np.inf, -np.inf], np.nan).infer_objects(copy=False)
+    return df.replace([np.inf, -np.inf], np.nan).infer_objects()

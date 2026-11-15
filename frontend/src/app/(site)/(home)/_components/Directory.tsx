@@ -6,7 +6,7 @@ import { TournamentStatusPill } from "@/components/tournaments/StatusPill";
 import { TrustedBadge } from "@/components/workspace/TrustedBadge";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import { OpenLoadError, Section, SectionHead } from "@/components/site/open-layout";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import type { Formatter } from "@/lib/datetime";
 import { getFormatter } from "@/lib/datetime/server";
 import { getActiveTournaments, getPublicCommunities, type PublicCommunity } from "@/lib/site/public-data";

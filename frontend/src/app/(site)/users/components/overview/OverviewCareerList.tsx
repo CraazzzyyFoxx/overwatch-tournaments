@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { UserProfile, UserTournament } from "@/types/user.types";
 import { CardSurface, ProfileStat } from "@/components/profile/atoms";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { tournamentTag } from "@/app/(site)/users/components/shared/list-utils";
 
 interface Props {

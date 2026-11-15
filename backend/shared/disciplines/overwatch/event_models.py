@@ -146,14 +146,14 @@ class PlayerStatRow(_StrictBase):
 def _parse_float(raw: str, field: str) -> float:
     try:
         return float(raw)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         raise ValueError(f"Cannot parse float for '{field}': {raw!r}")
 
 
 def _parse_int(raw: str, field: str) -> int:
     try:
         return int(raw)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         raise ValueError(f"Cannot parse int for '{field}': {raw!r}")
 
 

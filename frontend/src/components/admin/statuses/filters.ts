@@ -1,4 +1,4 @@
-import type { FilterDef } from "@/components/kit/useFilters";
+import type { FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 
 export function statusFilterDefs(
   t: (key: "columns.scope" | "scope.registration" | "scope.balancer") => string

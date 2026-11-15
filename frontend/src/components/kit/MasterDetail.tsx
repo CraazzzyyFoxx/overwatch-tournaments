@@ -4,10 +4,10 @@ import type { CSSProperties, ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { ChevronLeft } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { RowButton } from "@/components/ui/row-button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 export interface MasterDetailProps {

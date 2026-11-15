@@ -82,6 +82,8 @@ from .ranks import (
 )
 from .registration import (
     RegistrationEntryRepository,
+    RegistrationNoteAttachmentRepository,
+    RegistrationNoteRepository,
     RegistrationRepository,
     RegistrationRoleRepository,
     RegistrationTeamInviteRepository,
@@ -272,6 +274,8 @@ __all__ = (
     "RegistrationFormRepository",
     "RegistrationFormTemplateRepository",
     "RegistrationFormVersionRepository",
+    "RegistrationNoteAttachmentRepository",
+    "RegistrationNoteRepository",
     "RegistrationRepository",
     "RegistrationRoleRepository",
     "RegistrationStatusRepository",

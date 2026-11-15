@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@craazzzyyfoxx/admin-kit/ui/select";
 import { useHeroBanPresets } from "@/hooks/useHeroBanPresets";
 
 const NONE = "none";

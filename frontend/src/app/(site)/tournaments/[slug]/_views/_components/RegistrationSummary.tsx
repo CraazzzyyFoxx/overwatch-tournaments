@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { ProfileStat } from "@/components/profile/atoms";
-import { StatusDot } from "@/components/ui/status-dot";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { roleColor, slotCodeOrder, slotRank } from "@/lib/roster/ontology";

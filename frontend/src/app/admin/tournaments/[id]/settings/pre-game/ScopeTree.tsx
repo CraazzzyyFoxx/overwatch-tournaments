@@ -9,7 +9,7 @@ import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { cn } from "@/lib/utils";
 import type { PickBanConfig, PickBanKind, Stage } from "@/types/tournament.types";
 import type { PickBanScopeEncounter } from "@/lib/tournament/pick-ban-config";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useStageRounds } from "./useStageRounds";
 import {
   encodePreGameScope,

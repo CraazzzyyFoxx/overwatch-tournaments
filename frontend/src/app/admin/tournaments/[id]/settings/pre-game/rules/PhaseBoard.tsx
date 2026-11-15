@@ -4,21 +4,21 @@ import { useTranslations } from "next-intl";
 import { ArrowDown, ArrowUp, Copy, MoreHorizontal, Plus } from "lucide-react";
 
 import { SortableGrip, SortableRows, useSortableRow } from "@/components/kit/SortableRows";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { RowButton } from "@/components/ui/row-button";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { cn } from "@/lib/utils";
 import {
   PICK_BAN_STEP_TEMPLATES,

@@ -4,15 +4,15 @@ import { useTranslations } from "next-intl";
 import { MoreHorizontal } from "lucide-react";
 
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Spinner } from "@/components/ui/spinner";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import type { AchievementRule } from "@/types/admin.types";
 
 /**

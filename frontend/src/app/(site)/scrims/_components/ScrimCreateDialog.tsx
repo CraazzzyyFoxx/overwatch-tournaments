@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import {
   Field,
   FieldDescription,
@@ -25,15 +25,15 @@ import {
   FieldSet,
   FieldTitle
 } from "@/components/ui/field";
-import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
-import { Input } from "@/components/ui/input";
+import { FilterChip, FilterChipGroup } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { getApiErrorMessage } from "@/lib/api/error";
 import { BEST_OF_OPTIONS, DEFAULT_BEST_OF } from "@/lib/tournament/best-of";
 import { notify } from "@/lib/notify";
@@ -54,7 +54,7 @@ import {
   pickBanDraftToInput,
   stageRoundOptions
 } from "@/lib/tournament/pick-ban-config";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import {
   ScrimPoolEditor,

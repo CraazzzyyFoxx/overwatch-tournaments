@@ -2,9 +2,9 @@
 
 import { useId, type ReactNode } from "react";
 
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@craazzzyyfoxx/admin-kit/ui/select";
 
 /** A labelled field row: the label points at the control through `htmlFor`. */
 export function Field({ label, children }: Readonly<{ label: string; children: (id: string) => ReactNode }>) {

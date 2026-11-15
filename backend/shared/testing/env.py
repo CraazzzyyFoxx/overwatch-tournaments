@@ -21,7 +21,9 @@ stack (``POSTGRES_HOST=postgres``) and may point at production.
 
 from __future__ import annotations
 
+import asyncio
 import os
+import unittest
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -65,3 +67,18 @@ def apply_test_env_defaults(**overrides: str) -> None:
     load_dotenv(TEST_ENV_PATH, override=False, encoding="utf-8")
     for key, value in overrides.items():
         os.environ.setdefault(key, value)
+    _honour_asyncio_debug_setting()
+    from shared.testing.db import isolate_xdist_worker_db  # db imports this module
+
+    isolate_xdist_worker_db()
+
+
+def _setup_asyncio_runner(self: unittest.IsolatedAsyncioTestCase) -> None:
+    assert self._asyncioRunner is None, "asyncio runner is already initialized"
+    # debug=None: asyncio debug only under PYTHONASYNCIODEBUG=1 / -X dev.
+    self._asyncioRunner = asyncio.Runner(debug=None, loop_factory=self.loop_factory)
+
+
+def _honour_asyncio_debug_setting() -> None:
+    """``IsolatedAsyncioTestCase`` hard-codes asyncio debug mode, ~8% of a DB suite's wall time."""
+    unittest.IsolatedAsyncioTestCase._setupAsyncioRunner = _setup_asyncio_runner  # type: ignore[method-assign]

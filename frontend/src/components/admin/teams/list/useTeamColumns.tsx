@@ -7,7 +7,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Trash2 } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
-import { createKebabColumn } from "@/components/data-table";
+import { createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import type { Team } from "@/types/team.types";
 
 /** The roster row: the team, its strength, its size and the tournament it plays in. */

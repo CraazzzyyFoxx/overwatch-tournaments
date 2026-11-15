@@ -315,9 +315,9 @@ beforeEach(() => {
   notifySuccess.mockReset();
   notifyInfo.mockReset();
   notifyError.mockReset();
-  // The inspector is a side panel above `lg` and a sheet below it.
+  // The inspector is a side panel above `lg` and a sheet below it; the table is a table above `md`.
   window.matchMedia = ((query: string) => ({
-    matches: true,
+    matches: !query.includes("max-width"),
     media: query,
     onchange: null,
     addEventListener: () => undefined,

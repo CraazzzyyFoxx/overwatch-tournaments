@@ -10,7 +10,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { FEED_MODES, type FeedMode, type FeedRule } from "@/lib/flow/stageFeed";
 import type { Stage, StageType } from "@/types/tournament.types";
 

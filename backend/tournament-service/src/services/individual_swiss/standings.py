@@ -47,7 +47,7 @@ async def stage_pins(session: AsyncSession, stage_id: int) -> dict[int, int]:
             models.PlayerStandingPin.stage_id == stage_id
         )
     )
-    return dict(rows.tuples().all())
+    return dict(rows.all())
 
 
 def order_by_role(
@@ -99,7 +99,7 @@ async def _confirmed_results(session: AsyncSession, stage_id: int, pool: set[int
         )
         .order_by(models.EncounterTeamMember.id)
     )
-    for seat_id, member_id in member_rows.tuples():
+    for seat_id, member_id in member_rows:
         if member_id in pool:
             members[seat_id].append(member_id)
     by_encounter: dict[int, list] = defaultdict(list)

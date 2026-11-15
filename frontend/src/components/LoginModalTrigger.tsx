@@ -28,6 +28,7 @@ const LoginModalTrigger = () => {
   const pathname = usePathname();
   const router = useRouter();
   const t = useTranslations("auth.errors");
+  const tLink = useTranslations("auth.link");
   const open = useAuthModalStore((state) => state.open);
 
   const loginParam = searchParams.get("login");
@@ -35,6 +36,8 @@ const LoginModalTrigger = () => {
   const authError = searchParams.get("auth_error");
   const authErrorDescription = searchParams.get("auth_error_description");
   const authErrorProvider = searchParams.get("auth_error_provider");
+  const authLink = searchParams.get("auth_link");
+  const authLinkProvider = searchParams.get("auth_link_provider");
 
   useEffect(() => {
     if (loginParam === "1") {
@@ -68,6 +71,25 @@ const LoginModalTrigger = () => {
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }, [authError, authErrorDescription, authErrorProvider, pathname, router, searchParams, t]);
+
+  // Successful OAuth link (oauth-callback.ts / /auth/link/complete): always
+  // confirm it, including a re-link of an account the user already had.
+  useEffect(() => {
+    if (authLink !== "linked" && authLink !== "already_linked") {
+      return;
+    }
+
+    const provider = authLinkProvider
+      ? getSocialProviderConfig(authLinkProvider).label
+      : t("linkProviderFallback");
+    notify.success(tLink(authLink, { provider }), { id: "auth-link" });
+
+    const params = new URLSearchParams(searchParams);
+    params.delete("auth_link");
+    params.delete("auth_link_provider");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [authLink, authLinkProvider, pathname, router, searchParams, t, tLink]);
 
   return null;
 };

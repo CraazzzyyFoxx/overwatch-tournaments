@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { GameScopeControl } from "@/components/workspace/GameScopeControl";
 import type { GameScopeState } from "@/hooks/useGameScope";
 

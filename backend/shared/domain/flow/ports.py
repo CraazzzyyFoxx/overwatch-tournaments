@@ -83,7 +83,7 @@ def port_unit(
         case "config":
             try:
                 return FlowUnit(config["unit"])
-            except (KeyError, ValueError):
+            except KeyError, ValueError:
                 return None
         case "input":
             return input_unit

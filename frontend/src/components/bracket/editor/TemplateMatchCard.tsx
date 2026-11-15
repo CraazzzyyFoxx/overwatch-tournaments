@@ -5,14 +5,14 @@ import { useDndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { ArrowDown, ArrowUp, GripVertical, MoreHorizontal, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { RowButton } from "@/components/ui/row-button";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { cn } from "@/lib/utils";
 
 import { sourceLabel } from "@/lib/bracket/view";

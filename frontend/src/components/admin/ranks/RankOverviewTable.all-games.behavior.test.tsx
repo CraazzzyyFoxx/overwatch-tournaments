@@ -165,6 +165,7 @@ beforeEach(() => {
   game = null;
   invalid = false;
   mobile = false;
+  Object.defineProperty(window, "innerWidth", { value: 1280, configurable: true });
   selectScope.mockReset();
   listRanks.mockReset();
   listRanks.mockResolvedValue({
@@ -263,6 +264,8 @@ it("names each phone card's game under all games, whatever column order the user
     }
   });
   mobile = true;
+  // The kit's table reads the viewport through `matchMedia`, not the mocked hook.
+  Object.defineProperty(window, "innerWidth", { value: 375, configurable: true });
   await render();
 
   const cards = [...container.querySelectorAll("ul > li")].map((card) => card.textContent ?? "");

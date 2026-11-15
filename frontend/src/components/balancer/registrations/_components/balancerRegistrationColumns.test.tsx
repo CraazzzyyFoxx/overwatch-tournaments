@@ -2,7 +2,7 @@ import type { FilterFn, Row } from "@tanstack/react-table";
 import { createTranslator } from "next-intl";
 import { describe, expect, it } from "vitest";
 
-import { readColumnMeta, readAdminColumnFilter } from "@/components/data-table";
+import { readColumnMeta, readAdminColumnFilter } from "@craazzzyyfoxx/admin-kit/data-table";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { StatusMeta } from "@/types/registration.types";
 import type { FormField } from "@/types/forms.types";

@@ -22,21 +22,21 @@ import {
 import { WorkspacePlayerSheet } from "@/app/balancer/components/WorkspacePlayerSheet";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { DataPagination } from "@/components/ui/data-pagination";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { Input } from "@/components/ui/input";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { DataPagination } from "@craazzzyyfoxx/admin-kit/ui/data-pagination";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuLabel,
   ContextMenuTrigger,
-} from "@/components/ui/context-menu";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@craazzzyyfoxx/admin-kit/ui/context-menu";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
@@ -50,7 +50,7 @@ import {
   type RosterMember,
 } from "@/services/workspace-player.service";
 import type { DivisionGrid } from "@/types/workspace.types";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 const PER_PAGE = 30;
 

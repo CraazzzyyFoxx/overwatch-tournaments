@@ -9,6 +9,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from loguru import logger
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -178,7 +179,7 @@ def _primary_role_select(registration_node_id: int) -> sa.Subquery:
             models.RegistrationEntry.deleted_at.is_(None),
             models.Registration.deleted_at.is_(None),
         )
-        .distinct(models.RegistrationRole.registration_id)
+        .ext(distinct_on(models.RegistrationRole.registration_id))
         .order_by(
             models.RegistrationRole.registration_id,
             models.RegistrationRole.is_primary.desc(),

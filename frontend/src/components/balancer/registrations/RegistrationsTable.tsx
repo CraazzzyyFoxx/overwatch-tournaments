@@ -11,7 +11,17 @@ import RegistrationBulkActions from "@/components/balancer/registrations/_compon
 import RegistrationFormDialogs from "@/components/balancer/registrations/_components/RegistrationFormDialogs";
 import RegistrationInspectorBody from "@/components/balancer/registrations/_components/RegistrationInspectorBody";
 import { buildRegistrationRowActions } from "@/components/balancer/registrations/_components/registrationRowActions";
-import { builtinStatusName } from "@/components/balancer/registrations/_components/registrationsTranslator";
+import {
+  admissionDecisionLabel,
+  builtinStatusName,
+  localizedStatusMeta
+} from "@/components/balancer/registrations/_components/registrationsTranslator";
+import {
+  AdmissionStatusBadge,
+  BalancerStatusBadge,
+  RegistrationStatusBadge,
+  SubscriptionStatusBadge
+} from "@/components/status/RegistrationBadges";
 import {
   type RegistrationGroupingMode,
   groupRegistrations,
@@ -19,13 +29,13 @@ import {
 } from "@/components/balancer/registrations/_components/registrationGrouping";
 import { useRegistrationFilters } from "@/components/balancer/registrations/_hooks/useRegistrationFilters";
 import { useRegistrationMutations } from "@/components/balancer/registrations/_hooks/useRegistrationMutations";
-import { DataTable, type DataTableGroup, type TableCommand, createKebabColumn } from "@/components/data-table";
+import { DataTable, type DataTableGroup, type TableCommand, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { useAuditTrail } from "@/components/kit/AuditTrailSheet";
-import { FilterBar } from "@/components/kit/FilterBar";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { usePermissions } from "@/hooks/usePermissions";
 import { mergeStatusOptions } from "@/lib/registration/balancer-statuses";
@@ -41,8 +51,10 @@ import { nodesOfKind, registrationNodeConfig } from "@/lib/tournament/flow-nodes
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import adminService from "@/services/admin.service";
+import registrationNoteService from "@/services/registration-note.service";
+import { notesCountColumn } from "@/components/registration/notesCountColumn";
 
-import { ADMISSION_LABELS, adminRoleForm } from "./registrationsTable.model";
+import { adminRoleForm } from "./registrationsTable.model";
 
 export default function RegistrationsTable({
   tournamentId,
@@ -57,6 +69,7 @@ export default function RegistrationsTable({
   // as English literals like the rest of this admin table.
   const t = useTranslations();
   const tRegistrations = useTranslations("registrationsAdmin");
+  const tNotes = useTranslations("registrationNotes");
   // `id` (the inspector) is navigation, not narrowing: it must not drop the
   // filters the way a narrowing change does.
   const { searchParams, setParams } = useQueryParams({ resetOnChange: [], shallow: true });
@@ -89,6 +102,13 @@ export default function RegistrationsTable({
       }),
     enabled: tournamentId !== null && registrationNodeId !== null
   });
+
+  const noteCountsQuery = useQuery({
+    queryKey: tournamentQueryKeys.registrationNoteCounts(tournamentId ?? 0),
+    queryFn: () => registrationNoteService.counts(tournamentId as number),
+    enabled: tournamentId !== null
+  });
+  const noteCounts = noteCountsQuery.data?.registrations;
 
   const publicFormQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationFormPublic(tournamentId),
@@ -225,6 +245,11 @@ export default function RegistrationsTable({
         adminNotesEdit,
         ontology
       ),
+      notesCountColumn<AdminRegistration>({
+        header: tNotes("column"),
+        count: (registration) => noteCounts?.[String(registration.id)] ?? 0,
+        label: (count) => tNotes("count", { count })
+      }),
       createKebabColumn<AdminRegistration>(
         (registration) =>
           buildRegistrationRowActions(
@@ -266,7 +291,9 @@ export default function RegistrationsTable({
       setCheckIn,
       canAccessPermission,
       openAuditTrail,
-      tRegistrations
+      tRegistrations,
+      noteCounts,
+      tNotes
     ]
   );
 
@@ -319,7 +346,7 @@ export default function RegistrationsTable({
     <div
       className={cn(
         "grid min-w-0 items-start gap-4",
-        inspected && "lg:grid-cols-[minmax(0,1fr)_380px]"
+        inspected && "lg:grid-cols-[minmax(0,1fr)_auto]"
       )}
     >
       <div className="flex min-h-0 min-w-0 flex-col gap-4">
@@ -401,9 +428,25 @@ export default function RegistrationsTable({
           t("registrationsAdmin.table.registration")
         }
         subtitle={
-          inspected
-            ? `${inspected.status} · ${ADMISSION_LABELS[inspected.admission.decision]}`
-            : undefined
+          inspected ? (
+            <span className="mt-1 flex flex-wrap items-center gap-1.5">
+              <RegistrationStatusBadge
+                status={inspected.status}
+                meta={localizedStatusMeta(inspected.status_meta, tRegistrations)}
+              />
+              <BalancerStatusBadge
+                status={inspected.balancer_status}
+                meta={localizedStatusMeta(inspected.balancer_status_meta, tRegistrations)}
+              />
+              <span className="inline-flex items-center gap-0.5">
+                <AdmissionStatusBadge admission={inspected.admission} />
+                {admissionDecisionLabel(inspected.admission.decision, t)}
+              </span>
+              {inspected.subscription_outcome ? (
+                <SubscriptionStatusBadge outcome={inspected.subscription_outcome} />
+              ) : null}
+            </span>
+          ) : undefined
         }
       >
         {inspected && tournamentQuery.data ? (
@@ -414,6 +457,8 @@ export default function RegistrationsTable({
             catalog={subroleCatalog}
             schemaFields={schemaFields}
             schemaKnown={schemaLoaded}
+            canWriteNotes={canAccessPermission("registration.update", workspaceId)}
+            canModerateNotes={canAccessPermission("registration.delete", workspaceId)}
             t={t}
           />
         ) : null}

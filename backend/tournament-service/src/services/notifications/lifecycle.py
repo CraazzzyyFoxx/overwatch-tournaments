@@ -293,7 +293,7 @@ class LifecycleNotifier:
         name_rows = await session.execute(
             sa.select(models.Team.id, models.Team.name).where(models.Team.id.in_(team_ids))
         )
-        names = dict(name_rows.tuples().all())
+        names = dict(name_rows.all())
         rosters = await self.recipient_repo.team_roster_auth_user_ids(session, team_ids)
 
         pick_ban: dict[tuple[int, int | None, int], bool] = {}

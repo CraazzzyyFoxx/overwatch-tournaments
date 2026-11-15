@@ -7,10 +7,10 @@ import { useQuery } from "@tanstack/react-query";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { groupPastRanks, signed, type PastGroup } from "@/components/admin/people/personRanks.model";
-import { EmptyNote, LoadErrorNote } from "@/components/kit/EmptyNote";
+import { EmptyNote, LoadErrorNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { formatDate } from "@/components/kit/format-time";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { formatDateRange } from "@/lib/datetime";

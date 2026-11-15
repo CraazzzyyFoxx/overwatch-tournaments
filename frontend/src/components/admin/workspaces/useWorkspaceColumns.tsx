@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { EyeOff, Pencil, Trash2, XCircle } from "lucide-react";
 
-import { columnMeta, createKebabColumn } from "@/components/data-table";
+import { columnMeta, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { WorkspaceVerificationIcon } from "@/components/admin/workspace-verification";
 import type { WorkspaceListItem } from "@/types/workspace.types";

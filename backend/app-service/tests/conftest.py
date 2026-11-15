@@ -32,7 +32,12 @@ import pytest  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 
-from shared.testing import configure_test_cache, db_session, ensure_test_postgres  # noqa: E402,F401
+from shared.testing import (  # noqa: E402,F401
+    configure_test_cache,
+    db_session,
+    ensure_test_postgres,
+    forbid_redis_dials,
+)
 from shared.testing.db import CONNECT_TIMEOUT  # noqa: E402
 from shared.testing.stats_parity import stats_parity_database, stats_parity_template  # noqa: E402,F401
 from src.core.config import settings  # noqa: E402

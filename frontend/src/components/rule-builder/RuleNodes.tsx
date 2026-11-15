@@ -5,14 +5,14 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { FolderPlus, Plus, Trash2 } from "lucide-react";
 
 import { GraphNodeCard } from "@/components/graph-canvas/GraphNodeCard";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 
 import { LOGICAL_OPS, type FlatNode } from "./rule-tree";
 

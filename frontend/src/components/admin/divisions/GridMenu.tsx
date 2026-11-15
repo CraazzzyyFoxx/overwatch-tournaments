@@ -3,14 +3,14 @@
 import { Archive, ArchiveRestore, Download, FilePlus2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import type { DivisionGridEntity } from "@/types/workspace.types";
 
 /** One menu row: `null` handlers and a missing grant drop it; `disabled` keeps it with the menu's reason line. */

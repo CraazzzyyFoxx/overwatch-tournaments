@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { HeroFrame } from "@/components/site/PageHero";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { DraftBoardSkeleton } from "@/components/draft/DraftRoomSkeleton";
 import { RoomChat } from "@/components/chat/RoomChat";
 import { shouldShowInitialDraftSkeleton } from "@/components/draft/draft-loading-state";

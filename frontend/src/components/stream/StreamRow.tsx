@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { SocialIcon } from "@/components/social/SocialIcon";
 import Image from "@/components/ui/image";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { formatStreamUptime, streamPlatformLabel } from "@/lib/social/stream-platform";
 import { cn } from "@/lib/utils";
 import type { StreamEntry } from "@/types/stream.types";

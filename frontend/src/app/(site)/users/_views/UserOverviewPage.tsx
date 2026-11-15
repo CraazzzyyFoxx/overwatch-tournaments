@@ -3,7 +3,7 @@ import type { CharacterSummary, CharacterWithUserStats, User, UserProfile } from
 import { AchievementRarity } from "@/types/achievement.types";
 import userService from "@/services/user.service";
 import disciplineService from "@/services/discipline.service";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import OverviewLastTournamentCard from "@/app/(site)/users/components/overview/OverviewLastTournamentCard";
 import OverviewRoleSplit from "@/app/(site)/users/components/overview/OverviewRoleSplit";
 import OverviewRecentEncounters from "@/app/(site)/users/components/overview/OverviewRecentEncounters";

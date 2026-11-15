@@ -5,14 +5,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { MoreHorizontal, Plus } from "lucide-react";
 
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { StatusPill } from "@/components/kit/StatusPill";
 import {
   SortableGrip,
   SortableRows,
   useSortableRow
 } from "@/components/kit/SortableRows";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,13 +20,13 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Progress } from "@/components/ui/progress";
-import { RowButton } from "@/components/ui/row-button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import { Separator } from "@/components/ui/separator";
 import {
   Select,
@@ -34,7 +34,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { notify } from "@/lib/notify";
 import { nextStageOrder, phaseOrderForArrangement, phasesBesideAbove } from "@/lib/tournament/stages";
 import adminService from "@/services/admin.service";
@@ -437,7 +437,7 @@ function StageCard({
         <span className="sr-only">{stage.name}</span>
       </RowButton>
 
-      <div className="pointer-events-none min-w-0 flex-1">
+      <div className="pointer-events-none relative min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <p aria-hidden className="min-w-0 truncate text-sm font-semibold text-foreground">
             {stage.name}

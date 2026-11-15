@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 import { Lock } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
-import { eyebrowClass } from "@/components/ui/eyebrow";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import type { StandingsCuts } from "@/lib/flow/standingsCuts";
 import { straddlingTieGroups } from "@/lib/tournament/tie-clusters";
 import { cn } from "@/lib/utils";

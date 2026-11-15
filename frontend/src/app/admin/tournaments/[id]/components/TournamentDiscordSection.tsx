@@ -4,23 +4,23 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import { InspectorField } from "@/components/kit/InspectorField";
 import { StatusPill } from "@/components/kit/StatusPill";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { DiscordChannelSelect } from "@/components/discord/DiscordChannelSelect";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { DiscordChannelInput, DiscordChannelRead } from "@/types/admin.types";
 import type { Tournament } from "@/types/tournament.types";
 import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 
 const EMPTY_CHANNEL_FORM: DiscordChannelInput = {
   channel_id: "",

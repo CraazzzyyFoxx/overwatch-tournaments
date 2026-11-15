@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Clock, Trash2, UserCog } from "lucide-react";
 
-import { columnMeta, createKebabColumn } from "@/components/data-table";
+import { columnMeta, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { ProviderMark } from "@/components/admin/OAuthProviderMark";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";

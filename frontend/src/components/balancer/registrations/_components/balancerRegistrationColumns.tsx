@@ -4,7 +4,7 @@ import { roleOf, subRoleSlugOf } from "@/lib/roster/role-ref";
 import type { LadderedOntology } from "@/lib/roster/ontology";
 import type { ColumnDef, Row } from "@tanstack/react-table";
 
-import { columnMeta } from "@/components/data-table";
+import { columnMeta } from "@craazzzyyfoxx/admin-kit/data-table";
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import {
   AdmissionStatusBadge,

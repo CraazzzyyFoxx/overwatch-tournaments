@@ -5,9 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Info } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useFormatter } from "@/lib/datetime/client";
 import analyticsService from "@/services/analytics.service";
 import { analyticsQueryKeys } from "@/lib/analytics/query-keys";

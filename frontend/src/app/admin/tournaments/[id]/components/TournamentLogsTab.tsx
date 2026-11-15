@@ -5,11 +5,11 @@ import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
-import { DataTable, type TableCommand } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { FilterBar } from "@/components/kit/FilterBar";
-import { useFilters, type FilterDef } from "@/components/kit/useFilters";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
+import { useFilters, type FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
@@ -33,7 +33,7 @@ import {
   getTournamentWorkspaceQueryKeys,
   invalidateTournamentWorkspace
 } from "@/lib/tournament/workspace-query-keys";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 
 const PAGE_SIZE = 25;

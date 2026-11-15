@@ -40,8 +40,8 @@ vi.mock("./_hooks/useAchievementCatalog", () => ({
 vi.mock("@/components/admin/AdminPageHeader", () => ({
   AdminPageHeader: ({ actions }: { actions?: React.ReactNode }) => <div>{actions}</div>,
 }));
-vi.mock("@/components/kit/EmptyNote", () => ({ EmptyNote: ({ children }: { children: React.ReactNode }) => <p>{children}</p> }));
-vi.mock("@/components/kit/ConfirmDialog", () => ({ ConfirmDialog: () => null }));
+vi.mock("@craazzzyyfoxx/admin-kit/kit/EmptyNote", () => ({ EmptyNote: ({ children }: { children: React.ReactNode }) => <p>{children}</p> }));
+vi.mock("@craazzzyyfoxx/admin-kit/kit/ConfirmDialog", () => ({ ConfirmDialog: () => null }));
 vi.mock("@/components/admin/achievements/EvaluationRunSummary", () => ({ EvaluationRunSummary: () => null }));
 vi.mock("./_components/AchievementFormDialog", () => ({ AchievementFormDialog: () => null }));
 vi.mock("./_components/AchievementImportDialog", () => ({ AchievementImportDialog: () => null }));

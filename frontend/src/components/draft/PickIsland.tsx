@@ -8,8 +8,8 @@ import Link from "next/link";
 import { PersonLabel } from "@/components/PlayerName";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useDraftPlayerCardQuery, type DraftMutations } from "@/hooks/useDraftData";
@@ -32,7 +32,7 @@ import type { DraftAutopickPreview, DraftBoard, DraftPlayer, DraftRole } from "@
 import type { RealtimeConnectionState } from "@/types/realtime.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 import { formatSubRoleLabel, getPlayerSlug } from "@/lib/player";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import { CareerStats, CareerTables } from "./island/PlayerCareer";
 import { RegistrationSection } from "./island/RegistrationSection";

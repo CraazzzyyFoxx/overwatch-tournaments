@@ -50,6 +50,6 @@ def resolver_rule(blob: dict | None) -> SubscriptionRequirement | None:
     """
     try:
         requirement = parse_requirement(blob)
-    except (ValueError, TypeError, AttributeError):
+    except ValueError, TypeError, AttributeError:
         return None
     return requirement if requirement.requirements else None

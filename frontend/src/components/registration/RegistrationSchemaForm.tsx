@@ -10,19 +10,19 @@ import type { FieldRendererContext } from "@/components/forms/types";
 import {
   AuthUserSearchCombobox,
   type AuthUserOption
-} from "@/components/kit/ServerSearchCombobox";
-import { Button } from "@/components/ui/button";
-import { RowButton } from "@/components/ui/row-button";
+} from "@/components/kit/UserSearchCombobox";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
-import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
+import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { identityProvider } from "@/lib/forms/builtin-keys";
 import { fieldErrorsFrom } from "@/lib/forms/form-errors";
 import { visibleFields } from "@/lib/forms/visible-when";
@@ -45,7 +45,7 @@ import type {
   RoleInput
 } from "@/types/registration.types";
 import type { User } from "@/types/user.types";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useRoleName } from "@/hooks/useRoleName";
 import type { DisciplineMetadata } from "@/types/discipline.types";

@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { translateRegistrationTeamError } from "@/lib/registration/team-errors";
 import { cn } from "@/lib/utils";
 import registrationTeamService from "@/services/registration-team.service";

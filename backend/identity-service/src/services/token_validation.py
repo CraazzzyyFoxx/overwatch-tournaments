@@ -218,7 +218,7 @@ class TokenValidationService:
             raise credentials_exception
         try:
             user_id = int(user_id_str)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             raise credentials_exception
         if not isinstance(session_id, str) or not session_id:
             session_id = None

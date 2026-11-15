@@ -1,5 +1,5 @@
 import { TOURNAMENT_QUERY_PARAM } from "@/components/admin/tournament-filter";
-import type { FilterDef } from "@/components/kit/useFilters";
+import type { FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import type { EncounterReportsStats } from "@/types/admin.types";
 import type { Stage } from "@/types/tournament.types";
 

@@ -12,7 +12,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
+} from "@craazzzyyfoxx/admin-kit/ui/command";
 import {
   adminNavItemSearchValue,
   adminRouteAccessOptions,
@@ -46,6 +46,7 @@ function ResultCountAnnouncer() {
 
 export function AdminCommandPalette({ groups, open, onOpenChange }: Readonly<AdminCommandPaletteProps>) {
   const t = useTranslations("adminShell");
+  const tUi = useTranslations("kit.ui");
   const router = useRouter();
   const { canAccessAdminRoute } = usePermissions();
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
@@ -75,7 +76,13 @@ export function AdminCommandPalette({ groups, open, onOpenChange }: Readonly<Adm
   );
 
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange}>
+    <CommandDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={tUi("commandPalette")}
+      description={t("commandPalette.search")}
+      showCloseButton={false}
+    >
       <CommandInput aria-label={t("commandPalette.search")} placeholder={t("commandPalette.searchPlaceholder")} />
       <ResultCountAnnouncer />
       <CommandList>

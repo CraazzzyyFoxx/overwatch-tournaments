@@ -4,20 +4,20 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { EditableAvatar } from "@/components/ui/editable-avatar";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { MAX_AVATAR_BYTES } from "@/lib/uploads";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
@@ -26,6 +26,7 @@ import { flattenDivisionGridVersions, useHubDivisionGridsQuery } from "../../hub
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 export default function GeneralSettingsPage() {
   return (
@@ -53,6 +54,7 @@ function GeneralForm({
   workspaceId: number;
   disabled: boolean;
 }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminTournament.general");
   const tResults = useTranslations("adminTournament.scoring");
   const { form, patch, dirty, summary, saving, save, discard, error } = useTournamentSettingsForm(
@@ -168,7 +170,7 @@ function GeneralForm({
       <BrandingGroup tournament={tournament} tournamentId={tournamentId} disabled={disabled} />
       </SettingsGrid>
 
-      <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
+      <SaveBar onDirtyChange={reportUnsaved} dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>
   );
 }

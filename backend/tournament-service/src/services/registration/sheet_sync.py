@@ -136,7 +136,7 @@ async def _resolve_header_keys(
         return build_header_keys(feed.header_row_json)
     try:
         rows = await fetch_google_sheet_rows(source_url)
-    except (HTTPException, httpx.HTTPError):
+    except HTTPException, httpx.HTTPError:
         return None
     return build_header_keys(rows[0]) if rows else None
 

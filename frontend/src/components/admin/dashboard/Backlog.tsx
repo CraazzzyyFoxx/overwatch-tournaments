@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
 
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
-import { Card } from "@/components/ui/card";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { GameIcon } from "@/components/workspace/GameIcon";
 import { cn } from "@/lib/utils";
 import type { DashboardBacklog } from "@/types/admin-dashboard.types";

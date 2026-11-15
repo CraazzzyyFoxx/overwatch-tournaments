@@ -331,7 +331,7 @@ class ChallongeMappingService:
                 models.Encounter.slot_count == 2,
             )
         )
-        rows = encounters_result.tuples().all()
+        rows = encounters_result.all()
         seats_by_encounter: dict[int, list[int]] = {}
         for seat in (
             await session.execute(

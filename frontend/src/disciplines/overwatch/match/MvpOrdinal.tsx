@@ -4,7 +4,7 @@ import type { HTMLAttributes, ReactElement } from "react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import type { SlotProps } from "@/disciplines/types";
 import { observedScore } from "@/lib/encounter/detail";
 import { STAT_META } from "./stats";

@@ -12,6 +12,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -86,7 +87,7 @@ async def _tournament_values(
         await session.execute(
             sa.select(player.tournament_id, player.workspace_member_id, player.role, player.rank)
             .where(player.tournament_id.in_(tournament_ids))
-            .distinct(player.tournament_id, player.workspace_member_id)
+            .ext(distinct_on(player.tournament_id, player.workspace_member_id))
             .order_by(player.tournament_id, player.workspace_member_id, player.is_substitution.asc(), player.id.desc())
         )
     ).all()

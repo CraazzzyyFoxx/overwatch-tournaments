@@ -3,17 +3,18 @@
 import { useId, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { NumberInput } from "@/components/ui/number-input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { isSignUpOpen } from "@/lib/tournament/flow-nodes";
 import type { TournamentFlowNode } from "@/types/flow.types";
 import type { Tournament } from "@/types/tournament.types";
 import { useTabAccess } from "../../sub-tabs";
 import { useRegistrationNodeConfig } from "../useRegistrationNodeConfig";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 /**
  * How one registration node takes entries: auto-approval, late sign-up, required check-in and the announced capacity.
@@ -25,6 +26,7 @@ export function RegistrationNodeSettingsForm({
   node,
   children
 }: Readonly<{ tournament: Tournament; node: TournamentFlowNode; children?: ReactNode }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("registrationFormAdmin.page");
   const tStatus = useTranslations("registrationFormAdmin.status");
   const ids = useId();
@@ -121,7 +123,7 @@ export function RegistrationNodeSettingsForm({
         {children}
       </SettingsGrid>
 
-      <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
+      <SaveBar onDirtyChange={reportUnsaved} dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>
   );
 }

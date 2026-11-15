@@ -236,7 +236,7 @@ def _mix_channel_id(config_json: Any) -> int | None:
     value = config_json.get("mix_discord_channel_id") if isinstance(config_json, dict) else None
     try:
         return int(value) if value else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 

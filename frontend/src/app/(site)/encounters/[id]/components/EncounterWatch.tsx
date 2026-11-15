@@ -6,8 +6,8 @@ import { useTranslations } from "next-intl";
 
 import { SectionHead } from "@/components/match/EncounterAtoms";
 import { StreamerName, useChapterPlace } from "@/components/stream/PastBroadcasts";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { encounterQueryKeys } from "@/lib/encounters/query-keys";
 import { formatVodClock, twitchVodUrl } from "@/lib/social/stream-platform";
 import streamService from "@/services/stream.service";

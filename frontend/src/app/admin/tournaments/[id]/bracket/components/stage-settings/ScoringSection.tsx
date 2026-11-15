@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { SettingGroup } from "@/components/kit/SettingRow";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 
 /**
  * How a stage's matches are played and ranked, as one card: the series length, the points a result pays and

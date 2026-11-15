@@ -49,6 +49,7 @@ class OAuthLinkFailedError extends Error {
 
 // null = succeed; otherwise the error completeLink throws.
 let completeLinkError: Error | null = null;
+let completeLinkAlready = false;
 
 vi.mock("@/services/auth.service", () => ({
   OAuthLinkAuthRequiredError,
@@ -59,7 +60,7 @@ vi.mock("@/services/auth.service", () => ({
       if (completeLinkError) {
         throw completeLinkError;
       }
-      return { message: "Discord account linked successfully", provider: "discord", username: "u" };
+      return { message: "Discord account linked", provider: "discord", username: "u", already_linked: completeLinkAlready };
     }
   }
 }));
@@ -79,6 +80,7 @@ describe("GET /auth/link/complete", () => {
     requestCookies = {};
     completeLinkCalls.length = 0;
     completeLinkError = null;
+    completeLinkAlready = false;
   });
 
   afterEach(() => {
@@ -143,12 +145,26 @@ describe("GET /auth/link/complete", () => {
     const res = await GET(req("https://tenant.example.com/auth/link/complete?ticket=tic-1&next=%2Faccount"));
 
     expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("https://tenant.example.com/account");
+    expect(res.headers.get("location")).toBe(
+      "https://tenant.example.com/account?auth_link=linked&auth_link_provider=discord"
+    );
     // Session is unchanged by this request -- see module docstring. The
     // guard cookie IS cleared, so it's the only Set-Cookie present.
     const setCookies = res.headers.getSetCookie ? res.headers.getSetCookie() : [];
     expect(setCookies.length).toBe(1);
     expect(setCookies[0]).toMatch(/^owt_xdomain_guard=;/);
+  });
+
+  it("tells the landing page a re-link of the user's own provider account was already linked", async () => {
+    requestCookies.owt_access_token = { value: "session-token-abc" };
+    withGuardCookie();
+    completeLinkAlready = true;
+
+    const res = await GET(req("https://tenant.example.com/auth/link/complete?ticket=tic-1&next=%2Faccount"));
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("auth_link")).toBe("already_linked");
+    expect(location.searchParams.get("auth_link_provider")).toBe("discord");
   });
 
   it("clears the guard cookie on the login-redirect path too (no live session)", async () => {
@@ -165,7 +181,7 @@ describe("GET /auth/link/complete", () => {
 
     const res = await GET(req("https://tenant.example.com/auth/link/complete?ticket=tic-1&next=https%3A%2F%2Fevil.com%2Fsteal"));
 
-    expect(res.headers.get("location")).toBe("https://tenant.example.com/");
+    expect(res.headers.get("location")).toBe("https://tenant.example.com/?auth_link=linked&auth_link_provider=discord");
   });
 
   it("error-redirects (without leaking the error) when the ticket redeem fails, and still clears the guard cookie", async () => {

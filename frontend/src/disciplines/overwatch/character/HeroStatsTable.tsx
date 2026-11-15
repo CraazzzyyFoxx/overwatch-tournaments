@@ -4,8 +4,8 @@ import { useState } from "react";
 import { Crown } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { SearchField } from "@/components/ui/search-field";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import { useFormatter } from "@/lib/datetime/client";
 import { cn } from "@/lib/utils";
 

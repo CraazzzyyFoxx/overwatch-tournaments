@@ -317,7 +317,8 @@ describe("TournamentLogsTab", () => {
 
     expect(new URLSearchParams(window.location.search).get("status")).toBe("failed");
     await settle();
-    expect(getLogHistory).toHaveBeenLastCalledWith(78, {
+    // Not "last": the table prefetches the next page after this one.
+    expect(getLogHistory).toHaveBeenCalledWith(78, {
       limit: 25,
       offset: 0,
       status: "failed",
@@ -359,7 +360,10 @@ describe("TournamentLogsTab", () => {
     await click(scope.querySelector('button[aria-label="Next page"]'));
     await settle();
 
-    expect(getLogHistory).toHaveBeenLastCalledWith(78, {
+    // The table prefetches the next page, so page 2's request is not proof by itself.
+    expect(scope.textContent).toContain("26–50 of 128");
+    expect(new URLSearchParams(window.location.search).get("page")).toBe("2");
+    expect(getLogHistory).toHaveBeenCalledWith(78, {
       limit: 25,
       offset: 25,
       status: undefined,

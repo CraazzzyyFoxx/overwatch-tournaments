@@ -7,7 +7,7 @@ import { PlayerSearchCombobox } from "@/components/PlayerSearchCombobox";
 import { HeroFrame } from "@/components/site/PageHero";
 import { LEDE_CLASS } from "@/components/site/open-layout";
 import { owtButton } from "@/components/site/owt-button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { cn } from "@/lib/utils";
 
 import { HeroFeed } from "./HeroFeed";

@@ -58,6 +58,12 @@ EVIDENCE = 7001
 _SERVICE_DIR = Path(log_evidence.__file__).parent
 
 
+def _outbox_about(ids: dict) -> sa.ColumnElement[bool]:
+    """This test's outbox rows: parallel workers write the same ``event_outbox``, so a global count is not ours."""
+    pattern = rf'"tournament_id":\s*{ids["t"]}\M|"encounter_id":\s*{ids["e"]}\M'
+    return sa.cast(EventOutbox.payload_json, sa.Text).op("~")(pattern)
+
+
 class _DriverError(Exception):
     """What the asyncpg adapter surfaces: an exception carrying its SQLSTATE."""
 
@@ -279,7 +285,7 @@ class PolicyTests(EvidenceCase):
 
 class AcceptanceTests(EvidenceCase):
     async def test_valid_evidence_confirms_the_game_as_admin_log_with_the_normal_cascade(self) -> None:
-        jobs_before = await self._count(TournamentComputationJob)
+        jobs_before = await self._jobs()
         outbox_before = await self._outbox_routing_keys()
 
         outcome = await self.deliver(self.event(placements=(2, 1)))
@@ -297,7 +303,7 @@ class AcceptanceTests(EvidenceCase):
             {self.teams[0]: 2, self.teams[1]: 1}, {team_id: seat.placement for team_id, seat in seats.items()}
         )
         # one version step, the recalculation job and the completion announcement the normal confirm owes
-        self.assertEqual(jobs_before + 1, await self._count(TournamentComputationJob))
+        self.assertEqual(jobs_before + 1, await self._jobs())
         self.assertIn(
             "tournament.encounter.completed",
             (await self._outbox_routing_keys())[len(outbox_before) :],
@@ -314,13 +320,18 @@ class AcceptanceTests(EvidenceCase):
         sources = {row.action: row.source for row in history.entries if row.origin == "result"}
         self.assertEqual("system", sources["game_confirm"])
 
-    async def _count(self, model) -> int:
+    async def _jobs(self) -> int:
         async with self.Session() as s:
-            return await s.scalar(sa.select(sa.func.count()).select_from(model))
+            return await s.scalar(
+                sa.select(sa.func.count())
+                .select_from(TournamentComputationJob)
+                .where(TournamentComputationJob.tournament_id == self.ids["t"])
+            )
 
     async def _outbox_routing_keys(self) -> list[str]:
         async with self.Session() as s:
-            return list(await s.scalars(sa.select(EventOutbox.routing_key).order_by(EventOutbox.id)))
+            query = sa.select(EventOutbox.routing_key).where(_outbox_about(self.ids)).order_by(EventOutbox.id)
+            return list(await s.scalars(query))
 
 
 class PrecedenceTests(EvidenceCase):
@@ -1009,7 +1020,7 @@ class BracketStateTests(EvidenceCase):
 
     async def _outbox_count(self) -> int:
         async with self.Session() as s:
-            return await s.scalar(sa.select(sa.func.count()).select_from(EventOutbox))
+            return await s.scalar(sa.select(sa.func.count()).select_from(EventOutbox).where(_outbox_about(self.ids)))
 
 
 class RosterRoleAuthorityTests(EvidenceCase):

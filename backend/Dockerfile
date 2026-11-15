@@ -2,7 +2,7 @@
 #
 #   builder  compilers (Rust, C) + the third-party venv they build
 #   native   the balancer_native Rust wheel (balancer only)
-#   runtime  python:3.14-slim + that venv + source
+#   runtime  python:3.15-slim + that venv + source
 #
 # The compilers used to live in the shipped image: ~1 GiB of balancer's and
 # ~400 MiB of analytics' that every production host pulled and never ran.
@@ -11,9 +11,9 @@
 # for analytics) and it depends on uv.lock + pyproject files alone, so a release
 # that touches shared/ or service code re-pulls a few MiB of source, not the
 # venv. Nothing that changes per release may be copied before it.
-# Digest-pinned: a re-published 3.14-slim rebuilds every layer above it and the
+# Digest-pinned: a re-published 3.15-slim rebuilds every layer above it and the
 # host re-pulls every venv. Dependabot (docker, /backend) bumps it as a PR.
-FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d AS base
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS base
 
 ENV PYTHONUNBUFFERED=1
 
@@ -21,7 +21,7 @@ WORKDIR /app/
 
 # Install uv. Kept in the runtime image: runbooks `docker compose exec <svc> uv run ...`.
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#installing-uv
-COPY --from=ghcr.io/astral-sh/uv:0.9.24 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.8 /uv /uvx /bin/
 
 # Place executables in the environment at the front of the path
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#using-the-environment
@@ -48,7 +48,7 @@ ARG APP_PATH
 
 # balancer: the ``balancer_native`` Rust extension needs cargo/rustc and a C
 # linker (gcc + libc6-dev); nothing in the crate compiles C or C++.
-# analytics: `ruptures` has no Python 3.14 wheel yet
+# analytics: `ruptures` has no wheel past Python 3.13 (1.1.10 is the latest)
 # (upstream: https://github.com/deepcharles/ruptures), so uv builds its sdist,
 # which needs a C compiler for the `ekcpd` extension.
 RUN set -eux; \

@@ -11,10 +11,10 @@ import { CardSurface } from "@/components/profile/atoms";
 import { winrateColor } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 import { canonicalDisplay, getPlayerSlug } from "@/lib/player";
-import { Button } from "@/components/ui/button";
-import { DataPagination } from "@/components/ui/data-pagination";
-import { SearchField } from "@/components/ui/search-field";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { DataPagination } from "@craazzzyyfoxx/admin-kit/ui/data-pagination";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 
 interface Props {
   teammates: UserBestTeammate[];

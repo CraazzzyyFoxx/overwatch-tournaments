@@ -4,7 +4,7 @@ import { useState } from "react";
 import { GripVertical, Plus, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,11 +13,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { eyebrowClass } from "@/components/ui/eyebrow";
-import { Input } from "@/components/ui/input";
-import { RowButton } from "@/components/ui/row-button";
-import { StatusDot } from "@/components/ui/status-dot";
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 
 /** The drag payload a palette row writes and the canvas reads back: the item's `key`. */
 export const GRAPH_PALETTE_MIME = "application/graph-palette-item";

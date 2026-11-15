@@ -2,7 +2,7 @@
 
 import { Check } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,9 @@ interface StepIndicatorProps {
 
 export default function StepIndicator({ steps, current, onSelect }: Readonly<StepIndicatorProps>) {
   return (
-    <div className="flex items-center justify-center gap-1">
+    // Wraps instead of overflowing: step titles come from the form config, so their width is unbounded,
+    // and the `sm:` label breakpoint tracks the viewport, not the (narrower) dialog this sits in.
+    <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-2">
       {steps.map((step, i) => {
         const isCompleted = i < current;
         const isActive = i === current;

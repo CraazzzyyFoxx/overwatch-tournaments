@@ -5,14 +5,14 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { SettingRow, settingLabelId } from "@/components/kit/SettingRow";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import type { Stage, StageType } from "@/types/tournament.types";
 
 import { DraftFormatFields } from "../../../components/draft/DraftFormatFields";

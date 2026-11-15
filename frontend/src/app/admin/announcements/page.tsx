@@ -10,7 +10,7 @@ import { AnnouncementForm } from "@/components/admin/announcements/AnnouncementF
 import { AnnouncementsTable } from "@/components/admin/announcements/AnnouncementsTable";
 import type { AnnouncementAudience } from "@/components/admin/announcements/announcement-draft";
 import { LinkTabs } from "@/components/kit/LinkTabs";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";

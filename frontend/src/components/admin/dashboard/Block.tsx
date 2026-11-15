@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 import { AlertTriangle } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card, CardContent, CardDescription, CardHeader } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { cn } from "@/lib/utils";
 
 /** A dashboard section's title: the display face, the same size framed or open. */

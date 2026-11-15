@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 
 interface FilePickerOptions {
   /** The `accept` list, e.g. `"application/json,.json"`. */

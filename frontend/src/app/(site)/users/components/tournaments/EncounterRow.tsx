@@ -13,7 +13,7 @@ import {
   mapKind,
   uniqueViewerCharacters
 } from "@/app/(site)/users/components/shared/encounter-perspective";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 
 // ─── Encounter row (expanded matches table) ─────────────────────────────────────
 

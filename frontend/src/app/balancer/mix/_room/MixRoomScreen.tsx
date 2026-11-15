@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { lobbyIndexFromLetter } from "@/app/balancer/mix/pickup-chrome";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { customGameKeys, customGameService } from "@/services/custom-game.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 

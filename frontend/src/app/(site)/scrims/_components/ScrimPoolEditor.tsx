@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Check } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Field,
   FieldContent,
@@ -15,7 +15,7 @@ import {
   FieldSet,
   FieldTitle
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import type { PickBanRuleset, PickBanRulesetStep } from "@/types/tournament.types";
@@ -28,7 +28,7 @@ import {
   type PickBanDraft,
   type PickBanValidationIssue
 } from "@/lib/tournament/pick-ban-config";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useCatalogEntities } from "@/hooks/useCatalogEntities";
 
 /**

@@ -220,7 +220,7 @@ def _ratelimit_remaining(response: httpx.Response) -> int | None:
     raw = response.headers.get("Ratelimit-Remaining")
     try:
         return int(raw) if raw is not None else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -228,7 +228,7 @@ def _ratelimit_reset(response: httpx.Response) -> int | None:
     raw = response.headers.get("Ratelimit-Reset")
     try:
         return int(raw) if raw is not None else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -252,7 +252,7 @@ def _thumbnail(raw: Any) -> str | None:
 def _as_int(raw: Any) -> int | None:
     try:
         return int(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 

@@ -1,4 +1,4 @@
-import type { FilterValue } from "@/components/kit/useFilters";
+import type { FilterValue } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import type { AuditSortField } from "@/types/admin.types";
 
 /**

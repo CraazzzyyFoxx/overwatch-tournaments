@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Switch } from "@/components/ui/switch";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { useWorkspaceTimezone } from "@/hooks/useWorkspaceTimezone";
 import { nodesOfKind } from "@/lib/tournament/flow-nodes";
@@ -13,6 +13,7 @@ import type { Tournament } from "@/types/tournament.types";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
 import { NodeScheduleEditor } from "./NodeScheduleEditor";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 export default function ScheduleSettingsPage() {
   return (
@@ -33,6 +34,7 @@ function ScheduleForm({
   tournamentId,
   disabled
 }: Readonly<{ tournament: Tournament; tournamentId: number; disabled: boolean }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminTournament.schedule");
   const timezone = useWorkspaceTimezone();
   const { form, patch, dirty, summary, saving, save, discard, error } =
@@ -102,7 +104,7 @@ function ScheduleForm({
         ) : null}
       </div>
 
-      <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
+      <SaveBar onDirtyChange={reportUnsaved} dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>
   );
 }

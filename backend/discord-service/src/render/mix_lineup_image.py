@@ -132,7 +132,7 @@ def _decode(images: Mapping[str, bytes], url: str | None) -> Image.Image | None:
     try:
         with Image.open(io.BytesIO(images[url])) as source:
             return source.convert("RGBA")
-    except (UnidentifiedImageError, OSError):
+    except UnidentifiedImageError, OSError:
         logger.warning(f"Lineup picture: {url} is not an image")
         return None
 

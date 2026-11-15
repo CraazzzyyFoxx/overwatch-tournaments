@@ -140,7 +140,7 @@ def register(broker: Any, logger: Any) -> None:
             payload = c.payload(data)
             try:
                 tournament_id = int(payload["tournament_id"])
-            except (KeyError, TypeError, ValueError):
+            except KeyError, TypeError, ValueError:
                 raise HTTPException(status_code=422, detail="tournament_id is required")
             algorithm_ids = payload.get("algorithm_ids") or []
             algorithm_names: list[str] | None = None

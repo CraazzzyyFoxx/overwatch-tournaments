@@ -2,7 +2,7 @@ import { AlertTriangle, CheckCircle2, Circle, RotateCcw } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -10,11 +10,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { Spinner } from "@/components/ui/spinner";
-import { TONE_TEXT } from "@/components/ui/tone";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
+import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
 
 import type { BalancerOperationStep, BalancerOperationStepStatus } from "./operation-steps";
 

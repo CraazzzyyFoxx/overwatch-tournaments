@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { StatusPill } from "@/components/kit/StatusPill";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import type {
   DivisionGridReadinessSource,
   DivisionGridVersion

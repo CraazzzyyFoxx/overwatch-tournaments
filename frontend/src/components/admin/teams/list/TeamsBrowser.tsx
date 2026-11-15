@@ -6,11 +6,11 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
-import { DataTable, type TableCommand } from "@/components/data-table";
-import { FilterBar } from "@/components/kit/FilterBar";
+import { DataTable, type TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { useFilters } from "@/components/kit/useFilters";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { TeamCreateDialog } from "@/components/admin/teams/TeamCreateDialog";
 import { gameFilterDefs } from "@/components/admin/game-filter";
 import {
@@ -144,7 +144,7 @@ export function TeamsBrowser({
   return (
     <>
       <div
-        className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}
+        className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_auto]")}
       >
         <div className="min-w-0">
           <DataTable<Team>

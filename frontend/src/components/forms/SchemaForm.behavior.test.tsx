@@ -17,7 +17,7 @@ vi.mock("next-intl", () => ({
 // Radix portals and pointer measurement do not work under happy-dom. The two
 // primitives `GenericField` reaches for are stood in by their own contracts:
 // a `select` never opens in these cases, and the switch is a toggle button.
-vi.mock("@/components/ui/select", () => ({
+vi.mock("@craazzzyyfoxx/admin-kit/ui/select", () => ({
   Select: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   SelectTrigger: ({ children, ...rest }: { children: ReactNode }) => (
     <button type="button" {...rest}>

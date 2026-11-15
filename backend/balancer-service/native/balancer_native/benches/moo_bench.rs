@@ -1,4 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 use balancer_native::moo::bench_api as api;
 
 /// Полный пересчёт objectives на 40 командах (горячий путь polish).

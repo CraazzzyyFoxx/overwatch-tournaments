@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "@/components/ui/image";
-import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { IconTooltip } from "@craazzzyyfoxx/admin-kit/ui/icon-tooltip";
 
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { getDivisionIconSrc, getDivisionLabel } from "@/lib/divisions/grid";

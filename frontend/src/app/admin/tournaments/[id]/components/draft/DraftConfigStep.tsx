@@ -5,16 +5,16 @@ import { useId } from "react";
 import { ArrowUpRight, ChevronDown, Clock3, TimerReset } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { disclosureChevronClass } from "@/components/ui/chevron";
+import { disclosureChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { NumberInput } from "@/components/ui/number-input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import FlexIcon from "@/components/icons/FlexIcon";

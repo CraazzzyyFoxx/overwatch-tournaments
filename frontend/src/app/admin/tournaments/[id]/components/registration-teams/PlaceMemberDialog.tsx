@@ -6,20 +6,20 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { PersonLabel } from "@/components/PlayerName";
-import { Combobox, ComboboxCheck } from "@/components/ui/combobox";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { Combobox, ComboboxCheck } from "@craazzzyyfoxx/admin-kit/ui/combobox";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
-import { Checkbox } from "@/components/ui/checkbox";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { buildMyTeamRoster } from "@/components/registration/myTeam.model";
 import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { slotCodeOrder, type RoleOntology } from "@/lib/roster/ontology";

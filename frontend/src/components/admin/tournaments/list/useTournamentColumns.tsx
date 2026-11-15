@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import type { ColumnDef } from "@tanstack/react-table";
 
-import { createKebabColumn } from "@/components/data-table";
+import { createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { GameLabel } from "@/components/workspace/GameLabel";
 import { TOURNAMENT_STATUS_TONE } from "@/app/admin/tournaments/[id]/components/tournamentWorkspace.helpers";

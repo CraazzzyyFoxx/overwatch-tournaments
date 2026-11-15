@@ -7,7 +7,7 @@ import { usePersonEdit } from "@/components/admin/people/usePersonEdit";
 import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { notify } from "@/lib/notify";
 import { MAX_AVATAR_BYTES } from "@/lib/uploads";
 import type { User } from "@/types/user.types";

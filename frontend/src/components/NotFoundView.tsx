@@ -4,9 +4,9 @@ import type { LucideIcon } from "lucide-react";
 import { ArrowRight, Home, Swords, Trophy, Users } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 
 const QUICK_LINKS: { href: string; key: "tournaments" | "players" | "encounters"; icon: LucideIcon }[] =
   [

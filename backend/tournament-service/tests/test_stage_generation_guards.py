@@ -61,7 +61,7 @@ def _input_rows(count: int) -> AsyncMock:
 def _tuples_result(rows: list[tuple]) -> SimpleNamespace:
     """``_fill_bracket_seeds`` reads ``(Encounter, round)`` pairs: the round
     lives on ``tournament.bracket_encounter`` now (D22)."""
-    return SimpleNamespace(tuples=lambda: SimpleNamespace(all=lambda: rows))
+    return SimpleNamespace(all=lambda: rows)
 
 
 def _encounter(round_number: int, encounter_id: int, **overrides) -> tuple[SimpleNamespace, int]:

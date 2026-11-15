@@ -12,7 +12,7 @@ from shared.testing import apply_test_env_defaults
 # local ``.env`` win; committed ``shared/testing/test.env`` fills the rest.
 apply_test_env_defaults()
 
-from shared.testing import configure_test_cache, db_session  # noqa: E402,F401
+from shared.testing import configure_test_cache, db_session, forbid_redis_dials  # noqa: E402,F401
 
 # The cashews cache is a process-global singleton with no default backend --
 # any cache-touching flow raises ``NotConfiguredError`` until something calls

@@ -140,7 +140,7 @@ class DraftSessionRepository(BaseRepository[models.DraftSession]):
                 pick.session_id.in_(session_ids), pick.overall_no == 1, pick.clock_started_at.is_not(None)
             )
         )
-        return dict(rows.tuples().all())
+        return dict(rows.all())
 
     async def get_workspace_id_in_tournament(self, session: AsyncSession, id: int, *, tournament_id: int) -> int | None:
         """The session's workspace, or ``None`` unless the session exists AND belongs to ``tournament_id``."""
@@ -383,4 +383,4 @@ class DraftAuditEventRepository(BaseRepository[models.DraftAuditEvent]):
             .order_by(self.model.created_at.desc(), self.model.id.desc())
             .limit(limit)
         )
-        return result.tuples().all()
+        return result.all()

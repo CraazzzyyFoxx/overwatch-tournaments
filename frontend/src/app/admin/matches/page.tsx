@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { AdminTabbedPage } from "@/components/admin/AdminTabbedPage";
 import { PermissionGate } from "@/components/admin/PermissionGate";
 import type { LinkTabItem } from "@/components/kit/LinkTabs";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { GameScopeGate } from "@/components/workspace/GameScopeGate";
 import { useGameScope } from "@/hooks/useGameScope";
 import { usePermissions } from "@/hooks/usePermissions";

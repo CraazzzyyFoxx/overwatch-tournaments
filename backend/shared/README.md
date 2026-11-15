@@ -164,7 +164,7 @@ the services that need them.
 thin per-service facades:
 
 ```python
-from src import models          # curated re-export of shared.models
+from src import models  # curated re-export of shared.models
 from src.core import db, enums  # re-exports over shared.core.db / shared.core.enums
 
 user = models.User(name="example")

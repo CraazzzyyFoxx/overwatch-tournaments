@@ -4,10 +4,10 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, Compass, LineChart as ChartIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, XAxis, YAxis, type DotItemDotProps } from "recharts";
 
 import { ChartEmptyState, RankHistorySkeleton } from "@/components/RankHistoryState";
-import { Card } from "@/components/ui/card";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import {
   ChartContainer,
   ChartLegend,
@@ -17,7 +17,7 @@ import {
   type ChartConfig
 } from "@/components/ui/chart";
 import Image from "@/components/ui/image";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@craazzzyyfoxx/admin-kit/ui/select";
 import type { SlotProps } from "@/disciplines/types";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";
@@ -55,9 +55,6 @@ const PALETTE = [
 
 /** The queues a collector reports (League's Solo/Duo and Flex); roles name themselves through the game's metadata. */
 const QUEUES = ["solo", "flex"] as const;
-
-/** What recharts hands a `dot` render function: the point's place among every point of its line. */
-type DotArgs = { key: string; index: number; cx: number; cy: number; points: ReadonlyArray<{ value?: number | null }> };
 
 /**
  * Rank history of one player in one game, the `rankHistory` slot of every game that collects ranks: the current rank
@@ -389,7 +386,7 @@ function RankHistoryBody({
                     type="stepAfter"
                     stroke={`var(--color-${line.key})`}
                     strokeWidth={2.5}
-                    dot={({ key, index, cx, cy, points }: DotArgs) =>
+                    dot={({ key, index, cx, cy, points }: DotItemDotProps) =>
                       isLone(points, index) ? (
                         <circle key={key} cx={cx} cy={cy} r={3} fill={`var(--color-${line.key})`} />
                       ) : (

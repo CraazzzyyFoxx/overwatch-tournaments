@@ -421,7 +421,7 @@ class SubscriptionResolver:
             return None
         try:
             requirement = parse_requirement(blob)
-        except (ValueError, TypeError, AttributeError):
+        except ValueError, TypeError, AttributeError:
             logger.warning(
                 "Malformed subscription requirement for workspace_id={}: failing open, "
                 "nothing will be enforced until the row is fixed",

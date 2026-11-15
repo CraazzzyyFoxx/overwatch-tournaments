@@ -13,7 +13,7 @@ import {
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { tint } from "@/lib/colors";
 import { cn } from "@/lib/utils";

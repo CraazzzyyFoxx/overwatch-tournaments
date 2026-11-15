@@ -6,17 +6,17 @@ import { useTranslations } from "next-intl";
 import { AlertCircle, Copy, Download, Images } from "lucide-react";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
-import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
+import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import { resolveDivisionFromRank, getDivisionIconSrc, getDivisionLabel } from "@/lib/divisions/grid";
 import {
   capturePngBlob,
@@ -39,7 +39,7 @@ import type { RoleOntology } from "@/lib/roster/ontology";
 import { MUTED_BUTTON_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { balanceBucketKeys } from "@/components/balancer/balance-editor-helpers";
 import { BalanceTeamHeader } from "@/components/balancer/BalanceTeamHeader";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 const TEAMS_PER_IMAGE = 10;
 const EXPORT_WIDTH = 1920;

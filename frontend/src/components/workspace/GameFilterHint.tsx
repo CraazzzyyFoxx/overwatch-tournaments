@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Gamepad2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { useScopePillOpen } from "@/components/workspace/scope-pill-store";
 import { cn } from "@/lib/utils";
 

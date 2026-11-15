@@ -5,12 +5,12 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { DataTable } from "@/components/data-table";
+import { DataTable } from "@craazzzyyfoxx/admin-kit/data-table";
 import { PROVIDER_META } from "@/components/admin/OAuthProviderMark";
-import { FilterBar } from "@/components/kit/FilterBar";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { useFilters } from "@/components/kit/useFilters";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { notify } from "@/lib/notify";
@@ -78,7 +78,7 @@ export function OAuthConnectionsBrowser() {
   });
 
   return (
-    <div className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}>
+    <div className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_auto]")}>
       <div className="min-w-0">
         <DataTable<OAuthConnectionAdmin>
           columns={columns}

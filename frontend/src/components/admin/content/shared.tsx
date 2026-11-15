@@ -10,13 +10,13 @@ import { useTranslations } from "next-intl";
 import type { ColumnDef } from "@tanstack/react-table";
 import { CircleCheck, CircleSlash, Pencil, Trash2 } from "lucide-react";
 
-import { columnMeta, createKebabColumn } from "@/components/data-table";
+import { columnMeta, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { createAliasesColumn } from "@/components/admin/catalog-table-columns";
 import { entityFormError, onEntityDialogClose } from "@/components/admin/CatalogToolbarActions";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import type { FilterDef } from "@/components/kit/useFilters";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
+import type { FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import type { CatalogEntityRead } from "@/types/catalog.types";
 
 /** Active / inactive: the chip every catalogue screen offers. The value goes out as `?active=`. */

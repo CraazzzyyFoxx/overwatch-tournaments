@@ -11,8 +11,8 @@ import {
   standardTiers
 } from "@/app/admin/settings/divisions/editor/draftReducer";
 import { LadderBar } from "@/app/admin/settings/divisions/LadderBar";
-import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { GameMark } from "@/components/workspace/GameMark";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { activeGridVersionId, resolveOwnerGrid } from "@/lib/divisions/grid";

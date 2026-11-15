@@ -60,7 +60,7 @@ def identity_user_id(data: dict[str, Any]) -> int | None:
     raw = identity.get("user_id", identity.get("sub"))
     try:
         return int(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -253,7 +253,7 @@ def retry_after_seconds(exc: HTTPException) -> int | None:
     raw = next((v for k, v in headers.items() if str(k).lower() == "retry-after"), None)
     try:
         return int(str(raw).strip())
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 

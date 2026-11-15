@@ -3,11 +3,12 @@
 import { useTranslations } from "next-intl";
 
 import { MarkdownEditor } from "@/components/admin/MarkdownEditor";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import type { Tournament } from "@/types/tournament.types";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 /**
  * Mirrors `RULES_MAX_LENGTH` in
@@ -43,6 +44,7 @@ function RulesForm({
   tournamentId,
   disabled
 }: Readonly<{ tournament: Tournament; tournamentId: number; disabled: boolean }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminTournament.rules");
   const { form, patch, dirty, summary, saving, save, discard, error } = useTournamentSettingsForm(
     tournament,
@@ -73,7 +75,7 @@ function RulesForm({
       </SettingGroup>
       </SettingsGrid>
 
-      <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
+      <SaveBar onDirtyChange={reportUnsaved} dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>
   );
 }

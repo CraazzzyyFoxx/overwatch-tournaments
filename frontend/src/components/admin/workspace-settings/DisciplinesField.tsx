@@ -5,7 +5,7 @@ import { AlertTriangle } from "lucide-react";
 
 import { Switch } from "@/components/ui/switch";
 import { SortableGrip, SortableRows, useSortableRow } from "@/components/kit/SortableRows";
-import { eyebrowClass } from "@/components/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { GameMark } from "@/components/workspace/GameMark";
 import { useDisciplines } from "@/hooks/useDisciplineMetadata";
 import { resolveOwnerGrid } from "@/lib/divisions/grid";

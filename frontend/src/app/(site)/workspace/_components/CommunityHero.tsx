@@ -6,9 +6,9 @@ import { ArrowRight, ArrowUpRight, ChartColumn, Globe, TriangleAlert } from "luc
 import { HeroFrame } from "@/components/site/PageHero";
 import { owtButton } from "@/components/site/owt-button";
 import { HERO_TITLE_SIZE_CLASS, LEDE_CLASS } from "@/components/site/open-layout";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import Image from "@/components/ui/image";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { TrustedBadge } from "@/components/workspace/TrustedBadge";
 import { WorkspaceAvatar } from "@/components/workspace/WorkspaceAvatar";
 import { getFormatter } from "@/lib/datetime/server";

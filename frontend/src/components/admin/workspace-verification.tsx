@@ -12,10 +12,10 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { SettingRow } from "@/components/kit/SettingRow";
-import type { Tone } from "@/components/ui/tone";
+import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { notify } from "@/lib/notify";
 import workspaceService from "@/services/workspace.service";
 import type { Workspace, WorkspaceVerificationStatus } from "@/types/workspace.types";

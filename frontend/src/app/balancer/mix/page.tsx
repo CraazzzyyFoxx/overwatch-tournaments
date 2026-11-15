@@ -20,10 +20,10 @@ import {
 import { useMixHistory } from "@/app/balancer/mix/useMixHistory";
 import { LinkTabs } from "@/components/kit/LinkTabs";
 import { HeroCoord, HeroStat, PageHero } from "@/components/site/PageHero";
-import { Button } from "@/components/ui/button";
-import { Dialog } from "@/components/ui/dialog";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Dialog } from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { GameScopeControl } from "@/components/workspace/GameScopeControl";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";

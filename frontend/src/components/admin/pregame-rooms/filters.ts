@@ -1,4 +1,4 @@
-import type { FilterDef, FilterOption } from "@/components/kit/useFilters";
+import type { FilterDef, FilterOption } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import type { PregameRoomRow } from "@/types/admin.types";
 
 import { PHASE_LABEL } from "./model";

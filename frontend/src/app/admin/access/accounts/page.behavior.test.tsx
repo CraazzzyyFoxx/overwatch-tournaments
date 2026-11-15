@@ -18,7 +18,7 @@ import { act, useEffect, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import AccessAdminLayout from "../layout";
 import AccountsPage from "./page";
 
@@ -111,7 +111,7 @@ vi.mock("@/services/notification.service", () => ({
 }));
 
 // Its own query stack is irrelevant here; the panel around it is what matters.
-vi.mock("@/components/kit/ServerSearchCombobox", () => ({
+vi.mock("@/components/kit/UserSearchCombobox", () => ({
   UserSearchCombobox: () => null
 }));
 

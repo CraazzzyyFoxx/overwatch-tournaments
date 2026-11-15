@@ -4,10 +4,10 @@ import { useId } from "react";
 import { useTranslations } from "next-intl";
 
 import type { UserMergeIdentityOption } from "@/types/admin.types";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { getSocialProviderConfig } from "@/lib/social/providers";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 
 export function IdentitySelectionSection({
   label,

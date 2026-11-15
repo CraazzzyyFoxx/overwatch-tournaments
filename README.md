@@ -80,9 +80,9 @@ The edge implementation is documented separately in [`gateway/README.md`](./gate
 
 | Layer                   | Technologies                                                                                                  |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Frontend                | Next.js 16.2, React 19.2, TypeScript 5.9, Tailwind CSS 4, Radix/Shadcn, TanStack Query/Table, Zustand, Vitest |
-| Gateway                 | Go 1.25, `net/http`, RabbitMQ, Redis, PostgreSQL/pgx, OpenTelemetry                                           |
-| Backend                 | Python 3.14, FastStream, SQLAlchemy 2, Pydantic 2, Alembic, pytest                                            |
+| Frontend                | Next.js 16.4, React 19.3, TypeScript 6.0, Tailwind CSS 4, Radix/Shadcn, TanStack Query/Table, Zustand, Vitest |
+| Gateway                 | Go 1.26, `net/http`, RabbitMQ, Redis, PostgreSQL/pgx, OpenTelemetry                                           |
+| Backend                 | Python 3.15, FastStream, SQLAlchemy 2, Pydantic 2, Alembic, pytest                                            |
 | Balancing and analytics | Rust `tournament_balancer`, OpenSkill, LightGBM/XGBoost, Bayesian and Monte Carlo workflows                              |
 | Data and messaging      | PostgreSQL 16, Redis Stack, RabbitMQ 3.13, S3-compatible object storage                                       |
 | Operations              | Docker Compose, nginx, Prometheus, Grafana, Loki, Tempo, OpenTelemetry Collector, Sentry                      |
@@ -116,7 +116,7 @@ The edge implementation is documented separately in [`gateway/README.md`](./gate
 - Docker Engine or Docker Desktop with Docker Compose v2
 - `make` for the convenience commands below; every target is a thin wrapper around `docker compose`
 
-Host toolchains are optional when using Docker. Direct development requires Python 3.14 with [uv](https://docs.astral.sh/uv/), Bun, and Go 1.25.
+Host toolchains are optional when using Docker. Direct development requires Python 3.15 with [uv](https://docs.astral.sh/uv/), Bun, and Go 1.26.
 
 ### 1. Clone the repository
 

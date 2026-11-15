@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import CatalogEntityImage from "@/components/catalog/CatalogEntityImage";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { LOW_SAMPLE_GAMES, winrateColor } from "@/lib/colors";
 import { formatSeconds } from "@/lib/format";
 import { cn } from "@/lib/utils";

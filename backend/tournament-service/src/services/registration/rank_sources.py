@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
@@ -728,7 +729,7 @@ class RankSourcesService:
         opening = (
             sa.select(snap)
             .where(*pair, snap.captured_at < threshold)
-            .distinct(snap.platform)
+            .ext(distinct_on(snap.platform))
             .order_by(snap.platform, snap.captured_at.desc())
             .lateral("opening")
         )

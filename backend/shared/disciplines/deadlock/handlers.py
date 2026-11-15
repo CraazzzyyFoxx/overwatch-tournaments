@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.errors import BaseAPIException as HTTPException
@@ -76,7 +77,7 @@ async def _series(session: AsyncSession, data: dict, **scope: int) -> list[schem
     opening = await session.scalars(
         sa.select(snap)
         .where(*where, snap.captured_at < date_from)
-        .distinct(snap.social_account_id)
+        .ext(distinct_on(snap.social_account_id))
         .order_by(snap.social_account_id, snap.captured_at.desc())
     )
     grouped: dict[int, list[UserRankSnapshot]] = {}
@@ -121,7 +122,7 @@ async def user_current(session: AsyncSession, user: AuthUser | None, data: dict[
         await session.scalars(
             sa.select(snap)
             .where(snap.discipline == collector.DISCIPLINE, snap.user_id == user_id)
-            .distinct(snap.social_account_id)
+            .ext(distinct_on(snap.social_account_id))
             .order_by(snap.social_account_id, snap.captured_at.desc(), snap.id.desc())
         )
     ).all()

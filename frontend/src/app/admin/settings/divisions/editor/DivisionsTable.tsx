@@ -6,11 +6,11 @@ import { ChevronsDown, ChevronsUp, ImagePlus, Scissors, Unlink } from "lucide-re
 import Image from "@/components/ui/image";
 import { useTranslations } from "next-intl";
 
-import { DataTable, createKebabColumn } from "@/components/data-table";
+import { DataTable, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import { InlineEditText } from "@/components/kit/InlineEditText";
-import { Card } from "@/components/ui/card";
-import { eyebrowClass } from "@/components/ui/eyebrow";
-import { Input } from "@/components/ui/input";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import { DisciplineWidget } from "@/disciplines/DisciplineWidget";

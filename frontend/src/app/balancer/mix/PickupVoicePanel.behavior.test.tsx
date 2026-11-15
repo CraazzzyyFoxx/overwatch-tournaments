@@ -59,7 +59,7 @@ vi.mock("next-intl", () => ({
 // stand-in keeps the same contract (root owns the value, items report a pick)
 // as plain DOM, so a pick is a click.
 const SelectCtx = createContext<{ onValueChange?: (value: string) => void; disabled?: boolean }>({});
-vi.mock("@/components/ui/select", () => ({
+vi.mock("@craazzzyyfoxx/admin-kit/ui/select", () => ({
   Select: ({
     children,
     onValueChange,

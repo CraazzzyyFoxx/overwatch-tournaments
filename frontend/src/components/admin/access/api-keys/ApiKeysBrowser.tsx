@@ -4,14 +4,14 @@ import { useId, useMemo, useState } from "react";
 import { Check, Copy, Plus, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { DataTable, type TableCommand } from "@/components/data-table";
+import { DataTable, type TableCommand } from "@craazzzyyfoxx/admin-kit/data-table";
 import { ApiKeyQuotaDialog } from "@/components/admin/quota/ApiKeyQuotaDialog";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { FilterBar } from "@/components/kit/FilterBar";
-import { useFilters } from "@/components/kit/useFilters";
-import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
-import { Label } from "@/components/ui/label";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   fetchAccountApiKeys,
   useRenameAccountApiKey,

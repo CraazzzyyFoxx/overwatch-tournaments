@@ -5,17 +5,17 @@ import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { getDefaultStageItemType, STAGE_ITEM_TYPE_LABELS } from "@/lib/bracket/projection";
 import adminService from "@/services/admin.service";
 import type { Stage, StageItemType } from "@/types/tournament.types";

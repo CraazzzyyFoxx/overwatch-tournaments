@@ -5,8 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Clock, LogIn, UserPlus, XCircle } from "lucide-react";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
 import { cn } from "@/lib/utils";
 import { hasPlayStarted } from "@/lib/tournament/stages";

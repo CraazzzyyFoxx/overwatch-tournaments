@@ -4,7 +4,7 @@ import { useId } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import { useRequirementDescription } from "@/components/registration/useRequirementDescription";
 import { NumberInput } from "@/components/ui/number-input";
@@ -14,7 +14,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { registrationIntake } from "@/lib/tournament/flow-nodes";
@@ -24,6 +24,7 @@ import { FlowNodeScope } from "../FlowNodeScope";
 import { useRegistrationFormSection } from "../useRegistrationFormSection";
 import { useRegistrationNodeConfig } from "../useRegistrationNodeConfig";
 import type { TournamentFlowNode } from "@/types/flow.types";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 /**
  * Every rule that refuses an entry, on one screen.
@@ -66,6 +67,7 @@ function AdmissionForm({
   disabled: boolean;
   nodeDisabled: boolean;
 }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("registrationFormAdmin.page");
   const ids = useId();
   const { value, saved, patch, dirty, summary, saving, save, discard, error, retry } =
@@ -289,6 +291,7 @@ function AdmissionForm({
       </SettingsGrid>
 
       <SaveBar
+        onDirtyChange={reportUnsaved}
         dirty={dirty || intake.dirty}
         summary={[dirty ? summary : null, intake.dirty ? intake.summary : null].filter(Boolean).join(" · ")}
         error={intake.error}

@@ -9,9 +9,9 @@ import { Armchair, GripVertical, RotateCw, X } from "lucide-react";
 import { AWAY_CHIP_CLASS, lobbyLetter, teamAccent } from "@/app/balancer/mix/pickup-chrome";
 import { PersonLabel } from "@/components/PlayerName";
 import { RankCrest } from "@/components/RankCrest";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { IconTooltip } from "@/components/ui/icon-tooltip";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { IconTooltip } from "@craazzzyyfoxx/admin-kit/ui/icon-tooltip";
 import { cn } from "@/lib/utils";
 import type {
   CustomGamePlayer,

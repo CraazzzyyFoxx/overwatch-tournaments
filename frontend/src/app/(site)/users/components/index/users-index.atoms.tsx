@@ -4,8 +4,8 @@ import { useTranslations } from "next-intl";
 import type { RoleOntology } from "@/lib/roster/ontology";
 
 import type { PlayerIdentity } from "@/components/PlayerAvatar";
-import { Checkbox } from "@/components/ui/checkbox";
-import { StatusDot } from "@/components/ui/status-dot";
+import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { formatRelative } from "@/components/kit/format-time";
 import { GameMarkButton } from "@/components/workspace/GameMarkButton";
 import { useGameDescriptors } from "@/hooks/useGameDescriptors";

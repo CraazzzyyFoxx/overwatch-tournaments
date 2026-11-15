@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 
 import { ChartEmptyState, RankHistorySkeleton } from "@/components/RankHistoryState";
 import { GameScopeControl } from "@/components/workspace/GameScopeControl";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { DisciplineWidget } from "@/disciplines/DisciplineWidget";
 import { loadRankUI } from "@/disciplines/registry/rank";
 import { useCurrentWorkspaceId } from "@/hooks/useCurrentWorkspace";

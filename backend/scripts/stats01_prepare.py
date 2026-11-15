@@ -107,7 +107,7 @@ async def object_hash(s3, key, row_id, max_bytes):
         raise PreparationBlocked("oversize_raw_object", row_id)
     try:
         decoded = raw.decode("utf-8")
-    except (UnicodeDecodeError, AttributeError):
+    except UnicodeDecodeError, AttributeError:
         raise PreparationBlocked("unprocessable_raw_object", row_id) from None
     if not decoded.strip() or "\x00" in decoded:
         raise PreparationBlocked("unprocessable_raw_object", row_id)
@@ -730,7 +730,7 @@ async def apply_item(conn, s3, kind, item, *, max_bytes=25 * 1024 * 1024):
         if kind == "games":
             return apply_game(conn, item)
         return apply_member(conn, item)
-    except (KeyError, TypeError, ValueError):
+    except KeyError, TypeError, ValueError:
         raise PreparationBlocked(
             "malformed_manifest_snapshot", item.get("match_id") or item.get("record_id") or item.get("player_id") or 0
         ) from None
@@ -1327,7 +1327,7 @@ async def run_cli(args):
                 conn.exec_driver_sql("SET TRANSACTION READ ONLY")
                 conn.exec_driver_sql("SET LOCAL TIME ZONE 'UTC'")
                 report = await check(conn, s3, max_bytes=settings.max_match_log_bytes)
-        except (PreparationBlocked, sa.exc.SQLAlchemyError):
+        except PreparationBlocked, sa.exc.SQLAlchemyError:
             # Preserve committed-item evidence even when the final inventory fails.
             report = {
                 "version": 1,
@@ -1369,7 +1369,7 @@ def main(argv=None):
         report, status = asyncio.run(run_cli(args))
     except PreparationBlocked as exc:
         report, status = {"blockers": [diagnostic(exc.reason, exc.row_id)]}, 1
-    except (OSError, ValueError, sa.exc.SQLAlchemyError):
+    except OSError, ValueError, sa.exc.SQLAlchemyError:
         # Driver/settings errors can embed URLs, passwords or payloads: do not print them.
         report, status = (
             {

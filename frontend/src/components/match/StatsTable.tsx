@@ -10,7 +10,7 @@ import {
   TableHead,
   TableHeader,
   TableRow
-} from "@/components/ui/table";
+} from "@craazzzyyfoxx/admin-kit/ui/table";
 import { useFormatter } from "@/lib/datetime/client";
 import { formatStat } from "@/lib/stats/format";
 import type { StatsTable } from "@/lib/stats/table";

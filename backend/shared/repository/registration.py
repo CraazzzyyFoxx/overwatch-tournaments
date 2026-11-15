@@ -428,3 +428,13 @@ class GoogleSheetBindingRepository(BaseRepository[models.RegistrationGoogleSheet
         )
         result = await session.execute(query)
         return result.unique().scalars().all()
+
+
+class RegistrationNoteRepository(BaseRepository[models.RegistrationNote]):
+    def __init__(self) -> None:
+        super().__init__(models.RegistrationNote)
+
+
+class RegistrationNoteAttachmentRepository(BaseRepository[models.RegistrationNoteAttachment]):
+    def __init__(self) -> None:
+        super().__init__(models.RegistrationNoteAttachment)

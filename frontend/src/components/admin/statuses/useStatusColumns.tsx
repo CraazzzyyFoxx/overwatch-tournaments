@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { columnMeta, createKebabColumn } from "@/components/data-table";
+import { columnMeta, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
 import type { BalancerCustomStatus } from "@/types/balancer-admin.types";
 import type { StatusScope } from "@/types/registration.types";
 

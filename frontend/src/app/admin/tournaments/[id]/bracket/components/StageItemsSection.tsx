@@ -17,15 +17,15 @@ import { ArrowUpRight, CheckCircle2, Pencil, Plus, Trash2, X } from "lucide-reac
 
 import { TeamCombobox } from "@/components/admin/TeamCombobox";
 import { InlineEditText } from "@/components/kit/InlineEditText";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { notify } from "@/lib/notify";
 import { useDragSensors } from "@/hooks/useDragSensors";
 import adminService from "@/services/admin.service";
@@ -38,9 +38,9 @@ import {
   STAGE_ITEM_TYPE_LABELS,
   type StageProgress
 } from "@/lib/bracket/projection";
-import { EmptyNote } from "@/components/kit/EmptyNote";
-import { Spinner } from "@/components/ui/spinner";
-import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 
 import { AddStageItemForm } from "./stage-items/AddStageItemForm";
 import { inputLabel, listOf, seedOrder, SeedList, SeedSlotRow, type SeedLists } from "./stage-items/SeedSlots";

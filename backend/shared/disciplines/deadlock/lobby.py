@@ -41,7 +41,7 @@ def create_body(request: BotLobbyRequest) -> dict[str, Any]:
 def _retry_after(response: httpx.Response) -> int | None:
     try:
         seconds = response.json()["error"]["next_request_in"]
-    except (ValueError, TypeError, KeyError):
+    except ValueError, TypeError, KeyError:
         return None
     return int(seconds) if isinstance(seconds, int | float) and seconds >= 0 else None
 
@@ -73,12 +73,12 @@ async def party_match_id(party_id: str) -> str | None:
     try:
         async with deadlock_client(timeout=10.0, max_retries=1) as http:
             response = await http.get(f"/v1/matches/custom/{quote(party_id, safe='')}/match-id")
-    except (httpx.HTTPError, CircuitBreakerOpen):
+    except httpx.HTTPError, CircuitBreakerOpen:
         return None
     if response.status_code != 200:  # 404: the match has not started; anything else: ask again next tick
         return None
     try:
         match_id = response.json()["match_id"]
-    except (ValueError, TypeError, KeyError):
+    except ValueError, TypeError, KeyError:
         return None
     return str(match_id) if isinstance(match_id, int) and match_id > 0 else None

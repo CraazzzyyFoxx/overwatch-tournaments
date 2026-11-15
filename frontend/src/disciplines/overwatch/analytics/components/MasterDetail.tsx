@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { ChevronLeft } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useQueryParams } from "@/hooks/useQueryParams";

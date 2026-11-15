@@ -8,11 +8,12 @@ import {
   useScopedSettingsForm,
   type ScopedSettingsForm
 } from "@/components/kit/useScopedSettingsForm";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import adminService from "@/services/admin.service";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 type SettingValue = Record<string, unknown>;
 
@@ -100,6 +101,7 @@ export function CollectionSettingsPanel<T>({
   settings: CollectionSettings<T>;
   children: (form: T, patch: (values: Partial<T>) => void) => ReactNode;
 }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("collectors.settings");
 
   if (settings.isError) {
@@ -120,6 +122,7 @@ export function CollectionSettingsPanel<T>({
     <>
       {children(settings.form, settings.patch)}
       <SaveBar
+        onDirtyChange={reportUnsaved}
         dirty={settings.dirty}
         summary={settings.summary}
         error={settings.error}

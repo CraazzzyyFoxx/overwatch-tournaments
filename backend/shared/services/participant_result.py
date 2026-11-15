@@ -18,6 +18,7 @@ storage and the member's tournament-row helpers live in ``shared.repository.part
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -74,7 +75,7 @@ def _team_rule_rows(tournament_id: int) -> sa.Select:
             models.Tournament.is_finished.is_(True),
             player.is_substitution.is_(False),
         )
-        .distinct(player.workspace_member_id)
+        .ext(distinct_on(player.workspace_member_id))
         .order_by(player.workspace_member_id, models.FlowNode.completed_at.desc().nulls_last(), player.id.desc())
     )
 
@@ -148,7 +149,7 @@ def _leaderboard_rows(tournament_id: int) -> sa.Select:
             rows.c.field_size,
             sink,
         )
-        .distinct(rows.c.member)
+        .ext(distinct_on(rows.c.member))
         # A member's best place; between equal places, the larger field.
         .order_by(rows.c.member, rows.c.place, rows.c.field_size.desc())
     )

@@ -5,9 +5,9 @@ import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AccountSection } from "@/components/admin/access/AccountCard";
-import { LoadErrorNote } from "@/components/kit/EmptyNote";
+import { LoadErrorNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { formatDate, formatRelative } from "@/components/kit/format-time";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { accessQueryKeys } from "@/lib/access/query-keys";
 import { useFormatter } from "@/lib/datetime/client";

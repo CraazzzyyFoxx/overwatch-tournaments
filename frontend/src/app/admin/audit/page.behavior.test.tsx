@@ -17,6 +17,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AuditLogRead } from "@/types/admin.types";
+import { en as kitMessages } from "@craazzzyyfoxx/admin-kit/messages";
 import en from "@/i18n/messages/en.json";
 import AdminAuditPage from "./page";
 
@@ -35,6 +36,7 @@ const MESSAGES = {
   kit: en.kit,
   kitAudit: en.kitAudit,
   kitTable: en.kitTable,
+  ...kitMessages,
   adminMatches: { audit: en.adminMatches.audit }
 };
 

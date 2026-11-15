@@ -284,7 +284,8 @@ def test_converted_artifacts_serve_the_runtime_with_unchanged_outputs_and_roll_b
     tmp_path: Path,
 ) -> None:
     url = registry
-    template, ids = stats_parity_template
+    _, ids = stats_parity_template
+    template = workspace.template_url  # the derived template: it holds the algorithm rows the fixture registered
     bundle, new_root = _stage_in_process(workspace, exported, tmp_path)
     receipt_path = bundle / "receipt.json"
     original = _uris(url)

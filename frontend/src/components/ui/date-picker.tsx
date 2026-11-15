@@ -4,12 +4,12 @@ import * as React from "react";
 import { ChevronDownIcon, X } from "lucide-react";
 import { type DateTimeFormatOptions, useTranslations } from "next-intl";
 import { useFormatter } from "@/lib/datetime/client";
-import { Button, selectTriggerClass } from "@/components/ui/button";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { Button, selectTriggerClass } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Calendar } from "@/components/ui/calendar";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { TimeInput } from "@/components/ui/time-input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 
 /**
  * The slice of next-intl's formatter these triggers need. `useFormatter()` and

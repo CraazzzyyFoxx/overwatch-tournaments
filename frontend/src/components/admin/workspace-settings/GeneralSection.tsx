@@ -5,14 +5,14 @@ import { useTranslations } from "next-intl";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowUpRight } from "lucide-react";
 
-import { CommandGroup, CommandItem } from "@/components/ui/command";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MarkdownEditor } from "@/components/admin/MarkdownEditor";
 import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
-import { Combobox, ComboboxCheck, ComboboxMeta } from "@/components/ui/combobox";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { Combobox, ComboboxCheck, ComboboxMeta } from "@craazzzyyfoxx/admin-kit/ui/combobox";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid, invalidProps } from "@/components/kit/SettingRow";
 import {
   WorkspaceOwnerControl,
@@ -32,6 +32,7 @@ import { DisciplinesField } from "./DisciplinesField";
 import { LINK_HOSTS } from "./fields";
 import { WorkspaceSettingsFrame } from "./WorkspaceSettingsFrame";
 import { useWorkspaceSettingsForm } from "./useWorkspaceSettingsForm";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 const ACCEPTED_IMAGE_TYPES = "image/webp,image/png,image/jpeg,image/gif";
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
@@ -123,6 +124,7 @@ function TimezoneField({
  * is said once, in Ownership.
  */
 export function GeneralSection({ workspaceId }: Readonly<{ workspaceId: number | null }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminWorkspace.workspaceSettings.general");
   const settings = useWorkspaceSettingsForm(workspaceId, "general");
   const { isSuperuser } = usePermissions();
@@ -361,6 +363,7 @@ export function GeneralSection({ workspaceId }: Readonly<{ workspaceId: number |
           </SettingsGrid>
 
           <SaveBar
+            onDirtyChange={reportUnsaved}
             dirty={settings.dirty}
             summary={settings.summary}
             error={settings.error}

@@ -6,21 +6,21 @@ import { AlertTriangle, ChevronDown, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { gameFilterDefs } from "@/components/admin/game-filter";
-import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
-import { FilterBar } from "@/components/kit/FilterBar";
+import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { invalidProps, settingErrorId } from "@/components/kit/SettingRow";
-import { useFilters } from "@/components/kit/useFilters";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { triggerChevronClass } from "@/components/ui/chevron";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
+import { triggerChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ColorSwatch } from "@/components/ui/color-swatch";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { RowButton } from "@/components/ui/row-button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { RowButton } from "@craazzzyyfoxx/admin-kit/ui/row-button";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { GameMark } from "@/components/workspace/GameMark";
 import { GameScopeGate } from "@/components/workspace/GameScopeGate";
@@ -446,14 +446,17 @@ function SubRoleRow({
 
   return (
     <li className="relative flex items-center gap-3 px-4 py-2.5">
-      <SubRoleMark icon={effective(own.icon, parent.icon)} color={effective(own.color, parent.color)} />
-      <div className="min-w-0 flex-1">
-        <p className={cn("truncate text-sm font-medium", entry.is_active ? "text-foreground" : "text-muted-foreground")}>
-          {entry.label}
-        </p>
-        {entry.description ? (
-          <p className="truncate text-caption text-muted-foreground">{entry.description}</p>
-        ) : null}
+      {/* Positioned so the row button's hover fill paints beneath it; clicks pass through to the button. */}
+      <div className="pointer-events-none relative flex min-w-0 flex-1 items-center gap-3">
+        <SubRoleMark icon={effective(own.icon, parent.icon)} color={effective(own.color, parent.color)} />
+        <div className="min-w-0 flex-1">
+          <p className={cn("truncate text-sm font-medium", entry.is_active ? "text-foreground" : "text-muted-foreground")}>
+            {entry.label}
+          </p>
+          {entry.description ? (
+            <p className="truncate text-caption text-muted-foreground">{entry.description}</p>
+          ) : null}
+        </div>
       </div>
       {canEdit ? (
         // The whole row opens the editor; "Restore" comes after it and sits above its box.

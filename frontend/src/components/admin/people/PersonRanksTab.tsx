@@ -8,7 +8,7 @@ import { PersonRankCollection } from "@/components/admin/people/PersonRankCollec
 import { PersonRankMatrix } from "@/components/admin/people/PersonRankMatrix";
 import { SettingGroup } from "@/components/kit/SettingRow";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { GameScopeControl } from "@/components/workspace/GameScopeControl";
 import { useGameScope } from "@/hooks/useGameScope";
 import { cn } from "@/lib/utils";

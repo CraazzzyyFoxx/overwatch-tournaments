@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import TeamName from "@/components/TeamName";
-import { disclosureChevronClass } from "@/components/ui/chevron";
+import { disclosureChevronClass } from "@craazzzyyfoxx/admin-kit/ui/chevron";
 import Image from "@/components/ui/image";
 import { withReturnTo } from "@/lib/auth/return-to";
 import { encounterSeatScore } from "@/lib/encounter/detail";

@@ -239,15 +239,16 @@ class S3Client:
             raise ValueError("S3Client.public_url is not configured")
         return f"{self._public_url}/{key}"
 
-    async def generate_presigned_url(self, key: str, expires_in: int = 3600) -> str:
-        """Generate a presigned URL for private objects."""
+    async def generate_presigned_url(
+        self, key: str, expires_in: int = 3600, *, content_disposition: str | None = None
+    ) -> str:
+        """Generate a presigned URL for private objects; ``content_disposition`` overrides the response header."""
+        params: dict[str, Any] = {"Bucket": self.bucket_name, "Key": key}
+        if content_disposition is not None:
+            params["ResponseContentDisposition"] = content_disposition
         try:
             async with self._client() as client:
-                return await client.generate_presigned_url(
-                    "get_object",
-                    Params={"Bucket": self.bucket_name, "Key": key},
-                    ExpiresIn=expires_in,
-                )
+                return await client.generate_presigned_url("get_object", Params=params, ExpiresIn=expires_in)
         except ClientError:
             logger.exception(f"Error generating presigned URL for '{key}'")
             raise

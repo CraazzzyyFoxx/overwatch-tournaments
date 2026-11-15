@@ -4,15 +4,16 @@ import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { InspectorField } from "@/components/kit/InspectorField";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { RegistrationNotesPanel } from "@/components/registration/RegistrationNotesPanel";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from "@/components/ui/select";
+} from "@craazzzyyfoxx/admin-kit/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { REGISTRATION_TEAM_ERROR_CODES } from "@/lib/registration/team-errors";
 import type { RegistrationTeam } from "@/types/registration-team.types";
@@ -39,6 +40,7 @@ export function TeamInspectorPanel({
   tournamentId,
   workspaceId,
   canManageTeams,
+  canModerateNotes,
   disabled,
   inlineError,
   ontology,
@@ -50,6 +52,8 @@ export function TeamInspectorPanel({
   /** The tournament's own game's scoped ontology: slots are named and drawn in it. */
   ontology: RoleOntology | null;
   canManageTeams: boolean;
+  /** `team.delete`: remove other organizers' notes on the team. */
+  canModerateNotes: boolean;
   /** A read or a write is in flight; nothing on the panel may be typed into. */
   disabled: boolean;
   inlineError: ReactNode;
@@ -157,6 +161,13 @@ export function TeamInspectorPanel({
           })}
         </ul>
       )}
+      <RegistrationNotesPanel
+        key={team.id}
+        tournamentId={tournamentId}
+        target={{ teamId: team.id }}
+        canWrite={canManageTeams}
+        canModerate={canModerateNotes}
+      />
       <TeamInviteHistory
         tournamentId={tournamentId}
         workspaceId={workspaceId}

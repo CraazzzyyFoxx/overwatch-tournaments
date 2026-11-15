@@ -870,8 +870,10 @@ def test_overwatch_ingest_awards_once_and_the_other_game_is_never_evaluated_with
         _publish_achievement_event(live, event)
     runs = _finished_runs(live, ow.tournament_id, finished + 2)
     wait_until(
-        lambda: (q := live.stack.queue("achievement_evaluate") or {}).get("messages", 1) == 0
-        and q.get("messages_unacknowledged", 1) == 0,
+        lambda: (
+            (q := live.stack.queue("achievement_evaluate") or {}).get("messages", 1) == 0
+            and q.get("messages_unacknowledged", 1) == 0
+        ),
         "the achievement queue to go idle",
         timeout=60,
     )

@@ -301,7 +301,7 @@ describe("DisciplineWidget", () => {
     const alert = view.querySelector("[role=alert]");
     expect(alert?.textContent).toContain(en.common.discipline.widgetLoadFailed);
     expect(view.textContent).not.toContain("generic");
-    expect(view.querySelector("[data-slot]")).toBeNull();
+    expect(view.querySelector("[data-slot]:not([data-slot='button'])")).toBeNull();
 
     await act(async () => alert?.querySelector("button")?.click());
     await settle();

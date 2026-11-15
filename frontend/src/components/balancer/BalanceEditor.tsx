@@ -17,7 +17,7 @@ import { Armchair } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
-import { TONE_CLASS } from "@/components/ui/tone";
+import { TONE_CLASS } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import { cn } from "@/lib/utils";
 import workspaceService from "@/services/workspace.service";
 import { memberDisplayName } from "@/lib/workspace/member";

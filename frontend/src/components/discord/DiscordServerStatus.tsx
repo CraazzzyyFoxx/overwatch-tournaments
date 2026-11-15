@@ -6,8 +6,8 @@ import { useTranslations } from "next-intl";
 import { useDiscordGuildInfo } from "@/hooks/useDiscordEntities";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { cn } from "@/lib/utils";
 
 export function DiscordServerStatus({

@@ -178,9 +178,11 @@ async def run_performance_for_tournament(
     source_grid = await get_division_grid(session, workspace_id, tournament_id=tournament_id)
     player_ranks = feature_frame.groupby("player_id", dropna=False)["rank"].first().to_dict()
     per_player["division"] = per_player["player_id"].map(
-        lambda player_id: None
-        if pd.isna(rank := player_ranks.get(player_id))
-        else canonical_division_number(source_grid, int(rank), DEFAULT_GRID)
+        lambda player_id: (
+            None
+            if pd.isna(rank := player_ranks.get(player_id))
+            else canonical_division_number(source_grid, int(rank), DEFAULT_GRID)
+        )
     )
     per_player = exports.attach_local_performance(per_player)
     # Small (tournament, role) cohorts get a smooth normal-CDF impact score

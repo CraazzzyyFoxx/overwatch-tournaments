@@ -5,8 +5,8 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { Button } from "@/components/ui/button";
-import { SearchField } from "@/components/ui/search-field";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { SearchField } from "@craazzzyyfoxx/admin-kit/ui/search-field";
 import {
   Table,
   TableBody,
@@ -14,9 +14,9 @@ import {
   TableHead,
   TableHeader,
   TableRow
-} from "@/components/ui/table";
+} from "@craazzzyyfoxx/admin-kit/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@craazzzyyfoxx/admin-kit/ui/tooltip";
 import { useRoleCodeName } from "@/hooks/useRoleName";
 import {
   describeAggregate,

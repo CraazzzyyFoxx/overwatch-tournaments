@@ -18,7 +18,7 @@ import { FormStreak, ProfileStat, type FormResult } from "@/components/profile/a
 import ProfileToolbar from "@/app/(site)/users/components/header/ProfileToolbar";
 import userService from "@/services/user.service";
 import { HeroFrame } from "@/components/site/PageHero";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import type { StatsScope } from "@/lib/site/stats-scope";
 import type { WorkspaceAxis } from "@/lib/site/discipline-scope";
 import { encounterPerspective } from "@/app/(site)/users/components/shared/encounter-perspective";

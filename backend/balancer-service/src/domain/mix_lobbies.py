@@ -39,7 +39,7 @@ def seated_teams(balance_result_json: Mapping[str, Any] | None, variant_index: i
             for uuid in bucket if isinstance(bucket, list) else ():
                 try:
                     seats.append(int(uuid))
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     continue
         out.append(tuple(seats))
     return tuple(out)
@@ -60,7 +60,7 @@ def seated_member_ids(balance_result_json: Mapping[str, Any] | None, variant_ind
 def _member_id(uuid: Any) -> int | None:
     try:
         return int(uuid)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 

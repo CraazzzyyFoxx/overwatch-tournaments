@@ -98,7 +98,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any, user: Any) -> None:
             try:
                 session_uuid = UUID(str(raw_session_id))
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 raise HTTPException(status_code=400, detail="Invalid session id")
             await auth.revoke_session(
                 session, user, session_uuid, ip_address=data.get("ip_address"), user_agent=data.get("user_agent")

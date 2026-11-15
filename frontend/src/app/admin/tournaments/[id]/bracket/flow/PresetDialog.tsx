@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { DEFAULT_PRESET_CHOICE, PresetPicker, presetChoiceValid } from "@/components/admin/tournaments/PresetPicker";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import type { PresetId } from "@/lib/flow/presets";
 
 export type PresetParams = { days: number; best: number };

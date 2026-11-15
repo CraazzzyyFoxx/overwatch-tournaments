@@ -7,7 +7,7 @@ import { DayPicker, getDefaultClassNames, type DayButton } from "react-day-picke
 import { enUS, ru } from "react-day-picker/locale";
 
 import { cn } from "@/lib/utils";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@craazzzyyfoxx/admin-kit/ui/button";
 
 // Caption, weekday names, aria labels and week start come from the day
 // picker's own (date-fns) locale, not from `Intl` — so it needs the UI's too.

@@ -183,7 +183,7 @@ async def document_teams(s3, records: Sequence[models.IngestJob]) -> dict[int, l
         async with gate:
             try:
                 doc, _ = await load_document(s3, record.document_ref)
-            except (LookupError, ValueError):
+            except LookupError, ValueError:
                 return record.id, []
         handles: dict[str, list[str]] = {team.key: [] for team in doc.teams}
         for person in doc.participants:

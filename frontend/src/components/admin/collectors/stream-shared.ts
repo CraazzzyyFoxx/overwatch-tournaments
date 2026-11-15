@@ -1,4 +1,4 @@
-import type { Tone } from "@/components/ui/tone";
+import type { Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
 import type { StreamPollHealth, StreamPollStatus } from "@/types/admin.types";
 
 /**

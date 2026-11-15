@@ -5,18 +5,18 @@ import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Lock } from "lucide-react";
 
-import { DataTable } from "@/components/data-table";
+import { DataTable } from "@craazzzyyfoxx/admin-kit/data-table";
 import { StandingsArrangeBoard } from "@/components/admin/StandingsArrangeBoard";
-import { FilterBar } from "@/components/kit/FilterBar";
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { useFilters } from "@/components/kit/useFilters";
+import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { useFilters } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import {
   TOURNAMENT_QUERY_PARAM,
   parseTournamentQueryParam
 } from "@/components/admin/tournament-filter";
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { getTournamentWorkspaceQueryKeys, invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -27,7 +27,7 @@ import adminService from "@/services/admin.service";
 import tournamentService from "@/services/tournament.service";
 import type { StandingUpdateInput } from "@/types/admin.types";
 import type { Standings } from "@/types/tournament.types";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 

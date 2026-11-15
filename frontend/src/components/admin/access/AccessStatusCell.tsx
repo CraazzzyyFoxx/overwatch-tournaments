@@ -2,8 +2,8 @@
 
 import { useTranslations } from "next-intl";
 
-import { TONE_TEXT, type Tone } from "@/components/ui/tone";
-import { StatusDot } from "@/components/ui/status-dot";
+import { TONE_TEXT, type Tone } from "@craazzzyyfoxx/admin-kit/ui/tone";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { cn } from "@/lib/utils";
 
 type AccessStatus = "active" | "expired" | "revoked";

@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ArrowLeft, Clock, ShieldAlert } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card, CardContent } from "@craazzzyyfoxx/admin-kit/ui/card";
 import type { PickBanUnavailableIcon } from "@/components/pick-ban/pick-ban-model";
 
 /** One icon per cause, keyed by what `PICK_BAN_UNAVAILABLE_COPY` names. */

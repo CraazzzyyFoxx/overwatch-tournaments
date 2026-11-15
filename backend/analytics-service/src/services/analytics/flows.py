@@ -135,9 +135,11 @@ class AnalyticsFlowsService:
         # missing position is NaN in the frame, and a NaN signal would poison the player's Linear history and the
         # frame-wide noise estimate of its sd.
         df["placement_score"] = df.apply(
-            lambda row: 0.0
-            if pd.isna(row["overall_position"]) or pd.isna(row["team_count"])
-            else (1.0 - 2.0 * (row["overall_position"] - 1) / max((row["team_count"] - 1), 1)),
+            lambda row: (
+                0.0
+                if pd.isna(row["overall_position"]) or pd.isna(row["team_count"])
+                else (1.0 - 2.0 * (row["overall_position"] - 1) / max((row["team_count"] - 1), 1))
+            ),
             axis=1,
         )
 

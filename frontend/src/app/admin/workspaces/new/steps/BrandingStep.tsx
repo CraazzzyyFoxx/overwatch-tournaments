@@ -7,8 +7,8 @@ import {
   BrandPalettePreview,
   previewPalette
 } from "@/components/admin/workspace-settings/BrandPalettePreview";
-import { eyebrowClass } from "@/components/ui/eyebrow";
-import { Label } from "@/components/ui/label";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { Switch } from "@/components/ui/switch";
 
 import { BRAND_SEED_KEYS, type BrandingForm } from "../wizard-model";

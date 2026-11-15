@@ -103,6 +103,17 @@ export function safeRedirectTarget(redirect: string, origin: string): URL {
   return new URL("/", origin);
 }
 
+// Tells the landing page (LoginModalTrigger) what a successful link did, so the
+// user always gets a toast: "linked" or "already_linked" (a re-link of their own
+// provider account, which refreshes it and re-verifies the social identity).
+export function withLinkOutcome(target: URL, result: { already_linked?: boolean; provider?: string }): URL {
+  target.searchParams.set("auth_link", result.already_linked ? "already_linked" : "linked");
+  if (result.provider) {
+    target.searchParams.set("auth_link_provider", result.provider);
+  }
+  return target;
+}
+
 // AUTHORITATIVE gate for the ticket-handoff branch (see `handleOAuthCallback`
 // below). `isAllowedOrigin` is a cheap, purely syntactic pre-filter — it
 // accepts ANY well-formed http(s) FQDN that merely *looks* like a tenant
@@ -323,7 +334,9 @@ export async function handleOAuthCallback(request: Request): Promise<NextRespons
         } catch {
           // cache invalidation is best-effort
         }
-        const response = NextResponse.redirect(safeRedirectTarget(linkResult.redirect, origin));
+        const response = NextResponse.redirect(
+          withLinkOutcome(safeRedirectTarget(linkResult.redirect, origin), { ...linkResult, provider })
+        );
         clearCsrfCookie(response);
         return response;
       } catch (err) {

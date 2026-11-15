@@ -4,9 +4,9 @@ import { CalendarClock, ListOrdered } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState, type ReactNode } from "react";
 
-import { Combobox } from "@/components/ui/combobox";
-import { CommandGroup, CommandItem } from "@/components/ui/command";
-import { FilterChip } from "@/components/ui/filter-chip";
+import { Combobox } from "@craazzzyyfoxx/admin-kit/ui/combobox";
+import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
+import { FilterChip } from "@craazzzyyfoxx/admin-kit/ui/filter-chip";
 
 import { SectionToolbar } from "../../_components/SectionToolbar";
 import { ViewSegment } from "../../_components/ViewSegment";

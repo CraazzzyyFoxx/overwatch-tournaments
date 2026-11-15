@@ -3,8 +3,8 @@ import { getTranslations } from "next-intl/server";
 import { CalendarSearch, Medal, Sparkles, Swords, Trophy, Users } from "lucide-react";
 
 import { HeroFrame } from "@/components/site/PageHero";
-import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { canonicalDisplay } from "@/lib/player";
 
 /**

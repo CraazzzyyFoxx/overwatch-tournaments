@@ -6,10 +6,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Eye, Swords } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Card, CardContent } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { getApiErrorMessage } from "@/lib/api/error";
 import { duelSeats } from "@/lib/encounter/seats";
 import { notify } from "@/lib/notify";
@@ -19,7 +19,7 @@ import type { ScrimRoom } from "@/types/scrim.types";
 
 import { useEntityWorkspace } from "@/hooks/useEntityWorkspace";
 import { PregameRoom } from "@/app/(site)/tournaments/[slug]/pregame/[encounterId]/_components/PregameRoom";
-import { Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { scrimQueryKeys } from "@/lib/scrims/query-keys";
 
 /** Where a scrim room hands the viewer back when it is done with them. */

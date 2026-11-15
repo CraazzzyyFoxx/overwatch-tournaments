@@ -3,13 +3,14 @@
 import { useTranslations } from "next-intl";
 
 import { Switch } from "@/components/ui/switch";
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import type { Tournament } from "@/types/tournament.types";
 import { TournamentPreviewAllowlist } from "../../components/TournamentPreviewAllowlist";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
-import { EmptyNote } from "@/components/kit/EmptyNote";
+import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 export default function PreviewSettingsPage() {
   return (
@@ -42,6 +43,7 @@ function PreviewForm({
   workspaceId: number;
   disabled: boolean;
 }>) {
+  const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminTournament.previewExtra");
   const { form, patch, dirty, summary, saving, save, discard, error } = useTournamentSettingsForm(
     tournament,
@@ -74,7 +76,7 @@ function PreviewForm({
       </SettingGroup>
       </SettingsGrid>
 
-      <SaveBar dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
+      <SaveBar onDirtyChange={reportUnsaved} dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />
     </>
   );
 }

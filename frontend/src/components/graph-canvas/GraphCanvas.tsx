@@ -34,7 +34,7 @@ import "@xyflow/react/dist/style.css";
 import { Maximize2, Minimize2, Network } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@craazzzyyfoxx/admin-kit/ui/dialog";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { cn } from "@/lib/utils";
 
@@ -176,7 +176,7 @@ function FullscreenDialog({
       }}
     >
       <DialogContent
-        closeButton={false}
+        showCloseButton={false}
         aria-describedby={undefined}
         onOpenAutoFocus={toToggle}
         onCloseAutoFocus={toToggle}

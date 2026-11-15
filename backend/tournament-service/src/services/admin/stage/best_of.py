@@ -45,7 +45,7 @@ class StageBestOfMixin(StageServiceBase):
             .join(models.BracketEncounter, models.BracketEncounter.encounter_id == models.Encounter.id)
             .where(models.BracketEncounter.stage_id == stage_id)
         )
-        rows = result.tuples().all()
+        rows = result.all()
         max_round = max((round_number for _encounter, round_number in rows), default=0)
 
         targets: dict[int, int] = {}

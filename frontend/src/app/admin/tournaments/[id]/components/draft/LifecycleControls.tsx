@@ -4,8 +4,8 @@ import { useId, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
-import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
-import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { notify } from "@/lib/notify";
 import { useFlowErrorNotifier } from "@/hooks/useFlowErrorNotifier";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";

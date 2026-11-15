@@ -38,7 +38,7 @@ async def _one(http: ResilientHttpClient, gate: asyncio.Semaphore, account_id: s
             last_upload_at=datetime.fromisoformat(uploaded) if uploaded else None,
             window_days=int(body.get("window_days") or 14),
         )
-    except (httpx.HTTPError, CircuitBreakerOpen, ValueError, TypeError, KeyError, AttributeError):
+    except httpx.HTTPError, CircuitBreakerOpen, ValueError, TypeError, KeyError, AttributeError:
         return None
 
 

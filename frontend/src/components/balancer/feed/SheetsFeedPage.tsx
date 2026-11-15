@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { SaveBar } from "@/components/kit/SaveBar";
+import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { notify } from "@/lib/notify";
@@ -16,7 +16,7 @@ import type {
   AdminGoogleSheetFeedUpsertInput,
   MappingPreviewResponseV2
 } from "@/types/balancer-admin.types";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 
 import { ColumnMappingTab } from "./_components/ColumnMappingTab";
 import { PreviewTab } from "./_components/PreviewTab";
@@ -32,6 +32,7 @@ import {
 } from "./_components/mappingConfig";
 import { useMappingState } from "./_components/useMappingState";
 import { balancerQueryKeys } from "@/lib/balancer/query-keys";
+import { useUnsavedReporter } from "@/components/kit/SettingsContinuation";
 
 const PREVIEW_SAMPLE_ROWS = 5;
 
@@ -42,6 +43,7 @@ export default function SheetsFeedPage({
   tournamentId,
   registrationNodeId
 }: Readonly<{ tournamentId: number | null; registrationNodeId: number | null }>) {
+  const reportUnsaved = useUnsavedReporter();
   const queryClient = useQueryClient();
   const t = useTranslations("sheetsFeed");
 
@@ -383,6 +385,7 @@ export default function SheetsFeedPage({
           becomes dirty the moment a URL is typed, which is also the first
           moment "Create feed" could succeed. */}
       <SaveBar
+        onDirtyChange={reportUnsaved}
         dirty={hasChanges}
         saving={saveMutation.isPending}
         primaryLabel={feedExists ? t("saveBar.saveChanges") : t("saveBar.createFeed")}

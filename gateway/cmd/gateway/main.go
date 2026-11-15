@@ -312,6 +312,7 @@ func run() error {
 	mux.HandleFunc("POST /api/v1/admin/teams/{team_id}/image", tournamentBinary.TeamImageUpload)
 	mux.HandleFunc("POST /api/v1/registration-teams/{team_id}/image", tournamentBinary.RegistrationTeamImageUpload)
 	mux.HandleFunc("POST /api/v1/admin/tournaments/{tournament_id}/images/{slot}", tournamentBinary.TournamentImageUpload)
+	mux.HandleFunc("POST /api/v1/admin/balancer/tournaments/{tournament_id}/registration-notes/{note_id}/attachments", tournamentBinary.RegistrationNoteAttachmentUpload)
 	// analytics-service: typed RPC reads + job-control.
 	analyticsEdge := edge.NewRaw(rpcClient, logger, resolver.Identity)
 	analyticsEdge.Register(mux, analytics.ReadRoutes)

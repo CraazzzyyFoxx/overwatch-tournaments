@@ -3,10 +3,10 @@
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
+import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
+import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import type { ManageableDiscordGuild } from "@/types/workspace.types";
 import { GuildMark } from "./GuildMark";
 

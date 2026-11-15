@@ -23,7 +23,7 @@ vi.mock("@/lib/notify", () => ({ notify: { success: vi.fn(), warning: vi.fn() } 
 vi.mock("@/components/balancer/workspace-helpers", () => ({
   buildVariantFromSavedBalance: () => ({ id: "saved", source: "saved" })
 }));
-vi.mock("@/components/ui/dialog", () => {
+vi.mock("@craazzzyyfoxx/admin-kit/ui/dialog", () => {
   const Part = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
   return { Dialog: Part, DialogContent: Part, DialogDescription: Part, DialogFooter: Part, DialogHeader: Part, DialogTitle: Part };
 });

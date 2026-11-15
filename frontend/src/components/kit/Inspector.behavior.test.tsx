@@ -200,4 +200,24 @@ describe("Inspector", () => {
     expect(labels).toContain("Next row");
     expect(labels).toContain("Close inspector");
   });
+
+  it("resizes from its left edge by keyboard within bounds, remembers the width, and resets on double-click", async () => {
+    localStorage.removeItem("admin-inspector-width");
+    await render();
+    const panel = () => document.querySelector<HTMLElement>('[data-inspector-mode="panel"]')!;
+    const handle = document.querySelector<HTMLElement>('[role="separator"][aria-label="Resize inspector"]')!;
+
+    expect(panel().style.width).toBe("380px");
+    await keyDown("ArrowLeft", handle);
+    expect(panel().style.width).toBe("396px");
+    expect(localStorage.getItem("admin-inspector-width")).toBe("396");
+
+    for (let step = 0; step < 40; step += 1) await keyDown("ArrowLeft", handle);
+    expect(handle.getAttribute("aria-valuenow")).toBe("720");
+
+    await act(async () => {
+      handle.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    });
+    expect(panel().style.width).toBe("380px");
+  });
 });

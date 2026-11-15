@@ -4,9 +4,9 @@ import React, { useState } from "react";
 import { CircleAlert, CircleCheck, ScrollText, FileDown, FileX } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Eyebrow } from "@/components/ui/eyebrow";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import type { RawSourceStatus } from "@/types/encounter.types";
 

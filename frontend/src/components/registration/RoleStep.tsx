@@ -3,8 +3,8 @@
 import { useTranslations } from "next-intl";
 
 import FlexIcon from "@/components/icons/FlexIcon";
-import { Button } from "@/components/ui/button";
-import { Eyebrow, eyebrowClass } from "@/components/ui/eyebrow";
+import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useRoleName } from "@/hooks/useRoleName";
 import { roleAccent } from "@/lib/registration/role-accent";

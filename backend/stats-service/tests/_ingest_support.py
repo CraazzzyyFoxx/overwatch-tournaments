@@ -27,7 +27,7 @@ from shared import models
 from shared.core import enums
 from shared.rpc.identity import rehydrate_user
 from shared.services.ontology import project_disciplines
-from shared.testing.stats_parity import legacy_database, upgrade_database
+from shared.testing.stats_parity import cached_template, legacy_database, upgrade_database
 
 STATS = Path(__file__).resolve().parents[1]
 IDENTITY = STATS.parent / "identity-service"
@@ -192,13 +192,26 @@ def _seed_world(url: str) -> SimpleNamespace:
     return SimpleNamespace(world=world, ids=asyncio.run(seed()))
 
 
+def _build_ingest_template(url: str) -> dict:
+    migrated = upgrade_database(url, "head")
+    if migrated.returncode:
+        raise RuntimeError(f"head migration failed:\n{migrated.stdout}\n{migrated.stderr}")
+    seeded = _seed_world(url)
+    return {"world": seeded.world, "ids": seeded.ids}
+
+
 @pytest.fixture(scope="module")
-def ingest_template() -> Iterator[tuple[str, SimpleNamespace]]:
-    with legacy_database() as url:
-        migrated = upgrade_database(url, "head")
-        if migrated.returncode:
-            raise RuntimeError(f"head migration failed:\n{migrated.stdout}\n{migrated.stderr}")
-        yield url, _seed_world(url)
+def ingest_template() -> tuple[str, SimpleNamespace]:
+    """The persistent, read-only ingest template; the seed reads shared models/ontology and the identity world."""
+    url, payload = cached_template(
+        "ingest",
+        _build_ingest_template,
+        Path(__file__),
+        Path(__file__).with_name("_identity_world.py"),
+        STATS.parent / "shared",
+        IDENTITY / "src",
+    )
+    return url, SimpleNamespace(**payload)
 
 
 @asynccontextmanager

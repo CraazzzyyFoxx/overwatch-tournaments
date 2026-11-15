@@ -2,7 +2,7 @@
 
 import { useId, type KeyboardEventHandler, type ReactNode } from "react";
 
-import { Input } from "@/components/ui/input";
+import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 
