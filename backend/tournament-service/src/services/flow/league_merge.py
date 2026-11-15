@@ -238,6 +238,7 @@ TOURNAMENT_FKS: dict[str, Rule] = {
     "encounter.team.tournament_id": _rule("move"),
     "registration.form.tournament_id": _rule("special"),
     "registration.google_sheet_feed.tournament_id": _rule("keep_latest"),
+    "registration.note.tournament_id": _rule("move"),
     "registration.registration.tournament_id": _rule("special"),
     "registration.team.tournament_id": _rule("special"),
     "roster.team_format.tournament_id": _rule("keep_latest"),
@@ -276,6 +277,7 @@ REGISTRATION_FKS: dict[str, Literal["repoint", "owned"]] = {
     "draft.player.registration_id": "repoint",
     "registration.google_sheet_binding.registration_id": "owned",
     "registration.identity.registration_id": "owned",
+    "registration.note.registration_id": "repoint",
     "registration.registration_entry.registration_id": "repoint",
     "registration.role.registration_id": "owned",
     "registration.team.captain_registration_id": "repoint",
@@ -435,6 +437,8 @@ async def _collapse_registered_teams(session: AsyncSession, days: Sequence[int],
     rows = await _active_rows(session, "registration.team", days, "name_normalized")
     losers = _losers(rows, days, lambda r: r.name_normalized)
     await _repoint(session, "registration.registration", "registration_team_id", losers)
+    # Organizer notes are history: a dropped team's thread joins the kept team's instead of cascading away.
+    await _repoint(session, "registration.note", "registration_team_id", losers)
     await _delete_rows(session, "registration.team", [d for d, _ in losers], log, ("name_normalized",))
 
 
