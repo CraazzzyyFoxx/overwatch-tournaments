@@ -187,8 +187,15 @@ export function Inspector({
     );
   }
 
+  // `contain: size` + `self-stretch`: the panel adds no height to the grid row,
+  // so the table alone sets it and the panel fills it, scrolling inside. Sized
+  // by its own content it outgrew the viewport-fitted table and the page grew a
+  // second scrollbar. `min-h-80` keeps a one-row table from crushing it.
   return (
-    <Card asChild className="sticky top-16 flex max-h-[calc(100dvh-6rem)] flex-col overflow-hidden">
+    <Card
+      asChild
+      className="sticky top-16 flex min-h-80 max-h-[calc(100dvh-6rem)] flex-col self-stretch overflow-hidden [contain:size]"
+    >
       <aside aria-label={t("rowInspector")} data-inspector-mode="panel">
         {renderHeader(true)}
         {body}
