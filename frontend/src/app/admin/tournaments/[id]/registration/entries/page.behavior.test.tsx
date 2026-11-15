@@ -406,7 +406,8 @@ describe("Registration entries", () => {
     const withInspector = await mount("?id=1");
     const inspector = withInspector.querySelector("aside[aria-label='Row inspector']");
     expect(inspector?.textContent).toContain("Player1#1234");
-    expect(inspector?.textContent).toContain("Admission");
+    // The admission verdict sits in the header now; its section shows only blockers.
+    expect(inspector?.textContent).toContain("Admitted");
   });
 
   it("still reads an answer the form no longer asks, and says it is from an older version", async () => {
@@ -455,7 +456,70 @@ describe("Registration entries", () => {
     expect(inspector?.textContent).toContain("vk.com/player");
     expect(inspector?.textContent).toContain("why_this_tournament");
     expect(inspector?.textContent).toContain("a question we dropped");
-    expect(inspector?.textContent).toContain("no longer asked");
+    expect(inspector?.textContent).toContain("No longer asked");
     expect(inspector?.textContent).toContain("older version of this form");
+  });
+
+  it("groups the inspector's answers: ranks join the roles table, yes/no become chips, free text a quote", async () => {
+    const field = (key: string, kind: string, label: string) => ({
+      key,
+      kind,
+      label,
+      required: false,
+      visibility: "public",
+      params: {}
+    });
+    getPublicForm.mockResolvedValue({
+      id: 9,
+      tournament_id: 80,
+      workspace_id: 1,
+      form_schema: {
+        schema_version: 1,
+        sections: [
+          {
+            key: "details",
+            fields: [
+              field("peak", "role_ranks", "Peak this season"),
+              field("sub", "checkbox", "Sub"),
+              field("about", "textarea", "About you"),
+              field("matches", "number", "Matches")
+            ]
+          }
+        ]
+      },
+      version_id: 4,
+      version_number: 2
+    });
+    listRegistrations.mockResolvedValue([
+      {
+        ...registration(1, "admitted"),
+        roles: [
+          {
+            role: { dimension: "role", role: "tank" },
+            rank_value: 3500,
+            ow_rank_value: null,
+            rank_source: "none",
+            priority: 0,
+            is_primary: true,
+            is_declared_active: true
+          }
+        ],
+        answers: { peak: { tank: 3600, support: 3000 }, sub: true, about: "just a sub", matches: 79 }
+      }
+    ]);
+
+    const withInspector = await mount("?id=1");
+    const inspector = withInspector.querySelector("aside[aria-label='Row inspector']")!;
+    const rowOf = (role: string) =>
+      [...inspector.querySelectorAll("tbody tr")].find((row) => row.textContent?.includes(role));
+
+    // The rank answer is a column, with a row for the role ranked but not declared.
+    expect([...inspector.querySelectorAll("th")].map((th) => th.textContent)).toContain("Peak this season");
+    expect(rowOf("tank")?.textContent).toContain("3600");
+    expect(rowOf("support")?.textContent).toContain("3000");
+    expect([...inspector.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual(["Matches"]);
+    expect(inspector.querySelector("dd")?.textContent).toBe("79");
+    expect([...inspector.querySelectorAll("li")].some((li) => li.textContent === "SubYes")).toBe(true);
+    expect(inspector.querySelector("blockquote")?.textContent).toBe("just a sub");
   });
 });

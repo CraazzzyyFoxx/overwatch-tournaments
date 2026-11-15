@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Paperclip, Pencil, Trash2, X } from "lucide-react";
+import { FileText, Paperclip, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Markdown } from "@/components/Markdown";
@@ -62,6 +62,9 @@ export function RegistrationNotesPanel({
   const currentUserId = useAuthProfile().user?.id ?? null;
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  // The composer (textarea, files, hint) stays folded behind one button until
+  // asked for: in a panel no taller than its table it otherwise outweighs the thread.
+  const [composing, setComposing] = useState(false);
   const [editing, setEditing] = useState<{ id: number; body: string } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<RegistrationNote | null>(null);
 
@@ -87,6 +90,7 @@ export function RegistrationNotesPanel({
     onSuccess: () => {
       setDraft("");
       setFiles([]);
+      setComposing(false);
     },
     onSettled: refresh
   });
@@ -149,7 +153,18 @@ export function RegistrationNotesPanel({
 
   return (
     <section className="space-y-3">
-      <h3 className={eyebrowClass("muted")}>{t("title")}</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className={eyebrowClass("muted")}>
+          {t("title")}
+          {notesQuery.data ? ` · ${notes.length}` : null}
+        </h3>
+        {canWrite && !composing ? (
+          <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-2" onClick={() => setComposing(true)}>
+            <Plus className="size-3.5" aria-hidden />
+            {t("newNote")}
+          </Button>
+        ) : null}
+      </div>
 
       {notesQuery.isLoading ? (
         <Skeleton className="h-16 w-full rounded-md" />
@@ -288,12 +303,13 @@ export function RegistrationNotesPanel({
         </ul>
       )}
 
-      {canWrite ? (
+      {canWrite && composing ? (
         <div className="space-y-2">
           <Textarea
             aria-label={t("newNote")}
             placeholder={t("placeholder")}
             rows={3}
+            autoFocus
             value={draft}
             maxLength={20000}
             disabled={createMutation.isPending}
@@ -340,8 +356,21 @@ export function RegistrationNotesPanel({
             </FileButton>
             <Button
               type="button"
+              variant="ghost"
               size="sm"
               className="ml-auto"
+              disabled={createMutation.isPending}
+              onClick={() => {
+                setDraft("");
+                setFiles([]);
+                setComposing(false);
+              }}
+            >
+              {t("cancel")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
               disabled={createMutation.isPending || draft.trim() === ""}
               onClick={() => createMutation.mutate()}
             >

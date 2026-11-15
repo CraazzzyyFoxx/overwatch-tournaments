@@ -120,6 +120,10 @@ describe("RegistrationNotesPanel", () => {
     uploadAttachment.mockResolvedValue(note(3, 1));
     await render({ canWrite: true, canModerate: false });
 
+    const button = (text: string) => [...container.querySelectorAll("button")].find((b) => b.textContent === text)!;
+    expect(container.querySelector("textarea")).toBeNull();
+    await act(async () => button("New note").click());
+
     const composerInput = container.querySelectorAll<HTMLInputElement>('input[type="file"][multiple]')[0];
     const ok = new File(["x"], "proof.png", { type: "image/png" });
     const huge = new File(["x"], "huge.zip");
@@ -133,8 +137,7 @@ describe("RegistrationNotesPanel", () => {
       setter.call(textarea, "  Called the captain  ");
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    const addButton = [...container.querySelectorAll("button")].find((b) => b.textContent === "Add note")!;
-    await act(async () => addButton.click());
+    await act(async () => button("Add note").click());
     await act(async () => {
       await flush();
     });
@@ -142,5 +145,6 @@ describe("RegistrationNotesPanel", () => {
     expect(create).toHaveBeenCalledWith(9, { registrationId: 5 }, "Called the captain");
     expect(uploadAttachment).toHaveBeenCalledTimes(1);
     expect(uploadAttachment).toHaveBeenCalledWith(9, 3, ok);
+    expect(container.querySelector("textarea")).toBeNull();
   });
 });

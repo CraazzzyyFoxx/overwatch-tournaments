@@ -10,8 +10,21 @@ import { buildBalancerRegistrationColumns } from "@/components/balancer/registra
 import RegistrationBulkActions from "@/components/balancer/registrations/_components/RegistrationBulkActions";
 import RegistrationFormDialogs from "@/components/balancer/registrations/_components/RegistrationFormDialogs";
 import RegistrationInspectorBody from "@/components/balancer/registrations/_components/RegistrationInspectorBody";
-import { buildRegistrationRowActions } from "@/components/balancer/registrations/_components/registrationRowActions";
-import { builtinStatusName } from "@/components/balancer/registrations/_components/registrationsTranslator";
+import {
+  buildRegistrationRowActions,
+  registrationPrimaryActions
+} from "@/components/balancer/registrations/_components/registrationRowActions";
+import {
+  admissionDecisionLabel,
+  builtinStatusName,
+  localizedStatusMeta
+} from "@/components/balancer/registrations/_components/registrationsTranslator";
+import {
+  AdmissionStatusBadge,
+  BalancerStatusBadge,
+  RegistrationStatusBadge,
+  SubscriptionStatusBadge
+} from "@/components/status/RegistrationBadges";
 import {
   type RegistrationGroupingMode,
   groupRegistrations,
@@ -44,7 +57,7 @@ import adminService from "@/services/admin.service";
 import registrationNoteService from "@/services/registration-note.service";
 import { notesCountColumn } from "@/components/registration/notesCountColumn";
 
-import { ADMISSION_LABELS, adminRoleForm } from "./registrationsTable.model";
+import { adminRoleForm } from "./registrationsTable.model";
 
 export default function RegistrationsTable({
   tournamentId,
@@ -310,6 +323,13 @@ export default function RegistrationsTable({
   const inspected = openId
     ? (registrations.find((registration) => String(registration.id) === openId) ?? null)
     : null;
+  const inspectorActions = inspected
+    ? registrationPrimaryActions(
+        inspected,
+        { approve, reject, setBalancerInclusion, setCheckIn },
+        tRegistrations
+      ).filter((action) => !action.hidden)
+    : [];
 
   const commands: TableCommand[] = [
     {
@@ -418,8 +438,34 @@ export default function RegistrationsTable({
           t("registrationsAdmin.table.registration")
         }
         subtitle={
-          inspected
-            ? `${inspected.status} · ${ADMISSION_LABELS[inspected.admission.decision]}`
+          inspected ? (
+            <span className="mt-1 flex flex-wrap items-center gap-1.5">
+              <RegistrationStatusBadge
+                status={inspected.status}
+                meta={localizedStatusMeta(inspected.status_meta, tRegistrations)}
+              />
+              <BalancerStatusBadge
+                status={inspected.balancer_status}
+                meta={localizedStatusMeta(inspected.balancer_status_meta, tRegistrations)}
+              />
+              <span className="inline-flex items-center gap-0.5">
+                <AdmissionStatusBadge admission={inspected.admission} />
+                {admissionDecisionLabel(inspected.admission.decision, t)}
+              </span>
+              {inspected.subscription_outcome ? (
+                <SubscriptionStatusBadge outcome={inspected.subscription_outcome} />
+              ) : null}
+            </span>
+          ) : undefined
+        }
+        actions={
+          inspectorActions.length > 0
+            ? inspectorActions.map((action) => (
+                <Button key={action.label} variant="outline" size="sm" onClick={action.onSelect}>
+                  {action.icon ? <action.icon className="size-3.5" aria-hidden /> : null}
+                  {action.label}
+                </Button>
+              ))
             : undefined
         }
       >

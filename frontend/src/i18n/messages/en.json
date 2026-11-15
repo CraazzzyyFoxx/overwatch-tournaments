@@ -1919,16 +1919,15 @@
     },
     "inspector": {
       "admission": "Admission",
-      "declaredRoles": "Declared roles",
+      "rolesAndRanks": "Roles and ranks",
+      "role": "Role",
+      "declaredRank": "Declared",
       "questionnaire": "Questionnaire",
-      "details": "Details",
-      "subscription": "Subscription",
-      "source": "Source",
-      "submitted": "Submitted",
+      "submitted": "submitted",
       "reviewed": "Reviewed",
       "adminNotes": "Admin notes",
       "olderForm": "Answered on an older version of this form. Editing the registration re-files it against the current one.",
-      "noLongerAsked": "no longer asked",
+      "noLongerAskedTitle": "No longer asked",
       "openRankHistory": "Open rank history"
     },
     "status": {

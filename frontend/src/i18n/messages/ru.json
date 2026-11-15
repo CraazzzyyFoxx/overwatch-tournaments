@@ -1919,16 +1919,15 @@
     },
     "inspector": {
       "admission": "Допуск",
-      "declaredRoles": "Заявленные роли",
+      "rolesAndRanks": "Роли и ранги",
+      "role": "Роль",
+      "declaredRank": "Заявл.",
       "questionnaire": "Анкета",
-      "details": "Подробности",
-      "subscription": "Подписка",
-      "source": "Источник",
-      "submitted": "Подана",
+      "submitted": "подана",
       "reviewed": "Проверена",
       "adminNotes": "Заметки администратора",
       "olderForm": "Ответы внесены в старую версию формы. При редактировании регистрация будет перенесена на текущую версию.",
-      "noLongerAsked": "больше не запрашивается",
+      "noLongerAskedTitle": "Больше не запрашивается",
       "openRankHistory": "Открыть историю рангов"
     },
     "status": {
