@@ -460,7 +460,7 @@ describe("Registration entries", () => {
     expect(inspector?.textContent).toContain("older version of this form");
   });
 
-  it("groups the inspector's answers: ranks join the roles table, yes/no become chips, free text a quote", async () => {
+  it("lays out the inspector: roles across with rank answers as rows, every other answer a question row", async () => {
     const field = (key: string, kind: string, label: string) => ({
       key,
       kind,
@@ -479,6 +479,7 @@ describe("Registration entries", () => {
           {
             key: "details",
             fields: [
+              field("identity_battlenet", "builtin", "Battle.net"),
               field("peak", "role_ranks", "Peak this season"),
               field("sub", "checkbox", "Sub"),
               field("about", "textarea", "About you"),
@@ -504,22 +505,40 @@ describe("Registration entries", () => {
             is_declared_active: true
           }
         ],
-        answers: { peak: { tank: 3600, support: 3000 }, sub: true, about: "just a sub", matches: 79 }
+        answers: {
+          identity_battlenet: ["Main#1", "Smurf#2"],
+          peak: { tank: 3600, support: 3000 },
+          sub: true,
+          about: "just a sub",
+          matches: 79
+        }
       }
     ]);
 
     const withInspector = await mount("?id=1");
     const inspector = withInspector.querySelector("aside[aria-label='Row inspector']")!;
-    const rowOf = (role: string) =>
-      [...inspector.querySelectorAll("tbody tr")].find((row) => row.textContent?.includes(role));
+    const rowOf = (label: string) =>
+      [...inspector.querySelectorAll("tbody tr")].find((row) => row.querySelector("th")?.textContent === label);
+    const answerOf = (label: string) =>
+      [...inspector.querySelectorAll("dt")].find((dt) => dt.textContent === label)?.nextElementSibling?.textContent;
 
-    // The rank answer is a column, with a row for the role ranked but not declared.
-    expect([...inspector.querySelectorAll("th")].map((th) => th.textContent)).toContain("Peak this season");
-    expect(rowOf("tank")?.textContent).toContain("3600");
-    expect(rowOf("support")?.textContent).toContain("3000");
-    expect([...inspector.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual(["Matches"]);
-    expect(inspector.querySelector("dd")?.textContent).toBe("79");
-    expect([...inspector.querySelectorAll("li")].some((li) => li.textContent === "SubYes")).toBe(true);
-    expect(inspector.querySelector("blockquote")?.textContent).toBe("just a sub");
+    // Roles are the columns (a role ranked but not declared gets one too); each rank answer is a row.
+    const roleHeaders = [...inspector.querySelectorAll("thead th")].map((th) => th.textContent);
+    expect(roleHeaders.some((text) => text?.includes("tank"))).toBe(true);
+    expect(roleHeaders.some((text) => text?.includes("support"))).toBe(true);
+    expect(rowOf("Declared")?.textContent).toContain("3500");
+    expect(rowOf("Peak this season")?.textContent).toContain("3600");
+    expect(rowOf("Peak this season")?.textContent).toContain("3000");
+    // Handles are their own block, the rest stay question rows in form order.
+    expect(answerOf("Battle.net")).toBe("Main#1, Smurf#2");
+    expect([...inspector.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual([
+      "Battle.net",
+      "Sub",
+      "About you",
+      "Matches"
+    ]);
+    expect(answerOf("Sub")).toBe("Yes");
+    expect(answerOf("About you")).toBe("just a sub");
+    expect(answerOf("Matches")).toBe("79");
   });
 });

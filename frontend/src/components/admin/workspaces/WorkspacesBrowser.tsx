@@ -79,7 +79,7 @@ export function WorkspacesBrowser() {
   return (
     <>
       <div
-        className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}
+        className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_auto]")}
       >
         <div className="min-w-0">
           <DataTable<WorkspaceListItem>

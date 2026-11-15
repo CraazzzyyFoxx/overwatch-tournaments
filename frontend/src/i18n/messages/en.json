@@ -1920,8 +1920,8 @@
     "inspector": {
       "admission": "Admission",
       "rolesAndRanks": "Roles and ranks",
-      "role": "Role",
       "declaredRank": "Declared",
+      "accounts": "Accounts",
       "questionnaire": "Questionnaire",
       "submitted": "submitted",
       "reviewed": "Reviewed",
@@ -14541,6 +14541,7 @@
       "previousRow": "Previous row",
       "nextRow": "Next row",
       "closeInspector": "Close inspector",
+      "resizeInspector": "Resize inspector",
       "rowInspector": "Row inspector",
       "details": "Details",
       "detailsSelectedRow": "Details for the selected row.",

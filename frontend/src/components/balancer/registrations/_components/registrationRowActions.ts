@@ -24,17 +24,14 @@ export interface RegistrationRowActionHandlers {
   onDelete: (registration: AdminRegistration) => void;
 }
 
-/**
- * The moderation actions that move a row forward: approve/reject while it is
- * pending, balancer inclusion and check-in once it is manageable. The kebab
- * lists them among the rest; the inspector shows only these, as buttons.
- */
-export function registrationPrimaryActions(
+/** The kebab menu of one registration row, gated by its own status and scope. */
+export function buildRegistrationRowActions(
   registration: AdminRegistration,
-  handlers: Pick<RegistrationRowActionHandlers, "approve" | "reject" | "setBalancerInclusion" | "setCheckIn">,
+  handlers: RegistrationRowActionHandlers,
   t: RegistrationsTranslator
 ): KebabAction[] {
   const inBalancer = !registration.balancer_status_meta.excludes_from_balancer;
+  const isWithdrawn = registration.status === "withdrawn";
   const isPending = registration.status === "pending";
   // A custom status is organizer-defined and behaves like `approved` for
   // balancer inclusion, which is why both reach the same two actions.
@@ -42,6 +39,23 @@ export function registrationPrimaryActions(
     registration.status === "approved" || registration.status_meta.kind === "custom";
 
   return [
+    {
+      label: t("actions.edit"),
+      icon: Pencil,
+      hidden: isWithdrawn,
+      onSelect: () => handlers.onEdit(registration)
+    },
+    {
+      label: t("actions.history"),
+      icon: History,
+      hidden: !handlers.canAccessPermission("audit.read", registration.workspace_id),
+      onSelect: () =>
+        handlers.openAuditTrail({
+          entityType: "registration",
+          entityId: registration.id,
+          workspaceId: registration.workspace_id
+        })
+    },
     {
       label: t("actions.approve"),
       icon: Check,
@@ -70,37 +84,7 @@ export function registrationPrimaryActions(
           registrationId: registration.id,
           checkedIn: !registration.checked_in
         })
-    }
-  ];
-}
-
-/** The kebab menu of one registration row, gated by its own status and scope. */
-export function buildRegistrationRowActions(
-  registration: AdminRegistration,
-  handlers: RegistrationRowActionHandlers,
-  t: RegistrationsTranslator
-): KebabAction[] {
-  const isWithdrawn = registration.status === "withdrawn";
-
-  return [
-    {
-      label: t("actions.edit"),
-      icon: Pencil,
-      hidden: isWithdrawn,
-      onSelect: () => handlers.onEdit(registration)
     },
-    {
-      label: t("actions.history"),
-      icon: History,
-      hidden: !handlers.canAccessPermission("audit.read", registration.workspace_id),
-      onSelect: () =>
-        handlers.openAuditTrail({
-          entityType: "registration",
-          entityId: registration.id,
-          workspaceId: registration.workspace_id
-        })
-    },
-    ...registrationPrimaryActions(registration, handlers, t),
     {
       label: t("actions.restore"),
       icon: Undo2,

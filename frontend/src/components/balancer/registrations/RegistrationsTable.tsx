@@ -10,10 +10,7 @@ import { buildBalancerRegistrationColumns } from "@/components/balancer/registra
 import RegistrationBulkActions from "@/components/balancer/registrations/_components/RegistrationBulkActions";
 import RegistrationFormDialogs from "@/components/balancer/registrations/_components/RegistrationFormDialogs";
 import RegistrationInspectorBody from "@/components/balancer/registrations/_components/RegistrationInspectorBody";
-import {
-  buildRegistrationRowActions,
-  registrationPrimaryActions
-} from "@/components/balancer/registrations/_components/registrationRowActions";
+import { buildRegistrationRowActions } from "@/components/balancer/registrations/_components/registrationRowActions";
 import {
   admissionDecisionLabel,
   builtinStatusName,
@@ -323,13 +320,6 @@ export default function RegistrationsTable({
   const inspected = openId
     ? (registrations.find((registration) => String(registration.id) === openId) ?? null)
     : null;
-  const inspectorActions = inspected
-    ? registrationPrimaryActions(
-        inspected,
-        { approve, reject, setBalancerInclusion, setCheckIn },
-        tRegistrations
-      ).filter((action) => !action.hidden)
-    : [];
 
   const commands: TableCommand[] = [
     {
@@ -356,7 +346,7 @@ export default function RegistrationsTable({
     <div
       className={cn(
         "grid min-w-0 items-start gap-4",
-        inspected && "lg:grid-cols-[minmax(0,1fr)_380px]"
+        inspected && "lg:grid-cols-[minmax(0,1fr)_auto]"
       )}
     >
       <div className="flex min-h-0 min-w-0 flex-col gap-4">
@@ -457,16 +447,6 @@ export default function RegistrationsTable({
               ) : null}
             </span>
           ) : undefined
-        }
-        actions={
-          inspectorActions.length > 0
-            ? inspectorActions.map((action) => (
-                <Button key={action.label} variant="outline" size="sm" onClick={action.onSelect}>
-                  {action.icon ? <action.icon className="size-3.5" aria-hidden /> : null}
-                  {action.label}
-                </Button>
-              ))
-            : undefined
         }
       >
         {inspected && tournamentQuery.data ? (

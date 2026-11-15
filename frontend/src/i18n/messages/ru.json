@@ -1920,8 +1920,8 @@
     "inspector": {
       "admission": "Допуск",
       "rolesAndRanks": "Роли и ранги",
-      "role": "Роль",
-      "declaredRank": "Заявл.",
+      "declaredRank": "Заявленный",
+      "accounts": "Аккаунты",
       "questionnaire": "Анкета",
       "submitted": "подана",
       "reviewed": "Проверена",
@@ -14541,6 +14541,7 @@
       "previousRow": "Предыдущая строка",
       "nextRow": "Следующая строка",
       "closeInspector": "Закрыть инспектор",
+      "resizeInspector": "Изменить ширину инспектора",
       "rowInspector": "Инспектор строки",
       "details": "Подробности",
       "detailsSelectedRow": "Подробности выбранной строки.",

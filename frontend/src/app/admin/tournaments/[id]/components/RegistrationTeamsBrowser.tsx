@@ -210,7 +210,7 @@ export function RegistrationTeamsBrowser({
       <div
         className={cn(
           "grid min-w-0 items-start gap-4",
-          selectedTeam && "lg:grid-cols-[minmax(0,1fr)_minmax(20rem,28rem)]"
+          selectedTeam && "lg:grid-cols-[minmax(0,1fr)_auto]"
         )}
       >
         <div className="flex min-h-0 min-w-0 flex-col gap-3">

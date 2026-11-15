@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, ExternalLink, X } from "lucide-react";
@@ -8,6 +8,7 @@ import { ChevronDown, ChevronUp, ExternalLink, X } from "lucide-react";
 import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,12 @@ export interface InspectorProps {
 
 /** `lg` in `globals.css`'s `@theme` — the width at which the panel fits beside a table. */
 const PANEL_MEDIA_QUERY = "(min-width: 1024px)";
+
+/** Panel width bounds in px. One width for every screen: it is the reader's preference, not the data's. */
+const PANEL_WIDTH = { min: 320, max: 720, initial: 380, step: 16 } as const;
+const PANEL_WIDTH_KEY = "admin-inspector-width";
+const clampWidth = (width: number) =>
+  Math.min(PANEL_WIDTH.max, Math.max(PANEL_WIDTH.min, Number.isFinite(width) ? width : PANEL_WIDTH.initial));
 
 /** Arrow keys must not steal caret movement inside a field in the inspector. */
 function isTextEntry(target: EventTarget | null): boolean {
@@ -61,6 +68,25 @@ export function Inspector({
   const isWide = useMediaQuery(PANEL_MEDIA_QUERY);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const isOpen = openId !== null;
+  const [savedWidth, setSavedWidth] = useLocalStorageState<number>(PANEL_WIDTH_KEY, PANEL_WIDTH.initial);
+  // Live width while dragging; persisted once on release, not on every pointer move.
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
+  // `last` is read on release: the state may not have re-rendered since the final move.
+  const drag = useRef<{ x: number; width: number; last: number } | null>(null);
+  const endDrag = (save: boolean) => {
+    if (save && drag.current) setSavedWidth(drag.current.last);
+    drag.current = null;
+    setDragWidth(null);
+  };
+  const width = clampWidth(dragWidth ?? savedWidth);
+
+  const handleResizeKey = (event: ReactKeyboardEvent) => {
+    // The handle sits on the left edge: Left widens, Right narrows.
+    const delta = { ArrowLeft: PANEL_WIDTH.step, ArrowRight: -PANEL_WIDTH.step }[event.key];
+    if (delta === undefined) return;
+    event.preventDefault();
+    setSavedWidth(clampWidth(width + delta));
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -190,13 +216,38 @@ export function Inspector({
   // `contain: size` + `self-stretch`: the panel adds no height to the grid row,
   // so the table alone sets it and the panel fills it, scrolling inside. Sized
   // by its own content it outgrew the viewport-fitted table and the page grew a
-  // second scrollbar. `min-h-80` keeps a one-row table from crushing it.
+  // second scrollbar. `min-h-80` keeps a one-row table from crushing it. The
+  // explicit width is what the screen's `auto` grid column sizes to.
   return (
     <Card
       asChild
-      className="sticky top-16 flex min-h-80 max-h-[calc(100dvh-6rem)] flex-col self-stretch overflow-hidden [contain:size]"
+      className="sticky top-16 flex min-h-80 max-h-[calc(100dvh-6rem)] max-w-[50vw] flex-col self-stretch overflow-hidden [contain:size]"
+      style={{ width }}
     >
       <aside aria-label={t("rowInspector")} data-inspector-mode="panel">
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t("resizeInspector")}
+          aria-valuemin={PANEL_WIDTH.min}
+          aria-valuemax={PANEL_WIDTH.max}
+          aria-valuenow={width}
+          tabIndex={0}
+          className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-col-resize touch-none outline-hidden transition-colors hover:bg-primary/40 focus-visible:bg-primary/60"
+          onKeyDown={handleResizeKey}
+          onDoubleClick={() => setSavedWidth(PANEL_WIDTH.initial)}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            drag.current = { x: event.clientX, width, last: width };
+          }}
+          onPointerMove={(event) => {
+            if (!drag.current) return;
+            drag.current.last = clampWidth(drag.current.width + drag.current.x - event.clientX);
+            setDragWidth(drag.current.last);
+          }}
+          onPointerUp={() => endDrag(true)}
+          onPointerCancel={() => endDrag(false)}
+        />
         {renderHeader(true)}
         {body}
       </aside>

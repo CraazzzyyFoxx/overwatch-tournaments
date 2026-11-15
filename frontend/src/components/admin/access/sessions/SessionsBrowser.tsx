@@ -49,7 +49,7 @@ export function SessionsBrowser() {
   const columns = useSessionColumns();
 
   return (
-    <div className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_380px]")}>
+    <div className={cn("grid items-start gap-4", openRow && "lg:grid-cols-[minmax(0,1fr)_auto]")}>
       <div className="min-w-0">
         <DataTable<AdminAuthSession>
           columns={columns}
