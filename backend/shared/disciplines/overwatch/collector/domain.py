@@ -63,6 +63,8 @@ class ParsedProfile:
     attrs: dict[str, Any]
     #: Blizzard's "profile last updated" moment.
     upstream_updated_at: datetime | None
+    #: Whether the profile shows its career: OverFast answers ``stats: null`` for a closed one.
+    is_public: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +97,8 @@ class RankFetchResult:
     ranks: list[ParsedRank] = field(default_factory=list)
     error: str | None = None
     profile: ParsedProfile | None = None
-    career: list[CareerSeries] = field(default_factory=list)
+    #: ``None`` when the career was there but unreadable: what is stored stays as it is.
+    career: list[CareerSeries] | None = field(default_factory=list)
 
 
 def parse_profile(summary: Mapping[str, Any]) -> ParsedProfile:

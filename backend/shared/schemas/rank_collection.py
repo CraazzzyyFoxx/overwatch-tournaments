@@ -1,12 +1,22 @@
-"""Request/response models of the rank domain: public history reads and the admin collection RPCs."""
+"""Request/response models of the rank domain: public history and ladder reads and the admin collection RPCs."""
 
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 __all__ = (
+    "CareerAccount",
+    "CareerCharacter",
+    "CareerProfile",
+    "CareerQueue",
+    "CareerResponse",
+    "CareerRole",
+    "CareerSignal",
+    "CareerSignalsResponse",
+    "CareerUserSignals",
     "CollectTriggerRequest",
     "CollectTriggerResponse",
     "CollectionStatusRead",
@@ -21,6 +31,103 @@ __all__ = (
     "ReenableDisabledRequest",
     "ReenableDisabledResponse",
 )
+
+
+class CareerCharacter(BaseModel):
+    """One character in one queue: time, games and per-10-minute rates from the game's own career."""
+
+    character: str
+    role: str | None
+    seconds: float
+    share: float
+    """Of the queue's time."""
+    games_played: int | None = None
+    games_won: int | None = None
+    winrate: float | None = None
+    rates: dict[str, float] = {}
+    """Per 10 minutes of this character, keyed by the game's stat key."""
+
+
+class CareerRole(BaseModel):
+    role: str
+    seconds: float
+    share: float
+    pool_size: float
+    """Effective number of characters played (exp of the entropy of their time shares): 1 is a one-trick."""
+    mains: list[str]
+    """The most played characters, in order, covering 80% of the role's time."""
+
+
+class CareerQueue(BaseModel):
+    """One platform and queue of an account as the game shows it now; a seasonal queue covers its current season."""
+
+    platform: str | None
+    queue: str | None
+    season: int | None
+    seconds: float
+    games_played: int | None
+    games_won: int | None
+    games_lost: int | None
+    winrate: float | None
+    rates: dict[str, float]
+    roles: list[CareerRole]
+    characters: list[CareerCharacter]
+    captured_at: datetime
+    """When the newest of these figures was collected."""
+
+
+class CareerProfile(BaseModel):
+    display_name: str | None
+    avatar_url: str | None
+    attrs: dict[str, Any]
+    is_public: bool
+    """Whether the last poll saw the career; a closed profile shows only its name and avatar."""
+    upstream_updated_at: datetime | None
+    """The game's own "profile last changed" moment: roughly the last game played."""
+    fetched_at: datetime
+
+
+class CareerAccount(BaseModel):
+    """One linked game account. ``queues`` is empty while its profile is closed."""
+
+    social_account_id: int
+    handle: str
+    is_primary: bool
+    status: str | None
+    """Collection status of the account (``ok``, ``private``, ``not_found``, ...); ``None`` = never collected."""
+    last_success_at: datetime | None
+    profile: CareerProfile | None
+    queues: list[CareerQueue]
+
+
+class CareerResponse(BaseModel):
+    user_id: int
+    accounts: list[CareerAccount]
+    generated_at: datetime
+
+
+class CareerSignal(BaseModel):
+    code: str
+    """``profile_not_found``, ``previously_found``, ``profile_private``, ``never_collected``, ``renamed``,
+    ``low_hours_high_rank`` (``value`` = hours) or ``inactive``."""
+    social_account_id: int | None = None
+    """The account it is about; ``None`` for the player as a whole."""
+    value: float | None = None
+
+
+class CareerUserSignals(BaseModel):
+    user_id: int
+    competitive_role_shares: dict[str, float]
+    """Each role's share of the player's current-season competitive time, across their accounts."""
+    hours: float
+    last_played_at: datetime | None
+    """The newest "profile last changed" moment among the player's accounts."""
+    signals: list[CareerSignal]
+
+
+class CareerSignalsResponse(BaseModel):
+    users: list[CareerUserSignals]
+    generated_at: datetime
 
 
 class RankHistoryPoint(BaseModel):

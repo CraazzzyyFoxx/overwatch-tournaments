@@ -94,12 +94,16 @@ var Routes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/users/{id}/rank-history", Queue: "rpc.stats.rank.user_history", IDParam: "id", AllQuery: true, Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/v1/users/{id}/current-ranks", Queue: "rpc.stats.rank.user_current", IDParam: "id", Query: []string{"platform", "discipline"}, Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/v1/game-accounts/{id}/rank-history", Queue: "rpc.stats.rank.game_account_history", IDParam: "id", AllQuery: true, Auth: edge.AuthNone},
+	// The game's own career of the accounts shown on the public profile; a closed profile, no career.
+	{Method: "GET", Pattern: "/api/v1/users/{id}/career", Queue: "rpc.stats.rank.user_career", IDParam: "id", Query: []string{"discipline"}, Auth: edge.AuthNone},
 
 	// Rank collection admin (src/rpc/rank.py); rank.read / rank.update, where `workspace_id` is both the
 	// authorization scope and the data filter, and `discipline` names the game's collector.
 	{Method: "GET", Pattern: "/api/v1/admin/rank/stats", Queue: "rpc.stats.rank.stats", Query: []string{"workspace_id", "discipline"}, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/admin/rank/fetch-log", Queue: "rpc.stats.rank.fetch_log", AllQuery: true, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/admin/rank/users/{id}/collection", Queue: "rpc.stats.rank.user_collection", IDParam: "id", Query: []string{"workspace_id", "discipline"}, Auth: edge.AuthRequired},
+	// Admission signals for up to 200 players (`user_id` repeated).
+	{Method: "GET", Pattern: "/api/v1/admin/rank/career-signals", Queue: "rpc.stats.rank.career_signals", Query: []string{"user_id", "workspace_id", "discipline"}, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/rank/collect", Queue: "rpc.stats.rank.collect", Body: true, Query: []string{"workspace_id", "discipline"}, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/rank/reenable-disabled", Queue: "rpc.stats.rank.reenable_disabled", Body: true, Query: []string{"workspace_id", "discipline"}, Auth: edge.AuthRequired},
 

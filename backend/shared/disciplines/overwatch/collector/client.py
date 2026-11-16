@@ -11,6 +11,7 @@ can back off and RabbitMQ can retry.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from typing import Any
 from urllib.parse import quote
 
@@ -20,7 +21,7 @@ from shared.clients.http_client import ResilientHttpClient
 from shared.core import enums
 from shared.core.social import PROVIDERS, SocialProvider, compile_handle_pattern
 
-from .domain import ParsedRank, RankFetchResult, is_canonical_id, parse_career, parse_profile
+from .domain import CareerSeries, ParsedRank, RankFetchResult, is_canonical_id, parse_career, parse_profile
 
 #: Results asked of one player search; a display name shared by more players than this is left unresolved.
 SEARCH_LIMIT = 100
@@ -193,12 +194,14 @@ class OverFastRankClient:
             raise OverFastError(f"OverFast profile without a summary for {slug}")
 
         competitive = summary.get("competitive")
+        stats = payload.get("stats")
+        career: list[CareerSeries] | None
         try:
-            career = parse_career(payload.get("stats"), competitive)
+            career = parse_career(stats, competitive)
         except Exception:  # noqa: BLE001 -- a career the parser cannot read must not cost the account its ranks
             logger.exception("Unreadable OverFast career for %s", slug)
-            career = []
-        profile = parse_profile(summary)
+            career = None
+        profile = replace(parse_profile(summary), is_public=isinstance(stats, dict))
         if not competitive:
             # Public-but-unranked or private profile — no ranked data exposed.
             return RankFetchResult(status=enums.RankCollectionStatus.private, profile=profile, career=career)

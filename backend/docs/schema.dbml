@@ -2088,6 +2088,7 @@ Table rank.account_profile {
   canonical_checked_at timestamptz
   upstream_updated_at timestamptz
   fetched_at timestamptz [not null]
+  is_public boolean [not null, default: false]
 }
 
 Table rank.account_state {

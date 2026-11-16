@@ -64,7 +64,16 @@ System overview: [`../../docs/architecture.md`](../../docs/architecture.md). Cod
   and costs no ranks. A BattleTag that stops resolving is read by its stored Blizzard id (a renamed
   account); the id is resolved through Blizzard's player search, at most once a week per account. A daily
   snapshot of Blizzard's hero pick, win and ban rates goes to `rank.character_rate` (PC, Europe:
-  competitive overall, per division and per map; quick play overall).
+  competitive overall, per division and per map; quick play overall). `account_profile.is_public` records
+  whether the poll saw the career: the `private` status only means "no competitive rank".
+- **Career reads** — `rank.user_career` (public, `GET /users/{id}/career`): each account on the player's
+  public profile with its profile and, per platform and queue, the career as the game shows it now (time,
+  games, winrate, per-10-minute rates, roles with pool size and mains, heroes; competitive covers the
+  current season); a closed profile shows no career. `rank.career_signals` (`rank.read`,
+  `GET /admin/rank/career-signals?user_id=…`, up to 200 players): competitive role shares, hours, last
+  profile change and the admission signals `profile_not_found`, `previously_found`, `profile_private`,
+  `never_collected`, `renamed`, `low_hours_high_rank`, `inactive`. Both read the newest row of each
+  career series (`shared/disciplines/overwatch/collector/portrait.py`).
 - **Achievement evaluation** — owns the condition-tree engine, the rules admin surface, the
   evaluation runs and the manual grant/revoke overlay.
 - **MVP impact scoring** — derived stats (`ImpactPoints`, `ImpactRank`, `OverperformanceScore`,
@@ -89,7 +98,7 @@ RPC namespace: `rpc.stats.*` (single namespace, registered in `src/rpc/`).
 | --- | --- |
 | `rpc.stats.logs.*` | Match-log admin: queue depths, processing history and stats (with each job's structured error, observation revision, current-provenance flag and, while awaiting link, its document teams), upload, retry (`reparse` + `expected_revision` for a done log), whole-tournament reprocess |
 | `rpc.stats.ingest.*` | Canonical ingest: `submit`/`get` (workspace API key with `stats.ingest`) and the admin `bind` of an awaiting-link job to a game with the operator's team map |
-| `rpc.stats.rank.*` | Public rank reads (user and game-account history, current ranks) plus collection admin: health stats, fetch log, trigger collection, re-enable auto-disabled accounts. `?discipline=` (default `overwatch`) picks the game's collector; a game without one answers 404 `rank_collection_unsupported` |
+| `rpc.stats.rank.*` | Public rank reads (user and game-account history, current ranks, the game career) plus collection admin: health stats, fetch log, career signals, trigger collection, re-enable auto-disabled accounts. `?discipline=` (default `overwatch`) picks the game's collector; a game without one answers 404 `rank_collection_unsupported` |
 | `rpc.stats.ach.*` | Achievement rules CRUD, condition-type catalog and tree validation, seed/reset, export/import and cross-workspace library import, evaluation trigger and runs, rule test/dry-run, qualifying-user list, manual overrides |
 | `rpc.stats.subscription.*` | Subscription collection admin: health stats, check log, per-user entitlement, trigger a re-check or a sweep |
 | `rpc.stats.impact.*` | Superuser recompute of the impact-scoring baselines |
