@@ -108,6 +108,10 @@ class SignalTests(IsolatedAsyncioTestCase):
         closed = _account(status="private", queues=[])
         closed.profile.is_public = False
         self.assertEqual(_codes(closed), ["profile_private"])
+        # Ranked accounts show their ranks, which a closed profile hides: a stale openness flag is no signal.
+        ranked = _account()
+        ranked.profile.is_public = False
+        self.assertEqual(_codes(ranked), [])
 
     def test_an_account_read_under_another_name_is_renamed(self) -> None:
         self.assertEqual(_codes(_account(handle="OldName#1234")), ["renamed"])

@@ -208,7 +208,9 @@ def account_signals(account: schemas.CareerAccount, best_rank: int | None) -> li
     elif status == not_found:
         code = "previously_found" if account.last_success_at is not None else "profile_not_found"
         signals.append(schemas.CareerSignal(code=code, social_account_id=sid))
-    elif profile is not None and not profile.is_public:
+    elif status == enums.RankCollectionStatus.private.value and (profile is None or not profile.is_public):
+        # ``private`` is "no competitive rank"; only one whose career is not visible either is closed. A ranked
+        # account (``ok``) shows its ranks, which a closed profile hides.
         signals.append(schemas.CareerSignal(code="profile_private", social_account_id=sid))
     # Read by its Blizzard id after the BattleTag stopped resolving: the game now shows another name.
     if profile is not None and profile.display_name and status != not_found:
