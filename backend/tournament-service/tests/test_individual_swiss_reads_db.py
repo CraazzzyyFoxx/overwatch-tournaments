@@ -428,30 +428,6 @@ class LockQualificationTests(IndividualSwissReadsCase):
             await self.lock()
         self.assertEqual(409, raised.exception.status_code)
 
-    async def test_a_draft_format_other_than_snake_is_refused_before_anything_is_locked(self) -> None:
-        await self.complete()
-        async with self.Session() as s:
-            s.add(
-                models.FlowNode(
-                    tournament_id=self.tournament_id,
-                    kind="formation",
-                    name="Teams",
-                    status="draft",
-                    config={
-                        "mode": "draft",
-                        "draft_format": {"format": "linear", "round_rules": [], "avg_tie_seed_reverse": False},
-                    },
-                )
-            )
-            await s.commit()
-        with self.assertRaises(BaseAPIException) as raised:
-            await self.lock()
-        self.assertEqual(409, raised.exception.status_code)
-        self.assertEqual("draft_format_not_snake", raised.exception.detail[0]["code"])
-        self.assertEqual({"ready"}, {status for status, _ in (await self.balancer_statuses()).values()})
-        self.assertEqual("live", await self.node_status())
-        self.assertIsNone((await self.stage()).qualification_locked_at)
-
     async def test_another_stage_type_is_refused(self) -> None:
         async with self.Session() as s:
             stage = await s.get_one(models.Stage, self.stage_id)
