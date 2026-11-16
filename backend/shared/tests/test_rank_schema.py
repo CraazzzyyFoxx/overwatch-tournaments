@@ -8,10 +8,25 @@ from types import SimpleNamespace
 
 from sqlalchemy.dialects import postgresql
 
-from shared.models.ranks.rank import RANK_SCHEMA, RankAccountState, RankFetchLog, UserRankSnapshot
+from shared.models.ranks.rank import (
+    RANK_SCHEMA,
+    CareerSnapshot,
+    CharacterRate,
+    GameAccountProfile,
+    RankAccountState,
+    RankFetchLog,
+    UserRankSnapshot,
+)
 from shared.repository.ranks import RankAccountStateRepository, workspace_account_ids
 
-TABLES = (UserRankSnapshot.__table__, RankAccountState.__table__, RankFetchLog.__table__)
+TABLES = (
+    UserRankSnapshot.__table__,
+    RankAccountState.__table__,
+    RankFetchLog.__table__,
+    GameAccountProfile.__table__,
+    CareerSnapshot.__table__,
+    CharacterRate.__table__,
+)
 
 
 def _compiled(statement):
@@ -20,7 +35,14 @@ def _compiled(statement):
 
 def test_the_rank_tables_live_in_one_rank_schema() -> None:
     assert RANK_SCHEMA == "rank"
-    assert {table.fullname for table in TABLES} == {"rank.rank_snapshot", "rank.account_state", "rank.fetch_log"}
+    assert {table.fullname for table in TABLES} == {
+        "rank.rank_snapshot",
+        "rank.account_state",
+        "rank.fetch_log",
+        "rank.account_profile",
+        "rank.career_snapshot",
+        "rank.character_rate",
+    }
 
 
 def test_every_rank_row_names_its_game_and_no_default_hides_a_missing_one() -> None:

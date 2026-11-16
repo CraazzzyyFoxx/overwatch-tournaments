@@ -27,7 +27,7 @@ from shared.services.distributed_lock import (
 from shared.services.scheduler import IntervalScheduler
 from shared.services.settings_provider import settings_provider
 
-from . import metrics, runtime, service, tasks
+from . import character_rates, metrics, runtime, service, tasks
 
 SCHEDULER_TICK_SECONDS = 60
 LEADER_LOCK_KEY = "ow_rank:scheduler:leader"
@@ -42,6 +42,7 @@ FETCH_LOG_PURGE_TICK_SECONDS = 24 * 60 * 60
 
 _scheduler = IntervalScheduler(job_id="ow_rank_collection", label="OverFast rank")
 _purge_scheduler = IntervalScheduler(job_id="ow_rank_fetch_log_purge", label="OverFast fetch-log purge")
+_rates_scheduler = IntervalScheduler(job_id="ow_character_rates", label="OverFast hero rates")
 
 
 async def run_collection_tick(
@@ -180,8 +181,10 @@ async def run_fetch_log_purge(*, session_factory: Any | None = None) -> int:
 def start_scheduler() -> None:
     _scheduler.start(run_collection_tick, seconds=SCHEDULER_TICK_SECONDS)
     _purge_scheduler.start(run_fetch_log_purge, seconds=FETCH_LOG_PURGE_TICK_SECONDS)
+    _rates_scheduler.start(character_rates.run_tick, seconds=character_rates.TICK_SECONDS)
 
 
 def shutdown_scheduler() -> None:
     _scheduler.shutdown()
     _purge_scheduler.shutdown()
+    _rates_scheduler.shutdown()

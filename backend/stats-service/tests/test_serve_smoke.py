@@ -182,21 +182,21 @@ def test_shutdown_keeps_rank_fetch_available_until_consumers_finish(monkeypatch:
     monkeypatch.setattr(lifecycle, "close_quota", AsyncMock())
 
     async def exercise_shutdown() -> None:
-        payload = {"competitive": {"pc": {"tank": {"division": "gold", "tier": 2}}}}
+        payload = {"summary": {"competitive": {"pc": {"tank": {"division": "gold", "tier": 2}}}}}
         transport = httpx.MockTransport(lambda _: httpx.Response(200, json=payload))
         async with httpx.AsyncClient(base_url=client.base_url, transport=transport) as http:
             client._http._client = http
 
             async def drain_consumers() -> None:
                 assert schedule_stops == ["stopped"], "schedules must stop before the consumers drain"
-                result = await client.fetch_summary("Name#1234")
+                result = await client.fetch_profile("Name#1234")
                 tank = next(rank for rank in result.ranks if rank.role == "tank")
                 assert (result.status, tank.division, tank.tier) == ("ok", "gold", 2)
 
             monkeypatch.setattr(serve.broker, "stop", drain_consumers)
             await serve.app.stop()
             with pytest.raises(RuntimeError):
-                await client.fetch_summary("Name#1234")
+                await client.fetch_profile("Name#1234")
             assert schedule_stops == ["stopped"]
 
     asyncio.run(exercise_shutdown())

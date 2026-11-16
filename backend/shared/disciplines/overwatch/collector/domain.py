@@ -1,27 +1,37 @@
-"""Pure logic for the OverFast rank-collection domain: fetch DTOs, native
-division/tier -> rank_value mapping, history-read date-range resolution and
-gap filling, and the battle-tag -> OverFast-slug helper. Zero
-``AsyncSession``, zero ``await`` — see ``backend/ARCHITECTURE.md``'s ``domain/``
-boundary.
+"""Pure logic for the OverFast collection domain: fetch DTOs, the profile and career parsers and their change
+detection, the rename-proof id match, native division/tier -> rank_value mapping, history-read date-range resolution
+and gap filling, and the battle-tag -> OverFast-slug helper. Zero ``AsyncSession``, zero ``await`` — see
+``backend/ARCHITECTURE.md``'s ``domain/`` boundary.
 """
 
 from __future__ import annotations
 
 import functools
+import hashlib
+import json
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Literal, get_args
+from typing import Any, Literal, get_args
+from urllib.parse import unquote
 
 from shared.core import enums
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.disciplines import discipline
 
 __all__ = (
+    "CareerSeries",
+    "ParsedProfile",
     "ParsedRank",
     "RankFetchResult",
     "RankSeriesState",
+    "changed_career",
     "changed_ranks",
+    "is_canonical_id",
+    "match_canonical_id",
+    "parse_career",
+    "parse_profile",
     "RANK_MAPPING_VERSION",
     "map_division_tier_to_rank_value",
     "Granularity",
@@ -43,19 +53,169 @@ class ParsedRank:
     is_ranked: bool
 
 
+@dataclass(frozen=True, slots=True)
+class ParsedProfile:
+    """The account as the OverFast summary shows it, besides its ranks."""
+
+    display_name: str | None
+    avatar_url: str | None
+    #: Overwatch's own profile fields: ``namecard``, ``title``, ``endorsement_level`` (absent ones left out).
+    attrs: dict[str, Any]
+    #: Blizzard's "profile last updated" moment.
+    upstream_updated_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class CareerSeries:
+    """One character's cumulative career statistics in one platform and queue, as the profile shows them now."""
+
+    platform: str
+    queue: str
+    #: Competitive only: the season the figures belong to (Blizzard shows the last season played, nothing older).
+    season: int | None
+    #: OverFast hero key, or ``all-heroes`` for the whole account.
+    character: str
+    #: ``{category: {stat key: number}}``; the same key appears under several categories, so they stay apart.
+    stats: dict[str, dict[str, float]]
+    digest: str
+
+
 @dataclass(frozen=True)
 class RankFetchResult:
-    """Outcome of fetching one battle tag's summary from OverFast.
+    """Outcome of fetching one account's profile from OverFast.
 
     Expected, non-exceptional states (``not_found``/``private``) are returned
     rather than raised. Rate limiting and transport/5xx failures are raised
     (``OverFastRateLimited`` / ``OverFastError``) so the worker can back off and
-    let RabbitMQ retry.
+    let RabbitMQ retry. ``profile`` and ``career`` are set whenever the profile
+    was found, ``private`` included: an unranked public profile still shows its career.
     """
 
     status: enums.RankCollectionStatus
     ranks: list[ParsedRank] = field(default_factory=list)
     error: str | None = None
+    profile: ParsedProfile | None = None
+    career: list[CareerSeries] = field(default_factory=list)
+
+
+def parse_profile(summary: Mapping[str, Any]) -> ParsedProfile:
+    """The non-rank half of an OverFast ``summary``."""
+    endorsement = summary.get("endorsement")
+    attrs = {
+        "namecard": summary.get("namecard"),
+        "title": summary.get("title"),
+        "endorsement_level": endorsement.get("level") if isinstance(endorsement, Mapping) else None,
+    }
+    updated = _int(summary.get("last_updated_at"))
+    return ParsedProfile(
+        display_name=summary.get("username"),
+        avatar_url=summary.get("avatar"),
+        attrs={key: value for key, value in attrs.items() if value is not None},
+        upstream_updated_at=None if updated is None else datetime.fromtimestamp(updated, UTC),
+    )
+
+
+def _number(value: object) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _int(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _digest(stats: Mapping[str, Any]) -> str:
+    canonical = json.dumps(stats, sort_keys=True, separators=(",", ":"))
+    return hashlib.blake2b(canonical.encode(), digest_size=16).hexdigest()
+
+
+def parse_career(stats: Mapping[str, Any] | None, competitive: Mapping[str, Any] | None) -> list[CareerSeries]:
+    """Every non-empty ``career_stats`` entry of an OverFast ``stats`` block, one series per platform/queue/hero.
+
+    ``competitive`` is the summary's rank block: its per-platform ``season`` dates the competitive figures.
+    Non-numeric values are dropped; a hero with no numeric value is no series.
+    """
+    series: list[CareerSeries] = []
+    for platform, queues in (stats or {}).items():
+        if not isinstance(queues, Mapping):
+            continue
+        platform_ranks = (competitive or {}).get(platform)
+        for queue, block in queues.items():
+            career = block.get("career_stats") if isinstance(block, Mapping) else None
+            if not isinstance(career, Mapping):
+                continue
+            season = None
+            if queue == "competitive" and isinstance(platform_ranks, Mapping):
+                season = _int(platform_ranks.get("season"))
+            for character, categories in career.items():
+                grouped: dict[str, dict[str, float]] = {}
+                for category in categories or ():
+                    values = {
+                        stat["key"]: stat["value"]
+                        for stat in category.get("stats") or ()
+                        if isinstance(stat.get("key"), str) and _number(stat.get("value"))
+                    }
+                    if values and isinstance(category.get("category"), str):
+                        grouped[category["category"]] = values
+                if grouped:
+                    series.append(
+                        CareerSeries(
+                            platform=platform,
+                            queue=queue,
+                            season=season,
+                            character=character,
+                            stats=grouped,
+                            digest=_digest(grouped),
+                        )
+                    )
+    return series
+
+
+def changed_career(
+    observed: Iterable[CareerSeries], latest: Mapping[tuple[str, str, str], tuple[int | None, str]]
+) -> list[CareerSeries]:
+    """The series worth a row: new ones, and those whose season or figures moved since their last row.
+
+    ``latest`` maps ``(platform, queue, character)`` to the last stored ``(season, digest)``. A series the
+    profile no longer shows (a hero not yet played this competitive season) writes nothing: its last row,
+    with its season, stays the record of what it was.
+    """
+    return [
+        series
+        for series in observed
+        if latest.get((series.platform, series.queue, series.character)) != (series.season, series.digest)
+    ]
+
+
+_CANONICAL_ID = re.compile(r"[0-9a-f]+\|[0-9a-f]+")
+
+
+def is_canonical_id(player_id: str) -> bool:
+    """A Blizzard career id (``df51…|0bf3…``), as opposed to a BattleTag."""
+    return _CANONICAL_ID.fullmatch(player_id) is not None
+
+
+def match_canonical_id(profile: ParsedProfile, results: Sequence[Mapping[str, Any]]) -> str | None:
+    """The Blizzard id of the one search result the profile was built from, or ``None``.
+
+    OverFast fills a summary's name, avatar, namecard, title and ``last_updated_at`` from the matching Blizzard search
+    result, so exactly that result agrees on all five; ``last_updated_at`` is a timestamp, which is what makes the match
+    unique among players sharing a name. No timestamp, no match: the other four fields alone are not an identity.
+    """
+    if profile.upstream_updated_at is None:
+        return None
+    expected = {
+        "name": profile.display_name,
+        "avatar": profile.avatar_url,
+        "namecard": profile.attrs.get("namecard"),
+        "title": profile.attrs.get("title"),
+        "last_updated_at": int(profile.upstream_updated_at.timestamp()),
+    }
+    found = [
+        unquote(entry.get("blizzard_id") or "")
+        for entry in results
+        if all(entry.get(key) == value for key, value in expected.items())
+    ]
+    return found[0] if len(found) == 1 and is_canonical_id(found[0]) else None
 
 
 @dataclass(frozen=True, slots=True)

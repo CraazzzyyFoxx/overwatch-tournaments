@@ -1,6 +1,6 @@
 {
   "_generated_by": "backend/scripts/export_erd.py -- do not edit by hand",
-  "alembic_head": "regnote01_registration_notes",
+  "alembic_head": "rankcareer01_career_rates",
   "packages": [
     {
       "key": "achievements",
@@ -631,16 +631,33 @@
     },
     {
       "key": "ranks",
-      "mermaid": "erDiagram\n    RANK_ACCOUNT_STATE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar(32) discipline\n        bigint social_account_id FK,UK\n        varchar(255) handle\n        varchar(255) external_id \"nullable\"\n        varchar(16) region \"nullable\"\n        timestamptz last_checked_at \"nullable\"\n        timestamptz last_success_at \"nullable\"\n        varchar(32) status\n        int consecutive_failures\n        timestamptz next_eligible_at \"nullable\"\n        text last_error \"nullable\"\n        smallint priority_tier\n    }\n    RANK_FETCH_LOG {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar(32) discipline\n        bigint social_account_id FK \"nullable\"\n        varchar(255) handle\n        varchar(32) status\n        varchar(32) source\n        text error \"nullable\"\n        int snapshots_written\n    }\n    RANK_RANK_SNAPSHOT {\n        bigint id PK\n        varchar(32) discipline\n        bigint user_id FK\n        bigint social_account_id FK\n        varchar(255) handle\n        varchar(16) platform \"nullable\"\n        varchar(16) role \"nullable\"\n        varchar(16) queue \"nullable\"\n        varchar(32) division \"nullable\"\n        smallint tier \"nullable\"\n        int season \"nullable\"\n        int lp \"nullable\"\n        int wins \"nullable\"\n        int losses \"nullable\"\n        int rank_value \"nullable\"\n        varchar(64) mapping_version \"nullable\"\n        boolean is_ranked\n        timestamptz captured_at\n        varchar(32) source\n    }\n\n    PLAYERS_SOCIAL_ACCOUNT |o--o{ RANK_FETCH_LOG : \"social_account_id\"\n    PLAYERS_SOCIAL_ACCOUNT ||--o{ RANK_RANK_SNAPSHOT : \"social_account_id\"\n    PLAYERS_SOCIAL_ACCOUNT ||--o| RANK_ACCOUNT_STATE : \"social_account_id\"\n    PLAYERS_USER ||--o{ RANK_RANK_SNAPSHOT : \"user_id\"",
+      "mermaid": "erDiagram\n    RANK_ACCOUNT_PROFILE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar(32) discipline\n        bigint social_account_id FK,UK\n        varchar(255) display_name \"nullable\"\n        text avatar_url \"nullable\"\n        jsonb attrs\n        varchar(255) canonical_id \"nullable\"\n        timestamptz canonical_checked_at \"nullable\"\n        timestamptz upstream_updated_at \"nullable\"\n        timestamptz fetched_at\n    }\n    RANK_ACCOUNT_STATE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar(32) discipline\n        bigint social_account_id FK,UK\n        varchar(255) handle\n        varchar(255) external_id \"nullable\"\n        varchar(16) region \"nullable\"\n        timestamptz last_checked_at \"nullable\"\n        timestamptz last_success_at \"nullable\"\n        varchar(32) status\n        int consecutive_failures\n        timestamptz next_eligible_at \"nullable\"\n        text last_error \"nullable\"\n        smallint priority_tier\n    }\n    RANK_CAREER_SNAPSHOT {\n        bigint id PK\n        varchar(32) discipline\n        bigint social_account_id FK\n        varchar(16) platform \"nullable\"\n        varchar(16) queue \"nullable\"\n        int season \"nullable\"\n        varchar(64) character\n        jsonb stats\n        varchar(32) digest\n        timestamptz captured_at\n    }\n    RANK_CHARACTER_RATE {\n        bigint id PK\n        varchar(32) discipline\n        date captured_on\n        varchar(16) platform \"nullable\"\n        varchar(16) queue \"nullable\"\n        varchar(16) region \"nullable\"\n        varchar(32) division \"nullable\"\n        varchar(64) map \"nullable\"\n        varchar(64) character\n        float pickrate \"nullable\"\n        float winrate \"nullable\"\n        float banrate \"nullable\"\n    }\n    RANK_FETCH_LOG {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar(32) discipline\n        bigint social_account_id FK \"nullable\"\n        varchar(255) handle\n        varchar(32) status\n        varchar(32) source\n        text error \"nullable\"\n        int snapshots_written\n    }\n    RANK_RANK_SNAPSHOT {\n        bigint id PK\n        varchar(32) discipline\n        bigint user_id FK\n        bigint social_account_id FK\n        varchar(255) handle\n        varchar(16) platform \"nullable\"\n        varchar(16) role \"nullable\"\n        varchar(16) queue \"nullable\"\n        varchar(32) division \"nullable\"\n        smallint tier \"nullable\"\n        int season \"nullable\"\n        int lp \"nullable\"\n        int wins \"nullable\"\n        int losses \"nullable\"\n        int rank_value \"nullable\"\n        varchar(64) mapping_version \"nullable\"\n        boolean is_ranked\n        timestamptz captured_at\n        varchar(32) source\n    }\n\n    PLAYERS_SOCIAL_ACCOUNT |o--o{ RANK_FETCH_LOG : \"social_account_id\"\n    PLAYERS_SOCIAL_ACCOUNT ||--o{ RANK_CAREER_SNAPSHOT : \"social_account_id\"\n    PLAYERS_SOCIAL_ACCOUNT ||--o{ RANK_RANK_SNAPSHOT : \"social_account_id\"\n    PLAYERS_SOCIAL_ACCOUNT ||--o| RANK_ACCOUNT_PROFILE : \"social_account_id\"\n    PLAYERS_SOCIAL_ACCOUNT ||--o| RANK_ACCOUNT_STATE : \"social_account_id\"\n    PLAYERS_USER ||--o{ RANK_RANK_SNAPSHOT : \"user_id\"",
       "schemas": [
         "rank"
       ],
       "tables": [
+        "rank.account_profile",
         "rank.account_state",
+        "rank.career_snapshot",
+        "rank.character_rate",
         "rank.fetch_log",
         "rank.rank_snapshot"
       ],
-      "unique_keys": []
+      "unique_keys": [
+        {
+          "columns": [
+            "discipline",
+            "captured_on",
+            "platform",
+            "queue",
+            "region",
+            "division",
+            "map",
+            "character"
+          ],
+          "table": "RANK_CHARACTER_RATE"
+        }
+      ]
     },
     {
       "key": "registration",
