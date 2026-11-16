@@ -92,6 +92,12 @@ export function Inspector({
     if (!isOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // A dialog over the inspector (the notes sheet, an image viewer, a confirm) owns its keys: Esc
+      // closes that layer only, and ↑/↓ must not page the row out from under it. The inspector's own
+      // sheet below `lg` is not such a layer.
+      const layer =
+        event.target instanceof Element ? event.target.closest('[role="dialog"], [role="alertdialog"]') : null;
+      if (layer && !layer.hasAttribute("data-inspector-sheet")) return;
       if (event.key === "Escape") {
         onClose();
         return;
@@ -201,7 +207,7 @@ export function Inspector({
   if (!isWide) {
     return (
       <Sheet open onOpenChange={(next) => (next ? undefined : onClose())}>
-        <SheetContent side="right" variant="panel" className="w-full max-w-none sm:max-w-none">
+        <SheetContent side="right" variant="panel" className="w-full max-w-none sm:max-w-none" data-inspector-sheet>
           <SheetTitle className="sr-only">{typeof title === "string" ? title : t("details")}</SheetTitle>
           <SheetDescription className="sr-only">
             {t("detailsSelectedRow")}
