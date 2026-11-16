@@ -460,7 +460,7 @@ describe("Registration entries", () => {
     expect(inspector?.textContent).toContain("older version of this form");
   });
 
-  it("lays out the inspector: roles across with rank answers as rows, every other answer a question row", async () => {
+  it("lays out the inspector: a line per role with its rank answers, yes/no answers as a checklist, free text as a quote", async () => {
     const field = (key: string, kind: string, label: string) => ({
       key,
       kind,
@@ -517,28 +517,27 @@ describe("Registration entries", () => {
 
     const withInspector = await mount("?id=1");
     const inspector = withInspector.querySelector("aside[aria-label='Row inspector']")!;
-    const rowOf = (label: string) =>
-      [...inspector.querySelectorAll("tbody tr")].find((row) => row.querySelector("th")?.textContent === label);
+    const roleRow = (text: string) =>
+      [...inspector.querySelectorAll("li")].find((li) => li.textContent?.includes(text));
     const answerOf = (label: string) =>
-      [...inspector.querySelectorAll("dt")].find((dt) => dt.textContent === label)?.nextElementSibling?.textContent;
+      [...inspector.querySelectorAll("dt")].find((dt) => dt.textContent === label)?.nextElementSibling;
 
-    // Roles are the columns (a role ranked but not declared gets one too); each rank answer is a row.
-    const roleHeaders = [...inspector.querySelectorAll("thead th")].map((th) => th.textContent);
-    expect(roleHeaders.some((text) => text?.includes("tank"))).toBe(true);
-    expect(roleHeaders.some((text) => text?.includes("support"))).toBe(true);
-    expect(rowOf("Declared")?.textContent).toContain("3500");
-    expect(rowOf("Peak this season")?.textContent).toContain("3600");
-    expect(rowOf("Peak this season")?.textContent).toContain("3000");
-    // Handles are their own block, the rest stay question rows in form order.
-    expect(answerOf("Battle.net")).toBe("Main#1, Smurf#2");
-    expect([...inspector.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual([
-      "Battle.net",
-      "Sub",
-      "About you",
-      "Matches"
+    // One line per role, the declared rank on it and every rank answer under it; a role ranked but not declared too.
+    expect(roleRow("tank")?.textContent).toContain("3500");
+    expect(roleRow("tank")?.textContent).toContain("Peak this season");
+    expect(roleRow("tank")?.textContent).toContain("3600");
+    expect(roleRow("support")?.textContent).toContain("3000");
+    // A yes/no answer is a checklist line that still says its answer to a screen reader.
+    expect(roleRow("Sub")?.textContent).toBe("Sub: Yes");
+    // The player's free text is a quote, attributed to its question.
+    expect(inspector.querySelector("blockquote")?.textContent).toBe("just a sub");
+    expect(inspector.querySelector("figcaption")?.textContent).toContain("About you");
+    // The rest stay question rows; handles are their own block, one per line.
+    expect([...inspector.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual(["Matches", "Battle.net"]);
+    expect(answerOf("Matches")?.textContent).toBe("79");
+    expect([...(answerOf("Battle.net")?.children ?? [])].map((handle) => handle.textContent)).toEqual([
+      "Main#1",
+      "Smurf#2"
     ]);
-    expect(answerOf("Sub")).toBe("Yes");
-    expect(answerOf("About you")).toBe("just a sub");
-    expect(answerOf("Matches")).toBe("79");
   });
 });

@@ -16,12 +16,8 @@ import {
   builtinStatusName,
   localizedStatusMeta
 } from "@/components/balancer/registrations/_components/registrationsTranslator";
-import {
-  AdmissionStatusBadge,
-  BalancerStatusBadge,
-  RegistrationStatusBadge,
-  SubscriptionStatusBadge
-} from "@/components/status/RegistrationBadges";
+import { RegistrationStatusBadge } from "@/components/status/RegistrationBadges";
+import { formatAdmissionReason } from "@/lib/registration/admission";
 import {
   type RegistrationGroupingMode,
   groupRegistrations,
@@ -429,22 +425,18 @@ export default function RegistrationsTable({
         }
         subtitle={
           inspected ? (
+            // The review status and one line on admission; the checklist in the body says why.
             <span className="mt-1 flex flex-wrap items-center gap-1.5">
               <RegistrationStatusBadge
                 status={inspected.status}
                 meta={localizedStatusMeta(inspected.status_meta, tRegistrations)}
               />
-              <BalancerStatusBadge
-                status={inspected.balancer_status}
-                meta={localizedStatusMeta(inspected.balancer_status_meta, tRegistrations)}
-              />
-              <span className="inline-flex items-center gap-0.5">
-                <AdmissionStatusBadge admission={inspected.admission} />
+              <span className={inspected.admission.decision === "not_admitted" ? "text-destructive" : undefined}>
                 {admissionDecisionLabel(inspected.admission.decision, t)}
+                {inspected.admission.decision === "not_admitted" && inspected.admission.blockers[0]?.reasons[0]
+                  ? `: ${formatAdmissionReason(t, inspected.admission.blockers[0].reasons[0])}`
+                  : null}
               </span>
-              {inspected.subscription_outcome ? (
-                <SubscriptionStatusBadge outcome={inspected.subscription_outcome} />
-              ) : null}
             </span>
           ) : undefined
         }
