@@ -11,9 +11,11 @@ interface UserTabsClientProps {
   activeTab: string;
   children: React.ReactNode;
   badges?: TabBadges;
+  /** The player has a ladder tab; one opened by link shows even without. */
+  showLadder?: boolean;
 }
 
-const UserTabsClient = ({ activeTab, children, badges }: UserTabsClientProps) => {
+const UserTabsClient = ({ activeTab, children, badges, showLadder = false }: UserTabsClientProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -50,7 +52,7 @@ const UserTabsClient = ({ activeTab, children, badges }: UserTabsClientProps) =>
           margin cancels it plus most of the layout's `gap-4 md:gap-8` so the row
           sits 16px under the hero at rest instead of 44px. */}
       <div className="sticky top-[var(--aqt-header-h)] z-40 -mx-4 -mt-3 bg-background px-4 pt-3 md:-mx-6 md:-mt-7 md:px-6 xl:-mx-10 xl:px-10">
-        <UserProfileTabList badges={badges} />
+        <UserProfileTabList badges={badges} showLadder={showLadder || value === "ladder"} />
       </div>
       {/* A tab's sticky rails stop under this bar, not under the site header alone: the bar ends 3rem (`pt-3` and the
           36px tab row) below the header, and the rails keep the cards' 14px gap from it. */}

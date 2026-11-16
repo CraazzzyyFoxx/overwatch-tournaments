@@ -33,12 +33,31 @@ __all__ = (
     "parse_career",
     "parse_profile",
     "RANK_MAPPING_VERSION",
+    "RATES_PLATFORM",
+    "RATES_REGION",
+    "RATE_DIVISIONS",
     "map_division_tier_to_rank_value",
+    "rate_division",
     "Granularity",
     "resolve_date_range",
     "fill_rank_series",
     "battle_tag_to_slug",
 )
+
+#: The slice of Blizzard's hero rates collected: the community plays on PC in Europe.
+RATES_PLATFORM = "pc"
+RATES_REGION = "europe"
+#: OverFast's ``competitive_division`` filter values, lowest first.
+RATE_DIVISIONS = ("bronze", "silver", "gold", "platinum", "emerald", "diamond", "master", "grandmaster")
+
+
+def rate_division(division: str | None) -> str | None:
+    """The rates slice of a rank division: itself, or the top slice for Champion (Blizzard's ``ultimate``), which has
+    no rates of its own."""
+    name = (division or "").lower()
+    if name in RATE_DIVISIONS:
+        return name
+    return RATE_DIVISIONS[-1] if name in {"ultimate", "champion"} else None
 
 
 @dataclass(frozen=True)
@@ -63,6 +82,8 @@ class ParsedProfile:
     attrs: dict[str, Any]
     #: Blizzard's "profile last updated" moment.
     upstream_updated_at: datetime | None
+    #: Whether the profile shows its career: OverFast answers ``stats: null`` for a closed one.
+    is_public: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +116,8 @@ class RankFetchResult:
     ranks: list[ParsedRank] = field(default_factory=list)
     error: str | None = None
     profile: ParsedProfile | None = None
-    career: list[CareerSeries] = field(default_factory=list)
+    #: ``None`` when the career was there but unreadable: what is stored stays as it is.
+    career: list[CareerSeries] | None = field(default_factory=list)
 
 
 def parse_profile(summary: Mapping[str, Any]) -> ParsedProfile:

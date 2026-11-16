@@ -29,7 +29,10 @@ import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { FormField } from "@/types/forms.types";
 import type { RequirementVerdict, SubroleCatalog } from "@/types/registration.types";
 
+import type { CareerUserSignals } from "@/types/career-signals.types";
+
 import { formatSubmittedAt } from "../registrationsTable.model";
+import RegistrationCareerSection from "./RegistrationCareerSection";
 
 /** Builtins whose answer is the player's own free text: read under its question, full width. */
 const PROSE_BUILTINS: Record<string, true> = { public_notes: true, organizer_notes: true };
@@ -325,6 +328,7 @@ export default function RegistrationInspectorBody({
   schemaKnown,
   canWriteNotes,
   canModerateNotes,
+  careerSignals,
   t
 }: Readonly<{
   registration: AdminRegistration;
@@ -340,6 +344,8 @@ export default function RegistrationInspectorBody({
   canWriteNotes: boolean;
   /** `registration.delete`: remove other organizers' notes. */
   canModerateNotes: boolean;
+  /** The registrant's game-career signals; absent when the game collects none, the viewer may not read them or they are not in yet. */
+  careerSignals?: CareerUserSignals | null;
   t: AdmissionTranslator;
 }>) {
   const i18n = useTranslations("registrationsAdmin");
@@ -415,6 +421,10 @@ export default function RegistrationInspectorBody({
           ontology={ontology}
         />
       </section>
+
+      {careerSignals ? (
+        <RegistrationCareerSection ontology={ontology} signals={careerSignals} />
+      ) : null}
 
       {hasQuestionnaire ? (
         <section className="space-y-1.5">

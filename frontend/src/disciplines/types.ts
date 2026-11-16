@@ -20,6 +20,7 @@ import type {
 import type { UserTournamentStat } from "@/types/statistics.types";
 
 import type { WorkspaceAxis } from "@/lib/site/discipline-scope";
+import type { StatsScope } from "@/lib/site/stats-scope";
 
 export type { DisciplineCapabilities };
 
@@ -157,6 +158,13 @@ export type SlotProps = {
    * the host's explicit "not available" state and no read.
    */
   characterCompare: CharacterCompareProps;
+  /**
+   * The profile's game-career tab (a game that collects its players' career from the game itself): the host passes the
+   * player and the stats scope of the tournament side; the module reads and draws the rest.
+   */
+  careerTab: { userId: number; scope: StatsScope; metadata: DisciplineMetadata };
+  /** A compact career card on the overview; draws nothing without career data. */
+  careerOverview: { userId: number; userSlug: string; metadata: DisciplineMetadata };
   matchStats: { match: MatchWithStats; metadata: DisciplineMetadata };
   /** `view`: `overview` compares the observed sides; `players` is the totals grouped by participation (8a amendment). */
   seriesStats: { matches: MatchWithStats[]; metadata: DisciplineMetadata; view: "overview" | "players" };
@@ -229,7 +237,9 @@ export type ProfileSlot =
   | "roleSignatures"
   | "tournamentSummary"
   | "lobbyRankTiles"
-  | "characterCompare";
+  | "characterCompare"
+  | "careerTab"
+  | "careerOverview";
 export type MatchSlot = "matchStats" | "seriesStats" | "matchRowBadge" | "matchCharacters";
 export type PregameSlot = "pregameCharacterBans";
 export type AdminSlot = "nativeRankEditor";

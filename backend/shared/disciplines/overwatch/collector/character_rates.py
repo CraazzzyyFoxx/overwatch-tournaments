@@ -23,13 +23,12 @@ from shared.services.settings_provider import settings_provider
 
 from . import runtime, tasks
 from .client import OverFastError, OverFastRankClient, OverFastRateLimited
+from .domain import RATE_DIVISIONS as DIVISIONS
+from .domain import RATES_PLATFORM as PLATFORM
+from .domain import RATES_REGION as REGION
 from .service import DISCIPLINE
 
-PLATFORM = "pc"
-REGION = "europe"
 COMPETITIVE, QUICKPLAY = "competitive", "quickplay"
-#: OverFast's ``competitive_division`` filter values.
-DIVISIONS = ("bronze", "silver", "gold", "platinum", "emerald", "diamond", "master", "grandmaster")
 
 TICK_SECONDS = 60 * 60
 LEADER_LOCK_KEY = "ow_rank:character_rates:leader"

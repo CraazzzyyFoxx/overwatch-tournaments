@@ -53,12 +53,14 @@ async def record(
     *,
     social_account_id: int,
     profile: ParsedProfile,
-    career: Sequence[CareerSeries],
+    career: Sequence[CareerSeries] | None,
     now: datetime | None = None,
 ) -> tuple[int, bool]:
     """Rewrite the account's profile and append the career series that changed since their last row.
 
-    Returns the career rows written and whether the account's Blizzard id is due for (re)resolution.
+    ``career`` ``None`` means the profile showed a career the parser could not read: the stored series stay as they
+    are rather than being read as "nothing changed" or "closed". Returns the career rows written and whether the
+    account's Blizzard id is due for (re)resolution.
     """
     now = now or datetime.now(UTC)
     row = await profile_repo.get_by_social_account_id(session, social_account_id)
@@ -72,8 +74,9 @@ async def record(
     row.attrs = profile.attrs
     row.upstream_updated_at = profile.upstream_updated_at
     row.fetched_at = now
+    row.is_public = profile.is_public
 
-    changed = changed_career(career, await _latest_series(session, social_account_id))
+    changed = [] if career is None else changed_career(career, await _latest_series(session, social_account_id))
     if changed:
         await career_repo.create_many(
             session,

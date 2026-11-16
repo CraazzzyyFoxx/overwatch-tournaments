@@ -18,6 +18,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import { DistributionBar } from "./DistributionBar";
+import { RankCareerHealth } from "./rank-career-health";
 import {
   STATUS_BAR,
   STATUS_ORDER,
@@ -219,6 +220,8 @@ export function RankHealthDashboard({ discipline }: Readonly<{ discipline: strin
         labels={statusLabels}
         fills={STATUS_BAR}
       />
+
+      <RankCareerHealth discipline={discipline} />
     </div>
   );
 }

@@ -167,6 +167,8 @@ class GameAccountProfile(db.TimeStampIntegerMixin):
     ``canonical_id`` is the upstream's rename-proof id of the account (Overwatch: the Blizzard career id), resolved
     once and used to keep reading the account after its handle stopped resolving; ``canonical_checked_at`` paces that
     resolution. ``attrs`` holds the game's own profile fields (Overwatch: namecard, title, endorsement level).
+    ``is_public`` is whether the last poll saw the career: a closed profile still shows its name and avatar, and what
+    was collected while it was open must not be shown while it is closed.
     """
 
     __tablename__ = "account_profile"
@@ -184,6 +186,7 @@ class GameAccountProfile(db.TimeStampIntegerMixin):
     # The upstream's own "profile last changed" moment; ``fetched_at`` is our last successful read.
     upstream_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    is_public: Mapped[bool] = mapped_column(Boolean(), server_default=text("false"))
 
 
 class CareerSnapshot(db.Base):

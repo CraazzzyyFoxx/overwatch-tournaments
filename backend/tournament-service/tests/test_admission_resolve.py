@@ -190,7 +190,7 @@ class BatchingTests(IsolatedAsyncioTestCase):
         }
 
     async def test_twenty_registrations_cost_one_profile_read(self):
-        session = _Session([("player#1", "ok")])
+        session = _Session([("player#1", "ok", True)])
         regs = [_reg(i, tag="Player#1") for i in range(1, 21)]
 
         await _resolve(session, regs, config=_config(profile=True))
@@ -373,12 +373,12 @@ class FailOpenTests(IsolatedAsyncioTestCase):
     async def test_a_closed_profile_blocks_but_a_manual_check_in_still_admits(self):
         """The end-to-end shape of the forced-admission fix, through the real
         registry: the requirement stays visibly blocked, and the player is in."""
-        blocked = await _resolve(_Session([("player#1", "private")]), [_reg(1)], config=_config(profile=True))
+        blocked = await _resolve(_Session([("player#1", "private", False)]), [_reg(1)], config=_config(profile=True))
         assert blocked[1].decision is AdmissionDecision.not_admitted
         assert [v.key for v in blocked[1].blockers] == ["open_profile"]
 
         forced = await _resolve(
-            _Session([("player#1", "private")]), [_reg(1, checked_in=True)], config=_config(profile=True)
+            _Session([("player#1", "private", False)]), [_reg(1, checked_in=True)], config=_config(profile=True)
         )
         assert forced[1].decision is AdmissionDecision.admitted
         assert forced[1].blockers == ()

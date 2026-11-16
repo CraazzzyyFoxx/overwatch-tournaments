@@ -28,15 +28,18 @@ _SUBJECTS = {
     "rpc.stats.rank.user_history": "rank.user_history",
     "rpc.stats.rank.game_account_history": "rank.game_account_history",
     "rpc.stats.rank.user_current": "rank.user_current",
+    "rpc.stats.rank.user_career": "rank.user_career",
     "rpc.stats.rank.fetch_log": "rank.fetch_log",
     "rpc.stats.rank.stats": "rank.stats",
     "rpc.stats.rank.user_collection": "rank.user_collection",
+    "rpc.stats.rank.career_signals": "rank.career_signals",
+    "rpc.stats.rank.career_health": "rank.career_health",
     "rpc.stats.rank.collect": "rank.collect",
     "rpc.stats.rank.reenable_disabled": "rank.reenable_disabled",
 }
 
 # Public (AuthNone) reads never look at the caller; everything else needs a valid identity.
-_PUBLIC = frozenset({"rank.user_history", "rank.game_account_history", "rank.user_current"})
+_PUBLIC = frozenset({"rank.user_history", "rank.game_account_history", "rank.user_current", "rank.user_career"})
 
 
 def _handler(data: dict, name: str) -> CollectionHandler:

@@ -35,6 +35,8 @@ describe("slot-family loaders", () => {
     expect(await slotsOf(loadPregameUI)).toEqual(["pregameCharacterBans"]);
     expect(await slotsOf(loadAdminUI)).toEqual(["nativeRankEditor"]);
     expect(await slotsOf(loadProfileUI)).toEqual([
+      "careerOverview",
+      "careerTab",
       "characterCompare",
       "characterPopover",
       "characterStats",

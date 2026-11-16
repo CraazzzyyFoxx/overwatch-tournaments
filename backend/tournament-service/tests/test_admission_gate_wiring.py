@@ -152,7 +152,8 @@ class _Session:
 
     async def execute(self, _statement: Any, *_args: Any, **_kwargs: Any) -> _Rows:
         self.statements += 1
-        return _Rows([(tag, status) for tag, status in self._tag_statuses.items()])
+        # (handle, status, profile open): no profile row, as for a tag collected before the career was.
+        return _Rows([(tag, status, None) for tag, status in self._tag_statuses.items()])
 
     async def commit(self) -> None:
         """The gate commits its resolver's writes before deciding; nothing to do here."""

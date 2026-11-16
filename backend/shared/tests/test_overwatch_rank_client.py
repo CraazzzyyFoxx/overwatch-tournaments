@@ -80,10 +80,25 @@ class FetchProfileStatusTests(IsolatedAsyncioTestCase):
         self.assertEqual(result.status, enums.RankCollectionStatus.private)
         self.assertEqual(result.ranks, [])
         self.assertEqual(result.profile.display_name, "Name")
+        self.assertTrue(result.profile.is_public)
         self.assertEqual(
             [(s.platform, s.queue, s.character, s.stats) for s in result.career],
             [("pc", "quickplay", "ana", {"game": {"time_played": 3600}})],
         )
+
+    async def test_a_closed_profile_is_not_public(self) -> None:
+        c = _make_client(httpx.Response(200, json={"summary": {"competitive": None}, "stats": None}))
+        result = await c.fetch_profile("Name#1234")
+        self.assertFalse(result.profile.is_public)
+        self.assertEqual(result.career, [])
+
+    async def test_an_unreadable_career_is_told_from_a_closed_profile(self) -> None:
+        """A parser failure must not read as "closed": every account would hide its career until the next poll."""
+        payload = {"summary": {"competitive": None}, "stats": {"pc": {"quickplay": {"career_stats": {"ana": ["?"]}}}}}
+        c = _make_client(httpx.Response(200, json=payload))
+        result = await c.fetch_profile("Name#1234")
+        self.assertTrue(result.profile.is_public)
+        self.assertIsNone(result.career)
 
     async def test_a_blizzard_id_is_read_by_its_encoded_path(self) -> None:
         c = _make_client(httpx.Response(200, json={"summary": {"competitive": None}}))

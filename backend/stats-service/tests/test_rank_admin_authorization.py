@@ -245,9 +245,12 @@ class RpcDispatchTests(IsolatedAsyncioTestCase):
             "user_history",
             "game_account_history",
             "user_current",
+            "user_career",
             "fetch_log",
             "stats",
             "user_collection",
+            "career_signals",
+            "career_health",
             "collect",
             "reenable_disabled",
         )
@@ -265,7 +268,7 @@ class RpcDispatchTests(IsolatedAsyncioTestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def test_all_eight_subjects_are_served(self) -> None:
+    def test_every_subject_is_served(self) -> None:
         self.assertEqual(set(self.broker.handlers), self.SUBJECTS)
 
     async def test_an_admin_subject_without_identity_is_unauthorized(self) -> None:

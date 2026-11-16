@@ -2260,6 +2260,7 @@ CREATE TABLE rank.account_profile (
 	canonical_checked_at TIMESTAMP WITH TIME ZONE,
 	upstream_updated_at TIMESTAMP WITH TIME ZONE,
 	fetched_at TIMESTAMP WITH TIME ZONE NOT NULL,
+	is_public BOOLEAN DEFAULT false NOT NULL,
 	PRIMARY KEY (id),
 	UNIQUE (social_account_id),
 	FOREIGN KEY(social_account_id) REFERENCES players.social_account (id) ON DELETE CASCADE

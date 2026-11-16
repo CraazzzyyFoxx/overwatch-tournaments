@@ -89,6 +89,19 @@ OPERATIONS: dict[str, Op] = {
     "rpc.stats.rank.user_current": Op(
         response=schemas.CurrentRanksResponse, query_params=(QueryParam("platform"), QueryParam("discipline"))
     ),
+    "rpc.stats.rank.user_career": Op(response=schemas.CareerResponse, query_params=(QueryParam("discipline"),)),
+    "rpc.stats.rank.career_signals": Op(
+        response=schemas.CareerSignalsResponse,
+        query_params=(
+            QueryParam("user_id", "integer"),
+            QueryParam("workspace_id", "integer"),
+            QueryParam("discipline"),
+        ),
+    ),
+    "rpc.stats.rank.career_health": Op(
+        response=schemas.CareerHealth,
+        query_params=(QueryParam("workspace_id", "integer"), QueryParam("discipline")),
+    ),
     "rpc.stats.rank.stats": Op(
         response=schemas.RankCollectionStats,
         query_params=(QueryParam("workspace_id", "integer"), QueryParam("discipline")),

@@ -61,10 +61,10 @@ SMURF_B = "Smurf#2222"
 
 
 class _Rows:
-    def __init__(self, rows: list[tuple[str, str]]) -> None:
+    def __init__(self, rows: list[tuple[str, str, bool | None]]) -> None:
         self._rows = rows
 
-    def all(self) -> list[tuple[str, str]]:
+    def all(self) -> list[tuple[str, str, bool | None]]:
         return self._rows
 
 
@@ -72,18 +72,20 @@ class _Session:
     """Just enough ``AsyncSession`` for the one batched ``battle_tag_state`` read.
 
     Counts ``execute`` calls so the batching contract stays asserted: one pass per
-    list, never one per registration.
+    list, never one per registration. ``public`` are the tags whose profile the
+    last poll saw open (``rank.account_profile.is_public``).
     """
 
-    def __init__(self, statuses: dict[str, str] | None = None) -> None:
+    def __init__(self, statuses: dict[str, str] | None = None, *, public: frozenset[str] = frozenset()) -> None:
         # Stored verbatim; the resolver is responsible for the case folding, and
         # seeding a pre-lowered map here would test the test instead.
         self._statuses = statuses or {}
+        self._public = public
         self.executes = 0
 
     async def execute(self, _statement: Any) -> _Rows:
         self.executes += 1
-        return _Rows(list(self._statuses.items()))
+        return _Rows([(tag, status, tag in self._public) for tag, status in self._statuses.items()])
 
 
 def _reg(reg_id: int, battle_tag: str | None, smurfs: list[str] | None = None) -> SimpleNamespace:
@@ -114,6 +116,12 @@ class ResolveProfilesOpen(IsolatedAsyncioTestCase):
         signal = await self._one(RankCollectionStatus.private.value)
         assert signal.is_open is False
         assert _codes(signal) == {("profile_private", MAIN)}
+
+    async def test_an_open_profile_without_a_competitive_rank_is_open(self):
+        """``private`` is "no competitive rank": an open, unranked profile must not refuse the player."""
+        session = _Session({MAIN: RankCollectionStatus.private.value}, public=frozenset({MAIN}))
+        result = await resolve_profiles_open(session, [_reg(1, MAIN)], scope="main")
+        assert result[1] == ProfileSignal(is_open=True, reasons=())
 
     async def test_not_found_blocks_naming_the_tag(self):
         signal = await self._one(RankCollectionStatus.not_found.value)

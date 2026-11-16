@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`rankcareer01_career_rates`** (189 revisions in `backend/migrations/versions/`).
+Alembic head: **`rankcareer02_profile_public`** (190 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -950,6 +950,7 @@ erDiagram
         timestamptz canonical_checked_at "nullable"
         timestamptz upstream_updated_at "nullable"
         timestamptz fetched_at
+        boolean is_public
     }
     RANK_ACCOUNT_STATE {
         bigint id PK

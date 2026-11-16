@@ -172,6 +172,11 @@ const RoleSplitSection = async ({
   );
 };
 
+/** The ladder card: the game's own (`careerOverview`), absent for a game with none and for a player without career data. */
+const CareerSection = ({ user, userSlug, discipline, axis }: Pick<SectionProps, "user" | "discipline" | "axis"> & { userSlug: string }) => (
+  <ProfileWidget axis={axis} discipline={discipline} slot="careerOverview" props={{ userId: user.id, userSlug }} fallback={null} />
+);
+
 const AchievementsSection = async ({
   user,
   userSlug,
@@ -230,6 +235,7 @@ const UserOverviewPage = ({ profile, tournamentId, user, scope, discipline, axis
         <Suspense fallback={<Skeleton className="h-96 w-full rounded-xl" />}>
           <RoleSplitSection {...section} profile={profile} />
         </Suspense>
+        <CareerSection user={user} userSlug={userSlug} discipline={discipline} axis={axis} />
         <Suspense fallback={<Skeleton className="h-64 w-full rounded-xl" />}>
           <AchievementsSection user={user} userSlug={userSlug} scope={scope} discipline={discipline} />
         </Suspense>

@@ -7,6 +7,7 @@ import UserOverviewPage, { UserOverviewPageSkeleton } from "@/app/(site)/users/_
 import UserMapsPage from "@/app/(site)/users/_views/UserMapsPage";
 import { notFound } from "next/navigation";
 import UserHeroesPage from "@/app/(site)/users/_views/UserHeroesPage";
+import UserLadderPage from "@/app/(site)/users/_views/UserLadderPage";
 import {
   UserEncountersPageSkeleton,
   UserEncountersPage
@@ -45,7 +46,7 @@ import type { UserProfile } from "@/types/user.types";
 // profile reads are tagged + revalidated in the Data Cache (see user.service),
 // which cuts repeat TTFB and gives crawlers fast SSR HTML.
 
-const USER_TABS = ["overview", "tournaments", "matches", "heroes", "maps", "achievements"] as const;
+const USER_TABS = ["overview", "tournaments", "matches", "heroes", "maps", "ladder", "achievements"] as const;
 type UserTab = (typeof USER_TABS)[number];
 
 type UserPageSearchParams = {
@@ -346,6 +347,34 @@ const UserHeroesTab = async ({
   );
 };
 
+const UserLadderTab = async ({
+  userAndProfile,
+  view
+}: {
+  userAndProfile: Promise<UserAndProfile>;
+  view: ProfileView;
+}) => {
+  const { user } = await userAndProfile;
+  return (
+    <PerGameTab userAndProfile={userAndProfile} view={view}>
+      {(game) => <UserLadderPage user={user} scope={view.scope} discipline={game} axis={view.axis} />}
+    </PerGameTab>
+  );
+};
+
+/**
+ * Whether the profile has a ladder tab: the tab's game (the per-game tabs' pick) collects its players' career and
+ * the player has a linked account in it. A failed read hides the tab; the tab itself says why when opened by link.
+ */
+const hasLadder = async (userAndProfile: Promise<UserAndProfile>, view: ProfileView) => {
+  const { user, profile } = await userAndProfile;
+  const game = view.game ?? blockGameOf(profile.games, view.init);
+  const collects = view.init.disciplines?.find((entry) => entry.code === game)?.capabilities.native_rank_collection;
+  if (game === null || !collects) return false;
+  const career = await userService.getUserCareer(user.id, game).catch(() => null);
+  return (career?.accounts.length ?? 0) > 0;
+};
+
 const UserAchievementsTab = async ({
   userAndProfile,
   selectedTournamentId,
@@ -418,6 +447,12 @@ const resolveTabContent = ({
         fallback: <Skeleton className="min-h-150 w-full rounded-xl" />,
         content: <UserHeroesTab userAndProfile={userAndProfile} view={view} />
       };
+    case "ladder":
+      return {
+        value: "ladder",
+        fallback: <Skeleton className="min-h-150 w-full rounded-xl" />,
+        content: <UserLadderTab userAndProfile={userAndProfile} view={view} />
+      };
     case "achievements":
       return {
         value: "achievements",
@@ -463,6 +498,7 @@ const ProfileBody = async ({
   return (
     <UserTabsClient
       activeTab={activeTab}
+      showLadder={await hasLadder(userAndProfile, view)}
       badges={{
         tournaments: profile.tournaments_count ?? null,
         // Characters are one game's: no count across games.

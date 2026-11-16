@@ -5342,6 +5342,61 @@
       },
       "summary": "Upload match logs"
     },
+    "rpc.stats.rank.career_health": {
+      "description": "Permission: workspace `rank.read` when `workspace_id` is given (only the game accounts of that workspace's players are counted), otherwise global `rank.read`. How much of the players' game careers the collector sees: players and accounts linked, found by the game now, with an open career, not found and never collected; and up to 200 accounts to fix: `lost` (the tag stopped resolving after it had, most recently seen first) and `renamed` (read by the account's stable id while the game shows another name). `discipline` query parameter names the game; 404 `rank_collection_unsupported` for a game that collects none.",
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "discipline",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "response": {
+        "array": false,
+        "ref": "stats.CareerHealth"
+      },
+      "summary": "Career collection health"
+    },
+    "rpc.stats.rank.career_signals": {
+      "description": "Permission: workspace `rank.read` when `workspace_id` is given (only the game accounts of that workspace's players are read), otherwise global `rank.read`. For 1 to 200 `user_id` values: each player's current-season competitive role shares, hours, last time their profile changed, and signals: `profile_not_found`, `previously_found` (the tag resolved before: likely renamed), `profile_private`, `never_collected`, `renamed` (read by the account's stable id under another name), `low_hours_high_rank` (`value` = hours) and `inactive` (no change for 30 days). `discipline` query parameter names the game; 404 `rank_collection_unsupported` for a game that collects none.",
+      "query_params": [
+        {
+          "name": "user_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "discipline",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "response": {
+        "array": false,
+        "ref": "stats.CareerSignalsResponse"
+      },
+      "summary": "Career signals for admission"
+    },
     "rpc.stats.rank.collect": {
       "description": "Permission: workspace `rank.update` when `workspace_id` is given (only that workspace's players' accounts are touched), otherwise global `rank.update`. Enqueues a native rank-collection run for a user or specific linked game accounts and returns the enqueued count. `discipline` query parameter names the game (default `overwatch`); 404 `rank_collection_unsupported` for a game that collects no ranks.",
       "query_params": [
@@ -5525,6 +5580,23 @@
         "ref": "stats.RankCollectionStats"
       },
       "summary": "Rank collection health stats"
+    },
+    "rpc.stats.rank.user_career": {
+      "description": "Permission: public; no authentication required. Every game account of the user shown on their public profile (accounts hidden from it are left out), with its upstream profile (display name, avatar, game attributes, whether it is public now) and, per platform and queue, its career as the game shows it now: time, games, winrate, per-10-minute rates, roles with their pool size and mains, and characters. Where the game publishes hero rates for the platform and queue, each character carries them (`meta`: pick, win and ban rate as fractions) at the account's current division in the character's role (every division when unranked there), and the queue its time-weighted `meta_fit` (pick rate) and `ban_exposure` (ban rate). A closed profile shows no career. A seasonal queue covers its current season. `discipline` query parameter names the game; 404 `rank_collection_unsupported` for a game that collects none.",
+      "query_params": [
+        {
+          "name": "discipline",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "response": {
+        "array": false,
+        "ref": "stats.CareerResponse"
+      },
+      "summary": "User game career"
     },
     "rpc.stats.rank.user_collection": {
       "description": "Permission: workspace `rank.read` when `workspace_id` is given (empty unless the player is a member of that workspace), otherwise global `rank.read`. Returns the native rank-collection status for each of a user's game accounts. `discipline` query parameter names the game (default `overwatch`); 404 `rank_collection_unsupported` for a game that collects no ranks.",
@@ -30888,6 +30960,767 @@
         "teams"
       ],
       "title": "BindIngestRequest",
+      "type": "object"
+    },
+    "stats.CareerAccount": {
+      "description": "One linked game account. ``queues`` is empty while its profile is closed.",
+      "properties": {
+        "handle": {
+          "title": "Handle",
+          "type": "string"
+        },
+        "is_primary": {
+          "title": "Is Primary",
+          "type": "boolean"
+        },
+        "last_success_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Success At"
+        },
+        "profile": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/stats.CareerProfile"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "queues": {
+          "items": {
+            "$ref": "#/components/schemas/stats.CareerQueue"
+          },
+          "title": "Queues",
+          "type": "array"
+        },
+        "social_account_id": {
+          "title": "Social Account Id",
+          "type": "integer"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Status"
+        }
+      },
+      "required": [
+        "social_account_id",
+        "handle",
+        "is_primary",
+        "status",
+        "last_success_at",
+        "profile",
+        "queues"
+      ],
+      "title": "CareerAccount",
+      "type": "object"
+    },
+    "stats.CareerCharacter": {
+      "description": "One character in one queue: time, games and per-10-minute rates from the game's own career.",
+      "properties": {
+        "character": {
+          "title": "Character",
+          "type": "string"
+        },
+        "games_played": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Games Played"
+        },
+        "games_won": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Games Won"
+        },
+        "meta": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/stats.CareerMeta"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rates": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Rates",
+          "type": "object"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Role"
+        },
+        "seconds": {
+          "title": "Seconds",
+          "type": "number"
+        },
+        "share": {
+          "title": "Share",
+          "type": "number"
+        },
+        "winrate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Winrate"
+        }
+      },
+      "required": [
+        "character",
+        "role",
+        "seconds",
+        "share"
+      ],
+      "title": "CareerCharacter",
+      "type": "object"
+    },
+    "stats.CareerHealth": {
+      "description": "How much of the players' game careers the collector sees.",
+      "properties": {
+        "accounts": {
+          "title": "Accounts",
+          "type": "integer"
+        },
+        "accounts_found": {
+          "title": "Accounts Found",
+          "type": "integer"
+        },
+        "accounts_not_found": {
+          "title": "Accounts Not Found",
+          "type": "integer"
+        },
+        "accounts_pending": {
+          "title": "Accounts Pending",
+          "type": "integer"
+        },
+        "accounts_public": {
+          "title": "Accounts Public",
+          "type": "integer"
+        },
+        "generated_at": {
+          "format": "date-time",
+          "title": "Generated At",
+          "type": "string"
+        },
+        "lost": {
+          "title": "Lost",
+          "type": "integer"
+        },
+        "players": {
+          "title": "Players",
+          "type": "integer"
+        },
+        "players_found": {
+          "title": "Players Found",
+          "type": "integer"
+        },
+        "players_public": {
+          "title": "Players Public",
+          "type": "integer"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/components/schemas/stats.CareerProblem"
+          },
+          "title": "Problems",
+          "type": "array"
+        },
+        "renamed": {
+          "title": "Renamed",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "players",
+        "players_found",
+        "players_public",
+        "accounts",
+        "accounts_found",
+        "accounts_public",
+        "accounts_not_found",
+        "accounts_pending",
+        "lost",
+        "renamed",
+        "problems",
+        "generated_at"
+      ],
+      "title": "CareerHealth",
+      "type": "object"
+    },
+    "stats.CareerMeta": {
+      "description": "The game's own rates of a character in the ladder slice the player plays it in (fractions, 0..1).",
+      "properties": {
+        "banrate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Banrate"
+        },
+        "captured_on": {
+          "format": "date",
+          "title": "Captured On",
+          "type": "string"
+        },
+        "division": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Division"
+        },
+        "pickrate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pickrate"
+        },
+        "winrate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Winrate"
+        }
+      },
+      "required": [
+        "division",
+        "pickrate",
+        "winrate",
+        "banrate",
+        "captured_on"
+      ],
+      "title": "CareerMeta",
+      "type": "object"
+    },
+    "stats.CareerProblem": {
+      "description": "An account whose tag needs an organizer: ``lost`` stopped resolving after it had; ``renamed`` is read by its\nBlizzard id while the game shows another name.",
+      "properties": {
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Display Name"
+        },
+        "handle": {
+          "title": "Handle",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "last_success_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Success At"
+        },
+        "social_account_id": {
+          "title": "Social Account Id",
+          "type": "integer"
+        },
+        "user_id": {
+          "title": "User Id",
+          "type": "integer"
+        },
+        "user_name": {
+          "title": "User Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "social_account_id",
+        "user_id",
+        "user_name",
+        "handle",
+        "display_name",
+        "last_success_at"
+      ],
+      "title": "CareerProblem",
+      "type": "object"
+    },
+    "stats.CareerProfile": {
+      "properties": {
+        "attrs": {
+          "additionalProperties": true,
+          "title": "Attrs",
+          "type": "object"
+        },
+        "avatar_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Avatar Url"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Display Name"
+        },
+        "fetched_at": {
+          "format": "date-time",
+          "title": "Fetched At",
+          "type": "string"
+        },
+        "is_public": {
+          "title": "Is Public",
+          "type": "boolean"
+        },
+        "upstream_updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Upstream Updated At"
+        }
+      },
+      "required": [
+        "display_name",
+        "avatar_url",
+        "attrs",
+        "is_public",
+        "upstream_updated_at",
+        "fetched_at"
+      ],
+      "title": "CareerProfile",
+      "type": "object"
+    },
+    "stats.CareerQueue": {
+      "description": "One platform and queue of an account as the game shows it now; a seasonal queue covers its current season.",
+      "properties": {
+        "ban_exposure": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ban Exposure"
+        },
+        "captured_at": {
+          "format": "date-time",
+          "title": "Captured At",
+          "type": "string"
+        },
+        "characters": {
+          "items": {
+            "$ref": "#/components/schemas/stats.CareerCharacter"
+          },
+          "title": "Characters",
+          "type": "array"
+        },
+        "games_lost": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Games Lost"
+        },
+        "games_played": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Games Played"
+        },
+        "games_won": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Games Won"
+        },
+        "meta_fit": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Meta Fit"
+        },
+        "platform": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Platform"
+        },
+        "queue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Queue"
+        },
+        "rates": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Rates",
+          "type": "object"
+        },
+        "roles": {
+          "items": {
+            "$ref": "#/components/schemas/stats.CareerRole"
+          },
+          "title": "Roles",
+          "type": "array"
+        },
+        "season": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Season"
+        },
+        "seconds": {
+          "title": "Seconds",
+          "type": "number"
+        },
+        "winrate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Winrate"
+        }
+      },
+      "required": [
+        "platform",
+        "queue",
+        "season",
+        "seconds",
+        "games_played",
+        "games_won",
+        "games_lost",
+        "winrate",
+        "rates",
+        "roles",
+        "characters",
+        "captured_at"
+      ],
+      "title": "CareerQueue",
+      "type": "object"
+    },
+    "stats.CareerResponse": {
+      "properties": {
+        "accounts": {
+          "items": {
+            "$ref": "#/components/schemas/stats.CareerAccount"
+          },
+          "title": "Accounts",
+          "type": "array"
+        },
+        "generated_at": {
+          "format": "date-time",
+          "title": "Generated At",
+          "type": "string"
+        },
+        "user_id": {
+          "title": "User Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "user_id",
+        "accounts",
+        "generated_at"
+      ],
+      "title": "CareerResponse",
+      "type": "object"
+    },
+    "stats.CareerRole": {
+      "properties": {
+        "mains": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Mains",
+          "type": "array"
+        },
+        "pool_size": {
+          "title": "Pool Size",
+          "type": "number"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "seconds": {
+          "title": "Seconds",
+          "type": "number"
+        },
+        "share": {
+          "title": "Share",
+          "type": "number"
+        }
+      },
+      "required": [
+        "role",
+        "seconds",
+        "share",
+        "pool_size",
+        "mains"
+      ],
+      "title": "CareerRole",
+      "type": "object"
+    },
+    "stats.CareerSignal": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "handle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Handle"
+        },
+        "social_account_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Social Account Id"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "title": "CareerSignal",
+      "type": "object"
+    },
+    "stats.CareerSignalsResponse": {
+      "properties": {
+        "generated_at": {
+          "format": "date-time",
+          "title": "Generated At",
+          "type": "string"
+        },
+        "users": {
+          "items": {
+            "$ref": "#/components/schemas/stats.CareerUserSignals"
+          },
+          "title": "Users",
+          "type": "array"
+        }
+      },
+      "required": [
+        "users",
+        "generated_at"
+      ],
+      "title": "CareerSignalsResponse",
+      "type": "object"
+    },
+    "stats.CareerUserSignals": {
+      "properties": {
+        "competitive_role_shares": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Competitive Role Shares",
+          "type": "object"
+        },
+        "hours": {
+          "title": "Hours",
+          "type": "number"
+        },
+        "last_played_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Played At"
+        },
+        "signals": {
+          "items": {
+            "$ref": "#/components/schemas/stats.CareerSignal"
+          },
+          "title": "Signals",
+          "type": "array"
+        },
+        "user_id": {
+          "title": "User Id",
+          "type": "integer"
+        },
+        "user_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User Name"
+        }
+      },
+      "required": [
+        "user_id",
+        "competitive_role_shares",
+        "hours",
+        "last_played_at",
+        "signals"
+      ],
+      "title": "CareerUserSignals",
       "type": "object"
     },
     "stats.CatalogEntityRead": {

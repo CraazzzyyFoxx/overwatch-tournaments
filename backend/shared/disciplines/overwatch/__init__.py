@@ -54,9 +54,12 @@ _COLLECTION_HANDLERS = (
     "rank.user_history",
     "rank.game_account_history",
     "rank.user_current",
+    "rank.user_career",
     "rank.fetch_log",
     "rank.stats",
     "rank.user_collection",
+    "rank.career_signals",
+    "rank.career_health",
     "rank.collect",
     "rank.reenable_disabled",
 )

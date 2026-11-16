@@ -18,13 +18,18 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.social import SocialProvider
 from shared.models.identity.auth_user import AuthUser
+from shared.repository.ranks import workspace_account_ids
 from shared.rpc import common as c
 from shared.rpc.identity import MissingIdentityError, ensure_workspace_permission
 from shared.schemas import rank_collection as schemas
 
-from . import admin, queries
+from . import admin, portrait, queries
 from .domain import resolve_date_range
+
+#: Players one signals read may ask for: a registration list page.
+MAX_SIGNAL_USERS = 200
 
 
 def _dt(data: dict, key: str) -> datetime | None:
@@ -151,13 +156,45 @@ async def reenable_disabled(session: AsyncSession, user: AuthUser | None, data: 
     return schemas.ReenableDisabledResponse(reenabled=count)
 
 
+async def user_career(session: AsyncSession, user: AuthUser | None, data: dict[str, Any]) -> object:
+    # GET /users/{user_id}/career (public): the player's accounts as the game shows them; a closed profile, no career.
+    user_id = c.require_id(data)
+    accounts = await portrait.career_accounts(session, [user_id], visible_only=True)
+    return schemas.CareerResponse(user_id=user_id, accounts=accounts[user_id], generated_at=datetime.now(UTC))
+
+
+async def career_signals(session: AsyncSession, user: AuthUser | None, data: dict[str, Any]) -> object:
+    # GET /admin/rank/career-signals?user_id=..&user_id=.. — rank.read, scoped by workspace_id.
+    workspace_id = authorize(user, data, "read")
+    try:
+        user_ids = list(dict.fromkeys(int(raw) for raw in c.q(data, "user_id") or ()))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="user_id must be an integer") from exc
+    if not user_ids or len(user_ids) > MAX_SIGNAL_USERS:
+        raise HTTPException(status_code=422, detail=f"between 1 and {MAX_SIGNAL_USERS} user_id values")
+    scope = None if workspace_id is None else workspace_account_ids(workspace_id, provider=SocialProvider.BATTLENET)
+    now = datetime.now(UTC)
+    users = await portrait.career_signals(session, user_ids, now=now, account_scope=scope)
+    return schemas.CareerSignalsResponse(users=users, generated_at=now)
+
+
+async def career_health(session: AsyncSession, user: AuthUser | None, data: dict[str, Any]) -> object:
+    # GET /admin/rank/career-health — rank.read, scoped by workspace_id.
+    workspace_id = authorize(user, data, "read")
+    scope = None if workspace_id is None else workspace_account_ids(workspace_id, provider=SocialProvider.BATTLENET)
+    return await portrait.career_health(session, now=datetime.now(UTC), account_scope=scope)
+
+
 HANDLERS = {
     "rank.user_history": user_history,
     "rank.game_account_history": game_account_history,
     "rank.user_current": user_current,
+    "rank.user_career": user_career,
     "rank.fetch_log": fetch_log,
     "rank.stats": stats,
     "rank.user_collection": user_collection,
+    "rank.career_signals": career_signals,
+    "rank.career_health": career_health,
     "rank.collect": collect,
     "rank.reenable_disabled": reenable_disabled,
 }

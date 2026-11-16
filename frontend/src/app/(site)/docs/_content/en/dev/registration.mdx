@@ -72,7 +72,7 @@ One entry per player per tournament — a partial unique index, not a check in c
 
 Admission is two requirements in a fixed order, and the order is observable because the registrant's progress steps are rendered by walking it.
 
-1. **Open profile.** The stage is a hard-coded `check_in`: no column for it exists until an organizer asks for one. The scope is `main` (the primary BattleTag) or `all` (smurfs included).
+1. **Open profile.** The stage is a hard-coded `check_in`: no column for it exists until an organizer asks for one. The scope is `main` (the primary BattleTag) or `all` (smurfs included). A tag blocks when its profile is closed or not found; an open profile that has no competitive rank yet still counts as open.
 2. **Subscription.** The stage comes from the form (`registration` or `check_in`); garbage and `null` default to `check_in`, because a typo in a setting must not start refusing everyone.
 
 Stages are ordered: `registration` implies `check_in` as well. The subscription *rule* itself lives on the workspace rather than on the tournament — an armed toggle over an empty rule disarms itself instead of refusing everyone.

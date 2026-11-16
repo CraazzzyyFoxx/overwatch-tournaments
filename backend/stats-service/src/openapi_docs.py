@@ -77,6 +77,18 @@ DOCS: dict[str, dict] = {
         "summary": "Current user ranks",
         "description": "Permission: public; no authentication required. Returns a user's current collected native ranks for the requested platform. `discipline` query parameter names the game (default `overwatch`); 404 `rank_collection_unsupported` for a game that collects no ranks.",
     },
+    "rpc.stats.rank.user_career": {
+        "summary": "User game career",
+        "description": "Permission: public; no authentication required. Every game account of the user shown on their public profile (accounts hidden from it are left out), with its upstream profile (display name, avatar, game attributes, whether it is public now) and, per platform and queue, its career as the game shows it now: time, games, winrate, per-10-minute rates, roles with their pool size and mains, and characters. Where the game publishes hero rates for the platform and queue, each character carries them (`meta`: pick, win and ban rate as fractions) at the account's current division in the character's role (every division when unranked there), and the queue its time-weighted `meta_fit` (pick rate) and `ban_exposure` (ban rate). A closed profile shows no career. A seasonal queue covers its current season. `discipline` query parameter names the game; 404 `rank_collection_unsupported` for a game that collects none.",
+    },
+    "rpc.stats.rank.career_signals": {
+        "summary": "Career signals for admission",
+        "description": "Permission: workspace `rank.read` when `workspace_id` is given (only the game accounts of that workspace's players are read), otherwise global `rank.read`. For 1 to 200 `user_id` values: each player's current-season competitive role shares, hours, last time their profile changed, and signals: `profile_not_found`, `previously_found` (the tag resolved before: likely renamed), `profile_private`, `never_collected`, `renamed` (read by the account's stable id under another name), `low_hours_high_rank` (`value` = hours) and `inactive` (no change for 30 days). `discipline` query parameter names the game; 404 `rank_collection_unsupported` for a game that collects none.",
+    },
+    "rpc.stats.rank.career_health": {
+        "summary": "Career collection health",
+        "description": "Permission: workspace `rank.read` when `workspace_id` is given (only the game accounts of that workspace's players are counted), otherwise global `rank.read`. How much of the players' game careers the collector sees: players and accounts linked, found by the game now, with an open career, not found and never collected; and up to 200 accounts to fix: `lost` (the tag stopped resolving after it had, most recently seen first) and `renamed` (read by the account's stable id while the game shows another name). `discipline` query parameter names the game; 404 `rank_collection_unsupported` for a game that collects none.",
+    },
     "rpc.stats.rank.stats": {
         "summary": "Rank collection health stats",
         "description": "Permission: workspace `rank.read` when `workspace_id` is given (aggregates are then scoped to the game accounts of that workspace's players), otherwise global `rank.read`. Aggregated native rank-collection health: account state counts by status and priority tier, snapshot coverage over 24h/7d, last successful capture, last-24h fetch-outcome mix with error rate, upstream circuit state, and the active config. `discipline` query parameter names the game (default `overwatch`); 404 `rank_collection_unsupported` for a game that collects no ranks.",
