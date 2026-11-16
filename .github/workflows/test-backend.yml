@@ -107,7 +107,7 @@ jobs:
         with:
           python-version: "3.15"
       - name: Collect coverage data
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: coverage-data-*
           path: backend
