@@ -1966,6 +1966,38 @@
       "excludedDescription": "Manually removed from the balancer pool after being added.",
       "balancerIncompleteDescription": "Registration needs rank or role fixes.",
       "readyDescription": "Registration is ready for balancer."
+    },
+    "career": {
+      "title": "Ladder",
+      "openProfile": "profile",
+      "noSignals": "No signals: the game profile looks fine.",
+      "roleShares": "Share of this season's competitive time per role",
+      "hours": "{hours} h in total",
+      "lastGame": "last game {when}",
+      "noGames": "no games yet",
+      "column": {
+        "header": "Ladder",
+        "none": "No signals",
+        "many": "{count, plural, one {# signal} other {# signals}}"
+      },
+      "short": {
+        "profile_not_found": "Tag not found",
+        "previously_found": "Tag lost",
+        "profile_private": "Closed",
+        "never_collected": "Not collected",
+        "renamed": "Renamed",
+        "low_hours_high_rank": "Few hours",
+        "inactive": "Inactive"
+      },
+      "full": {
+        "profile_not_found": "Tag not found",
+        "previously_found": "Tag stopped resolving, likely renamed",
+        "profile_private": "Profile is closed",
+        "never_collected": "Not collected yet",
+        "renamed": "The game shows another name",
+        "low_hours_high_rank": "Only {hours} h at a high rank",
+        "inactive": "No profile changes for {days} days"
+      }
     }
   },
   "rankAutofill": {
@@ -6114,6 +6146,7 @@
         "overview": "Overview",
         "tournaments": "Tournaments",
         "maps": "Maps",
+        "ladder": "Ladder",
         "achievements": "Achievements"
       },
       "toolbar": {
@@ -6832,6 +6865,127 @@
         "title": "That hero is not in this game",
         "description": "The hero in the link does not exist in {game}. Choose another hero, or switch to the game the link was made for.",
         "checkFailed": "Could not check that hero against this game's catalog."
+      }
+    },
+    "career": {
+      "accounts": "Overwatch accounts",
+      "platform": "Platform",
+      "season": "Season {season}",
+      "loadError": "Couldn't load the ladder data.",
+      "empty": {
+        "title": "No Overwatch account",
+        "description": "This player has no Overwatch account on their profile."
+      },
+      "state": {
+        "primary": "Main",
+        "ok": "Linked",
+        "notFound": "Tag not found",
+        "private": "Profile closed",
+        "pending": "Not collected yet",
+        "error": "Update failed"
+      },
+      "profile": {
+        "title": "Game profile",
+        "endorsement": "Endorsement {level}",
+        "updated": "profile updated {when}"
+      },
+      "rank": {
+        "title": "Rank",
+        "unranked": "Unranked"
+      },
+      "queue": {
+        "title": "Queue",
+        "competitive": "Competitive",
+        "competitiveSeason": "Competitive · season {season}",
+        "quickplay": "Quick play"
+      },
+      "kpi": {
+        "hours": "Hours played",
+        "hoursValue": "{hours} h",
+        "games": "Games",
+        "winrate": "Winrate",
+        "record": "{won}W · {lost}L",
+        "eliminations": "Eliminations / 10",
+        "deaths": "Deaths / 10",
+        "healing": "Healing / 10",
+        "damage": "Damage / 10",
+        "metaFit": "Meta pool",
+        "metaFitTitle": "Average ladder pick rate of the heroes you play, weighted by your time.",
+        "banExposure": "Under ban",
+        "banExposureTitle": "Share of your playtime on heroes the ladder bans."
+      },
+      "roles": {
+        "pool": "pool {size}",
+        "mains": "Mains"
+      },
+      "heroes": {
+        "title": "Heroes",
+        "col": {
+          "hero": "Hero",
+          "share": "Time",
+          "games": "Games",
+          "winrate": "Winrate",
+          "eliminations": "Elims / 10",
+          "deaths": "Deaths / 10",
+          "output": "Dmg · Heal / 10",
+          "outputTitle": "Healing per 10 minutes for supports, hero damage for the rest",
+          "meta": "Ladder",
+          "metaTitle": "The hero's ladder winrate at your division",
+          "delta": "vs ladder",
+          "deltaTitle": "Your winrate minus the ladder's, in percentage points; hidden under 10 games"
+        },
+        "metaDivision": "Ladder, {division}",
+        "allDivisions": "all divisions",
+        "points": "{value} pp",
+        "more": "{count} more",
+        "less": "Show less"
+      },
+      "vs": {
+        "title": "Tournaments vs ladder",
+        "stat": "Stat",
+        "ladder": "Ladder",
+        "ours": "Our tournaments",
+        "rate": {
+          "winrate": "Winrate",
+          "eliminations": "Eliminations / 10",
+          "deaths": "Deaths / 10",
+          "hero_damage_done": "Damage / 10",
+          "healing_done": "Healing / 10"
+        },
+        "better": "Better than on the ladder",
+        "worse": "Worse than on the ladder",
+        "footer": "{maps, plural, one {# map} other {# maps}} in our tournaments · {games, plural, one {# game} other {# games}} this season",
+        "more": "{count} more",
+        "less": "Show less"
+      },
+      "unavailable": {
+        "private": {
+          "title": "Profile is closed",
+          "description": "The player has hidden their career in Overwatch, so only the name and avatar are shown."
+        },
+        "notFound": {
+          "title": "Tag not found",
+          "description": "Blizzard does not know this BattleTag. The player may have renamed it."
+        },
+        "pending": {
+          "title": "Not collected yet",
+          "description": "The career of this account has not been collected yet. It appears within a couple of hours."
+        },
+        "error": {
+          "title": "Couldn't update",
+          "description": "The last refresh of this account failed. The data appears after the next successful one."
+        },
+        "noQueues": {
+          "title": "No games yet",
+          "description": "This account has no ranked or quick play career on this platform."
+        }
+      },
+      "footer": "Data comes from the Blizzard profile and refreshes about every 2 hours. Hidden accounts are not shown; a closed profile shows only the name and avatar.",
+      "overview": {
+        "title": "Ladder",
+        "more": "Details",
+        "games": "{count, plural, one {# game} other {# games}}",
+        "mains": "Mains"
       }
     }
   },
@@ -9981,6 +10135,33 @@
         "upstreamDetail": "{host} · {count, plural, one {# malformed account} other {# malformed accounts}} rejected in 24h",
         "autoDisabled": "Auto-disabled accounts",
         "reenableAll": "Re-enable all accounts"
+      },
+      "career": {
+        "title": "Blizzard profiles",
+        "tiles": {
+          "playersFound": "Players found",
+          "playersPublic": "Profile open",
+          "notFound": "Tag not found",
+          "notFoundDetail": "of {total, plural, one {# account} other {# accounts}}",
+          "lost": "Lost",
+          "lostDetail": "were found before",
+          "renamed": "Renamed"
+        },
+        "table": {
+          "title": "Tags to fix",
+          "kind": "Issue",
+          "player": "Player",
+          "handle": "Tag",
+          "displayName": "In-game name",
+          "lastFound": "Last found",
+          "search": "Search players and tags…",
+          "empty": "Nothing to fix: every tag that was found still resolves.",
+          "truncated": "Showing the first {count} of {total}"
+        },
+        "kind": {
+          "lost": "Lost",
+          "renamed": "Renamed"
+        }
       },
       "history": {
         "battleTag": "Account",

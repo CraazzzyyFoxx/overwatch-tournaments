@@ -97,7 +97,8 @@ vi.mock("@/services/user.service", () => ({
     getUserMaps: async () => null,
     getUserEncounters: async () => ({ results: [], total: 0 }),
     getUserAchievements: async () => [],
-    getUserBestTeammates: async () => ({ results: [], total: 0 })
+    getUserBestTeammates: async () => ({ results: [], total: 0 }),
+    getUserCareer: async () => ({ accounts: [] })
   }
 }));
 // The rest of the page has its own suites.

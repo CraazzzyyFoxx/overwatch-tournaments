@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { Clock, UserPlus } from "lucide-react";
 
 import { buildBalancerRegistrationColumns } from "@/components/balancer/registrations/_components/balancerRegistrationColumns";
+import { careerSignalsColumn } from "@/components/balancer/registrations/_components/careerSignalsColumn";
 import RegistrationBulkActions from "@/components/balancer/registrations/_components/RegistrationBulkActions";
 import RegistrationFormDialogs from "@/components/balancer/registrations/_components/RegistrationFormDialogs";
 import RegistrationInspectorBody from "@/components/balancer/registrations/_components/RegistrationInspectorBody";
@@ -23,6 +24,7 @@ import {
   groupRegistrations,
   normalizeRegistrationGroupingMode
 } from "@/components/balancer/registrations/_components/registrationGrouping";
+import { useCareerSignals } from "@/components/balancer/registrations/_hooks/useCareerSignals";
 import { useRegistrationFilters } from "@/components/balancer/registrations/_hooks/useRegistrationFilters";
 import { useRegistrationMutations } from "@/components/balancer/registrations/_hooks/useRegistrationMutations";
 import { DataTable, type DataTableGroup, type TableCommand, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
@@ -168,6 +170,18 @@ export default function RegistrationsTable({
 
   const registrations = useMemo(() => registrationsQuery.data ?? [], [registrationsQuery.data]);
 
+  // The game's collected career: only for a game that collects one and a viewer who may read it (a 403 hides it too).
+  const careerReadable =
+    ontology?.discipline.capabilities.native_rank_collection === true &&
+    canAccessPermission("rank.read", tournament?.workspace_id);
+  const careerSignals = useCareerSignals({
+    workspaceId: tournament?.workspace_id ?? null,
+    discipline: tournament?.discipline ?? null,
+    userIds: registrations.flatMap((registration) => (registration.user_id == null ? [] : [registration.user_id])),
+    enabled: careerReadable
+  });
+  const careerVisible = careerReadable && !careerSignals.unavailable;
+
   const {
     defs: filterDefs,
     filters,
@@ -241,6 +255,9 @@ export default function RegistrationsTable({
         adminNotesEdit,
         ontology
       ),
+      ...(careerVisible
+        ? [careerSignalsColumn({ header: tRegistrations("career.column.header"), byUser: careerSignals.byUser })]
+        : []),
       notesCountColumn<AdminRegistration>({
         header: tNotes("column"),
         count: (registration) => noteCounts?.[String(registration.id)] ?? 0,
@@ -289,7 +306,9 @@ export default function RegistrationsTable({
       openAuditTrail,
       tRegistrations,
       noteCounts,
-      tNotes
+      tNotes,
+      careerVisible,
+      careerSignals.byUser
     ]
   );
 
@@ -451,6 +470,9 @@ export default function RegistrationsTable({
             schemaKnown={schemaLoaded}
             canWriteNotes={canAccessPermission("registration.update", workspaceId)}
             canModerateNotes={canAccessPermission("registration.delete", workspaceId)}
+            careerSignals={
+              careerVisible && inspected.user_id != null ? (careerSignals.byUser.get(inspected.user_id) ?? null) : null
+            }
             t={t}
           />
         ) : null}

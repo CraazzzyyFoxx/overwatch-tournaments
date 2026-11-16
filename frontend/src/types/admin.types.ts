@@ -119,6 +119,9 @@ export interface RankCollectionStats {
   invalid_handles_24h: number;
 }
 
+export type CareerHealth = Schema<"stats.CareerHealth">;
+export type CareerProblem = Schema<"stats.CareerProblem">;
+
 // ─── Subscription collection (parser admin) ────────────────────────────────────
 
 interface SubscriptionStateCounts {

@@ -2485,7 +2485,7 @@
       "path": "frontend/src/app/(site)/users/[slug]/page.tsx",
       "rule": "catalog-label",
       "token": "heroes",
-      "context": "const USER_TABS = [\"overview\", \"tournaments\", \"matches\", \"heroes\", \"maps\", \"achievements\"]",
+      "context": "const USER_TABS = [\"overview\", \"tournaments\", \"matches\", \"heroes\", \"maps\", \"ladder\", \"achievements\"]",
       "count": 1,
       "reason": "persisted/wire identifier (column default, table/schema name, stored parser/mode id, URL value, include token)",
       "owner": "P9",

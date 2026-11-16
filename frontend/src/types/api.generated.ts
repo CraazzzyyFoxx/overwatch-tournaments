@@ -26576,6 +26576,11 @@ export interface components {
             /** Code */
             code: string;
             /**
+             * Handle
+             * @default null
+             */
+            handle: string | null;
+            /**
              * Social Account Id
              * @default null
              */
@@ -26610,6 +26615,11 @@ export interface components {
             signals: components["schemas"]["stats.CareerSignal"][];
             /** User Id */
             user_id: number;
+            /**
+             * User Name
+             * @default null
+             */
+            user_name: string | null;
         };
         /** CatalogSyncError */
         "stats.CatalogSyncError": {

@@ -31599,6 +31599,18 @@
           "title": "Code",
           "type": "string"
         },
+        "handle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Handle"
+        },
         "social_account_id": {
           "anyOf": [
             {
@@ -31687,6 +31699,18 @@
         "user_id": {
           "title": "User Id",
           "type": "integer"
+        },
+        "user_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User Name"
         }
       },
       "required": [

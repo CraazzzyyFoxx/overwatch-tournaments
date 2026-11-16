@@ -17,8 +17,7 @@ import {
   UserProfile,
   MinimizedUser,
   UserTournamentList,
-  UserTournamentWithStats
-} from "@/types/user.types";
+  UserTournamentWithStats, CareerResponse} from "@/types/user.types";
 import { PaginatedResponse, SearchPaginationParams } from "@/types/pagination.types";
 import { AchievementRarity } from "@/types/achievement.types";
 import { apiFetch } from "@/lib/api/fetch";
@@ -264,6 +263,19 @@ export default class userService {
         discipline,
         ...scopeQuery(scope)
       },
+      next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
+    }).then((res) => res.json());
+  }
+  /** A player's collected game career (`discipline`: the game that collects it; 404 for one that collects none). */
+  static async getUserCareer(
+    id: number,
+    discipline: string,
+    { signal }: { signal?: AbortSignal } = {}
+  ): Promise<CareerResponse> {
+    return apiFetch(`/api/v1/users/${id}/career`, {
+      signal,
+      query: { discipline },
+      skipWorkspace: true,
       next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
     }).then((res) => res.json());
   }

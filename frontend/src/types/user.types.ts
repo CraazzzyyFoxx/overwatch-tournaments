@@ -6,6 +6,13 @@ import type { PaginatedResponse } from "@/types/pagination.types";
 import { UserTournamentStat } from "@/types/statistics.types";
 import { DivisionGridVersion } from "@/types/workspace.types";
 
+/** A player's collected game career (`GET /users/{id}/career`); the meta fields are absent until the ladder meta is collected. */
+export type CareerResponse = Schema<"stats.CareerResponse">;
+export type CareerAccount = Schema<"stats.CareerAccount">;
+export type CareerQueue = Schema<"stats.CareerQueue">;
+export type CareerCharacter = Schema<"stats.CareerCharacter">;
+export type CareerProfile = Schema<"stats.CareerProfile">;
+
 /** One character's share (0..1) of the observed playtime of the returned set — a fraction, not a duration. */
 export interface CharacterPlaytime {
   entity: CatalogEntityRead;

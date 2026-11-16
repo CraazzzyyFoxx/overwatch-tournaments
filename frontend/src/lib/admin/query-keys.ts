@@ -44,6 +44,11 @@ export const adminQueryKeys = {
   /** The flat rank-overview table; `params` is the whole filter/sort/page set. */
   rankOverview: (workspaceId: KeyPart, params: unknown) =>
     ["admin", "rank", "overview", workspaceId, params] as const,
+  /** One chunk of the registrations' career signals: its sorted user ids. */
+  rankCareerSignals: (workspaceId: KeyPart, discipline: KeyPart, userIds: readonly number[]) =>
+    ["admin", "rank", "career-signals", workspaceId, discipline, userIds] as const,
+  rankCareerHealth: (workspaceId: KeyPart, discipline: KeyPart) =>
+    ["admin", "rank", "career-health", workspaceId, discipline] as const,
   rankStats: (workspaceId: KeyPart, discipline: KeyPart) =>
     ["admin", "rank", "stats", workspaceId, discipline] as const,
   rankStatsAll: () => ["admin", "rank", "stats"] as const,

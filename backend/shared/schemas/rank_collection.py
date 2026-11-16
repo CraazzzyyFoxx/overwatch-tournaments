@@ -133,11 +133,15 @@ class CareerSignal(BaseModel):
     ``low_hours_high_rank`` (``value`` = hours) or ``inactive``."""
     social_account_id: int | None = None
     """The account it is about; ``None`` for the player as a whole."""
+    handle: str | None = None
+    """That account's stored handle."""
     value: float | None = None
 
 
 class CareerUserSignals(BaseModel):
     user_id: int
+    user_name: str | None = None
+    """The player's name (their public profile's address)."""
     competitive_role_shares: dict[str, float]
     """Each role's share of the player's current-season competitive time, across their accounts."""
     hours: float

@@ -38,6 +38,7 @@ export const userQueryKeys = {
   /** One tournament's encounters of a user (the history dossier); the axis and game are that tournament's own. */
   tournamentEncounters: (userId: KeyPart, axis: UserAxis, discipline: string, tournamentId: KeyPart) =>
     ["user-stats", userId, axis, discipline, "tournament-encounters", tournamentId] as const,
+  career: (userId: KeyPart, discipline: string) => ["user-stats", userId, null, discipline, "career"] as const,
   /** Prefix over every axis and game of one user's statistics — for invalidation, not for a read. */
   statsAll: (userId: KeyPart) => ["user-stats", userId] as const,
   overviewCatalog: (axis: UserAxis, discipline: string, query: KeyPart, role: KeyPart, divisions: KeyPart, hasLogs: KeyPart, letter: KeyPart) =>

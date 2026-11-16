@@ -32,6 +32,24 @@ player whose open profile simply had no competitive rank yet. A `private` tag wh
 (`is_public`) now counts as open. A closed or unfound profile still blocks; a tag never collected since the column
 appeared reads as before until its next poll.
 
+**Meta comparison.** The career read compares each hero with Blizzard's newest daily hero rates (PC, Europe, from
+`rank.character_rate`). In competitive the slice is the account's current division in the hero's role: Champion
+reads the Grandmaster slice, the top one Blizzard publishes, and a role the account is unranked in reads every
+division. Quick play reads its only slice. Each hero carries `meta` (pick, win and ban rate as fractions, the
+division and the day). Each queue carries `meta_fit`, the time-weighted pick rate of the player's heroes, and
+`ban_exposure`, their time-weighted ban rate. Console careers get no meta, because only PC rates are collected.
+
+**Collection health.** `GET /api/v1/admin/rank/career-health` (`rank.read`, scoped by `workspace_id`) returns:
+- how many players and accounts are linked, found by the game now, open, not found, and never collected;
+- up to 200 tags to fix: `lost` (stopped resolving after they had) and `renamed` (the game shows another name).
+
+**Site.** The public player profile gets a «Ладдер» / "Ladder" tab with:
+- the game profile, ranks, the queue's figures, roles and heroes, with each hero's meta;
+- tournament against ladder per hero.
+
+The Overview tab gets a short ladder card. The registrations list gets a ladder-signals column and an inspector
+section. The rank collector's health tab shows Blizzard-profile coverage and the tags to fix.
+
 **Data fix shipped before this.** v2.10.14 fixed career parsing. Blizzard repeats some keys inside one category
 (a hero's `games_won`, then its hero wins under the same key), and the parser kept the last value. Career rows
 written by v2.10.13 were deleted after v2.10.14 started; the next poll rewrites them.

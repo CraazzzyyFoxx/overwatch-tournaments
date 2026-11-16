@@ -366,3 +366,11 @@ class CareerAccountsDbTests(IsolatedAsyncioTestCase):
         async with self.Session() as s:
             report = await portrait.career_health(s, now=NOW, account_scope=scope)
         self.assertEqual((report.players, report.accounts), (1, 2))
+
+    async def test_signals_name_the_player_and_each_account(self) -> None:
+        async with self.Session() as s:
+            (signals,) = await portrait.career_signals(s, [self.user_id], now=NOW)
+        tag = signals.user_name or ""
+        self.assertTrue(tag.startswith("owportrait-"))
+        never = {s.handle for s in signals.signals if s.code == "never_collected"}
+        self.assertEqual(never, {f"{tag}a#1234", f"{tag}b#1234"})

@@ -1,3 +1,4 @@
+import type { CareerSignalsResponse } from "@/types/career-signals.types";
 import { apiFetch } from "@/lib/api/fetch";
 import { teamFormatPayload, type TeamFormatRead, type TeamFormatWrite } from "@/lib/roster/team-format";
 import { PaginatedResponse } from "@/types/pagination.types";
@@ -110,6 +111,7 @@ import {
   RankFetchLogRow,
   RankFetchLogQuery,
   RankCollectionStats,
+  CareerHealth,
   SubscriptionCollectionStats,
   SubscriptionCheckLogRow,
   SubscriptionCheckLogQuery,
@@ -1929,6 +1931,23 @@ class AdminService {
 
   async getRankCollectionStats(discipline: string): Promise<RankCollectionStats> {
     const response = await apiFetch("/api/v1/admin/rank/stats", { query: { discipline } });
+    return response.json();
+  }
+
+  async getCareerHealth(discipline: string): Promise<CareerHealth> {
+    const response = await apiFetch("/api/v1/admin/rank/career-health", { query: { discipline } });
+    return response.json();
+  }
+
+  /** Career signals of up to 200 users; `403` without `rank.read`, `404` for a game that collects no career. */
+  async getCareerSignals(
+    discipline: string,
+    workspaceId: number,
+    userIds: readonly number[]
+  ): Promise<CareerSignalsResponse> {
+    const response = await apiFetch("/api/v1/admin/rank/career-signals", {
+      query: { discipline, workspace_id: workspaceId, user_id: [...userIds] }
+    });
     return response.json();
   }
 

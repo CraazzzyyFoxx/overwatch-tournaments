@@ -254,35 +254,44 @@ def is_renamed(handle: str, display_name: str | None) -> bool:
 
 def account_signals(account: schemas.CareerAccount, best_rank: int | None) -> list[schemas.CareerSignal]:
     """What an organizer should know about one account, most actionable first."""
-    sid = account.social_account_id
     status = account.status
     profile = account.profile
     not_found = enums.RankCollectionStatus.not_found.value
     signals: list[schemas.CareerSignal] = []
+
+    def signal(code: str, value: float | None = None) -> None:
+        signals.append(
+            schemas.CareerSignal(
+                code=code, social_account_id=account.social_account_id, handle=account.handle, value=value
+            )
+        )
+
     if status is None or status == enums.RankCollectionStatus.pending.value:
-        signals.append(schemas.CareerSignal(code="never_collected", social_account_id=sid))
+        signal("never_collected")
     elif status == not_found:
-        code = "previously_found" if account.last_success_at is not None else "profile_not_found"
-        signals.append(schemas.CareerSignal(code=code, social_account_id=sid))
+        signal("previously_found" if account.last_success_at is not None else "profile_not_found")
     elif status == enums.RankCollectionStatus.private.value and (profile is None or not profile.is_public):
         # ``private`` is "no competitive rank"; only one whose career is not visible either is closed. A ranked
         # account (``ok``) shows its ranks, which a closed profile hides.
-        signals.append(schemas.CareerSignal(code="profile_private", social_account_id=sid))
+        signal("profile_private")
     # Read by its Blizzard id after the BattleTag stopped resolving: the game now shows another name.
     if profile is not None and status != not_found and is_renamed(account.handle, profile.display_name):
-        signals.append(schemas.CareerSignal(code="renamed", social_account_id=sid))
+        signal("renamed")
 
     hours = sum(queue.seconds for queue in account.queues) / 3600
     if account.queues and best_rank is not None and HIGH_RANK is not None and best_rank >= HIGH_RANK:
         if hours < LOW_HOURS:
-            signals.append(
-                schemas.CareerSignal(code="low_hours_high_rank", social_account_id=sid, value=round(hours, 1))
-            )
+            signal("low_hours_high_rank", round(hours, 1))
     return signals
 
 
 def user_signals(
-    user_id: int, accounts: Sequence[schemas.CareerAccount], best_rank: Mapping[int, int], *, now: datetime
+    user_id: int,
+    accounts: Sequence[schemas.CareerAccount],
+    best_rank: Mapping[int, int],
+    *,
+    now: datetime,
+    user_name: str | None = None,
 ) -> schemas.CareerUserSignals:
     """The accounts' signals, the player's competitive role shares and when they last played."""
     signals = [
@@ -305,6 +314,7 @@ def user_signals(
     total = sum(seconds_by_role.values())
     return schemas.CareerUserSignals(
         user_id=user_id,
+        user_name=user_name,
         competitive_role_shares={role: round(s / total, 4) for role, s in seconds_by_role.items()} if total else {},
         hours=round(sum(q.seconds for a in accounts for q in a.queues) / 3600, 1),
         last_played_at=last_played_at,
@@ -466,13 +476,21 @@ async def career_signals(
 ) -> list[schemas.CareerUserSignals]:
     """The signals of each user, in the order asked."""
     accounts = await career_accounts(session, user_ids, account_scope=account_scope, with_meta=False)
+    names = dict(
+        (await session.execute(sa.select(models.User.id, models.User.name).where(models.User.id.in_(user_ids))))
+        .tuples()
+        .all()
+    )
     id_of = {account.handle: account.social_account_id for items in accounts.values() for account in items}
     best_rank: dict[int, int] = {}
     for by_handle in (await fetch_latest_ow_ranks_by_account(session, list(user_ids), discipline=DISCIPLINE)).values():
         for handle, by_role in by_handle.items():
             if handle in id_of and by_role:
                 best_rank[id_of[handle]] = max(by_role.values())
-    return [user_signals(user_id, accounts.get(user_id, []), best_rank, now=now) for user_id in user_ids]
+    return [
+        user_signals(user_id, accounts.get(user_id, []), best_rank, now=now, user_name=names.get(user_id))
+        for user_id in user_ids
+    ]
 
 
 @dataclass(frozen=True, slots=True)

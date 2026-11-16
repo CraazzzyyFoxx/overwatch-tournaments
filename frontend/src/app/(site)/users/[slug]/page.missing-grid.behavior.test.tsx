@@ -29,8 +29,8 @@ vi.mock("@/lib/site/discipline-server", () => ({
       axis: view.axis,
       hostLockedWorkspaceId: null,
       disciplines: [
-        { code: "overwatch", name: "Overwatch", short_name: "OW", icon: null, enabled: true },
-        { code: "lol", name: "League of Legends", short_name: "LoL", icon: null, enabled: true }
+        { code: "overwatch", name: "Overwatch", short_name: "OW", icon: null, enabled: true, capabilities: { native_rank_collection: false } },
+        { code: "lol", name: "League of Legends", short_name: "LoL", icon: null, enabled: true, capabilities: { native_rank_collection: false } }
       ]
     },
     resolution: { game: view.game, pill: { kind: "all" }, tabs: false, scope: "all" }

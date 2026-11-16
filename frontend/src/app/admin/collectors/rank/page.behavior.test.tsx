@@ -27,6 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getMatchingAdminRoute } from "@/components/admin/admin-navigation";
 import type * as RankSettings from "@/components/admin/collectors/rank-settings";
 import en from "@/i18n/messages/en.json";
+import { ApiError } from "@/lib/api/error";
 import RankCollectorPage from "./page";
 
 declare global {
@@ -36,6 +37,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const getRankCollectionStats = vi.fn();
 const getRankFetchLog = vi.fn();
+const getCareerHealth = vi.fn();
 const getSetting = vi.fn();
 const updateSetting = vi.fn();
 
@@ -63,6 +65,7 @@ vi.mock("@/services/admin.service", () => ({
   default: {
     getRankCollectionStats: (...args: unknown[]) => getRankCollectionStats(...args),
     getRankFetchLog: (...args: unknown[]) => getRankFetchLog(...args),
+    getCareerHealth: (...args: unknown[]) => getCareerHealth(...args),
     getSetting: (...args: unknown[]) => getSetting(...args),
     updateSetting: (...args: unknown[]) => updateSetting(...args),
     reenableDisabledRankCollection: vi.fn()
@@ -161,6 +164,40 @@ const STATS = {
   invalid_handles_24h: 0
 };
 
+const CAREER = {
+  players: 1765,
+  players_found: 917,
+  players_public: 700,
+  accounts: 2100,
+  accounts_found: 1000,
+  accounts_public: 800,
+  accounts_not_found: 211,
+  accounts_pending: 5,
+  lost: 3,
+  renamed: 1,
+  problems: [
+    {
+      kind: "lost",
+      social_account_id: 11,
+      user_id: 77,
+      user_name: "Anak Main",
+      handle: "Anak#2107",
+      display_name: null,
+      last_success_at: new Date(Date.now() - 3 * 86_400_000).toISOString()
+    },
+    {
+      kind: "renamed",
+      social_account_id: 12,
+      user_id: 78,
+      user_name: "Ana Amari",
+      handle: "Ana#1111",
+      display_name: "Ana#9999",
+      last_success_at: null
+    }
+  ],
+  generated_at: "2026-11-16T00:00:00Z"
+};
+
 const mounted: { root: Root; container: HTMLElement }[] = [];
 
 async function settle(turns = 8) {
@@ -230,6 +267,7 @@ beforeEach(() => {
   superuser = false;
   replace.mockClear();
   getRankCollectionStats.mockReset().mockResolvedValue(STATS);
+  getCareerHealth.mockReset().mockResolvedValue(CAREER);
   getRankFetchLog.mockReset().mockResolvedValue([
     {
       id: 1,
@@ -317,6 +355,57 @@ describe("RankCollectorPage", () => {
     const container = await mount();
 
     expect(container.querySelector("[role=alert]")).toBeNull();
+  });
+
+  it("shows Blizzard profile coverage as percentages of the counts, and the tags to fix", async () => {
+    const container = await mount();
+
+    expect(getCareerHealth).toHaveBeenCalledWith("overwatch");
+    const text = container.textContent ?? "";
+    expect(text).toContain("Blizzard profiles");
+    // 917 / 1765 → 52%, 700 / 1765 → 40%.
+    expect(text).toContain("52%");
+    expect(text).toContain("917 / 1,765");
+    expect(text).toContain("40%");
+    expect(text).toContain("700 / 1,765");
+    // 3 lost + 1 renamed, two rows listed: the note names both numbers.
+    expect(text).toContain("Showing the first 2 of 4");
+  });
+
+  it("links a flagged tag to the person's admin page, where it can be fixed", async () => {
+    const container = await mount();
+
+    expect(container.querySelector('a[href="/admin/people/77"]')?.textContent).toBe("Anak Main");
+    expect(container.querySelector('a[href="/admin/people/78"]')?.textContent).toBe("Ana Amari");
+    expect(container.textContent).toContain("Ana#9999");
+  });
+
+  it("says nothing needs fixing when no tag is flagged", async () => {
+    getCareerHealth.mockResolvedValue({ ...CAREER, lost: 0, renamed: 0, problems: [] });
+    const container = await mount();
+
+    expect(container.textContent).toContain("Nothing to fix");
+    expect(container.textContent).not.toContain("Showing the first");
+  });
+
+  it("hides the block, not the page, for a game whose collector has no career read", async () => {
+    getCareerHealth.mockRejectedValue(
+      new ApiError(404, [{ msg: "rank_collection_unsupported", code: "rank_collection_unsupported" }])
+    );
+    const container = await mount();
+
+    expect(container.textContent).not.toContain("Blizzard profiles");
+    expect(container.textContent).toContain("Accounts");
+    expect(container.querySelector("[role=alert]")).toBeNull();
+  });
+
+  it("shows an inline error for the block, keeping the rest of the page, on any other failure", async () => {
+    getCareerHealth.mockRejectedValue(new ApiError(500, [{ msg: "boom", code: "internal" }]));
+    const container = await mount();
+
+    expect(container.textContent).toContain("Blizzard profiles");
+    expect(container.textContent).not.toContain("Tags to fix");
+    expect(container.textContent).toContain("Accounts");
   });
 
   it("reads League's collector when League is the picked game", async () => {
