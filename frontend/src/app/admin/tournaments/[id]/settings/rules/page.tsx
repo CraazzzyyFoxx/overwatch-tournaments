@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { MarkdownEditor } from "@/components/admin/MarkdownEditor";
+import { MarkdownEditor } from "@/components/MarkdownEditor";
 import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid } from "@/components/kit/SettingRow";
 import type { Tournament } from "@/types/tournament.types";

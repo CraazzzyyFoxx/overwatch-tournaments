@@ -123,6 +123,9 @@ export const tournamentQueryKeys = {
   registrationNotes: (tournamentId: number, target: "registration" | "team", targetId: number) =>
     ["registration-notes", tournamentId, target, targetId] as const,
   registrationNoteCounts: (tournamentId: number) => ["registration-notes", tournamentId, "counts"] as const,
+  /** A note file's short-lived signed link. Outside `registrationNotesAll`: a note write must not re-sign every image. */
+  registrationNoteFileUrl: (tournamentId: number, attachmentId: number) =>
+    ["registration-note-file-url", tournamentId, attachmentId] as const,
   subscriptionStatus: (tournamentId: number, registrationNodeId: number) =>
     ["subscription-status", tournamentId, registrationNodeId] as const,
   /** The formation node's current draft (active, else the latest). */

@@ -167,6 +167,7 @@ export function TeamInspectorPanel({
         target={{ teamId: team.id }}
         canWrite={canManageTeams}
         canModerate={canModerateNotes}
+        subject={team.name}
       />
       <TeamInviteHistory
         tournamentId={tournamentId}

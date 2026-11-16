@@ -1793,7 +1793,7 @@
     "loadFailed": "Failed to load notes.",
     "newNote": "New note",
     "placeholder": "What happened, what was agreed, what to check… Markdown works.",
-    "hint": "Only organizers see notes. Up to 5 files per note, 10 MB each: images, PDF, TXT, CSV, ZIP.",
+    "hint": "Only organizers see notes. Up to 5 files per note, 10 MB each: images, PDF, TXT, CSV, ZIP. Paste a screenshot with Ctrl+V or drop files here.",
     "add": "Add note",
     "addFiles": "Attach files",
     "attach": "Attach a file",
@@ -1808,7 +1808,13 @@
     "removeFile": "Remove {name}",
     "fileTooLarge": "{name} is larger than 10 MB.",
     "tooManyFiles": "A note holds at most {max} files.",
-    "openFailed": "Could not open the file."
+    "openFailed": "Could not open the file.",
+    "expand": "Open notes full width",
+    "openImage": "Open {name}",
+    "openOriginal": "Open the original in a new tab",
+    "close": "Close",
+    "previousImage": "Previous image",
+    "nextImage": "Next image"
   },
   "registrationsAdmin": {
     "table": {

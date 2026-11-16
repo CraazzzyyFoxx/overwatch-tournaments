@@ -370,7 +370,7 @@ the last-resort `global-error`) are listed in the script with their reason.
 | Tournament facts   | `tournamentFacts` + `FactsRow` / `IconFact` (`components/tournaments/TournamentFacts.tsx`): dates, players and teams, or before the start the date, a countdown and the applications, each after its icon; `StageBar` for a running tournament's stage |
 | Tournament spotlight | `TournamentSpotlight` (`components/tournaments/TournamentSpotlight.tsx`): one tournament on a large stage, thumbnails switch it, autoplay every 7 s with a pause button. Built, not mounted yet |
 | Platform record    | `RecordFigure`, `RecordHolder`, `RecordContext` (`statistics/_components/records.tsx`): one record's figure, holder and where it happened, the same on `/statistics`, in the home leaders block and in the home hero's feed |
-| Markdown           | `components/Markdown.tsx`; editing `components/admin/MarkdownEditor.tsx`   |
+| Markdown           | `components/Markdown.tsx`; editing `components/MarkdownEditor.tsx`         |
 | Spinner (rare)     | `ui/spinner.tsx`, the one spinner (`animate-spin` elsewhere fails R14). Only for a wait the reader started or is watching: inside the control whose action is pending (`isPending ? <Spinner /> : <Icon />`), the icon of a running step or job beside its state in words, or a background refetch beside the stale content. Content that is loading draws its skeleton (§9) |
 
 ## 7. Layout
