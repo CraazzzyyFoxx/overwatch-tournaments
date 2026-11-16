@@ -132,7 +132,9 @@ def parse_career(stats: Mapping[str, Any] | None, competitive: Mapping[str, Any]
     """Every non-empty ``career_stats`` entry of an OverFast ``stats`` block, one series per platform/queue/hero.
 
     ``competitive`` is the summary's rank block: its per-platform ``season`` dates the competitive figures.
-    Non-numeric values are dropped; a hero with no numeric value is no series.
+    Non-numeric values are dropped; a hero with no numeric value is no series. Blizzard repeats keys inside one
+    category with other figures under them (a hero's ``games_won`` 42, then 17 twice: its hero wins), so the first
+    occurrence is the stat and the rest are ignored.
     """
     series: list[CareerSeries] = []
     for platform, queues in (stats or {}).items():
@@ -149,11 +151,11 @@ def parse_career(stats: Mapping[str, Any] | None, competitive: Mapping[str, Any]
             for character, categories in career.items():
                 grouped: dict[str, dict[str, float]] = {}
                 for category in categories or ():
-                    values = {
-                        stat["key"]: stat["value"]
-                        for stat in category.get("stats") or ()
-                        if isinstance(stat.get("key"), str) and _number(stat.get("value"))
-                    }
+                    values: dict[str, float] = {}
+                    for stat in category.get("stats") or ():
+                        key, value = stat.get("key"), stat.get("value")
+                        if isinstance(key, str) and _number(value):
+                            values.setdefault(key, value)
                     if values and isinstance(category.get("category"), str):
                         grouped[category["category"]] = values
                 if grouped:
