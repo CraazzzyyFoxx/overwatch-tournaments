@@ -1,17 +1,37 @@
-from datetime import datetime
+from datetime import date, datetime
+from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, SmallInteger, String, Text, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    SmallInteger,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.core import db, enums
 
 __all__ = (
+    "CareerSnapshot",
+    "CharacterRate",
+    "GameAccountProfile",
     "RankAccountState",
     "RankFetchLog",
     "UserRankSnapshot",
 )
 
-#: One schema for every game's rank telemetry, isolated from player identity; each row names its game in ``discipline``.
+#: One schema for every game's upstream telemetry of game accounts -- ranks, profiles, careers -- and the game's own
+#: character rates, isolated from player identity; each row names its game in ``discipline``.
 RANK_SCHEMA = "rank"
 
 
@@ -138,3 +158,103 @@ class RankFetchLog(db.TimeStampIntegerMixin):
     source: Mapped[str] = mapped_column(String(32))  # enums.RankCollectionSource
     error: Mapped[str | None] = mapped_column(Text(), nullable=True)
     snapshots_written: Mapped[int] = mapped_column(Integer(), server_default="0")
+
+
+class GameAccountProfile(db.TimeStampIntegerMixin):
+    """What the game's upstream last showed for one game account: its display name, avatar and attributes.
+
+    Current state, one row per ``players.social_account``, rewritten on every successful poll; no history.
+    ``canonical_id`` is the upstream's rename-proof id of the account (Overwatch: the Blizzard career id), resolved
+    once and used to keep reading the account after its handle stopped resolving; ``canonical_checked_at`` paces that
+    resolution. ``attrs`` holds the game's own profile fields (Overwatch: namecard, title, endorsement level).
+    """
+
+    __tablename__ = "account_profile"
+    __table_args__ = ({"schema": RANK_SCHEMA},)
+
+    discipline: Mapped[str] = mapped_column(String(32))
+    social_account_id: Mapped[int] = mapped_column(
+        ForeignKey("players.social_account.id", ondelete="CASCADE"), unique=True
+    )
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    attrs: Mapped[dict[str, Any]] = mapped_column(JSONB(), default=dict, server_default=text("'{}'::jsonb"))
+    canonical_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    canonical_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The upstream's own "profile last changed" moment; ``fetched_at`` is our last successful read.
+    upstream_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class CareerSnapshot(db.Base):
+    """One observed CHANGE of a game account's cumulative career statistics for one character.
+
+    A series is (account, ``platform``, ``queue``, ``character``); a row is written only when the poll finds the
+    series different from its last row (``season`` + ``digest``), like ``rank_snapshot``. The difference of two rows of
+    a series is what the player played between them. ``stats`` is ``{category: {stat key: number}}`` exactly as the
+    upstream groups it; ``digest`` is its hash, so a poll compares series without reading the JSON back. ``season`` is
+    the season the figures belong to where the upstream shows one season only (Overwatch competitive), else NULL.
+    ``character`` is the upstream's character key or its whole-account pseudo key (Overwatch ``all-heroes``).
+    """
+
+    __tablename__ = "career_snapshot"
+    __table_args__ = (
+        Index(
+            "ix_career_snapshot_series_captured",
+            "social_account_id",
+            "platform",
+            "queue",
+            "character",
+            text("captured_at DESC"),
+        ),
+        {"schema": RANK_SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger(), primary_key=True, sort_order=-1000)
+    discipline: Mapped[str] = mapped_column(String(32))
+    social_account_id: Mapped[int] = mapped_column(ForeignKey("players.social_account.id", ondelete="CASCADE"))
+    platform: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    queue: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    season: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    character: Mapped[str] = mapped_column(String(64))
+    stats: Mapped[dict[str, Any]] = mapped_column(JSONB())
+    digest: Mapped[str] = mapped_column(String(32))
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=db.func.now())
+
+
+class CharacterRate(db.Base):
+    """The game's own pick, win and ban rate of one character in one slice of its ladder, on one day.
+
+    Written at most once a day per slice. ``division`` and ``map`` NULL mean "every division" / "every map";
+    ``banrate`` is NULL where the queue has no bans.
+    """
+
+    __tablename__ = "character_rate"
+    __table_args__ = (
+        UniqueConstraint(
+            "discipline",
+            "captured_on",
+            "platform",
+            "queue",
+            "region",
+            "division",
+            "map",
+            "character",
+            name="uq_character_rate_slice",
+            postgresql_nulls_not_distinct=True,
+        ),
+        {"schema": RANK_SCHEMA},
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger(), primary_key=True, sort_order=-1000)
+    discipline: Mapped[str] = mapped_column(String(32))
+    captured_on: Mapped[date] = mapped_column(Date())
+    platform: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    queue: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    region: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    division: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    map: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    character: Mapped[str] = mapped_column(String(64))
+    pickrate: Mapped[float | None] = mapped_column(Float(), nullable=True)
+    winrate: Mapped[float | None] = mapped_column(Float(), nullable=True)
+    banrate: Mapped[float | None] = mapped_column(Float(), nullable=True)

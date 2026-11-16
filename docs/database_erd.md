@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`regnote01_registration_notes`** (188 revisions in `backend/migrations/versions/`).
+Alembic head: **`rankcareer01_career_rates`** (189 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -937,6 +937,20 @@ ladder lives in its module (`shared/disciplines/overwatch/ladder.py`,
 <!-- ERD:auto ranks -->
 ```mermaid
 erDiagram
+    RANK_ACCOUNT_PROFILE {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        varchar(32) discipline
+        bigint social_account_id FK,UK
+        varchar(255) display_name "nullable"
+        text avatar_url "nullable"
+        jsonb attrs
+        varchar(255) canonical_id "nullable"
+        timestamptz canonical_checked_at "nullable"
+        timestamptz upstream_updated_at "nullable"
+        timestamptz fetched_at
+    }
     RANK_ACCOUNT_STATE {
         bigint id PK
         timestamptz created_at
@@ -953,6 +967,32 @@ erDiagram
         timestamptz next_eligible_at "nullable"
         text last_error "nullable"
         smallint priority_tier
+    }
+    RANK_CAREER_SNAPSHOT {
+        bigint id PK
+        varchar(32) discipline
+        bigint social_account_id FK
+        varchar(16) platform "nullable"
+        varchar(16) queue "nullable"
+        int season "nullable"
+        varchar(64) character
+        jsonb stats
+        varchar(32) digest
+        timestamptz captured_at
+    }
+    RANK_CHARACTER_RATE {
+        bigint id PK
+        varchar(32) discipline
+        date captured_on
+        varchar(16) platform "nullable"
+        varchar(16) queue "nullable"
+        varchar(16) region "nullable"
+        varchar(32) division "nullable"
+        varchar(64) map "nullable"
+        varchar(64) character
+        float pickrate "nullable"
+        float winrate "nullable"
+        float banrate "nullable"
     }
     RANK_FETCH_LOG {
         bigint id PK
@@ -989,10 +1029,16 @@ erDiagram
     }
 
     PLAYERS_SOCIAL_ACCOUNT |o--o{ RANK_FETCH_LOG : "social_account_id"
+    PLAYERS_SOCIAL_ACCOUNT ||--o{ RANK_CAREER_SNAPSHOT : "social_account_id"
     PLAYERS_SOCIAL_ACCOUNT ||--o{ RANK_RANK_SNAPSHOT : "social_account_id"
+    PLAYERS_SOCIAL_ACCOUNT ||--o| RANK_ACCOUNT_PROFILE : "social_account_id"
     PLAYERS_SOCIAL_ACCOUNT ||--o| RANK_ACCOUNT_STATE : "social_account_id"
     PLAYERS_USER ||--o{ RANK_RANK_SNAPSHOT : "user_id"
 ```
+
+Composite unique keys:
+
+- `RANK_CHARACTER_RATE` unique on (`discipline`, `captured_on`, `platform`, `queue`, `region`, `division`, `map`, `character`)
 <!-- /ERD:auto -->
 
 ## tournament — `tournament`

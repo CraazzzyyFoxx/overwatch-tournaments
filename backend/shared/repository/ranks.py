@@ -2,15 +2,20 @@ from __future__ import annotations
 
 import math
 import random
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core import enums
 from shared.repository.base import BaseRepository
+
+#: Rows per ``character_rate`` insert statement: a day is a few thousand rows, kept under the driver's bind limit.
+_RATE_CHUNK = 1000
 
 
 def workspace_account_ids(workspace_id: int, *, provider: str) -> sa.Select:
@@ -156,6 +161,46 @@ class RankFetchLogRepository(BaseRepository[models.RankFetchLog]):
             }
             for row in rows
         ]
+
+
+class GameAccountProfileRepository(BaseRepository[models.GameAccountProfile]):
+    """``rank.account_profile`` — the account as its upstream last showed it, one row per game account."""
+
+    def __init__(self) -> None:
+        super().__init__(models.GameAccountProfile)
+
+    async def get_by_social_account_id(
+        self, session: AsyncSession, social_account_id: int
+    ) -> models.GameAccountProfile | None:
+        return await session.scalar(self.select().where(self.model.social_account_id == social_account_id))
+
+
+class CareerSnapshotRepository(BaseRepository[models.CareerSnapshot]):
+    """``rank.career_snapshot`` — one row per observed career change of one character."""
+
+    def __init__(self) -> None:
+        super().__init__(models.CareerSnapshot)
+
+
+class CharacterRateRepository(BaseRepository[models.CharacterRate]):
+    """``rank.character_rate`` — the game's own character rates, one day per slice."""
+
+    def __init__(self) -> None:
+        super().__init__(models.CharacterRate)
+
+    async def add_day(self, session: AsyncSession, rows: Sequence[Mapping[str, Any]]) -> int:
+        """Insert a day's rows; a slice already stored for that day is kept as it is. Returns rows inserted."""
+        inserted = 0
+        for start in range(0, len(rows), _RATE_CHUNK):
+            result = await session.execute(
+                pg_insert(models.CharacterRate)
+                .values([dict(row) for row in rows[start : start + _RATE_CHUNK]])
+                .on_conflict_do_nothing(constraint="uq_character_rate_slice")
+                .returning(models.CharacterRate.id)
+            )
+            # ``rowcount`` is -1 for a multi-row VALUES under the async driver; the returned ids are the count.
+            inserted += len(result.all())
+        return inserted
 
 
 class RankAccountStateRepository(BaseRepository[models.RankAccountState]):

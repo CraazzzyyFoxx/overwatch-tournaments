@@ -53,9 +53,18 @@ System overview: [`../../docs/architecture.md`](../../docs/architecture.md). Cod
   participations, including substitutes and event-only players. Roster snapshot repairs and
   battlenet renames share the observation transaction; ingestion does not grant workspace access.
 - **Native rank collection** — each game's module collector selects due accounts in `rank.account_state`
-  (its `discipline`), fetches them upstream (Overwatch: OverFast career summaries per BattleTag; LoL:
+  (its `discipline`), fetches them upstream (Overwatch: the whole OverFast profile per BattleTag; LoL:
   Riot API Solo/Duo and Flex per Riot ID; Deadlock: deadlock-api `/v1/players/rank`, up to 1000 Steam
   accounts per request) and keeps the per-account collection state, snapshot series and fetch log.
+- **Overwatch profile and career collection** — the same OverFast poll also keeps the account's current
+  profile (`rank.account_profile`: name, avatar, namecard, title, endorsement level, Blizzard career id)
+  and its career statistics per platform, queue and hero as a series of changes (`rank.career_snapshot`,
+  a row only when a series moved; competitive rows carry their season, since Blizzard shows only the last
+  season played). Written after the poll's ranks commit, in a transaction of its own: a failure is logged
+  and costs no ranks. A BattleTag that stops resolving is read by its stored Blizzard id (a renamed
+  account); the id is resolved through Blizzard's player search, at most once a week per account. A daily
+  snapshot of Blizzard's hero pick, win and ban rates goes to `rank.character_rate` (PC, Europe:
+  competitive overall, per division and per map; quick play overall).
 - **Achievement evaluation** — owns the condition-tree engine, the rules admin surface, the
   evaluation runs and the manual grant/revoke overlay.
 - **MVP impact scoring** — derived stats (`ImpactPoints`, `ImpactRank`, `OverperformanceScore`,
@@ -443,6 +452,7 @@ idempotent (`ow_rank_fetch_log_purge`; `lol_rank_fetch_log_purge` and `deadlock_
 | Job | Cadence | What it does |
 | --- | --- | --- |
 | OverFast rank collection | 60s tick | Selects and *claims* due battle tags and publishes one `FetchRankEvent` each — it never calls OverFast itself. Per-tag cadence comes from `next_eligible_at`, so changing the admin interval needs no restart. No-ops while collection is disabled in settings. |
+| OverFast hero rates | 1h tick | Leader-locked (`ow_rank:character_rates:leader`); does nothing once today's `rank.character_rate` rows exist, else asks OverFast's `/maps` and every slice's `/heroes/stats` (a map outside the competitive rotation answers 400 and is skipped) within the rank fetches' per-minute budget and 429 cooldown, and writes the day in one transaction. No-ops while OverFast rank collection is disabled. |
 | LoL rank collection | 60s tick | The same for League (`lol_rank:*` keys, `lol.rank_collection` settings): claims due Riot accounts and publishes one fetch each. Off by default. |
 | Deadlock rank collection | 60s tick | The same for Deadlock (`deadlock_rank:*` keys, `deadlock.rank_collection` settings): claims up to 1000 due Steam accounts and publishes them as one batched fetch. On by default (seeded by `deadlock01`). |
 | Match-log stall reaper | `LOG_REAPER_TICK_SECONDS` (300s) | Requeues native jobs dropped by the queue: `pending` older than `LOG_REAPER_PENDING_AFTER_SECONDS` and `processing` older than `LOG_REAPER_PROCESSING_AFTER_SECONDS`. Exhausted attempts become `failed`; awaiting-link is never claimed. Keep the pending threshold above the queue TTL. |
@@ -457,7 +467,8 @@ Writes:
 
 - `stats` — `ingest_job`, `match_fetch`, `match_search`, `match`, `match_team`, `match_player`, `segment`, `fact`, `event` and
   `stat_baseline`. `stats.discord_channel` sits in this schema but discord-service writes it.
-- `rank` — `account_state`, `rank_snapshot`, `fetch_log` (every game; `discipline` names it).
+- `rank` — `account_state`, `rank_snapshot`, `fetch_log` (every game; `discipline` names it); `account_profile`,
+  `career_snapshot`, `character_rate` (Overwatch so far).
 - `achievements` — `rule`, `evaluation_result`, `evaluation_run`, `override`.
 - `catalog` — `alias_miss` for unresolved Overwatch log names, plus `entity` aliases and rows
   written by each discipline module's sync; app-service owns the public catalog reads and generic admin CRUD.
@@ -492,8 +503,8 @@ No service ships its own migrations — there is one Alembic project at
   and the realtime publish channel and cache generations.
 - **S3** — new raw logs at `logs/{tournament_id}/{content_hash}` (imported keys remain unchanged)
   and catalog images at `assets/{discipline}/{kind}/{slug}.{ext}`; an image already stored survives sync.
-- **OverFast API** (self-hosted on the production host, called directly) — player career
-  summaries for rank collection and the Overwatch module's hero/map/gamemode catalog; the
+- **OverFast API** (self-hosted on the production host, called directly) — whole player profiles
+  (`/players/{id}`), Blizzard's player search and hero rates for collection, and the Overwatch module's hero/map/gamemode catalog; the
   hero sync pulls all 13 Blizzard locales and only ever adds aliases. OverFast exposes no
   `locale` parameter for `/maps` or `/gamemodes`, so their aliases are admin-supplied.
 - **Riot API** (called directly, `X-Riot-Token`) — the LoL rank collector: account-v1 on

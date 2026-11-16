@@ -1,7 +1,7 @@
 -- Anak Tournaments — PostgreSQL DDL compiled from SQLAlchemy metadata.
 -- Open in any SQL editor (DataGrip, DBeaver, VS Code).
 -- Runtime mappings only, not a complete physical-database dump.
--- Tables: 178
+-- Tables: 181
 -- Source of truth is backend/shared/models. Regenerate: python scripts/export_db_schema.py
 
 CREATE SCHEMA IF NOT EXISTS achievements;
@@ -2247,6 +2247,24 @@ CREATE TABLE quota.workspace_limit (
 	FOREIGN KEY(updated_by) REFERENCES auth."user" (id) ON DELETE SET NULL
 );
 
+CREATE TABLE rank.account_profile (
+	id BIGSERIAL NOT NULL,
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+	updated_at TIMESTAMP WITH TIME ZONE,
+	discipline VARCHAR(32) NOT NULL,
+	social_account_id BIGINT NOT NULL,
+	display_name VARCHAR(255),
+	avatar_url TEXT,
+	attrs JSONB DEFAULT '{}'::jsonb NOT NULL,
+	canonical_id VARCHAR(255),
+	canonical_checked_at TIMESTAMP WITH TIME ZONE,
+	upstream_updated_at TIMESTAMP WITH TIME ZONE,
+	fetched_at TIMESTAMP WITH TIME ZONE NOT NULL,
+	PRIMARY KEY (id),
+	UNIQUE (social_account_id),
+	FOREIGN KEY(social_account_id) REFERENCES players.social_account (id) ON DELETE CASCADE
+);
+
 CREATE TABLE rank.account_state (
 	id BIGSERIAL NOT NULL,
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
@@ -2271,6 +2289,40 @@ CREATE TABLE rank.account_state (
 CREATE INDEX ix_account_state_due ON rank.account_state (discipline, status, next_eligible_at, last_checked_at);
 
 CREATE INDEX ix_account_state_priority ON rank.account_state (priority_tier, last_checked_at);
+
+CREATE TABLE rank.career_snapshot (
+	id BIGSERIAL NOT NULL,
+	discipline VARCHAR(32) NOT NULL,
+	social_account_id BIGINT NOT NULL,
+	platform VARCHAR(16),
+	queue VARCHAR(16),
+	season INTEGER,
+	character VARCHAR(64) NOT NULL,
+	stats JSONB NOT NULL,
+	digest VARCHAR(32) NOT NULL,
+	captured_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+	PRIMARY KEY (id),
+	FOREIGN KEY(social_account_id) REFERENCES players.social_account (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_career_snapshot_series_captured ON rank.career_snapshot (social_account_id, platform, queue, character, captured_at DESC);
+
+CREATE TABLE rank.character_rate (
+	id BIGSERIAL NOT NULL,
+	discipline VARCHAR(32) NOT NULL,
+	captured_on DATE NOT NULL,
+	platform VARCHAR(16),
+	queue VARCHAR(16),
+	region VARCHAR(16),
+	division VARCHAR(32),
+	map VARCHAR(64),
+	character VARCHAR(64) NOT NULL,
+	pickrate FLOAT,
+	winrate FLOAT,
+	banrate FLOAT,
+	PRIMARY KEY (id),
+	CONSTRAINT uq_character_rate_slice UNIQUE NULLS NOT DISTINCT (discipline, captured_on, platform, queue, region, division, map, character)
+);
 
 CREATE TABLE rank.fetch_log (
 	id BIGSERIAL NOT NULL,

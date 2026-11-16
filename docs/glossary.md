@@ -102,6 +102,8 @@ player-facing subset see [`../frontend/src/i18n/GLOSSARY.md`](../frontend/src/i1
 | **MVP impact** | The scoring model that ranks a player's contribution within a match; the basis of MVP achievements. |
 | **Achievement** | A declarative rule (a JSON condition tree) evaluated against match data, plus a manual grant/revoke overlay. |
 | **Rank snapshot** | A point-in-time native rank of a linked game account in `rank.rank_snapshot` (one `discipline` per row): Overwatch per role from OverFast for a BattleTag, League of Legends per queue (Solo/Duo, Flex) from the Riot API for a Riot ID, Deadlock one series per Steam account from deadlock-api; the series behind rank history. |
+| **Career snapshot** | One observed change of a game account's cumulative career statistics for one character, in `rank.career_snapshot`: Overwatch per platform, queue (quick play, competitive) and hero from the OverFast profile, written only when the series moved. The difference of two rows is what the player played between the polls; competitive rows carry their season, because Blizzard shows only the last season played. |
+| **Character rate** | The game's own pick, win and ban rate of a character in one slice of its ladder on one day, in `rank.character_rate`: Overwatch from OverFast's hero stats, per queue, division and map. |
 
 ## Platform mechanics
 

@@ -23,8 +23,9 @@ from shared.observability.broker import require_broker
 from shared.schemas.events import FetchRankEvent, PlayerRefreshRequestedEvent
 from shared.services.settings_provider import settings_provider
 
-from . import runtime, service
+from . import career, runtime, service
 from .client import OverFastError, OverFastRankClient, OverFastRateLimited
+from .domain import RankFetchResult, match_canonical_id
 from .settings import settings
 
 PENDING_TTL_SECONDS = 15 * 60
@@ -50,7 +51,7 @@ async def _set_once(redis: Any, key: str, ttl_seconds: int) -> bool:
     return bool(await redis.set(key, "1", nx=True, ex=ttl_seconds))
 
 
-async def _reserve_slot(redis: Any, limit: int) -> int:
+async def reserve_slot(redis: Any, limit: int) -> int:
     """Fixed-window per-minute limiter.
 
     Returns 0 when the caller may proceed, otherwise the seconds until the
@@ -155,6 +156,37 @@ async def handle_player_refresh(
     return enqueued
 
 
+async def _record_profile(
+    event: FetchRankEvent, result: RankFetchResult, *, client: OverFastRankClient, session_factory: Any, redis: Any
+) -> None:
+    """The profile half of a poll, after its ranks are committed: profile, changed career series, Blizzard id.
+
+    Its own transactions, and nothing escapes it: the ranks already landed and must stay the only thing a poll's
+    outcome reports. The player search runs between the transactions, never inside one; its 429 still cools
+    OverFast down for every fetch, its outage waits for the next poll.
+    """
+    profile = result.profile
+    if profile is None:
+        return
+    try:
+        async with session_factory() as session:
+            _, resolve = await career.record(
+                session, social_account_id=event.social_account_id, profile=profile, career=result.career
+            )
+            await session.commit()
+        if resolve and profile.display_name:
+            found = match_canonical_id(profile, await client.search_players(profile.display_name))
+            async with session_factory() as session:
+                await career.set_canonical_id(session, social_account_id=event.social_account_id, canonical=found)
+                await session.commit()
+    except OverFastRateLimited as exc:
+        await redis.set(COOLDOWN_KEY, "1", ex=int(exc.retry_after or 60))
+    except (OverFastError, CircuitBreakerOpen) as exc:
+        logger.warning("OverFast player search failed for {}, retrying next poll: {}", event.battle_tag, exc)
+    except Exception:  # noqa: BLE001 -- see the docstring: the ranks are committed, the career retries next poll
+        logger.exception("OverFast profile/career write failed for {}", event.battle_tag)
+
+
 async def process_fetch_rank(
     data: dict[str, Any],
     *,
@@ -192,7 +224,7 @@ async def process_fetch_rank(
             # approvals bypass the scheduler's per-tick pacing). Not written to
             # fetch_log: self-throttling is not an upstream failure and the
             # admin error rate counts `rate_limited` rows as errors.
-            retry_after = await _reserve_slot(redis_client, cfg.rate_limit_per_minute)
+            retry_after = await reserve_slot(redis_client, cfg.rate_limit_per_minute)
             if retry_after:
                 await service.defer_tag(
                     session,
@@ -214,7 +246,13 @@ async def process_fetch_rank(
         # server-side, and the session's close()/rollback then hits an
         # already-closed connection.
         try:
-            result = await client.fetch_summary(event.battle_tag)
+            result = await client.fetch_profile(event.battle_tag)
+            if result.status == enums.RankCollectionStatus.not_found:
+                # A BattleTag that stopped resolving is usually a renamed account: its Blizzard id still reads it.
+                async with session_factory() as session:
+                    renamed = await career.canonical_id(session, event.social_account_id)
+                if renamed:
+                    result = await client.fetch_profile(renamed)
         except OverFastRateLimited as exc:
             await redis_client.set(COOLDOWN_KEY, "1", ex=int(exc.retry_after or 60))
             async with session_factory() as session:
@@ -257,6 +295,8 @@ async def process_fetch_rank(
                 snapshots_written=written,
             )
             await session.commit()
+        if result.profile is not None:
+            await _record_profile(event, result, client=client, session_factory=session_factory, redis=redis_client)
     except (OverFastError, CircuitBreakerOpen) as exc:
         # Transient upstream failure (OverFast 5xx / timeout, or the breaker
         # holding the door shut while it is down). It is fully handled here:

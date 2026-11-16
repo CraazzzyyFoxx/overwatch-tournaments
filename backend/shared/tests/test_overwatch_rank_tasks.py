@@ -10,7 +10,7 @@ from shared.clients.circuit_breaker import CircuitBreakerOpen
 from shared.core import enums
 from shared.disciplines.overwatch.collector import tasks
 from shared.disciplines.overwatch.collector.client import OverFastRateLimited
-from shared.disciplines.overwatch.collector.domain import RankFetchResult
+from shared.disciplines.overwatch.collector.domain import ParsedProfile, RankFetchResult
 from shared.schemas.settings import RankCollectionConfig
 
 
@@ -55,7 +55,7 @@ class FakeRedis:
 
 
 class _FrozenClock:
-    """Pins ``_reserve_slot``'s minute bucket so the window cannot roll mid-test."""
+    """Pins ``reserve_slot``'s minute bucket so the window cannot roll mid-test."""
 
     fixed = datetime(2026, 1, 1, 12, 30, 15, tzinfo=UTC)
 
@@ -83,7 +83,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
         redis = FakeRedis()
         session = SimpleNamespace(commit=AsyncMock())
         client = SimpleNamespace(
-            fetch_summary=AsyncMock(return_value=RankFetchResult(status=enums.RankCollectionStatus.ok))
+            fetch_profile=AsyncMock(return_value=RankFetchResult(status=enums.RankCollectionStatus.ok))
         )
         with (
             patch.object(
@@ -107,7 +107,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
 
     async def test_skips_when_already_in_flight(self) -> None:
         redis = FakeRedis({tasks._inflight_key(7)})
-        client = SimpleNamespace(fetch_summary=AsyncMock())
+        client = SimpleNamespace(fetch_profile=AsyncMock())
         with patch.object(tasks.service, "record_result", AsyncMock()) as rec:
             await tasks.process_fetch_rank(
                 {"event_type": "fetch_rank", "social_account_id": 7, "battle_tag": "N#1"},
@@ -116,7 +116,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
                 session_factory=_session_factory(SimpleNamespace(commit=AsyncMock())),
             )
         rec.assert_not_awaited()
-        client.fetch_summary.assert_not_awaited()
+        client.fetch_profile.assert_not_awaited()
 
     async def test_over_the_per_minute_ceiling_defers_instead_of_fetching(self) -> None:
         """The per-minute ceiling must actually stop the fetch.
@@ -128,7 +128,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
         """
         redis = FakeRedis()
         client = SimpleNamespace(
-            fetch_summary=AsyncMock(return_value=RankFetchResult(status=enums.RankCollectionStatus.ok))
+            fetch_profile=AsyncMock(return_value=RankFetchResult(status=enums.RankCollectionStatus.ok))
         )
         with (
             patch.object(
@@ -155,7 +155,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
 
         # First request consumes the window's single slot; the second is deferred
         # past the window instead of reaching OverFast.
-        self.assertEqual(client.fetch_summary.await_count, 1)
+        self.assertEqual(client.fetch_profile.await_count, 1)
         defer.assert_awaited_once()
         self.assertEqual(defer.await_args.kwargs["social_account_id"], 12)
         # Frozen at 12:30:15 → the window resets in 45s.
@@ -167,7 +167,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
     async def test_rate_limited_sets_cooldown_and_records_failure(self) -> None:
         redis = FakeRedis()
         session = SimpleNamespace(commit=AsyncMock())
-        client = SimpleNamespace(fetch_summary=AsyncMock(side_effect=OverFastRateLimited(retry_after=42)))
+        client = SimpleNamespace(fetch_profile=AsyncMock(side_effect=OverFastRateLimited(retry_after=42)))
         with (
             patch.object(
                 tasks.settings_provider,
@@ -197,7 +197,7 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
         redis = FakeRedis()
         session = SimpleNamespace(commit=AsyncMock())
         client = SimpleNamespace(
-            fetch_summary=AsyncMock(side_effect=CircuitBreakerOpen("Circuit breaker for overfast is open"))
+            fetch_profile=AsyncMock(side_effect=CircuitBreakerOpen("Circuit breaker for overfast is open"))
         )
         with (
             patch.object(
@@ -222,6 +222,101 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
         log_fetch.assert_awaited_once()
         # Dedup keys released, so the scheduler can retry the tag once OverFast is back.
         self.assertNotIn(tasks._inflight_key(9), redis.store)
+
+    async def test_a_tag_that_stopped_resolving_is_read_by_its_blizzard_id(self) -> None:
+        """A renamed account keeps being collected: the not-found tag falls back to the stored Blizzard id."""
+        renamed = RankFetchResult(status=enums.RankCollectionStatus.ok, profile=_PROFILE)
+        client = SimpleNamespace(
+            fetch_profile=AsyncMock(
+                side_effect=[RankFetchResult(status=enums.RankCollectionStatus.not_found), renamed]
+            ),
+            search_players=AsyncMock(return_value=[]),
+        )
+        with (
+            patch.object(
+                tasks.settings_provider,
+                "get_rank_collection_config",
+                AsyncMock(return_value=RankCollectionConfig()),
+            ),
+            patch.object(tasks.career, "canonical_id", AsyncMock(return_value="aa|bb")),
+            patch.object(tasks.career, "record", AsyncMock(return_value=(0, False))) as record,
+            patch.object(tasks.service, "record_result", AsyncMock(return_value=0)) as rec,
+            patch.object(tasks.service, "log_fetch", AsyncMock()),
+        ):
+            await tasks.process_fetch_rank(
+                {"event_type": "fetch_rank", "social_account_id": 7, "battle_tag": "N#1"},
+                redis=FakeRedis(),
+                client=client,
+                session_factory=_session_factory(SimpleNamespace(commit=AsyncMock())),
+            )
+        self.assertEqual([call.args[0] for call in client.fetch_profile.await_args_list], ["N#1", "aa|bb"])
+        self.assertIs(rec.await_args.kwargs["result"], renamed)
+        record.assert_awaited_once()
+
+    async def test_a_failing_career_write_costs_the_poll_nothing(self) -> None:
+        """Ranks are committed first; a career failure is logged, the fetch log is written, the keys are released."""
+        redis = FakeRedis()
+        session = SimpleNamespace(commit=AsyncMock())
+        client = SimpleNamespace(
+            fetch_profile=AsyncMock(
+                return_value=RankFetchResult(status=enums.RankCollectionStatus.ok, profile=_PROFILE)
+            )
+        )
+        with (
+            patch.object(
+                tasks.settings_provider,
+                "get_rank_collection_config",
+                AsyncMock(return_value=RankCollectionConfig()),
+            ),
+            patch.object(tasks.career, "record", AsyncMock(side_effect=RuntimeError("bad jsonb"))),
+            patch.object(tasks.service, "record_result", AsyncMock(return_value=2)) as rec,
+            patch.object(tasks.service, "record_failure", AsyncMock()) as fail,
+            patch.object(tasks.service, "log_fetch", AsyncMock()) as log_fetch,
+        ):
+            await tasks.process_fetch_rank(
+                {"event_type": "fetch_rank", "social_account_id": 7, "battle_tag": "N#1"},
+                redis=redis,
+                client=client,
+                session_factory=_session_factory(session),
+            )
+        rec.assert_awaited_once()
+        fail.assert_not_awaited()
+        self.assertEqual(log_fetch.await_args.kwargs["status"], "ok")
+        self.assertNotIn(tasks._inflight_key(7), redis.store)
+
+    async def test_a_rate_limited_search_cools_overfast_down_but_never_fails_the_account(self) -> None:
+        redis = FakeRedis()
+        client = SimpleNamespace(
+            fetch_profile=AsyncMock(
+                return_value=RankFetchResult(status=enums.RankCollectionStatus.ok, profile=_PROFILE)
+            ),
+            search_players=AsyncMock(side_effect=OverFastRateLimited(retry_after=30)),
+        )
+        with (
+            patch.object(
+                tasks.settings_provider,
+                "get_rank_collection_config",
+                AsyncMock(return_value=RankCollectionConfig()),
+            ),
+            patch.object(tasks.career, "record", AsyncMock(return_value=(1, True))),
+            patch.object(tasks.career, "set_canonical_id", AsyncMock()) as stamp,
+            patch.object(tasks.service, "record_result", AsyncMock(return_value=0)),
+            patch.object(tasks.service, "record_failure", AsyncMock()) as fail,
+            patch.object(tasks.service, "log_fetch", AsyncMock()),
+        ):
+            await tasks.process_fetch_rank(
+                {"event_type": "fetch_rank", "social_account_id": 7, "battle_tag": "N#1"},
+                redis=redis,
+                client=client,
+                session_factory=_session_factory(SimpleNamespace(commit=AsyncMock())),
+            )
+        fail.assert_not_awaited()
+        # No attempt stamped: the search is retried on the next poll instead of a week later.
+        stamp.assert_not_awaited()
+        self.assertEqual(redis.store.get(tasks.COOLDOWN_KEY), "1")
+
+
+_PROFILE = ParsedProfile(display_name="N", avatar_url=None, attrs={}, upstream_updated_at=None)
 
 
 def _refresh(**values: Any) -> dict[str, Any]:
