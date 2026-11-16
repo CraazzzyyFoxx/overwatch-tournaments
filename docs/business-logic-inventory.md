@@ -148,7 +148,7 @@ Absence of a row is inheritance. A stored `0` would break fall-through, so write
 
 Two requirements, fixed order (`backend/tournament-service/src/services/admission/registry.py`):
 
-1. **Open profile** — always `check_in`. There is no stage column (YAGNI until an organizer asks).
+1. **Open profile** — always `check_in`. There is no stage column (YAGNI until an organizer asks). A tag blocks when its profile is closed or not found; an open profile without a competitive rank (collection status `private`, career visible) is open.
 2. **Subscription** — stage from the form; garbage/NULL defaults to `check_in` (a typo must not start refusing sign-ups).
 
 `registration` implies `check_in`. After check-in, blockers become `overridden` (the gate is behind); `ready` stays a separate completeness flag.

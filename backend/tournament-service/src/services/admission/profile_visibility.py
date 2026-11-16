@@ -9,9 +9,11 @@ Reasons are produced here because only this loop still knows which tag and which
 `RankCollectionStatus` produced a `None` or `False`; a caller would need a second
 per-registration `account_state` read to reconstruct them.
 
-`private` and `not_found` are the only BLOCKING statuses. Everything else is an
-unfinished or failed collection and stays `None`, which fails open: a stalled
-parser must not become a mass refusal mid-check-in.
+`private` and `not_found` are the only BLOCKING statuses. `private` means "no
+competitive rank", which an open profile also gets before it places: one whose
+career the last poll saw (``rank.account_profile.is_public``) counts as open.
+Everything else is an unfinished or failed collection and stays `None`, which
+fails open: a stalled parser must not become a mass refusal mid-check-in.
 """
 
 from __future__ import annotations
@@ -98,16 +100,24 @@ async def resolve_profiles_open(
     if not all_tags:
         return dict.fromkeys(tags_by_reg, _NO_BATTLE_TAG)
 
-    state = models.RankAccountState
+    state, profile = models.RankAccountState, models.GameAccountProfile
     rows = await session.execute(
-        sa.select(state.handle, state.status)
+        sa.select(state.handle, state.status, profile.is_public)
         .join(models.SocialAccount, models.SocialAccount.id == state.social_account_id)
+        .outerjoin(
+            profile,
+            sa.and_(profile.social_account_id == state.social_account_id, profile.discipline == state.discipline),
+        )
         .where(
             models.SocialAccount.provider == SocialProvider.BATTLENET,
             sa.func.lower(state.handle).in_(all_tags),
         )
     )
-    status_by_tag: dict[str, str] = {handle.lower(): status for handle, status in rows.all()}
+    private = enums.RankCollectionStatus.private.value
+    status_by_tag: dict[str, str] = {
+        handle.lower(): enums.RankCollectionStatus.ok.value if status == private and is_public else status
+        for handle, status, is_public in rows.all()
+    }
 
     ok = enums.RankCollectionStatus.ok.value
     signals: dict[int, ProfileSignal] = {}
