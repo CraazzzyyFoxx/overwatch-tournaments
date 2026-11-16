@@ -126,3 +126,10 @@ export function formatTiebreakOrder(
   if (!order || order.length === 0) return "";
   return order.map((id) => tiebreakerLabel(id, labelFor, ffaColumns)).join(" → ");
 }
+
+/** Buchholz as every table shows it: to hundredths, keeping one decimal ("2.25", "0.6", "3.0").
+ * The server stores and compares it at `STANDING_DIGITS` (thousandths). */
+export function formatBuchholz(value: number): string {
+  const hundredths = value.toFixed(2);
+  return hundredths.endsWith("0") ? value.toFixed(1) : hundredths;
+}

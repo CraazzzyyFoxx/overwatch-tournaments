@@ -210,6 +210,25 @@ def test_compute_totals_buchholz_is_sum_of_opponent_means() -> None:
     assert totals[2].buchholz == 3
 
 
+def test_compute_totals_buchholz_ties_exactly_across_different_opponent_means() -> None:
+    # 1 beats a five whose points total 1 (mean 0.2) and one whose total 2 (mean 0.4); 2 beats a five
+    # totalling 3 (mean 0.6). In floats 0.2 + 0.4 != 0.6, which would split this tie.
+    x, y, z = (10, 11, 12, 13, 14), (20, 21, 22, 23, 24), (30, 31, 32, 33, 34)
+    results = [
+        _match((1,), 2, 1, x, 0, 2),
+        _match((1,), 2, 1, y, 0, 2),
+        _match((2,), 2, 1, z, 0, 2),
+        _match((10,), 2, 1, (99,), 0, 2),
+        _match((20,), 2, 1, (98,), 0, 2),
+        _match((21,), 2, 1, (97,), 0, 2),
+        _match((30,), 2, 1, (96,), 0, 2),
+        _match((31,), 2, 1, (95,), 0, 2),
+        _match((32,), 2, 1, (94,), 0, 2),
+    ]
+    totals = compute_totals([1, 2], results, win=1, draw=0.5, loss=0)
+    assert totals[1].buchholz == totals[2].buchholz == 0.6
+
+
 def test_qualify_and_captains() -> None:
     order = {"tank": [1, 2, 3, 4], "damage": [5, 6, 7, 8, 9, 10, 11, 12], "support": [13, 14, 15, 16, 17, 18, 19, 20]}
     q = qualify(order, SHAPE, 2)

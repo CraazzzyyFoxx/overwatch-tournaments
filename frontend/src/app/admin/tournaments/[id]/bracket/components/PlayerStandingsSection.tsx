@@ -19,6 +19,7 @@ import { useSlotLabel } from "@/hooks/useSlotLabel";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
+import { formatBuchholz } from "@/lib/tournament/tiebreakers";
 import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import adminService from "@/services/admin.service";
 import type { PlayerStanding } from "@/types/admin.types";
@@ -149,7 +150,7 @@ export function PlayerStandingsSection({
       {
         accessorKey: "buchholz",
         header: t("buchholz"),
-        cell: ({ row }) => row.original.buchholz.toFixed(1),
+        cell: ({ row }) => formatBuchholz(row.original.buchholz),
         meta: numeric
       },
       {

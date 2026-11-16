@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
+from shared.domain.encounter_scoring import STANDING_DIGITS
+from shared.domain.ffa_formula import round_half_up
 from src.domain.individual_swiss.pool import PoolPlayer
 
 
@@ -82,13 +84,16 @@ def compute_totals(
                 t.maps_won += seat.score
                 t.maps_lost += other.score
                 t.matches_played += 1
-    # Buchholz needs the opponents' final points, hence the second pass.
+    # Buchholz needs the opponents' final points, hence the second pass. Rounded to STANDING_DIGITS: float
+    # means (0.2 + 0.4 = 0.6000000000000001) would split a true tie that ``order_role`` compares exactly.
     for match in results:
         for seat, other in (match.seats, match.seats[::-1]):
             if other.members:
                 mean = sum(totals.setdefault(o, PlayerTotals()).points for o in other.members) / len(other.members)
                 for m in seat.members:
                     totals[m].buchholz += mean
+    for t in totals.values():
+        t.buchholz = round_half_up(t.buchholz, STANDING_DIGITS)
     return totals
 
 
