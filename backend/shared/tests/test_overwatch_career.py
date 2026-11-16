@@ -88,6 +88,27 @@ class ParseCareerTests(IsolatedAsyncioTestCase):
     def test_a_private_profile_has_no_career(self) -> None:
         self.assertEqual(parse_career(None, None), [])
 
+    def test_a_key_blizzard_repeats_inside_a_category_keeps_its_first_figure(self) -> None:
+        # Verbatim from a live profile (ana, quick play): 42 of 78 games won is the 53 % Blizzard shows; the two later
+        # ``games_won`` rows carry the 17 hero wins.
+        game = {
+            "category": "game",
+            "label": "Game",
+            "stats": [
+                {"key": "time_played", "label": "Time Played", "value": 38763},
+                {"key": "games_played", "label": "Games Played", "value": 78},
+                {"key": "games_won", "label": "Games Won", "value": 42},
+                {"key": "games_won", "label": "Games Won", "value": 17},
+                {"key": "games_won", "label": "Games Won", "value": 17},
+                {"key": "hero_wins", "label": "Hero Wins", "value": 17},
+                {"key": "win_percentage", "label": "Win Percentage", "value": 53},
+                {"key": "games_lost", "label": "Games Lost", "value": 36},
+            ],
+        }
+        (ana,) = parse_career({"pc": {"quickplay": {"career_stats": {"ana": [game]}}}}, None)
+        self.assertEqual(ana.stats["game"]["games_won"], 42)
+        self.assertEqual(ana.stats["game"]["hero_wins"], 17)
+
 
 class ChangedCareerTests(IsolatedAsyncioTestCase):
     def test_only_new_or_moved_series_are_written(self) -> None:
