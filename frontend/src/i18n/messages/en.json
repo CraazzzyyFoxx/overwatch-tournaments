@@ -6909,13 +6909,14 @@
         "deaths": "Deaths / 10",
         "healing": "Healing / 10",
         "damage": "Damage / 10",
-        "metaFit": "Meta pool",
+        "metaFit": "Meta fit",
         "metaFitTitle": "Average ladder pick rate of the heroes you play, weighted by your time.",
         "banExposure": "Under ban",
-        "banExposureTitle": "Share of your playtime on heroes the ladder bans."
+        "banExposureTitle": "Average ladder ban rate of the heroes you play, weighted by your time."
       },
       "roles": {
-        "pool": "pool {size}",
+        "pool": "≈ {size, plural, one {# hero} other {# heroes}}",
+        "poolTitle": "How many heroes the player really plays in this role, weighted by time: 1 is one hero, 3 is three equally.",
         "mains": "Mains"
       },
       "heroes": {

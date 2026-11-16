@@ -213,7 +213,9 @@ describe("ladder tab", () => {
       account(1, "main#1", { is_primary: true, queues: [queue({ characters, meta_fit: metaFit })] })
     ];
     await mount(withMeta([hero("ana", "support", { games_played: 20, winrate: 0.6 })]), tab);
-    expect(container.textContent).not.toContain("Meta pool");
+    expect(container.textContent).not.toContain("Meta fit");
+    // The role's effective number of heroes, a fraction: plural "heroes", never the old "pool".
+    expect(container.textContent).toContain("≈ 3.4 heroes");
     expect(container.textContent).not.toContain("vs ladder");
 
     await act(async () => root.unmount());
@@ -228,7 +230,7 @@ describe("ladder tab", () => {
       ], 0.31),
       tab
     );
-    expect(container.textContent).toContain("Meta pool");
+    expect(container.textContent).toContain("Meta fit");
     expect(container.textContent).toContain("31%");
     expect(container.textContent).toContain("vs ladder");
     expect(container.textContent).toContain("10 pp");
