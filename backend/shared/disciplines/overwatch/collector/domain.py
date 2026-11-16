@@ -33,12 +33,31 @@ __all__ = (
     "parse_career",
     "parse_profile",
     "RANK_MAPPING_VERSION",
+    "RATES_PLATFORM",
+    "RATES_REGION",
+    "RATE_DIVISIONS",
     "map_division_tier_to_rank_value",
+    "rate_division",
     "Granularity",
     "resolve_date_range",
     "fill_rank_series",
     "battle_tag_to_slug",
 )
+
+#: The slice of Blizzard's hero rates collected: the community plays on PC in Europe.
+RATES_PLATFORM = "pc"
+RATES_REGION = "europe"
+#: OverFast's ``competitive_division`` filter values, lowest first.
+RATE_DIVISIONS = ("bronze", "silver", "gold", "platinum", "emerald", "diamond", "master", "grandmaster")
+
+
+def rate_division(division: str | None) -> str | None:
+    """The rates slice of a rank division: itself, or the top slice for Champion (Blizzard's ``ultimate``), which has
+    no rates of its own."""
+    name = (division or "").lower()
+    if name in RATE_DIVISIONS:
+        return name
+    return RATE_DIVISIONS[-1] if name in {"ultimate", "champion"} else None
 
 
 @dataclass(frozen=True)

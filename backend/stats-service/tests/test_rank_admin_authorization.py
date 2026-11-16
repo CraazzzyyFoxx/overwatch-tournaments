@@ -250,6 +250,7 @@ class RpcDispatchTests(IsolatedAsyncioTestCase):
             "stats",
             "user_collection",
             "career_signals",
+            "career_health",
             "collect",
             "reenable_disabled",
         )

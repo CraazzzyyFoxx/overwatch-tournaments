@@ -104,6 +104,8 @@ var Routes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/admin/rank/users/{id}/collection", Queue: "rpc.stats.rank.user_collection", IDParam: "id", Query: []string{"workspace_id", "discipline"}, Auth: edge.AuthRequired},
 	// Admission signals for up to 200 players (`user_id` repeated).
 	{Method: "GET", Pattern: "/api/v1/admin/rank/career-signals", Queue: "rpc.stats.rank.career_signals", Query: []string{"user_id", "workspace_id", "discipline"}, Auth: edge.AuthRequired},
+	// Career coverage of the linked accounts and the lost/renamed tags to fix.
+	{Method: "GET", Pattern: "/api/v1/admin/rank/career-health", Queue: "rpc.stats.rank.career_health", Query: []string{"workspace_id", "discipline"}, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/rank/collect", Queue: "rpc.stats.rank.collect", Body: true, Query: []string{"workspace_id", "discipline"}, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/rank/reenable-disabled", Queue: "rpc.stats.rank.reenable_disabled", Body: true, Query: []string{"workspace_id", "discipline"}, Auth: edge.AuthRequired},
 

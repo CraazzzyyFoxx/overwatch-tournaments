@@ -73,7 +73,10 @@ System overview: [`../../docs/architecture.md`](../../docs/architecture.md). Cod
   `GET /admin/rank/career-signals?user_id=…`, up to 200 players): competitive role shares, hours, last
   profile change and the admission signals `profile_not_found`, `previously_found`, `profile_private`,
   `never_collected`, `renamed`, `low_hours_high_rank`, `inactive`. Both read the newest row of each
-  career series (`shared/disciplines/overwatch/collector/portrait.py`).
+  career series (`shared/disciplines/overwatch/collector/portrait.py`); the public read compares each
+  hero with the game's newest rates at the account's division in its role (`meta`, `meta_fit`,
+  `ban_exposure`). `rank.career_health` (`rank.read`, `GET /admin/rank/career-health`): players and
+  accounts found, open, not found and never collected, and the `lost`/`renamed` tags to fix.
 - **Achievement evaluation** — owns the condition-tree engine, the rules admin surface, the
   evaluation runs and the manual grant/revoke overlay.
 - **MVP impact scoring** — derived stats (`ImpactPoints`, `ImpactRank`, `OverperformanceScore`,

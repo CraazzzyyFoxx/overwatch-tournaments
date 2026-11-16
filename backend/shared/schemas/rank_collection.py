@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 __all__ = (
     "CareerAccount",
+    "CareerHealth",
+    "CareerProblem",
     "CareerCharacter",
+    "CareerMeta",
     "CareerProfile",
     "CareerQueue",
     "CareerResponse",
@@ -33,6 +36,18 @@ __all__ = (
 )
 
 
+class CareerMeta(BaseModel):
+    """The game's own rates of a character in the ladder slice the player plays it in (fractions, 0..1)."""
+
+    division: str | None
+    """The player's division in the character's role; ``None``: every division (no rank there, or a queue without)."""
+    pickrate: float | None
+    winrate: float | None
+    banrate: float | None
+    """``None`` in a queue without bans."""
+    captured_on: date
+
+
 class CareerCharacter(BaseModel):
     """One character in one queue: time, games and per-10-minute rates from the game's own career."""
 
@@ -46,6 +61,8 @@ class CareerCharacter(BaseModel):
     winrate: float | None = None
     rates: dict[str, float] = {}
     """Per 10 minutes of this character, keyed by the game's stat key."""
+    meta: CareerMeta | None = None
+    """``None`` when the game publishes no rates for this platform and queue."""
 
 
 class CareerRole(BaseModel):
@@ -74,6 +91,10 @@ class CareerQueue(BaseModel):
     characters: list[CareerCharacter]
     captured_at: datetime
     """When the newest of these figures was collected."""
+    meta_fit: float | None = None
+    """How meta the player's pool is: the time-weighted pickrate of their characters at their divisions."""
+    ban_exposure: float | None = None
+    """Time-weighted banrate of their characters at their divisions: how much of their pool a ban phase can take."""
 
 
 class CareerProfile(BaseModel):
@@ -127,6 +148,42 @@ class CareerUserSignals(BaseModel):
 
 class CareerSignalsResponse(BaseModel):
     users: list[CareerUserSignals]
+    generated_at: datetime
+
+
+class CareerProblem(BaseModel):
+    """An account whose tag needs an organizer: ``lost`` stopped resolving after it had; ``renamed`` is read by its
+    Blizzard id while the game shows another name."""
+
+    kind: str
+    social_account_id: int
+    user_id: int
+    user_name: str
+    handle: str
+    display_name: str | None
+    """The name the game shows now."""
+    last_success_at: datetime | None
+
+
+class CareerHealth(BaseModel):
+    """How much of the players' game careers the collector sees."""
+
+    players: int
+    """Players with a linked account."""
+    players_found: int
+    """Players with an account the game resolves now."""
+    players_public: int
+    """Players with an account whose career is open."""
+    accounts: int
+    accounts_found: int
+    accounts_public: int
+    accounts_not_found: int
+    accounts_pending: int
+    """Never collected yet."""
+    lost: int
+    renamed: int
+    problems: list[CareerProblem]
+    """Lost accounts, most recently seen first, then renamed ones; at most ``MAX_CAREER_PROBLEMS``."""
     generated_at: datetime
 
 

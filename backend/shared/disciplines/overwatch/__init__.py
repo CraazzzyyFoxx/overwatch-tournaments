@@ -59,6 +59,7 @@ _COLLECTION_HANDLERS = (
     "rank.stats",
     "rank.user_collection",
     "rank.career_signals",
+    "rank.career_health",
     "rank.collect",
     "rank.reenable_disabled",
 )

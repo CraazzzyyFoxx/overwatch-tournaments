@@ -178,6 +178,13 @@ async def career_signals(session: AsyncSession, user: AuthUser | None, data: dic
     return schemas.CareerSignalsResponse(users=users, generated_at=now)
 
 
+async def career_health(session: AsyncSession, user: AuthUser | None, data: dict[str, Any]) -> object:
+    # GET /admin/rank/career-health — rank.read, scoped by workspace_id.
+    workspace_id = authorize(user, data, "read")
+    scope = None if workspace_id is None else workspace_account_ids(workspace_id, provider=SocialProvider.BATTLENET)
+    return await portrait.career_health(session, now=datetime.now(UTC), account_scope=scope)
+
+
 HANDLERS = {
     "rank.user_history": user_history,
     "rank.game_account_history": game_account_history,
@@ -187,6 +194,7 @@ HANDLERS = {
     "rank.stats": stats,
     "rank.user_collection": user_collection,
     "rank.career_signals": career_signals,
+    "rank.career_health": career_health,
     "rank.collect": collect,
     "rank.reenable_disabled": reenable_disabled,
 }

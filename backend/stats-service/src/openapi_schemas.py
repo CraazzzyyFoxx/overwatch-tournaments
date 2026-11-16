@@ -98,6 +98,10 @@ OPERATIONS: dict[str, Op] = {
             QueryParam("discipline"),
         ),
     ),
+    "rpc.stats.rank.career_health": Op(
+        response=schemas.CareerHealth,
+        query_params=(QueryParam("workspace_id", "integer"), QueryParam("discipline")),
+    ),
     "rpc.stats.rank.stats": Op(
         response=schemas.RankCollectionStats,
         query_params=(QueryParam("workspace_id", "integer"), QueryParam("discipline")),

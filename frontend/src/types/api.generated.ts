@@ -4298,6 +4298,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/{id}/career": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * User game career
+         * @description Permission: public; no authentication required. Every game account of the user shown on their public profile (accounts hidden from it are left out), with its upstream profile (display name, avatar, game attributes, whether it is public now) and, per platform and queue, its career as the game shows it now: time, games, winrate, per-10-minute rates, roles with their pool size and mains, and characters. Where the game publishes hero rates for the platform and queue, each character carries them (`meta`: pick, win and ban rate as fractions) at the account's current division in the character's role (every division when unranked there), and the queue its time-weighted `meta_fit` (pick rate) and `ban_exposure` (ban rate). A closed profile shows no career. A seasonal queue covers its current season. `discipline` query parameter names the game; 404 `rank_collection_unsupported` for a game that collects none.
+         *
+         *     RPC subject: `rpc.stats.rank.user_career`
+         */
+        get: operations["get__api_v1_users__id__career"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/{id}/characters": {
         parameters: {
             query?: never;
@@ -7281,6 +7303,50 @@ export interface paths {
          *     RPC subject: `rpc.app.quota.plan_upsert`
          */
         put: operations["put__api_v1_admin_quota_plans"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/rank/career-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Career collection health
+         * @description Permission: workspace `rank.read` when `workspace_id` is given (only the game accounts of that workspace's players are counted), otherwise global `rank.read`. How much of the players' game careers the collector sees: players and accounts linked, found by the game now, with an open career, not found and never collected; and up to 200 accounts to fix: `lost` (the tag stopped resolving after it had, most recently seen first) and `renamed` (read by the account's stable id while the game shows another name). `discipline` query parameter names the game; 404 `rank_collection_unsupported` for a game that collects none.
+         *
+         *     RPC subject: `rpc.stats.rank.career_health`
+         */
+        get: operations["get__api_v1_admin_rank_career_health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/rank/career-signals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Career signals for admission
+         * @description Permission: workspace `rank.read` when `workspace_id` is given (only the game accounts of that workspace's players are read), otherwise global `rank.read`. For 1 to 200 `user_id` values: each player's current-season competitive role shares, hours, last time their profile changed, and signals: `profile_not_found`, `previously_found` (the tag resolved before: likely renamed), `profile_private`, `never_collected`, `renamed` (read by the account's stable id under another name), `low_hours_high_rank` (`value` = hours) and `inactive` (no change for 30 days). `discipline` query parameter names the game; 404 `rank_collection_unsupported` for a game that collects none.
+         *
+         *     RPC subject: `rpc.stats.rank.career_signals`
+         */
+        get: operations["get__api_v1_admin_rank_career_signals"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -16715,6 +16781,172 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+        };
+        /**
+         * CareerAccount
+         * @description One linked game account. ``queues`` is empty while its profile is closed.
+         */
+        "stats.CareerAccount": {
+            /** Handle */
+            handle: string;
+            /** Is Primary */
+            is_primary: boolean;
+            /** Last Success At */
+            last_success_at: string | null;
+            profile: components["schemas"]["stats.CareerProfile"] | null;
+            /** Queues */
+            queues: components["schemas"]["stats.CareerQueue"][];
+            /** Social Account Id */
+            social_account_id: number;
+            /** Status */
+            status: string | null;
+        };
+        /**
+         * CareerCharacter
+         * @description One character in one queue: time, games and per-10-minute rates from the game's own career.
+         */
+        "stats.CareerCharacter": {
+            /** Character */
+            character: string;
+            /**
+             * Games Played
+             * @default null
+             */
+            games_played: number | null;
+            /**
+             * Games Won
+             * @default null
+             */
+            games_won: number | null;
+            /** @default null */
+            meta: components["schemas"]["stats.CareerMeta"] | null;
+            /**
+             * Rates
+             * @default {}
+             */
+            rates: {
+                [key: string]: number;
+            };
+            /** Role */
+            role: string | null;
+            /** Seconds */
+            seconds: number;
+            /** Share */
+            share: number;
+            /**
+             * Winrate
+             * @default null
+             */
+            winrate: number | null;
+        };
+        /**
+         * CareerMeta
+         * @description The game's own rates of a character in the ladder slice the player plays it in (fractions, 0..1).
+         */
+        "stats.CareerMeta": {
+            /** Banrate */
+            banrate: number | null;
+            /**
+             * Captured On
+             * Format: date
+             */
+            captured_on: string;
+            /** Division */
+            division: string | null;
+            /** Pickrate */
+            pickrate: number | null;
+            /** Winrate */
+            winrate: number | null;
+        };
+        /** CareerProfile */
+        "stats.CareerProfile": {
+            /** Attrs */
+            attrs: {
+                [key: string]: unknown;
+            };
+            /** Avatar Url */
+            avatar_url: string | null;
+            /** Display Name */
+            display_name: string | null;
+            /**
+             * Fetched At
+             * Format: date-time
+             */
+            fetched_at: string;
+            /** Is Public */
+            is_public: boolean;
+            /** Upstream Updated At */
+            upstream_updated_at: string | null;
+        };
+        /**
+         * CareerQueue
+         * @description One platform and queue of an account as the game shows it now; a seasonal queue covers its current season.
+         */
+        "stats.CareerQueue": {
+            /**
+             * Ban Exposure
+             * @default null
+             */
+            ban_exposure: number | null;
+            /**
+             * Captured At
+             * Format: date-time
+             */
+            captured_at: string;
+            /** Characters */
+            characters: components["schemas"]["stats.CareerCharacter"][];
+            /** Games Lost */
+            games_lost: number | null;
+            /** Games Played */
+            games_played: number | null;
+            /** Games Won */
+            games_won: number | null;
+            /**
+             * Meta Fit
+             * @default null
+             */
+            meta_fit: number | null;
+            /** Platform */
+            platform: string | null;
+            /** Queue */
+            queue: string | null;
+            /** Rates */
+            rates: {
+                [key: string]: number;
+            };
+            /** Roles */
+            roles: components["schemas"]["stats.CareerRole"][];
+            /** Season */
+            season: number | null;
+            /** Seconds */
+            seconds: number;
+            /** Winrate */
+            winrate: number | null;
+        };
+        /** CareerResponse */
+        "stats.CareerResponse": {
+            /** Accounts */
+            accounts: components["schemas"]["stats.CareerAccount"][];
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** User Id */
+            user_id: number;
+        };
+        /** CareerRole */
+        "stats.CareerRole": {
+            /** Mains */
+            mains: string[];
+            /** Pool Size */
+            pool_size: number;
+            /** Role */
+            role: string;
+            /** Seconds */
+            seconds: number;
+            /** Share */
+            share: number;
         };
         /**
          * CatalogEntityRead
@@ -26284,6 +26516,100 @@ export interface components {
             teams: {
                 [key: string]: number;
             };
+        };
+        /**
+         * CareerHealth
+         * @description How much of the players' game careers the collector sees.
+         */
+        "stats.CareerHealth": {
+            /** Accounts */
+            accounts: number;
+            /** Accounts Found */
+            accounts_found: number;
+            /** Accounts Not Found */
+            accounts_not_found: number;
+            /** Accounts Pending */
+            accounts_pending: number;
+            /** Accounts Public */
+            accounts_public: number;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Lost */
+            lost: number;
+            /** Players */
+            players: number;
+            /** Players Found */
+            players_found: number;
+            /** Players Public */
+            players_public: number;
+            /** Problems */
+            problems: components["schemas"]["stats.CareerProblem"][];
+            /** Renamed */
+            renamed: number;
+        };
+        /**
+         * CareerProblem
+         * @description An account whose tag needs an organizer: ``lost`` stopped resolving after it had; ``renamed`` is read by its
+         *     Blizzard id while the game shows another name.
+         */
+        "stats.CareerProblem": {
+            /** Display Name */
+            display_name: string | null;
+            /** Handle */
+            handle: string;
+            /** Kind */
+            kind: string;
+            /** Last Success At */
+            last_success_at: string | null;
+            /** Social Account Id */
+            social_account_id: number;
+            /** User Id */
+            user_id: number;
+            /** User Name */
+            user_name: string;
+        };
+        /** CareerSignal */
+        "stats.CareerSignal": {
+            /** Code */
+            code: string;
+            /**
+             * Social Account Id
+             * @default null
+             */
+            social_account_id: number | null;
+            /**
+             * Value
+             * @default null
+             */
+            value: number | null;
+        };
+        /** CareerSignalsResponse */
+        "stats.CareerSignalsResponse": {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Users */
+            users: components["schemas"]["stats.CareerUserSignals"][];
+        };
+        /** CareerUserSignals */
+        "stats.CareerUserSignals": {
+            /** Competitive Role Shares */
+            competitive_role_shares: {
+                [key: string]: number;
+            };
+            /** Hours */
+            hours: number;
+            /** Last Played At */
+            last_played_at: string | null;
+            /** Signals */
+            signals: components["schemas"]["stats.CareerSignal"][];
+            /** User Id */
+            user_id: number;
         };
         /** CatalogSyncError */
         "stats.CatalogSyncError": {
@@ -48649,6 +48975,68 @@ export interface operations {
             };
         };
     };
+    get__api_v1_users__id__career: {
+        parameters: {
+            query?: {
+                discipline?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["stats.CareerResponse"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     get__api_v1_users__id__characters: {
         parameters: {
             query: {
@@ -60469,6 +60857,165 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["app.QuotaPlanRead"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_admin_rank_career_health: {
+        parameters: {
+            query?: {
+                workspace_id?: number;
+                discipline?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["stats.CareerHealth"];
+                };
+            };
+            /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not authorized (`forbidden`). Authenticated, but the credential lacks the permission, workspace, or scope. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not found (`not_found`). Unknown id, or an id outside this credential's workspace (no existence leak). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (`unprocessable`). JSON parsed but failed schema or business validation. See `fields` / `error.details.fields`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rate limited (`rate_limited`). Wait `retry_after` seconds (also sent as `Retry-After`). */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before retrying. Mirrors `retry_after` in the body. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Internal error (`internal`). Unexpected failure. Do not retry blindly on writes. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__api_v1_admin_rank_career_signals: {
+        parameters: {
+            query?: {
+                user_id?: number;
+                workspace_id?: number;
+                discipline?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["stats.CareerSignalsResponse"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */

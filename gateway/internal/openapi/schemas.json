@@ -5342,6 +5342,30 @@
       },
       "summary": "Upload match logs"
     },
+    "rpc.stats.rank.career_health": {
+      "description": "Permission: workspace `rank.read` when `workspace_id` is given (only the game accounts of that workspace's players are counted), otherwise global `rank.read`. How much of the players' game careers the collector sees: players and accounts linked, found by the game now, with an open career, not found and never collected; and up to 200 accounts to fix: `lost` (the tag stopped resolving after it had, most recently seen first) and `renamed` (read by the account's stable id while the game shows another name). `discipline` query parameter names the game; 404 `rank_collection_unsupported` for a game that collects none.",
+      "query_params": [
+        {
+          "name": "workspace_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "discipline",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "response": {
+        "array": false,
+        "ref": "stats.CareerHealth"
+      },
+      "summary": "Career collection health"
+    },
     "rpc.stats.rank.career_signals": {
       "description": "Permission: workspace `rank.read` when `workspace_id` is given (only the game accounts of that workspace's players are read), otherwise global `rank.read`. For 1 to 200 `user_id` values: each player's current-season competitive role shares, hours, last time their profile changed, and signals: `profile_not_found`, `previously_found` (the tag resolved before: likely renamed), `profile_private`, `never_collected`, `renamed` (read by the account's stable id under another name), `low_hours_high_rank` (`value` = hours) and `inactive` (no change for 30 days). `discipline` query parameter names the game; 404 `rank_collection_unsupported` for a game that collects none.",
       "query_params": [
@@ -5558,7 +5582,7 @@
       "summary": "Rank collection health stats"
     },
     "rpc.stats.rank.user_career": {
-      "description": "Permission: public; no authentication required. Every game account of the user shown on their public profile (accounts hidden from it are left out), with its upstream profile (display name, avatar, game attributes, whether it is public now) and, per platform and queue, its career as the game shows it now: time, games, winrate, per-10-minute rates, roles with their pool size and mains, and characters. A closed profile shows no career. A seasonal queue covers its current season. `discipline` query parameter names the game; 404 `rank_collection_unsupported` for a game that collects none.",
+      "description": "Permission: public; no authentication required. Every game account of the user shown on their public profile (accounts hidden from it are left out), with its upstream profile (display name, avatar, game attributes, whether it is public now) and, per platform and queue, its career as the game shows it now: time, games, winrate, per-10-minute rates, roles with their pool size and mains, and characters. Where the game publishes hero rates for the platform and queue, each character carries them (`meta`: pick, win and ban rate as fractions) at the account's current division in the character's role (every division when unranked there), and the queue its time-weighted `meta_fit` (pick rate) and `ban_exposure` (ban rate). A closed profile shows no career. A seasonal queue covers its current season. `discipline` query parameter names the game; 404 `rank_collection_unsupported` for a game that collects none.",
       "query_params": [
         {
           "name": "discipline",
@@ -31037,6 +31061,17 @@
           "default": null,
           "title": "Games Won"
         },
+        "meta": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/stats.CareerMeta"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "rates": {
           "additionalProperties": {
             "type": "number"
@@ -31084,6 +31119,201 @@
         "share"
       ],
       "title": "CareerCharacter",
+      "type": "object"
+    },
+    "stats.CareerHealth": {
+      "description": "How much of the players' game careers the collector sees.",
+      "properties": {
+        "accounts": {
+          "title": "Accounts",
+          "type": "integer"
+        },
+        "accounts_found": {
+          "title": "Accounts Found",
+          "type": "integer"
+        },
+        "accounts_not_found": {
+          "title": "Accounts Not Found",
+          "type": "integer"
+        },
+        "accounts_pending": {
+          "title": "Accounts Pending",
+          "type": "integer"
+        },
+        "accounts_public": {
+          "title": "Accounts Public",
+          "type": "integer"
+        },
+        "generated_at": {
+          "format": "date-time",
+          "title": "Generated At",
+          "type": "string"
+        },
+        "lost": {
+          "title": "Lost",
+          "type": "integer"
+        },
+        "players": {
+          "title": "Players",
+          "type": "integer"
+        },
+        "players_found": {
+          "title": "Players Found",
+          "type": "integer"
+        },
+        "players_public": {
+          "title": "Players Public",
+          "type": "integer"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/components/schemas/stats.CareerProblem"
+          },
+          "title": "Problems",
+          "type": "array"
+        },
+        "renamed": {
+          "title": "Renamed",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "players",
+        "players_found",
+        "players_public",
+        "accounts",
+        "accounts_found",
+        "accounts_public",
+        "accounts_not_found",
+        "accounts_pending",
+        "lost",
+        "renamed",
+        "problems",
+        "generated_at"
+      ],
+      "title": "CareerHealth",
+      "type": "object"
+    },
+    "stats.CareerMeta": {
+      "description": "The game's own rates of a character in the ladder slice the player plays it in (fractions, 0..1).",
+      "properties": {
+        "banrate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Banrate"
+        },
+        "captured_on": {
+          "format": "date",
+          "title": "Captured On",
+          "type": "string"
+        },
+        "division": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Division"
+        },
+        "pickrate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pickrate"
+        },
+        "winrate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Winrate"
+        }
+      },
+      "required": [
+        "division",
+        "pickrate",
+        "winrate",
+        "banrate",
+        "captured_on"
+      ],
+      "title": "CareerMeta",
+      "type": "object"
+    },
+    "stats.CareerProblem": {
+      "description": "An account whose tag needs an organizer: ``lost`` stopped resolving after it had; ``renamed`` is read by its\nBlizzard id while the game shows another name.",
+      "properties": {
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Display Name"
+        },
+        "handle": {
+          "title": "Handle",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "last_success_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Success At"
+        },
+        "social_account_id": {
+          "title": "Social Account Id",
+          "type": "integer"
+        },
+        "user_id": {
+          "title": "User Id",
+          "type": "integer"
+        },
+        "user_name": {
+          "title": "User Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "social_account_id",
+        "user_id",
+        "user_name",
+        "handle",
+        "display_name",
+        "last_success_at"
+      ],
+      "title": "CareerProblem",
       "type": "object"
     },
     "stats.CareerProfile": {
@@ -31151,6 +31381,18 @@
     "stats.CareerQueue": {
       "description": "One platform and queue of an account as the game shows it now; a seasonal queue covers its current season.",
       "properties": {
+        "ban_exposure": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ban Exposure"
+        },
         "captured_at": {
           "format": "date-time",
           "title": "Captured At",
@@ -31195,6 +31437,18 @@
             }
           ],
           "title": "Games Won"
+        },
+        "meta_fit": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Meta Fit"
         },
         "platform": {
           "anyOf": [
