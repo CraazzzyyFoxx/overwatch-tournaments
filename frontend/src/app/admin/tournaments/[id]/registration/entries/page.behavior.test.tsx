@@ -540,4 +540,45 @@ describe("Registration entries", () => {
       "Smurf#2"
     ]);
   });
+
+  // "Not admitted" alone told an organizer nothing: each requirement is a named line with its
+  // state, the reason and who can fix it.
+  it("names every admission requirement with its state, reason and who can fix it", async () => {
+    const verdict = (key: string, state: string, stage: string, code: string, subject?: string) => ({
+      key,
+      state,
+      stage,
+      reasons: [{ code, actor: "player", subject }],
+      detail: {}
+    });
+    const subscription = verdict("subscription", "blocked", "registration", "not_subscribed", "boosty");
+    const profile = verdict("open_profile", "blocked", "check_in", "profile_private", "Main#1");
+    const unknown = verdict("discord_member", "undetermined", "registration", "no_linked_discord_account");
+    const refused = registration(1, "not_admitted");
+    const overridden = registration(2, "admitted");
+    listRegistrations.mockResolvedValue([
+      { ...refused, admission: { ...refused.admission, requirements: [subscription, profile, unknown], blockers: [subscription] } },
+      { ...overridden, admission: { ...overridden.admission, requirements: [profile], overridden: [profile] } }
+    ]);
+
+    const lineOf = (inspector: Element, text: string) =>
+      [...inspector.querySelectorAll("li")].find((li) => li.textContent?.includes(text));
+
+    const first = (await mount("?id=1")).querySelector("aside[aria-label='Row inspector']")!;
+    expect(first.textContent).toContain("Not Admitted: No active subscription (boosty)");
+    const blocked = lineOf(first, "Subscription");
+    expect(blocked?.textContent).toContain("No active subscription (boosty) · the player can fix it");
+    expect(blocked?.querySelector(".lucide-circle-x")).not.toBeNull();
+    // Blocked, but its gate has not come: not a refusal yet.
+    const later = lineOf(first, "Profile visibility");
+    expect(later?.textContent).toContain("Checked at check-in");
+    expect(later?.querySelector(".lucide-circle-x")).toBeNull();
+    // An unknown requirement reads as its key; an undetermined one fails open.
+    expect(lineOf(first, "discord_member")?.textContent).toContain("Could not be checked, does not block");
+
+    const second = (await mount("?id=2")).querySelector("aside[aria-label='Row inspector']")!;
+    expect(lineOf(second, "Profile visibility")?.textContent).toContain(
+      "requirement unmet, admission already granted"
+    );
+  });
 });
