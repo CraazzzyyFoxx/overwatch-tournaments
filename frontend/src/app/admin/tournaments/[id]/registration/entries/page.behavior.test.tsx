@@ -460,7 +460,7 @@ describe("Registration entries", () => {
     expect(inspector?.textContent).toContain("older version of this form");
   });
 
-  it("lays out the inspector: roles across with rank answers as rows, every other answer a question row", async () => {
+  it("lays out the inspector: a line per role with its rank answers, yes/no answers as a checklist, free text as a quote", async () => {
     const field = (key: string, kind: string, label: string) => ({
       key,
       kind,
@@ -517,28 +517,68 @@ describe("Registration entries", () => {
 
     const withInspector = await mount("?id=1");
     const inspector = withInspector.querySelector("aside[aria-label='Row inspector']")!;
-    const rowOf = (label: string) =>
-      [...inspector.querySelectorAll("tbody tr")].find((row) => row.querySelector("th")?.textContent === label);
+    const roleRow = (text: string) =>
+      [...inspector.querySelectorAll("li")].find((li) => li.textContent?.includes(text));
     const answerOf = (label: string) =>
-      [...inspector.querySelectorAll("dt")].find((dt) => dt.textContent === label)?.nextElementSibling?.textContent;
+      [...inspector.querySelectorAll("dt")].find((dt) => dt.textContent === label)?.nextElementSibling;
 
-    // Roles are the columns (a role ranked but not declared gets one too); each rank answer is a row.
-    const roleHeaders = [...inspector.querySelectorAll("thead th")].map((th) => th.textContent);
-    expect(roleHeaders.some((text) => text?.includes("tank"))).toBe(true);
-    expect(roleHeaders.some((text) => text?.includes("support"))).toBe(true);
-    expect(rowOf("Declared")?.textContent).toContain("3500");
-    expect(rowOf("Peak this season")?.textContent).toContain("3600");
-    expect(rowOf("Peak this season")?.textContent).toContain("3000");
-    // Handles are their own block, the rest stay question rows in form order.
-    expect(answerOf("Battle.net")).toBe("Main#1, Smurf#2");
-    expect([...inspector.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual([
-      "Battle.net",
-      "Sub",
-      "About you",
-      "Matches"
+    // One line per role, the declared rank on it and every rank answer under it; a role ranked but not declared too.
+    expect(roleRow("tank")?.textContent).toContain("3500");
+    expect(roleRow("tank")?.textContent).toContain("Peak this season");
+    expect(roleRow("tank")?.textContent).toContain("3600");
+    expect(roleRow("support")?.textContent).toContain("3000");
+    // A yes/no answer is a checklist line that still says its answer to a screen reader.
+    expect(roleRow("Sub")?.textContent).toBe("Sub: Yes");
+    // The player's free text is a quote, attributed to its question.
+    expect(inspector.querySelector("blockquote")?.textContent).toBe("just a sub");
+    expect(inspector.querySelector("figcaption")?.textContent).toContain("About you");
+    // The rest stay question rows; handles are their own block, one per line.
+    expect([...inspector.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual(["Matches", "Battle.net"]);
+    expect(answerOf("Matches")?.textContent).toBe("79");
+    expect([...(answerOf("Battle.net")?.children ?? [])].map((handle) => handle.textContent)).toEqual([
+      "Main#1",
+      "Smurf#2"
     ]);
-    expect(answerOf("Sub")).toBe("Yes");
-    expect(answerOf("About you")).toBe("just a sub");
-    expect(answerOf("Matches")).toBe("79");
+  });
+
+  // "Not admitted" alone told an organizer nothing: each requirement is a named line with its
+  // state, the reason and who can fix it.
+  it("names every admission requirement with its state, reason and who can fix it", async () => {
+    const verdict = (key: string, state: string, stage: string, code: string, subject?: string) => ({
+      key,
+      state,
+      stage,
+      reasons: [{ code, actor: "player", subject }],
+      detail: {}
+    });
+    const subscription = verdict("subscription", "blocked", "registration", "not_subscribed", "boosty");
+    const profile = verdict("open_profile", "blocked", "check_in", "profile_private", "Main#1");
+    const unknown = verdict("discord_member", "undetermined", "registration", "no_linked_discord_account");
+    const refused = registration(1, "not_admitted");
+    const overridden = registration(2, "admitted");
+    listRegistrations.mockResolvedValue([
+      { ...refused, admission: { ...refused.admission, requirements: [subscription, profile, unknown], blockers: [subscription] } },
+      { ...overridden, admission: { ...overridden.admission, requirements: [profile], overridden: [profile] } }
+    ]);
+
+    const lineOf = (inspector: Element, text: string) =>
+      [...inspector.querySelectorAll("li")].find((li) => li.textContent?.includes(text));
+
+    const first = (await mount("?id=1")).querySelector("aside[aria-label='Row inspector']")!;
+    expect(first.textContent).toContain("Not Admitted: No active subscription (boosty)");
+    const blocked = lineOf(first, "Subscription");
+    expect(blocked?.textContent).toContain("No active subscription (boosty) · the player can fix it");
+    expect(blocked?.querySelector(".lucide-circle-x")).not.toBeNull();
+    // Blocked, but its gate has not come: not a refusal yet.
+    const later = lineOf(first, "Profile visibility");
+    expect(later?.textContent).toContain("Checked at check-in");
+    expect(later?.querySelector(".lucide-circle-x")).toBeNull();
+    // An unknown requirement reads as its key; an undetermined one fails open.
+    expect(lineOf(first, "discord_member")?.textContent).toContain("Could not be checked, does not block");
+
+    const second = (await mount("?id=2")).querySelector("aside[aria-label='Row inspector']")!;
+    expect(lineOf(second, "Profile visibility")?.textContent).toContain(
+      "requirement unmet, admission already granted"
+    );
   });
 });

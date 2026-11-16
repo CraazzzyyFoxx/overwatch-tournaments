@@ -1793,7 +1793,7 @@
     "loadFailed": "Failed to load notes.",
     "newNote": "New note",
     "placeholder": "What happened, what was agreed, what to check… Markdown works.",
-    "hint": "Only organizers see notes. Up to 5 files per note, 10 MB each: images, PDF, TXT, CSV, ZIP.",
+    "hint": "Only organizers see notes. Up to 5 files per note, 10 MB each: images, PDF, TXT, CSV, ZIP. Paste a screenshot with Ctrl+V or drop files here.",
     "add": "Add note",
     "addFiles": "Attach files",
     "attach": "Attach a file",
@@ -1808,7 +1808,13 @@
     "removeFile": "Remove {name}",
     "fileTooLarge": "{name} is larger than 10 MB.",
     "tooManyFiles": "A note holds at most {max} files.",
-    "openFailed": "Could not open the file."
+    "openFailed": "Could not open the file.",
+    "expand": "Open notes full width",
+    "openImage": "Open {name}",
+    "openOriginal": "Open the original in a new tab",
+    "close": "Close",
+    "previousImage": "Previous image",
+    "nextImage": "Next image"
   },
   "registrationsAdmin": {
     "table": {
@@ -1918,9 +1924,18 @@
       "add": "Add to Balancer {count}"
     },
     "inspector": {
-      "admission": "Admission",
+      "status": "Status",
+      "checkIn": "Check-in",
+      "notCheckedIn": "Not checked in yet",
+      "balancer": "Balancer",
+      "atCheckIn": "Checked at check-in",
+      "undetermined": "Could not be checked, does not block",
+      "actor": {
+        "player": "the player can fix it",
+        "organizer": "needs an organizer",
+        "system": "a check failed on our side"
+      },
       "rolesAndRanks": "Roles and ranks",
-      "declaredRank": "Declared",
       "accounts": "Accounts",
       "questionnaire": "Questionnaire",
       "submitted": "submitted",
@@ -1928,7 +1943,8 @@
       "adminNotes": "Admin notes",
       "olderForm": "Answered on an older version of this form. Editing the registration re-files it against the current one.",
       "noLongerAskedTitle": "No longer asked",
-      "openRankHistory": "Open rank history"
+      "openRankHistory": "Rank history",
+      "fromPlayer": "from the player"
     },
     "status": {
       "pending": "Pending",

@@ -174,6 +174,28 @@ describe("Inspector", () => {
     expect(onNext).not.toHaveBeenCalled();
   });
 
+  // The notes sheet and the image viewer open over the inspector: Esc there closed the inspector
+  // under them too, and ↑/↓ switched the row, unmounting the very dialog being used.
+  it("leaves Escape and the arrow keys to a dialog opened over it", async () => {
+    await render();
+    const dialog = document.body.appendChild(document.createElement("div"));
+    dialog.setAttribute("role", "dialog");
+    const button = dialog.appendChild(document.createElement("button"));
+
+    await keyDown("Escape", button);
+    await keyDown("ArrowDown", button);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onNext).not.toHaveBeenCalled();
+  });
+
+  it("still closes on Escape from inside its own sheet below lg", async () => {
+    await render({}, false);
+    const field = document.querySelector<HTMLInputElement>('input[aria-label="Note"]');
+
+    await keyDown("Escape", field!);
+    expect(onClose).toHaveBeenCalled();
+  });
+
   it("offers Open page only when the entity has a route", async () => {
     await render();
     expect(document.body.textContent).not.toContain("Open page");

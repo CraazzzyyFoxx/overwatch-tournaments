@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Check, Circle, CircleAlert, CircleHelp, CircleX, Minus } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
@@ -9,11 +9,14 @@ import { AnswerValue } from "@/components/forms/AnswerValue";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { RankCrest } from "@/components/RankCrest";
 import { RegistrationNotesPanel } from "@/components/registration/RegistrationNotesPanel";
-import { builtinAnswerLabel } from "@/components/balancer/registrations/_components/registrationsTranslator";
+import {
+  builtinAnswerLabel,
+  localizedStatusMeta
+} from "@/components/balancer/registrations/_components/registrationsTranslator";
+import { BalancerStatusBadge } from "@/components/status/RegistrationBadges";
 import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { TONE_TEXT } from "@craazzzyyfoxx/admin-kit/ui/tone";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@craazzzyyfoxx/admin-kit/ui/table";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useRoleName } from "@/hooks/useRoleName";
 import { useFormatter } from "@/lib/datetime/client";
@@ -24,7 +27,7 @@ import { roleOf, subRoleSlugOf, type RoleRef } from "@/lib/roster/role-ref";
 import { cn } from "@/lib/utils";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { FormField } from "@/types/forms.types";
-import type { SubroleCatalog } from "@/types/registration.types";
+import type { RequirementVerdict, SubroleCatalog } from "@/types/registration.types";
 
 import { formatSubmittedAt } from "../registrationsTable.model";
 
@@ -35,7 +38,142 @@ const DASH = <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>;
 
 const isBlank = (value: unknown) => value === null || value === undefined || value === "";
 
-/** A `role_ranks` answer: one row of the roles table under the declared ranks. */
+const STATUS_ICON = "mt-px size-3.5 shrink-0";
+
+/** One line of the status checklist: what, its state as an icon, and why under it. */
+function StatusRow({
+  icon,
+  label,
+  value,
+  detail
+}: Readonly<{ icon: ReactNode; label: string; value?: ReactNode; detail?: ReactNode }>) {
+  return (
+    <li className="flex items-start gap-2">
+      {icon}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-foreground">{label}</span>
+          {value}
+        </div>
+        {detail ? <p className="text-label text-[color:var(--aqt-fg-dim)]">{detail}</p> : null}
+      </div>
+    </li>
+  );
+}
+
+/**
+ * Where the registration stands, one line per thing that can hold it up: each
+ * admission requirement by name, check-in, the balancer pool. A refusal names
+ * its reason and who can fix it, so "not admitted" never stands alone.
+ */
+function StatusChecklist({ registration, t }: Readonly<{ registration: AdminRegistration; t: AdmissionTranslator }>) {
+  const i18n = useTranslations("registrationsAdmin");
+  const tRoot = useTranslations();
+  const format = useFormatter();
+  const { admission } = registration;
+  const keysOf = (verdicts: RequirementVerdict[]) => new Set(verdicts.map((verdict) => verdict.key));
+  const blocking = keysOf(admission.blockers);
+  const overridden = keysOf(admission.overridden);
+
+  const nameOf = (key: string) => {
+    // The requirement registry is server-side and open-ended: an unknown key reads as itself.
+    const messageKey = `admission.requirement.${key}` as never;
+    return tRoot.has(messageKey) ? tRoot(messageKey) : key;
+  };
+  const why = (verdict: RequirementVerdict) =>
+    verdict.reasons
+      .map((reason) => `${formatAdmissionReason(t, reason)} · ${i18n(`inspector.actor.${reason.actor}`)}`)
+      .join("; ");
+
+  const requirementRow = (verdict: RequirementVerdict) => {
+    const label = nameOf(verdict.key);
+    if (verdict.state === "satisfied") {
+      return <StatusRow key={verdict.key} label={label} icon={<Check className={cn(STATUS_ICON, "text-[color:var(--aqt-emerald)]")} aria-hidden />} />;
+    }
+    if (verdict.state === "undetermined") {
+      // Fails open by design (see `RequirementState`): shown, never as a refusal.
+      return (
+        <StatusRow
+          key={verdict.key}
+          label={label}
+          icon={<CircleHelp className={cn(STATUS_ICON, "text-muted-foreground")} aria-hidden />}
+          detail={[i18n("inspector.undetermined"), why(verdict)].filter(Boolean).join(" · ")}
+        />
+      );
+    }
+    if (overridden.has(verdict.key)) {
+      return (
+        <StatusRow
+          key={verdict.key}
+          label={label}
+          icon={<CircleAlert className={cn(STATUS_ICON, TONE_TEXT.warning)} aria-hidden />}
+          detail={`${tRoot("common.admissionStatus.overridden")} · ${why(verdict)}`}
+        />
+      );
+    }
+    if (blocking.has(verdict.key)) {
+      return (
+        <StatusRow
+          key={verdict.key}
+          label={label}
+          icon={<CircleX className={cn(STATUS_ICON, "text-destructive")} aria-hidden />}
+          detail={why(verdict)}
+        />
+      );
+    }
+    // Blocked, but its gate (check-in) has not come yet: nothing is refused so far.
+    return (
+      <StatusRow
+        key={verdict.key}
+        label={label}
+        icon={<Circle className={cn(STATUS_ICON, "text-muted-foreground")} aria-hidden />}
+        detail={`${i18n("inspector.atCheckIn")} · ${why(verdict)}`}
+      />
+    );
+  };
+
+  return (
+    <section className="space-y-1.5">
+      <h3 className={eyebrowClass("muted")}>{i18n("inspector.status")}</h3>
+      <ul className="space-y-1.5 text-xs">
+        {admission.requirements.filter((verdict) => verdict.state !== "not_applicable").map(requirementRow)}
+        <StatusRow
+          label={i18n("inspector.checkIn")}
+          icon={
+            registration.checked_in ? (
+              <Check className={cn(STATUS_ICON, "text-[color:var(--aqt-emerald)]")} aria-hidden />
+            ) : (
+              <Circle className={cn(STATUS_ICON, "text-muted-foreground")} aria-hidden />
+            )
+          }
+          detail={
+            registration.checked_in
+              ? [
+                  registration.checked_in_at ? formatSubmittedAt(format, registration.checked_in_at) : null,
+                  registration.checked_in_by_username
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : i18n("inspector.notCheckedIn")
+          }
+        />
+        <StatusRow
+          label={i18n("inspector.balancer")}
+          // The badge carries the state; an icon beside it would claim a pass/fail the pool has no notion of.
+          icon={<span className={STATUS_ICON} aria-hidden />}
+          value={
+            <BalancerStatusBadge
+              status={registration.balancer_status}
+              meta={localizedStatusMeta(registration.balancer_status_meta, i18n)}
+            />
+          }
+        />
+      </ul>
+    </section>
+  );
+}
+
+/** A `role_ranks` answer: shown under each role it ranks. */
 interface RankSource {
   key: string;
   label: string;
@@ -43,12 +181,12 @@ interface RankSource {
 }
 
 /**
- * Roles across, rank sources down: the declared rank first, then every
- * `role_ranks` answer. Transposed because a game has two or three roles but a
- * question's label runs long: as column headers the labels pushed the table
- * past the panel's width.
+ * One line per role, its declared rank on the right; under it what that rank
+ * rests on: where it came from, the live game rank, and every `role_ranks`
+ * answer for the same role. A list rather than a roles × sources table: with a
+ * single role the table was mostly empty headers.
  */
-function RolesRanksTable({
+function RolesRanksList({
   roles,
   rankSources,
   discipline,
@@ -90,7 +228,7 @@ function RolesRanksTable({
     )
   ].sort((left, right) => order(left) - order(right) || left.localeCompare(right));
 
-  const columns = [
+  const rows = [
     ...declared.map((role) => ({ key: `${role.role.dimension}:${role.role.role}`, ref: role.role, role })),
     ...answeredOnly.map((code) => ({ key: `answer:${code}`, ref: { dimension, role: code } as RoleRef, role: null }))
   ].map((column) => {
@@ -103,25 +241,9 @@ function RolesRanksTable({
       subrole: slug && !known ? getSubroleLabel(catalog, roleOf(column.ref), slug) : null
     };
   });
-  if (columns.length === 0) return DASH;
+  if (rows.length === 0) return DASH;
 
-  // Where each declared rank came from and the live game rank: one footnote per
-  // role, since a narrow column has no room for it.
-  const footnotes = columns.flatMap(({ key, name, role }) => {
-    if (!role) return [];
-    const meta = [
-      role.rank_source && role.rank_source !== "none" ? tRows(`source.${role.rank_source}`) : null,
-      role.ow_rank_value != null && role.ow_rank_value !== role.rank_value
-        ? tRows("gameRank", { rank: role.ow_rank_value })
-        : null
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    return meta ? [{ key, text: `${name}: ${meta}` }] : [];
-  });
-
-  const answerCell = (value: unknown) => {
-    if (isBlank(value)) return DASH;
+  const answerRank = (value: unknown) => {
     const rank = Number(value);
     return nativeLadder && Number.isFinite(rank) ? (
       <RankCrest rank={rank} grid={nativeLadder} size={16} showValue className="text-foreground" />
@@ -130,84 +252,59 @@ function RolesRanksTable({
     );
   };
 
-  // The kit table, stripped to a plain grid: no row borders, hover or cell padding in a narrow panel.
-  const row = "border-0 hover:bg-transparent";
-  const rowHead = "h-auto px-0 py-1 text-left align-top font-normal whitespace-normal text-muted-foreground";
-  const cell = "px-0 py-1 pl-3 align-top";
   return (
-    <div className="space-y-1.5">
-      <Table className="text-xs">
-        <TableHeader>
-          <TableRow className={row}>
-            <TableHead className="h-auto px-0" />
-            {columns.map(({ key, ref, role, name, subrole }) => (
-              <TableHead
-                key={key}
-                scope="col"
-                className={cn("h-auto px-0 pb-1.5 pl-3 text-right align-bottom font-normal", role?.rank_value == null && "opacity-60")}
+    <ul className="space-y-2.5 text-xs">
+      {rows.map(({ key, ref, role, name, subrole }) => {
+        const meta = role
+          ? [
+              role.rank_source && role.rank_source !== "none" ? tRows(`source.${role.rank_source}`) : null,
+              role.ow_rank_value != null && role.ow_rank_value !== role.rank_value
+                ? tRows("gameRank", { rank: role.ow_rank_value })
+                : null
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          : "";
+        const answers = rankSources.filter((source) => !isBlank(source.ranks[roleOf(ref)]));
+        return (
+          <li key={key} className="space-y-1">
+            <div className="flex items-center justify-between gap-3">
+              <span
+                className={cn(
+                  "inline-flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm font-medium text-foreground",
+                  role?.rank_value == null && "opacity-60"
+                )}
               >
-                <span className="inline-flex flex-col items-end">
-                  <span className="inline-flex items-center gap-1 font-medium text-foreground">
-                    <PlayerRoleIcon role={ref} ontology={ontology} size={14} />
-                    {name}
-                  </span>
-                  {subrole ? <span className="text-label text-[color:var(--aqt-fg-dim)]">{subrole}</span> : null}
-                  {role?.is_primary ? <span className={cn("text-label", TONE_TEXT.accent)}>{tRows("primary")}</span> : null}
-                </span>
-              </TableHead>
+                <PlayerRoleIcon role={ref} ontology={ontology} size={16} />
+                {name}
+                {subrole ? <span className="font-normal text-muted-foreground">· {subrole}</span> : null}
+                {role?.is_primary ? <span className={cn("text-label font-normal", TONE_TEXT.accent)}>{tRows("primary")}</span> : null}
+              </span>
+              {!role ? (
+                DASH
+              ) : role.rank_value == null ? (
+                <span className={TONE_TEXT.warning}>{i18n("columns.noRank")}</span>
+              ) : (
+                <RankCrest rank={role.rank_value} grid={grid} size={18} showValue className="text-sm font-semibold text-foreground" />
+              )}
+            </div>
+            {meta ? <p className="pl-5.5 text-label text-[color:var(--aqt-fg-dim)]">{meta}</p> : null}
+            {answers.map((source) => (
+              <div key={source.key} className="flex items-center justify-between gap-3 pl-5.5 text-muted-foreground">
+                <span className="min-w-0">{source.label}</span>
+                {answerRank(source.ranks[roleOf(ref)])}
+              </div>
             ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow className={row}>
-            <TableHead scope="row" className={rowHead}>
-              {i18n("inspector.declaredRank")}
-            </TableHead>
-            {columns.map(({ key, role }) => (
-              <TableCell key={key} className={cell}>
-                <span className="flex justify-end">
-                  {!role ? (
-                    DASH
-                  ) : role.rank_value == null ? (
-                    <span className={TONE_TEXT.warning}>{i18n("columns.noRank")}</span>
-                  ) : (
-                    <RankCrest rank={role.rank_value} grid={grid} size={16} showValue className="font-semibold text-foreground" />
-                  )}
-                </span>
-              </TableCell>
-            ))}
-          </TableRow>
-          {rankSources.map((source) => (
-            <TableRow key={source.key} className={row}>
-              <TableHead scope="row" className={rowHead}>
-                {source.label}
-              </TableHead>
-              {columns.map(({ key, ref }) => (
-                <TableCell key={key} className={cell}>
-                  <span className="flex justify-end">{answerCell(source.ranks[roleOf(ref)])}</span>
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      {footnotes.map((note) => (
-        <p key={note.key} className="text-label text-[color:var(--aqt-fg-dim)]">
-          {note.text}
-        </p>
-      ))}
-    </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
-/** One answer as a row: the question wraps on the left, a short answer sits right; free text goes under its question. */
-function AnswerRow({ label, children, block = false }: Readonly<{ label: string; children: ReactNode; block?: boolean }>) {
-  return block ? (
-    <div className="space-y-0.5 py-1.5">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="whitespace-pre-wrap text-foreground">{children}</dd>
-    </div>
-  ) : (
+/** One answer as a row: the question wraps on the left, a short answer sits right. */
+function AnswerRow({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
+  return (
     <div className="flex items-start justify-between gap-3 py-1.5">
       <dt className="min-w-0 text-muted-foreground">{label}</dt>
       {/* `AnswerValue` paints its value muted, as a table cell wants; here the answer must outweigh its question. */}
@@ -277,9 +374,14 @@ export default function RegistrationInspectorBody({
   const rest = asked.filter((field) => !rankSources.some((source) => source.key === field.key));
   const accounts = rest.filter((field) => field.key.startsWith("identity_"));
   const questions = rest.filter((field) => !accounts.includes(field));
-  const hasQuestionnaire = questions.length > 0 || orphaned.length > 0;
-
-  const blockers = registration.admission.blockers.flatMap((requirement) => requirement.reasons);
+  // Yes/no answers read as a checklist, the player's free text as quotes; the rest stays question–answer rows.
+  const flags = questions.filter((field) => field.kind === "checkbox" || typeof answer(field.key) === "boolean");
+  const prose = questions.filter(
+    (field) => !flags.includes(field) && (field.kind === "textarea" || PROSE_BUILTINS[field.key] === true)
+  );
+  const plain = questions.filter((field) => !flags.includes(field) && !prose.includes(field));
+  const hasQuestionnaire =
+    flags.length > 0 || plain.length > 0 || orphaned.length > 0 || registration.form_version_stale;
 
   const orphanRows = orphaned.map(([key, value]) => (
     <AnswerRow key={key} label={builtinAnswerLabel(key, i18n) || key}>
@@ -289,26 +391,23 @@ export default function RegistrationInspectorBody({
 
   return (
     <div className="space-y-5 text-sm">
-      {blockers.length > 0 ? (
-        <section className="space-y-1.5">
-          <h3 className={eyebrowClass("muted")}>{i18n("inspector.admission")}</h3>
-          {/* Behind check-in a blocker is spent, not fatal (see `AdmissionStatusBadge`): only a refusal reads red. */}
-          <ul
-            className={cn(
-              "space-y-1 text-xs",
-              registration.admission.decision === "not_admitted" ? "text-destructive" : "text-muted-foreground"
-            )}
-          >
-            {blockers.map((reason) => (
-              <li key={`${reason.code}-${reason.actor}`}>{formatAdmissionReason(t, reason)}</li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      <StatusChecklist registration={registration} t={t} />
 
-      <section className="space-y-1.5">
-        <h3 className={eyebrowClass("muted")}>{i18n("inspector.rolesAndRanks")}</h3>
-        <RolesRanksTable
+      <section className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className={eyebrowClass("muted")}>{i18n("inspector.rolesAndRanks")}</h3>
+          {/* The chart itself lives on the person: a 380px panel is the wrong
+              canvas for a time series, and the person page already draws it. */}
+          {registration.user_id != null ? (
+            <Button asChild variant="link" size="sm" className="h-auto shrink-0 gap-1 p-0 text-xs">
+              <Link href={`/admin/people/${registration.user_id}`}>
+                {i18n("inspector.openRankHistory")}
+                <ArrowRight className="size-3.5" aria-hidden />
+              </Link>
+            </Button>
+          ) : null}
+        </div>
+        <RolesRanksList
           roles={registration.roles}
           rankSources={rankSources}
           catalog={catalog}
@@ -317,43 +416,40 @@ export default function RegistrationInspectorBody({
         />
       </section>
 
-      {accounts.length > 0 ? (
-        <section className="space-y-1.5">
-          <h3 className={eyebrowClass("muted")}>{i18n("inspector.accounts")}</h3>
-          <dl className="space-y-1 text-xs">
-            {accounts.map((field) => {
-              // An identity answer is a list, primary handle first (see `identityHandles`).
-              const value = answer(field.key);
-              return (
-                <div key={field.key} className="grid grid-cols-[6rem_minmax(0,1fr)] gap-3">
-                  <dt className="text-muted-foreground">{labelOf(field)}</dt>
-                  <dd className="break-words text-foreground">
-                    {Array.isArray(value) ? value.join(", ") : String(value)}
-                  </dd>
-                </div>
-              );
-            })}
-          </dl>
-        </section>
-      ) : null}
-
       {hasQuestionnaire ? (
         <section className="space-y-1.5">
           <h3 className={eyebrowClass("muted")}>{i18n("inspector.questionnaire")}</h3>
-          {questions.length > 0 || (orphaned.length > 0 && !schemaKnown) ? (
-            <dl className="divide-y divide-dashed divide-border text-xs">
-              {questions.map((field) => {
-                const prose = field.kind === "textarea" || PROSE_BUILTINS[field.key] === true;
+          {flags.length > 0 ? (
+            <ul className="space-y-1 text-xs">
+              {flags.map((field) => {
+                const value = answer(field.key);
+                // A checkbox that round-tripped through a form encoding arrives as `"false"` (see `AnswerValue`).
+                const on = value !== false && value !== "false";
+                const label = labelOf(field);
                 return (
-                  <AnswerRow key={field.key} label={labelOf(field)} block={prose}>
-                    {prose ? (
-                      String(answer(field.key))
+                  <li key={field.key} className={cn("flex items-start gap-2", on ? "text-foreground" : "text-muted-foreground")}>
+                    {on ? (
+                      <Check className="mt-px size-3.5 shrink-0 text-[color:var(--aqt-emerald)]" aria-hidden />
                     ) : (
-                      <AnswerValue value={answer(field.key)} kind={field.kind} labels={yesNo} ontology={ontology} />
+                      <Minus className="mt-px size-3.5 shrink-0" aria-hidden />
                     )}
-                  </AnswerRow>
+                    {/* The question is the label: a long one is clamped, its full wording stays in the tooltip and to screen readers. */}
+                    <span className="line-clamp-2" title={label}>
+                      {label}
+                    </span>
+                    <span className="sr-only">: {on ? yesNo.yes : yesNo.no}</span>
+                  </li>
                 );
               })}
+            </ul>
+          ) : null}
+          {plain.length > 0 || (orphaned.length > 0 && !schemaKnown) ? (
+            <dl className="divide-y divide-dashed divide-border text-xs">
+              {plain.map((field) => (
+                <AnswerRow key={field.key} label={labelOf(field)}>
+                  <AnswerValue value={answer(field.key)} kind={field.kind} labels={yesNo} ontology={ontology} />
+                </AnswerRow>
+              ))}
               {/* Without the schema nothing can be called dropped: the leftovers are plain answers. */}
               {schemaKnown ? null : orphanRows}
             </dl>
@@ -370,6 +466,46 @@ export default function RegistrationInspectorBody({
         </section>
       ) : null}
 
+      {accounts.length > 0 ? (
+        <section className="space-y-1.5">
+          <h3 className={eyebrowClass("muted")}>{i18n("inspector.accounts")}</h3>
+          <dl className="space-y-1 text-xs">
+            {accounts.map((field) => {
+              // An identity answer is a list, primary handle first (see `identityHandles`).
+              const value = answer(field.key);
+              return (
+                <div key={field.key} className="grid grid-cols-[6rem_minmax(0,1fr)] gap-3">
+                  <dt className="text-muted-foreground">{labelOf(field)}</dt>
+                  <dd className="break-words text-foreground">
+                    {(Array.isArray(value) ? value : [value]).map((handle) => (
+                      <span key={String(handle)} className="block">
+                        {String(handle)}
+                      </span>
+                    ))}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+        </section>
+      ) : null}
+
+      {/* The player's own words, attributed so they never pass for the organizers' notes below. */}
+      {prose.length > 0 ? (
+        <div className="space-y-3">
+          {prose.map((field) => (
+            <figure key={field.key} className="space-y-1">
+              <blockquote className="whitespace-pre-wrap border-l-2 border-border pl-3 text-xs text-foreground">
+                {String(answer(field.key))}
+              </blockquote>
+              <figcaption className="pl-3.5 text-label text-[color:var(--aqt-fg-dim)]">
+                {labelOf(field)} · {i18n("inspector.fromPlayer")}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      ) : null}
+
       {registration.admin_notes ? (
         <section className="space-y-1.5">
           <h3 className={eyebrowClass("muted")}>{i18n("inspector.adminNotes")}</h3>
@@ -383,26 +519,15 @@ export default function RegistrationInspectorBody({
         target={{ registrationId: registration.id }}
         canWrite={canWriteNotes}
         canModerate={canModerateNotes}
+        subject={registration.primary_handle ?? registration.display_name ?? undefined}
       />
 
       <footer className="space-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
-        <div className="flex items-center justify-between gap-3">
-          <span>
-            {registration.source === "google_sheets" ? i18n("columns.sheets") : i18n("columns.manual")}
-            {" · "}
-            {i18n("inspector.submitted")} {formatSubmittedAt(format, registration.submitted_at)}
-          </span>
-          {/* The chart itself lives on the person: a 380px panel is the wrong
-              canvas for a time series, and the person page already draws it. */}
-          {registration.user_id != null ? (
-            <Button asChild variant="link" size="sm" className="h-auto shrink-0 gap-1 p-0 text-xs">
-              <Link href={`/admin/people/${registration.user_id}`}>
-                {i18n("inspector.openRankHistory")}
-                <ArrowRight className="size-3.5" aria-hidden />
-              </Link>
-            </Button>
-          ) : null}
-        </div>
+        <p>
+          {registration.source === "google_sheets" ? i18n("columns.sheets") : i18n("columns.manual")}
+          {" · "}
+          {i18n("inspector.submitted")} {formatSubmittedAt(format, registration.submitted_at)}
+        </p>
         {registration.reviewed_at ? (
           <p>
             {i18n("inspector.reviewed")} {formatSubmittedAt(format, registration.reviewed_at)}

@@ -9,7 +9,7 @@ import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
 import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { MarkdownEditor } from "@/components/admin/MarkdownEditor";
+import { MarkdownEditor } from "@/components/MarkdownEditor";
 import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
 import { Combobox, ComboboxCheck, ComboboxMeta } from "@craazzzyyfoxx/admin-kit/ui/combobox";
 import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
