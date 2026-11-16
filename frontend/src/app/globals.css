@@ -187,6 +187,8 @@
 
 @layer base {
   :root {
+    /* Dark-only app: native scrollbars, inputs, date pickers and <select> lists render dark. */
+    color-scheme: dark;
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
     --muted: 0 0% 96.1%;
@@ -277,9 +279,12 @@
   height: 8px;
 }
 
-/* Track */
-::-webkit-scrollbar-track {
-  background: var(--background);
+/* Track and the corner where two scrollbars meet. A styled ::-webkit-scrollbar drops the native
+   (color-scheme) look, so an unstyled corner paints white. --background is a bare HSL triplet, so
+   `var(--background)` here was invalid and already resolved to transparent. */
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* Handle */
