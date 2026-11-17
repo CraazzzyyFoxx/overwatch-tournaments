@@ -30,6 +30,8 @@ ignore_imports =
     # Known debt in shared: shared.division_grid keeps its SQL CASE builders
     # beside the pure DivisionGrid sheet parsing uses.
     src.domain.registration.sheet_parsing -> shared.division_grid
+    # Typing only: encounter_scoring names ScoringRule under TYPE_CHECKING.
+    shared.domain.encounter_scoring -> shared.models.encounter
 
 [importlinter:contract:services-dont-import-rpc]
 name = services never import rpc
