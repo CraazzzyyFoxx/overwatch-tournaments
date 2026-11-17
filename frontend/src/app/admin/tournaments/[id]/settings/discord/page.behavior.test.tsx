@@ -271,18 +271,18 @@ describe("Settings › Discord", () => {
   });
 
   describe("voice channels", () => {
-    it("shows sync issues and players without Discord, grouped by team", async () => {
+    it("shows sync issues, and players without Discord on their team's row", async () => {
       await render();
 
       expect(container.textContent).toContain("The bot lacks the permission: manage_roles.");
       expect(container.textContent).toContain("something_new");
-      expect(container.textContent).toContain("Rockets: Ann, Bob");
+      const rocketsRow = [...container.querySelectorAll("li")].find((row) => row.textContent?.includes("Rockets"));
+      expect(rocketsRow?.textContent).toContain("No Discord: Ann, Bob");
     });
 
-    it("saves a draft with an automatic category as null", async () => {
+    it("turns voice on at once, without a save button", async () => {
       await render();
       await click(container.querySelector("#voice-enabled")!);
-      await click(buttonByText("Save"));
 
       expect(putVoice).toHaveBeenCalledWith(64, { ...VOICE_SETTINGS, enabled: true });
     });
@@ -293,7 +293,7 @@ describe("Settings › Discord", () => {
         settings: { ...VOICE_SETTINGS, enabled: true, category_id: "42" }
       });
       await render();
-      await click(buttonByText("Delete all channels"));
+      await click(container.querySelector("#voice-enabled")!);
 
       expect(putVoice).not.toHaveBeenCalled();
       await click(buttonByText("Delete channels"));

@@ -10945,7 +10945,6 @@
     "discord": {
       "title": "Логи матчей из Discord",
       "channel": "Канал",
-      "channelId": "ID канала",
       "empty": "Канал пока не настроен. Добавьте его, чтобы автоматически получать логи матчей.",
       "remove": "Удалить канал",
       "setDescription": "Настройте канал Discord для турнира {name}.",
@@ -11232,6 +11231,8 @@
       "importHistory": "Импортировать историю канала",
       "deleting": "Удаление…",
       "delete": "Удалить",
+      "monitoring": "Мониторинг идёт",
+      "moreActions": "Ещё действия с каналом логов",
       "displayNamePlaceholder": "#match-logs"
     },
     "challongeExtra": {
@@ -11250,7 +11251,6 @@
       "saved": "Настройки голосовых каналов сохранены",
       "syncRequested": "Синхронизация запрошена",
       "enabled": "Голосовые каналы",
-      "enabledHint": "Автоматически создавать голосовые каналы для этого турнира.",
       "private": "Закрытые каналы",
       "privateHint": "Каналы видят и заходят в них только участники команды и роли персонала. Общий канал остаётся открытым.",
       "category": "Категория",
@@ -11261,10 +11261,9 @@
       "staffRolesNone": "Роли не выбраны",
       "rolesLoading": "Загружаем роли…",
       "noRoles": "Роли недоступны. Проверьте, что бот добавлен на сервер.",
-      "save": "Сохранить",
       "sync": "Синхронизировать",
+      "moreActions": "Ещё действия с голосовыми каналами",
       "earlyTeams": "Создать каналы команд сейчас",
-      "deleteAll": "Удалить все каналы",
       "deleteTitle": "Удалить все голосовые каналы?",
       "deleteDescription": "Голосовые каналы будут выключены, а бот удалит все созданные для этого турнира каналы, как только они опустеют.",
       "deleteConfirm": "Удалить каналы",
@@ -11278,11 +11277,28 @@
       },
       "channelsTitle": "Каналы",
       "noChannels": "Каналов пока нет.",
-      "kinds": {
-        "category": "Категория",
+      "groups": {
+        "category": "Категории",
         "hub": "Общий",
-        "team": "Команда",
-        "swiss_slot": "Лобби раунда"
+        "team": "Команды",
+        "swiss_slot": "Лобби раундов"
+      },
+      "filters": {
+        "all": "Все",
+        "team": "Команды",
+        "swiss_slot": "Лобби",
+        "attention": "Требуют внимания"
+      },
+      "filtersLabel": "Фильтр каналов",
+      "search": "Найти канал",
+      "showMore": "Показать ещё {count}",
+      "showLess": "Свернуть",
+      "channelCount": "{count, plural, one {# канал} few {# канала} many {# каналов} other {# канала}}",
+      "statusCounts": {
+        "active": "{count, plural, one {# активен} other {# активны}}",
+        "pending": "{count, plural, one {# создаётся} other {# создаются}}",
+        "planned": "{count, plural, one {# запланирован} other {# запланированы}}",
+        "deleting": "{count, plural, one {# удаляется} other {# удаляются}}"
       },
       "statuses": {
         "planned": "Запланирован",
@@ -11290,11 +11306,15 @@
         "active": "Активен",
         "deleting": "Удаляется"
       },
-      "warningsTitle": "Игроки без привязанного Discord",
+      "withoutDiscord": "{count, plural, one {# игрок без привязанного Discord.} few {# игрока без привязанного Discord.} many {# игроков без привязанного Discord.} other {# игрока без привязанного Discord.}}",
+      "teamWithoutDiscord": "Без Discord: {names}",
       "warningsHint": "Их не переносят и не пускают в каналы, пока они не привяжут Discord.",
       "unnamedPlayer": "Игрок без имени",
       "noTeam": "Без команды",
-      "team": "Команда #{id}",
+      "allChannels": "Все каналы",
+      "openSettings": "Настройки",
+      "drawerTitle": "Голосовые каналы турнира",
+      "activeOf": "{kind}: активно {active} из {total}",
       "lastSynced": "Последняя синхронизация: {time}",
       "neverSynced": "Ещё не синхронизировано."
     },

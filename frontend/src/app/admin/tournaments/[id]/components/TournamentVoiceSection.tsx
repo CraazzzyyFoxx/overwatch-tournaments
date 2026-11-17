@@ -3,26 +3,35 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MoreHorizontal, RefreshCw } from "lucide-react";
 
 import { DiscordChannelSelect } from "@/components/discord/DiscordChannelSelect";
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { EmptyNote } from "@craazzzyyfoxx/admin-kit/kit/EmptyNote";
-import { SettingRow } from "@/components/kit/SettingRow";
-import { StatusPill } from "@/components/kit/StatusPill";
+import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
 import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Combobox, ComboboxCheck } from "@craazzzyyfoxx/admin-kit/ui/combobox";
 import { CommandGroup, CommandItem } from "@craazzzyyfoxx/admin-kit/ui/command";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useDiscordRoles } from "@/hooks/useDiscordEntities";
 import { adminQueryKeys } from "@/lib/admin/query-keys";
-import { useFormatter } from "@/lib/datetime/client";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
-import type { VoiceSettings, VoiceStatus } from "@/types/admin.types";
-
-const ISSUE_KEYS = ["guild_not_found", "category_not_found", "category_overflow"] as const;
-const MISSING_PERMISSION_PREFIX = "missing_permission:";
+import type { VoiceSettings } from "@/types/admin.types";
+import {
+  hasVoiceIssues,
+  VoiceChannelList,
+  VoiceCounts,
+  VoiceIssues,
+  VoiceLastSynced
+} from "./voice/VoiceChannelList";
 
 interface TournamentVoiceSectionProps {
   tournamentId: number;
@@ -31,9 +40,10 @@ interface TournamentVoiceSectionProps {
 }
 
 /**
- * Voice channels the bot keeps for the tournament (`docs/tournament-voice-channels.md`).
- * A resource of its own, like the match-log channel: it saves with its own button,
- * not with the settings form's save bar.
+ * Voice channels the bot keeps for the tournament (`docs/tournament-voice-channels.md`),
+ * as one settings group. Every control saves on its own, like the match-log channel:
+ * the switch in the header turns the feature on, and off only after a confirmation,
+ * because off is what deletes every channel.
  */
 export function TournamentVoiceSection({
   tournamentId,
@@ -43,92 +53,129 @@ export function TournamentVoiceSection({
   const t = useTranslations("adminTournament.voiceSettings");
   const queryClient = useQueryClient();
   const queryKey = adminQueryKeys.tournamentVoice(tournamentId);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [disableOpen, setDisableOpen] = useState(false);
 
   const statusQuery = useQuery({ queryKey, queryFn: () => adminService.getVoice(tournamentId) });
   const status = statusQuery.data;
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey });
   const putMutation = useMutation({
     mutationFn: (settings: VoiceSettings) => adminService.putVoice(tournamentId, settings),
-    onSuccess: async () => {
-      await refresh();
+    onSuccess: (next) => {
+      queryClient.setQueryData(queryKey, next);
       notify.success(t("saved"));
     }
   });
   const syncMutation = useMutation({
     mutationFn: () => adminService.syncVoice(tournamentId),
-    onSuccess: async () => {
-      await refresh();
+    onSuccess: (next) => {
+      queryClient.setQueryData(queryKey, next);
       notify.success(t("syncRequested"));
     }
   });
 
-  if (!status) {
-    return statusQuery.isError ? (
-      <EmptyNote size="sm">{t("loadError")}</EmptyNote>
-    ) : (
-      <Skeleton className="h-24 w-full" />
-    );
-  }
-
-  const settings = status.settings;
-  const busy = putMutation.isPending || syncMutation.isPending;
+  // While a save is in flight the controls show what was asked for; a failed one falls back to the server's.
+  const settings = putMutation.isPending ? putMutation.variables : status?.settings;
+  const disabled = !canUpdateTournament || putMutation.isPending;
+  // Off with nothing made: only the settings, nothing to count or list.
+  const inUse = Boolean(settings?.enabled) || (status?.channels.length ?? 0) > 0;
+  const save = (patch: Partial<VoiceSettings>) => {
+    if (settings) putMutation.mutate({ ...settings, ...patch });
+  };
 
   return (
-    <>
-      {/* Keyed by the saved settings: a save or refetch resets the draft to what the server holds. */}
-      <VoiceForm
-        key={JSON.stringify(settings)}
-        workspaceId={workspaceId}
-        settings={settings}
-        canEdit={canUpdateTournament}
-        saving={putMutation.isPending}
-        onSave={(next) => putMutation.mutate(next)}
-      />
-
-      {canUpdateTournament ? (
-        <div className="flex flex-wrap gap-2 pt-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => syncMutation.mutate()}
-          >
-            {t("sync")}
-          </Button>
-          {!settings.early_teams ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => putMutation.mutate({ ...settings, early_teams: true })}
-            >
-              {t("earlyTeams")}
-            </Button>
+    <SettingGroup
+      id="voice-channels"
+      title={t("title")}
+      description={t("description")}
+      immediate
+      actions={
+        settings ? (
+          <Switch
+            id="voice-enabled"
+            aria-label={t("enabled")}
+            checked={settings.enabled}
+            disabled={disabled}
+            onCheckedChange={(enabled) => (enabled ? save({ enabled }) : setDisableOpen(true))}
+          />
+        ) : null
+      }
+    >
+      {!status || !settings ? (
+        statusQuery.isError ? (
+          <EmptyNote size="sm">{t("loadError")}</EmptyNote>
+        ) : (
+          <Skeleton className="h-24 w-full" />
+        )
+      ) : (
+        <>
+          {inUse || hasVoiceIssues(status) ? (
+          <div className="flex flex-col gap-2 py-3 first:pt-0">
+            {inUse ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <div className="min-w-0 flex-1">
+                  <VoiceCounts status={status} />
+                  <VoiceLastSynced status={status} />
+                </div>
+                {canUpdateTournament ? (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={syncMutation.isPending}
+                      onClick={() => syncMutation.mutate()}
+                    >
+                      <RefreshCw aria-hidden className={syncMutation.isPending ? "animate-spin" : undefined} />
+                      {t("sync")}
+                    </Button>
+                    {!settings.early_teams ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="size-8"
+                            aria-label={t("moreActions")}
+                            title={t("moreActions")}
+                          >
+                            <MoreHorizontal aria-hidden className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem disabled={disabled} onSelect={() => save({ early_teams: true })}>
+                            {t("earlyTeams")}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            <VoiceIssues status={status} />
+          </div>
           ) : null}
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            disabled={busy}
-            onClick={() => setDeleteOpen(true)}
-          >
-            {t("deleteAll")}
-          </Button>
-        </div>
-      ) : null}
 
-      <VoiceStatusPanel status={status} />
+          <VoiceSettingsRows workspaceId={workspaceId} settings={settings} disabled={disabled} save={save} />
+
+          {inUse ? (
+            <div className="flex flex-col gap-2 py-3 last:pb-0">
+              <h3 className="text-sm font-medium">{t("channelsTitle")}</h3>
+              <VoiceChannelList status={status} previewCount={6} />
+            </div>
+          ) : null}
+        </>
+      )}
 
       <ConfirmDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        onConfirm={() =>
-          putMutation.mutate({ ...settings, enabled: false }, { onSettled: () => setDeleteOpen(false) })
-        }
+        open={disableOpen}
+        onOpenChange={setDisableOpen}
+        onConfirm={() => {
+          if (settings) {
+            putMutation.mutate({ ...settings, enabled: false }, { onSettled: () => setDisableOpen(false) });
+          }
+        }}
         pending={putMutation.isPending}
         intent={{
           title: t("deleteTitle"),
@@ -137,51 +184,41 @@ export function TournamentVoiceSection({
           tone: "danger"
         }}
       />
-    </>
+    </SettingGroup>
   );
 }
 
-function VoiceForm({
+function VoiceSettingsRows({
   workspaceId,
   settings,
-  canEdit,
-  saving,
-  onSave
+  disabled,
+  save
 }: Readonly<{
   workspaceId: number;
   settings: VoiceSettings;
-  canEdit: boolean;
-  saving: boolean;
-  onSave: (settings: VoiceSettings) => void;
+  disabled: boolean;
+  save: (patch: Partial<VoiceSettings>) => void;
 }>) {
   const t = useTranslations("adminTournament.voiceSettings");
   const tc = useTranslations("common");
-  const [draft, setDraft] = useState(settings);
   const rolesQuery = useDiscordRoles(workspaceId);
   const roles = (rolesQuery.data?.roles ?? []).filter((role) => !role.managed);
-  const disabled = !canEdit || saving;
-  const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
+  // Roles toggle inside an open popover and save once it closes: one request, not one per click.
+  const [roleDraft, setRoleDraft] = useState<string[] | null>(null);
+  const roleIds = roleDraft ?? settings.staff_role_ids;
   const staffLabel = roles
-    .filter((role) => draft.staff_role_ids.includes(role.id))
+    .filter((role) => roleIds.includes(role.id))
     .map((role) => role.name)
     .join(", ");
 
   return (
     <>
-      <SettingRow htmlFor="voice-enabled" label={t("enabled")} hint={t("enabledHint")}>
-        <Switch
-          id="voice-enabled"
-          checked={draft.enabled}
-          disabled={disabled}
-          onCheckedChange={(enabled) => setDraft({ ...draft, enabled })}
-        />
-      </SettingRow>
       <SettingRow htmlFor="voice-private" label={t("private")} hint={t("privateHint")}>
         <Switch
           id="voice-private"
-          checked={draft.private}
+          checked={settings.private}
           disabled={disabled}
-          onCheckedChange={(next) => setDraft({ ...draft, private: next })}
+          onCheckedChange={(next) => save({ private: next })}
         />
       </SettingRow>
       <SettingRow htmlFor="voice-category" label={t("category")} hint={t("categoryHint")}>
@@ -190,8 +227,8 @@ function VoiceForm({
             id="voice-category"
             type="category"
             workspaceId={workspaceId}
-            value={draft.category_id ?? ""}
-            onChange={(next) => setDraft({ ...draft, category_id: next === "" ? null : next })}
+            value={settings.category_id ?? ""}
+            onChange={(next) => save({ category_id: next === "" ? null : next })}
             disabled={disabled}
             ariaLabel={t("category")}
             placeholder={t("categoryAuto")}
@@ -202,7 +239,6 @@ function VoiceForm({
       <SettingRow htmlFor="voice-staff-roles" label={t("staffRoles")} hint={t("staffRolesHint")}>
         <div className="w-full md:max-w-sm">
           {roles.length > 0 ? (
-            // Uncontrolled: the popover stays open while roles are toggled.
             <Combobox
               id="voice-staff-roles"
               label={staffLabel}
@@ -210,21 +246,26 @@ function VoiceForm({
               disabled={disabled}
               searchPlaceholder={tc("search")}
               emptyMessage={tc("noResults")}
+              onOpenChange={(open) => {
+                if (open) {
+                  setRoleDraft(settings.staff_role_ids);
+                  return;
+                }
+                if (roleDraft && [...roleDraft].sort().join() !== [...settings.staff_role_ids].sort().join()) {
+                  save({ staff_role_ids: roleDraft });
+                }
+                setRoleDraft(null);
+              }}
             >
               <CommandGroup>
                 {roles.map((role) => {
-                  const selected = draft.staff_role_ids.includes(role.id);
+                  const selected = roleIds.includes(role.id);
                   return (
                     <CommandItem
                       key={role.id}
                       value={`${role.name} ${role.id}`}
                       onSelect={() =>
-                        setDraft({
-                          ...draft,
-                          staff_role_ids: selected
-                            ? draft.staff_role_ids.filter((id) => id !== role.id)
-                            : [...draft.staff_role_ids, role.id]
-                        })
+                        setRoleDraft(selected ? roleIds.filter((id) => id !== role.id) : [...roleIds, role.id])
                       }
                     >
                       <span className="min-w-0 flex-1 truncate">{role.name}</span>
@@ -241,101 +282,6 @@ function VoiceForm({
           )}
         </div>
       </SettingRow>
-      {canEdit ? (
-        <div className="pt-1">
-          <Button type="button" size="sm" disabled={!dirty || saving} onClick={() => onSave(draft)}>
-            {t("save")}
-          </Button>
-        </div>
-      ) : null}
     </>
-  );
-}
-
-function VoiceStatusPanel({ status }: Readonly<{ status: VoiceStatus }>) {
-  const t = useTranslations("adminTournament.voiceSettings");
-  const format = useFormatter();
-
-  const issueLabel = (code: string) => {
-    if (code.startsWith(MISSING_PERMISSION_PREFIX)) {
-      return t("issues.missing_permission", { permission: code.slice(MISSING_PERMISSION_PREFIX.length) });
-    }
-    return (ISSUE_KEYS as readonly string[]).includes(code)
-      ? t(`issues.${code as (typeof ISSUE_KEYS)[number]}`)
-      : code;
-  };
-
-  // A team's channel (`team:<id>`) carries the team's name; the warning itself only has the id.
-  const teamName = (teamId: number) =>
-    status.channels.find((channel) => channel.slot_key === `team:${teamId}`)?.name ??
-    t("team", { id: teamId });
-
-  const warningsByTeam = new Map<number | null, string[]>();
-  for (const warning of status.warnings) {
-    const names = warningsByTeam.get(warning.team_id) ?? [];
-    names.push(warning.name ?? t("unnamedPlayer"));
-    warningsByTeam.set(warning.team_id, names);
-  }
-
-  return (
-    <div className="flex flex-col gap-3 pt-4">
-      {!status.guild_linked ? (
-        <p role="status" className="text-sm text-warning">
-          {t("guildNotLinked")}
-        </p>
-      ) : null}
-
-      {status.sync_issues.length > 0 ? (
-        <ul className="flex flex-col gap-1 text-sm text-warning" aria-label={t("issuesTitle")}>
-          {status.sync_issues.map((issue) => (
-            <li key={`${issue.code}:${issue.detail ?? ""}`}>
-              {issueLabel(issue.code)}
-              {issue.detail ? ` (${issue.detail})` : ""}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {status.channels.length > 0 ? (
-        <ul className="flex flex-col gap-1.5" aria-label={t("channelsTitle")}>
-          {status.channels.map((channel) => (
-            <li key={channel.slot_key} className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-muted-foreground">{t(`kinds.${channel.kind}`)}</span>
-              <span className="font-medium">{channel.name ?? channel.slot_key}</span>
-              <StatusPill tone={channel.status === "active" ? "success" : "neutral"}>
-                {t(`statuses.${channel.status}`)}
-              </StatusPill>
-              {channel.discord_channel_id ? (
-                <span className="font-mono text-xs text-muted-foreground">
-                  {channel.discord_channel_id}
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <EmptyNote size="sm">{t("noChannels")}</EmptyNote>
-      )}
-
-      {warningsByTeam.size > 0 ? (
-        <div className="flex flex-col gap-1 text-sm">
-          <p className="font-medium">{t("warningsTitle")}</p>
-          <ul className="flex flex-col gap-1 text-muted-foreground">
-            {[...warningsByTeam].map(([teamId, names]) => (
-              <li key={teamId ?? "none"}>
-                {teamId === null ? t("noTeam") : teamName(teamId)}: {names.join(", ")}
-              </li>
-            ))}
-          </ul>
-          <p className="text-xs text-muted-foreground">{t("warningsHint")}</p>
-        </div>
-      ) : null}
-
-      <p className="text-xs text-muted-foreground">
-        {status.last_synced_at
-          ? t("lastSynced", { time: format.dateTime(new Date(status.last_synced_at), { dateStyle: "medium", timeStyle: "short" }) })
-          : t("neverSynced")}
-      </p>
-    </div>
   );
 }
