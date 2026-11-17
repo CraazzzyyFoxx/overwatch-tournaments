@@ -13,6 +13,8 @@ import { tabError, tabFallback, useHubStagesQuery, useHubTournamentQuery } from 
 import { buildChecklist, hasChallongeSource, pickNextAction } from "@/components/admin/tournament-checklist";
 import { LifecycleChecklist } from "./LifecycleChecklist";
 import { PhaseStepper } from "./PhaseStepper";
+import { TournamentVoiceSummary } from "../components/voice/TournamentVoiceSummary";
+import { useTabAccess } from "../sub-tabs";
 
 /** Overview (T3 body): the next action, where the tournament is, what it still needs. */
 export default function OverviewTabPage() {
@@ -24,6 +26,7 @@ export default function OverviewTabPage() {
 
   const tournamentQuery = useHubTournamentQuery(tournamentId);
   const stagesQuery = useHubStagesQuery(tournamentId);
+  const { canUpdateTournament } = useTabAccess(tournamentQuery.data);
   // Living-checklist data (§3, D13). Freshness comes from window focus and the
   // shell's realtime invalidation — deliberately NO refetchInterval (CG-O4).
   const readinessQuery = useQuery({
@@ -85,6 +88,7 @@ export default function OverviewTabPage() {
           </AlertDescription>
         </Alert>
       ) : null}
+      <TournamentVoiceSummary tournamentId={tournamentId} canSync={canUpdateTournament} />
       {readinessQuery.isError ? (
         tabError(readinessQuery.refetch)
       ) : (

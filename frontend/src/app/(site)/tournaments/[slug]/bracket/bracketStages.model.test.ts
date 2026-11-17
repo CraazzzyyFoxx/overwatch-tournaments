@@ -13,9 +13,17 @@ function stage(
   id: number,
   stageType: Stage["stage_type"],
   items: Partial<StageItem>[],
-  isCompleted = false
+  isCompleted = false,
+  order = 0
 ): Stage {
-  return { id, stage_type: stageType, name: `Stage ${id}`, items, status: isCompleted ? "completed" : "draft" } as Stage;
+  return {
+    id,
+    stage_type: stageType,
+    name: `Stage ${id}`,
+    items,
+    order,
+    status: isCompleted ? "completed" : "draft"
+  } as Stage;
 }
 
 const seeded = { id: 1, inputs: [{ id: 10 }] } as Partial<StageItem>;
@@ -93,5 +101,46 @@ describe("an individual Swiss stage", () => {
       ["Stage 300", false],
       ["Playoff", false]
     ]);
+  });
+});
+
+describe("a flow with several group-scope phases", () => {
+  // Тхао #6: individual Swiss qualification → team Swiss groups → playoff, one phase each.
+  const qualification = stage(308, "individual_swiss", [], false, 0);
+  const groups = stage(309, "swiss", [seeded], false, 1);
+  const playoff = stage(310, "single_elimination", [], false, 2);
+
+  it("gives every phase its own tab, in phase order, named by its stage", () => {
+    const result = buildBracketTabs({
+      tournament,
+      groupStages: [qualification, groups],
+      eliminationStages: [playoff],
+      activeStageId: 309,
+      viewParam: null,
+      matchCountsKnown: true,
+      stageIdsWithMatches: new Set(),
+      labels: { groupStage: "Group stage", playoff: "Playoff" }
+    });
+    expect(result.items.map(({ label, href }) => [label, href])).toEqual([
+      ["Stage 308", "/tournaments/txao-5/bracket?stage=308"],
+      ["Stage 309", "/tournaments/txao-5/bracket?stage=309"],
+      ["Playoff", "/tournaments/txao-5/bracket?stage=310"]
+    ]);
+    expect(result.activeKey).toBe("stage-309");
+  });
+
+  it("draws only the selected phase in the groups view", () => {
+    const stages = [qualification, groups, playoff];
+    expect(selectBracketStages(stages, "groups", 309).activeGroupStages).toEqual([groups]);
+  });
+
+  it("still shares one tab between parallel group stages of a phase", () => {
+    const a = stage(401, "round_robin", [seeded], false, 0);
+    const b = stage(402, "round_robin", [seeded], false, 0);
+    expect(tabs([a, b], stage(403, "single_elimination", [], false, 1), 401)).toEqual([
+      ["Group stage", false],
+      ["Playoff", false]
+    ]);
+    expect(selectBracketStages([a, b], "groups", 402).activeGroupStages).toEqual([a, b]);
   });
 });

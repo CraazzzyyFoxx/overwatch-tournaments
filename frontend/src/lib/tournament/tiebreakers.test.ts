@@ -5,6 +5,7 @@ import {
   FFA_STAT_PREFIX,
   FFA_TIEBREAKERS,
   ffaStatTiebreakers,
+  formatBuchholz,
   formatTiebreakOrder,
   tiebreakerLabel,
   tiebreakersForStageType
@@ -126,5 +127,14 @@ describe("formatTiebreakOrder", () => {
         COLUMNS
       )
     ).toBe("Points → Game Wins → Sum: Kills → Last Placement");
+  });
+});
+
+describe("formatBuchholz", () => {
+  it("shows hundredths and keeps one decimal, hiding float noise", () => {
+    expect(formatBuchholz(2.25)).toBe("2.25");
+    expect(formatBuchholz(0.6000000000000001)).toBe("0.6");
+    expect(formatBuchholz(3)).toBe("3.0");
+    expect(formatBuchholz(1.333)).toBe("1.33");
   });
 });

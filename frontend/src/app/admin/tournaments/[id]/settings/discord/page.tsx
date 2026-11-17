@@ -41,7 +41,6 @@ function DiscordSettings({
   const reportUnsaved = useUnsavedReporter();
   const t = useTranslations("adminTournament.discordSettings");
   const tChannel = useTranslations("adminTournament.discord");
-  const tVoice = useTranslations("adminTournament.voiceSettings");
   const channelQuery = useQuery({
     queryKey: getTournamentWorkspaceQueryKeys(tournamentId).discordChannel,
     queryFn: () => adminService.getDiscordChannel(tournamentId)
@@ -89,13 +88,11 @@ function DiscordSettings({
         />
       </SettingGroup>
 
-      <SettingGroup id="voice-channels" title={tVoice("title")} description={tVoice("description")}>
-        <TournamentVoiceSection
-          tournamentId={tournamentId}
-          workspaceId={tournament.workspace_id}
-          canUpdateTournament={canUpdateTournament}
-        />
-      </SettingGroup>
+      <TournamentVoiceSection
+        tournamentId={tournamentId}
+        workspaceId={tournament.workspace_id}
+        canUpdateTournament={canUpdateTournament}
+      />
       </SettingsGrid>
 
       <SaveBar onDirtyChange={reportUnsaved} dirty={dirty} summary={summary} error={error} saving={saving} onDiscard={discard} onSave={save} />

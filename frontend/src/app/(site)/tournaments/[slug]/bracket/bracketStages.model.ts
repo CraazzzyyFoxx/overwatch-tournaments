@@ -13,6 +13,12 @@ const isWholeStagePanel = (stage: Stage) =>
   FFA_STAGE_TYPES.includes(stage.stage_type) ||
   INDIVIDUAL_SWISS_STAGE_TYPES.includes(stage.stage_type);
 
+/**
+ * A stage's phase is its `order`: the flow editor keeps it at 1 + the phase of the stages that feed it, and parallel
+ * stages (legacy group stages, divisions) share one. Qualification → groups → playoff are three phases, not one group scope.
+ */
+const phaseOf = (stage: Stage) => stage.order ?? 0;
+
 /** Which stages the bracket screen is currently drawing, and in which mode. */
 export type BracketStageSelection = {
   groupStages: Stage[];
@@ -49,11 +55,15 @@ export function selectBracketStages(
   const shouldShowGroupStage =
     viewParam === "groups" ||
     (primaryStage ? groupStages.some((stage) => stage.id === primaryStage.id) : false);
-  // The dedicated groups view lists every group stage; arriving on a group
+  // The dedicated groups view lists every group stage of the selected stage's phase; arriving on a group
   // stage by any other route shows only that one.
+  const phaseStages =
+    primaryStage && groupStages.some((stage) => stage.id === primaryStage.id)
+      ? groupStages.filter((stage) => phaseOf(stage) === phaseOf(primaryStage))
+      : groupStages;
   const activeGroupStages =
     shouldShowGroupStage && viewParam === "groups"
-      ? groupStages
+      ? phaseStages
       : shouldShowGroupStage && primaryStage
         ? [primaryStage]
         : [];
@@ -152,16 +162,12 @@ export function buildBracketTabs({
 
   // An FFA or individual Swiss stage is ONE scope however many groups it has: its panel renders
   // every lobby of the stage at once, so its groups are not separate tabs.
-  const groupScopeCount = groupStages.reduce(
-    (count, stage) =>
-      count + (isWholeStagePanel(stage) ? 1 : Math.max(stage.items.length, 1)),
-    0
-  );
+  const scopeCount = (phase: readonly Stage[]) =>
+    phase.reduce(
+      (count, stage) => count + (isWholeStagePanel(stage) ? 1 : Math.max(stage.items.length, 1)),
+      0
+    );
   const wholeStageIds = new Set(groupStages.filter(isWholeStagePanel).map((stage) => stage.id));
-
-  const isGroupViewActive =
-    viewParam === "groups" ||
-    (!!activeStageId && groupStages.some((stage) => stage.id === activeStageId));
 
   // The tab you are standing on stays live even when empty; you are already
   // looking at its empty state. A group stage has its table to show as soon as
@@ -176,38 +182,45 @@ export function buildBracketTabs({
   const isDead = (isActive: boolean, hasContent: boolean) =>
     !isActive && matchCountsKnown && !hasContent;
 
-  if (groupScopeCount > 1) {
-    if (isGroupViewActive) activeKey = "group-stage";
-    tabs.push({
-      key: "group-stage",
-      href:
-        groupStages.length === 1
-          ? tournamentHref(tournament, `/bracket?stage=${groupStages[0].id}`)
-          : tournamentHref(tournament, `/bracket?view=groups&stage=${groupStages[0].id}`),
-      label: labels.groupStage,
-      disabled: isDead(isGroupViewActive, groupStages.some(groupHasContent))
-    });
-  } else if (groupStages.length === 1) {
-    const stage = groupStages[0];
-    const isActive = !viewParam && stage.id === activeStageId;
-    if (isActive) activeKey = `stage-${stage.id}`;
-    tabs.push({
-      key: `stage-${stage.id}`,
-      href: tournamentHref(tournament, `/bracket?stage=${stage.id}`),
-      label: stage.name,
-      disabled: isDead(isActive, groupHasContent(stage))
-    });
-  }
+  // One tab per phase, in phase order: the group stages of a phase share a tab, every bracket keeps its own.
+  const groupPhases = new Map<number, Stage[]>();
+  for (const stage of groupStages)
+    groupPhases.set(phaseOf(stage), [...(groupPhases.get(phaseOf(stage)) ?? []), stage]);
+  const phases = [
+    ...[...groupPhases.entries()].map(([order, stages]) => ({ order, stages, bracket: false })),
+    ...eliminationStages.map((stage) => ({ order: phaseOf(stage), stages: [stage], bracket: true }))
+  ].sort((a, b) => a.order - b.order);
 
-  for (const stage of eliminationStages) {
-    const isActive = !viewParam && stage.id === activeStageId;
-    if (isActive) activeKey = `stage-${stage.id}`;
+  for (const { order, stages, bracket } of phases) {
+    const first = stages[0];
+    if (bracket) {
+      const isActive = !viewParam && first.id === activeStageId;
+      if (isActive) activeKey = `stage-${first.id}`;
+      tabs.push({
+        key: `stage-${first.id}`,
+        href: tournamentHref(tournament, `/bracket?stage=${first.id}`),
+        label:
+          eliminationStages.length === 1 && groupStages.length > 0 ? labels.playoff : first.name,
+        disabled: isDead(isActive, stageIdsWithMatches.has(first.id) || first.status !== "completed")
+      });
+      continue;
+    }
+    const key = stages.length === 1 ? `stage-${first.id}` : `group-stage-${order}`;
+    const isActive = !!activeStageId && stages.some((stage) => stage.id === activeStageId);
+    if (isActive) activeKey = key;
     tabs.push({
-      key: `stage-${stage.id}`,
-      href: tournamentHref(tournament, `/bracket?stage=${stage.id}`),
+      key,
+      href:
+        stages.length === 1
+          ? tournamentHref(tournament, `/bracket?stage=${first.id}`)
+          : tournamentHref(tournament, `/bracket?view=groups&stage=${first.id}`),
+      // The generic "Group stage" names the one group phase of a groups → playoff tournament; with several
+      // phases each tab says which stage it is.
       label:
-        eliminationStages.length === 1 && groupStages.length > 0 ? labels.playoff : stage.name,
-      disabled: isDead(isActive, stageIdsWithMatches.has(stage.id) || stage.status !== "completed")
+        groupPhases.size === 1 && scopeCount(stages) > 1
+          ? labels.groupStage
+          : stages.map((stage) => stage.name).join(" · "),
+      disabled: isDead(isActive, stages.some(groupHasContent))
     });
   }
 

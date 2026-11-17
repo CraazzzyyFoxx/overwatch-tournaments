@@ -3,12 +3,20 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Hash, MoreHorizontal } from "lucide-react";
 
+import { CopyButton } from "@craazzzyyfoxx/admin-kit/kit/Clipboard";
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
 import { EntityFormDialog } from "@craazzzyyfoxx/admin-kit/kit/EntityFormDialog";
-import { InspectorField } from "@/components/kit/InspectorField";
 import { StatusPill } from "@/components/kit/StatusPill";
 import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@craazzzyyfoxx/admin-kit/ui/dropdown-menu";
 import { Checkbox } from "@craazzzyyfoxx/admin-kit/ui/checkbox";
 import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
@@ -109,62 +117,72 @@ export function TournamentDiscordSection({
 
   return (
     <>
-      <div className="flex flex-col gap-3">
-        {/* Monitoring is the norm and "not configured" is the empty note
-            below; only a paused channel wants attention. */}
-        {discordChannel && !discordChannel.is_active ? (
-          <StatusPill tone="warning" className="self-start">
-            {tx("paused")}
-          </StatusPill>
-        ) : null}
-
-        {discordChannelLoading ? (
-          <Skeleton className="h-16 w-full" />
-        ) : discordChannel ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <InspectorField label={t("channel")}>
-              {discordChannel.channel_name ? `#${discordChannel.channel_name}` : tx("unnamed")}
-            </InspectorField>
-            <InspectorField label={t("channelId")}>
-              <span className="font-mono text-xs">{discordChannel.channel_id}</span>
-            </InspectorField>
+      {discordChannelLoading ? (
+        <Skeleton className="h-12 w-full" />
+      ) : discordChannel ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground">
+            <Hash aria-hidden className="size-4" />
           </div>
-        ) : (
-          <EmptyNote size="sm">
-            {t("empty")}
-          </EmptyNote>
-        )}
-
-        {canUpdateTournament ? (
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={openDialog}>
-              {discordChannel ? tx("editChannel") : tx("addChannel")}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="truncate text-sm font-medium">
+                {discordChannel.channel_name ? `#${discordChannel.channel_name}` : tx("unnamed")}
+              </span>
+              <StatusPill tone={discordChannel.is_active ? "success" : "warning"}>
+                {discordChannel.is_active ? tx("monitoring") : tx("paused")}
+              </StatusPill>
+            </div>
+            <div className="flex items-center gap-0.5 text-xs text-muted-foreground">
+              <span className="font-mono">{discordChannel.channel_id}</span>
+              <CopyButton value={discordChannel.channel_id} />
+            </div>
+          </div>
+          {canUpdateTournament ? (
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={openDialog}>
+                {tx("editChannel")}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-8"
+                    aria-label={tx("moreActions")}
+                    title={tx("moreActions")}
+                  >
+                    <MoreHorizontal aria-hidden className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    title={tx("backfillTitle")}
+                    disabled={backfillMutation.isPending}
+                    onSelect={() => backfillMutation.mutate()}
+                  >
+                    {backfillMutation.isPending ? tx("importing") : tx("importHistory")}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
+                    {t("remove")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <EmptyNote size="sm">{t("empty")}</EmptyNote>
+          {canUpdateTournament ? (
+            <Button type="button" variant="outline" size="sm" className="self-start" onClick={openDialog}>
+              {tx("addChannel")}
             </Button>
-            {discordChannel ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                title={tx("backfillTitle")}
-                disabled={backfillMutation.isPending}
-                onClick={() => backfillMutation.mutate()}
-              >
-                {backfillMutation.isPending ? tx("importing") : tx("importHistory")}
-              </Button>
-            ) : null}
-            {discordChannel ? (
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                onClick={() => setDeleteOpen(true)}
-              >
-                {t("remove")}
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
+      )}
 
       <EntityFormDialog
         open={dialogOpen}

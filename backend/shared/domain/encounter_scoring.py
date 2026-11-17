@@ -38,6 +38,7 @@ __all__ = (
     "GAME_POINTS_DIGITS",
     "PLACEMENT_VARIABLES",
     "POINTS_END_FORMULA",
+    "STANDING_DIGITS",
     "WINS_END_FORMULA",
     "WINS_RULES",
     "EncounterOutcome",
@@ -71,6 +72,9 @@ DEFAULT_COLUMN_LABEL = "Score"
 DEFAULT_FORMULA = DEFAULT_COLUMN_KEY
 #: Float noise must not become a false inequality in a tiebreak.
 GAME_POINTS_DIGITS = 4
+#: The precision every standings tiebreak (Buchholz, median Buchholz) is stored and compared at: finer
+#: digits are float noise or an opposition too close to call, so the next tiebreaker decides.
+STANDING_DIGITS = 3
 #: The variables that read a team's place: a game formula naming one needs every
 #: place entered by hand.
 PLACEMENT_VARIABLES: frozenset[str] = frozenset({"place", "place_pts"})

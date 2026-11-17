@@ -11,9 +11,7 @@ from sqlalchemy.orm import selectinload
 from shared import models
 from shared.core import enums
 from shared.core import http_status as status
-from shared.core.enums import DraftFormat
 from shared.repository import StageRepository, TournamentRepository
-from shared.schemas.draft_format import DraftFormatSettings
 from src.schemas import individual_swiss as swiss_schemas
 from src.services.flow.lifecycle import flow_node_service
 from src.services.individual_swiss.pins import refuse
@@ -74,20 +72,6 @@ class IndividualSwissQualificationService:
                 "stage_not_completed",
                 "Этап ещё не завершён: сыграйте все туры личной швейцарки",
             )
-        draft_formats = await session.scalars(
-            sa.select(models.FlowNode.config["draft_format"]).where(
-                models.FlowNode.tournament_id == tournament.id,
-                models.FlowNode.kind == enums.FlowNodeKind.FORMATION,
-                models.FlowNode.config["mode"].astext == "draft",
-            )
-        )
-        if any(DraftFormatSettings.model_validate(raw or {}).format is not DraftFormat.SNAKE for raw in draft_formats):
-            raise refuse(
-                status.HTTP_409_CONFLICT,
-                "draft_format_not_snake",
-                "Плей-офф после личной швейцарки играется змейкой: переключите формат драфта на «змейка»",
-            )
-
         await recalculate_individual_stage(session, stage, tournament)
         rows = list(
             (

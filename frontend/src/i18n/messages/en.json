@@ -6909,13 +6909,14 @@
         "deaths": "Deaths / 10",
         "healing": "Healing / 10",
         "damage": "Damage / 10",
-        "metaFit": "Meta pool",
+        "metaFit": "Meta fit",
         "metaFitTitle": "Average ladder pick rate of the heroes you play, weighted by your time.",
         "banExposure": "Under ban",
-        "banExposureTitle": "Share of your playtime on heroes the ladder bans."
+        "banExposureTitle": "Average ladder ban rate of the heroes you play, weighted by your time."
       },
       "roles": {
-        "pool": "pool {size}",
+        "pool": "≈ {size, plural, one {# hero} other {# heroes}}",
+        "poolTitle": "How many heroes the player really plays in this role, weighted by time: 1 is one hero, 3 is three equally.",
         "mains": "Mains"
       },
       "heroes": {
@@ -10944,7 +10945,6 @@
     "discord": {
       "title": "Discord match logs",
       "channel": "Channel",
-      "channelId": "Channel ID",
       "empty": "No channel yet. Add a channel to start pulling match logs in automatically.",
       "remove": "Remove channel",
       "setDescription": "Set the Discord channel for {name}.",
@@ -11231,6 +11231,8 @@
       "importHistory": "Import channel history",
       "deleting": "Deleting…",
       "delete": "Delete",
+      "monitoring": "Monitoring",
+      "moreActions": "More match-log channel actions",
       "displayNamePlaceholder": "#match-logs"
     },
     "challongeExtra": {
@@ -11249,7 +11251,6 @@
       "saved": "Voice channel settings saved",
       "syncRequested": "Sync requested",
       "enabled": "Voice channels",
-      "enabledHint": "Create voice channels for this tournament automatically.",
       "private": "Private channels",
       "privateHint": "Only team members and staff roles can see and join their channels. The shared hub stays public.",
       "category": "Category",
@@ -11260,10 +11261,9 @@
       "staffRolesNone": "No staff roles",
       "rolesLoading": "Loading roles…",
       "noRoles": "No roles available. Check that the bot is on the server.",
-      "save": "Save",
       "sync": "Sync",
+      "moreActions": "More voice channel actions",
       "earlyTeams": "Create team channels now",
-      "deleteAll": "Delete all channels",
       "deleteTitle": "Delete all voice channels?",
       "deleteDescription": "Voice channels are turned off and the bot deletes every channel it made for this tournament, as soon as each is empty.",
       "deleteConfirm": "Delete channels",
@@ -11277,11 +11277,28 @@
       },
       "channelsTitle": "Channels",
       "noChannels": "No channels yet.",
-      "kinds": {
-        "category": "Category",
+      "groups": {
+        "category": "Categories",
         "hub": "Hub",
-        "team": "Team",
-        "swiss_slot": "Round lobby"
+        "team": "Teams",
+        "swiss_slot": "Round lobbies"
+      },
+      "filters": {
+        "all": "All",
+        "team": "Teams",
+        "swiss_slot": "Lobbies",
+        "attention": "Needs attention"
+      },
+      "filtersLabel": "Channel filter",
+      "search": "Find a channel",
+      "showMore": "Show {count} more",
+      "showLess": "Show less",
+      "channelCount": "{count, plural, one {# channel} other {# channels}}",
+      "statusCounts": {
+        "active": "{count} active",
+        "pending": "{count} pending",
+        "planned": "{count} planned",
+        "deleting": "{count} deleting"
       },
       "statuses": {
         "planned": "Planned",
@@ -11289,11 +11306,15 @@
         "active": "Active",
         "deleting": "Deleting"
       },
-      "warningsTitle": "Players without a linked Discord",
+      "withoutDiscord": "{count, plural, one {# player without a linked Discord.} other {# players without a linked Discord.}}",
+      "teamWithoutDiscord": "No Discord: {names}",
       "warningsHint": "They won't be moved or given access until they link Discord.",
       "unnamedPlayer": "Unnamed player",
       "noTeam": "No team",
-      "team": "Team #{id}",
+      "allChannels": "All channels",
+      "openSettings": "Settings",
+      "drawerTitle": "Tournament voice channels",
+      "activeOf": "{kind}: {active} of {total} active",
       "lastSynced": "Last synced: {time}",
       "neverSynced": "Not synced yet."
     },

@@ -200,7 +200,7 @@ const TournamentRankingView = ({ tournament }: { tournament: Tournament }) => {
       className: "w-24 whitespace-nowrap max-sm:hidden",
       cell: (row) => (
         <span className="text-[color:var(--aqt-fg-dim)]">
-          {format.number(row.buchholz, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+          {format.number(row.buchholz, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
         </span>
       )
     }

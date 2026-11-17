@@ -68,7 +68,7 @@ export function CareerKpis({ queue }: Readonly<{ queue: CareerQueue }>) {
   );
 }
 
-/** Per role: its share of the time, the hero pool's size and the heroes the player mains. */
+/** Per role: its share of the time, how many heroes the player effectively plays in it and their mains. */
 export function CareerRoles({
   queue,
   metadata
@@ -93,8 +93,11 @@ export function CareerRoles({
               {format.number(role.share, { style: "percent", maximumFractionDigits: 0 })}
             </span>
           </span>
-          <span className="aqt-tnum col-span-2 text-caption text-[color:var(--aqt-fg-dim)] sm:col-span-1">
-            {t("pool", { size: format.number(role.pool_size, { maximumFractionDigits: 1 }) })}
+          <span
+            className="aqt-tnum col-span-2 text-caption text-[color:var(--aqt-fg-dim)] sm:col-span-1"
+            title={t("poolTitle")}
+          >
+            {t("pool", { size: Math.round(role.pool_size * 10) / 10 })}
           </span>
           <span className="col-span-2 flex items-center gap-1 sm:col-span-1 sm:justify-end" aria-label={t("mains")}>
             {role.mains.slice(0, MAINS).map((key) => (

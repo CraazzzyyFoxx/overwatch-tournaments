@@ -13,7 +13,15 @@ from sqlalchemy.orm.strategy_options import _AbstractLoad
 from shared import models
 from shared.core import enums, utils
 from shared.core.enums import StageType
-from shared.domain.encounter_scoring import GameLine, ScoringRules, TeamTotals, compile_rules, team_totals
+from shared.domain.encounter_scoring import (
+    STANDING_DIGITS,
+    GameLine,
+    ScoringRules,
+    TeamTotals,
+    compile_rules,
+    team_totals,
+)
+from shared.domain.ffa_formula import round_half_up
 from shared.domain.tournament_utils import (
     completed_encounters_in_finished_rounds as _shared_completed_encounters_in_finished_rounds,
 )
@@ -388,12 +396,12 @@ def _metric_value(team: RankedStageTeam, metric: str) -> float | int:
         return team.wins
     if metric == "head_to_head":
         return team.head_to_head
-    # Buchholz hundredths are noise (custom scoring / bye points): round to 0.1
-    # so near-equal opposition falls through to the next tiebreaker instead.
+    # Buchholz beyond STANDING_DIGITS is noise (custom scoring / bye points): rounded,
+    # near-equal opposition falls through to the next tiebreaker instead.
     if metric == "buchholz":
-        return round(team.buchholz, 1)
+        return round_half_up(team.buchholz, STANDING_DIGITS)
     if metric == "median_buchholz":
-        return round(team.median_buchholz, 1)
+        return round_half_up(team.median_buchholz, STANDING_DIGITS)
     if metric in {"score_differential", "map_differential"}:
         return team.score_differential
     if metric == "wins_as_higher_stage_specific_metric":

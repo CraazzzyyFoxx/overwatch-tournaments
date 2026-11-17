@@ -120,6 +120,11 @@ type VoiceStatus = {
 
 `GET` returns `VoiceStatus` (no settings row yet → defaults, all off). `PUT` takes `VoiceSettings`, checks
 the category is a category of the workspace guild and the roles exist, saves, requests a sync and returns
-`VoiceStatus`. "Delete all" in the UI is `PUT` with `enabled: false`; "Create team voices now" is
-`early_teams: true`. `channels` lists the plan's channels joined with the bot's rows by `slot_key`
+`VoiceStatus`. `channels` lists the plan's channels joined with the bot's rows by `slot_key`
 (`planned` = in the plan, not yet made) plus rows the plan dropped.
+
+The UI: Settings › Discord › Voice channels saves each control on its own `PUT`. Its header switch turning
+off is `enabled: false`, which deletes every channel, so it asks first; "Create team channels now" (the
+`⋯` menu) is `early_teams: true`. Overview shows a read-only summary (active/total per kind, issues, the
+full list in a drawer) whenever voice is on or channels remain; it polls `GET` every 15 s while a channel
+is `pending`/`deleting`, every 60 s otherwise, foreground only.

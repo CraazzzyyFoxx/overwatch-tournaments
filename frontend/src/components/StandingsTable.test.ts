@@ -16,7 +16,6 @@ describe("StandingsTable", () => {
 
     expect(source).toContain("standing.points.toFixed(1)");
     expect(source).toContain('standing.tb ? standing.tb : "—"');
-    expect(source).toContain("standing.buchholz.toFixed(1)");
     expect(source).toContain("standing.score_differential ?? maps.diff");
   });
 

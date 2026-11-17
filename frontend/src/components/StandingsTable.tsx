@@ -13,6 +13,7 @@ import { useTranslations } from "next-intl";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import {
   FFA_STAT_PREFIX,
+  formatBuchholz,
   tiebreakerLabel,
   type TiebreakerMetricId
 } from "@/lib/tournament/tiebreakers";
@@ -431,13 +432,13 @@ const StandingsTable = ({
                             "—"
                           ) : (
                             <>
-                              {standing.buchholz.toFixed(1)}
+                              {formatBuchholz(standing.buchholz)}
                               {/* Two teams level on the median but split by the
                                   full value can now be read off the table. */}
                               {standing.full_buchholz != null && (
                                 <span className="opacity-55">
                                   {" · "}
-                                  {standing.full_buchholz.toFixed(1)}
+                                  {formatBuchholz(standing.full_buchholz)}
                                 </span>
                               )}
                             </>

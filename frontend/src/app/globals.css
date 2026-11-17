@@ -269,6 +269,15 @@
     --admin-control-bg: var(--aqt-overlay-2);
     --admin-control-border: var(--aqt-border-2);
     --admin-chip-bg: var(--aqt-overlay-3);
+    /* The controls and overlays: the raised ladder (overlay-3 at rest, -4 under the pointer), the
+       floating panel on --aqt-card-2, the 1px light along a raised surface's top edge. */
+    --admin-raised: var(--aqt-overlay-3);
+    --admin-raised-hover: var(--aqt-overlay-4);
+    --admin-control-border-hover: var(--aqt-border-3);
+    --admin-panel: var(--aqt-card-2);
+    --admin-separator: var(--aqt-overlay-border);
+    --admin-edge: var(--aqt-overlay-3);
+    --admin-sheen: var(--aqt-sheen);
   }
 }
 
