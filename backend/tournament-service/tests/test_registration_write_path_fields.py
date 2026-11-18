@@ -620,6 +620,21 @@ class TestAdminProfileUpdateAutoManagedBalancerStatus(IsolatedAsyncioTestCase):
 
         assert registration.entries[0].balancer_status == "incomplete"
 
+    async def test_approving_and_adding_in_one_edit_lands_in_the_pool(self) -> None:
+        """A pending entry sits at ``not_in_balancer``; approve + ready in one save must enrol it."""
+        registration = self._registration()
+        registration.entries[0].status = "pending"
+        registration.roles = [registration_role(role="tank", is_active=True, rank_value=2500)]
+
+        with (
+            mock.patch.object(reg_lifecycle.lifecycle_service, "validate_registration_status_value", _noop),
+            mock.patch.object(reg_lifecycle, "enqueue_registration_approved", mock.AsyncMock()),
+        ):
+            await self._update(registration, status_value="approved", balancer_status_value="ready")
+
+        assert registration.entries[0].status == "approved"
+        assert registration.entries[0].balancer_status == "ready"
+
     async def test_admin_managed_values_are_still_rejected_by_the_helper(self) -> None:
         """The dedicated pin action (`set_balancer_status`) must keep rejecting
         an explicit ready/incomplete request outright -- only the profile

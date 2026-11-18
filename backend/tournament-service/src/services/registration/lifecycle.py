@@ -585,22 +585,27 @@ class RegistrationLifecycleService:
             )
             entry.status = status_value
         if balancer_status_value is not None:
-            if balancer_status_value in AUTO_MANAGED_BALANCER_STATUSES:
-                sync_included_balancer_status(
-                    entry, await resolve_roster(session, entry.registration_node_id, registration)
-                )
-            else:
+            auto_managed = balancer_status_value in AUTO_MANAGED_BALANCER_STATUSES
+            if not auto_managed:
                 await self.validate_registration_status_value(
                     session,
                     workspace_id=registration.tournament.workspace_id,
                     scope="balancer",
                     value=balancer_status_value,
                 )
-                if balancer_status_value != NOT_ADDED_BALANCER_STATUS and entry.status != "approved":
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Registration must be approved before adding to balancer",
-                    )
+            # Checked after ``status_value`` is applied, so approve + add in one edit works.
+            if balancer_status_value != NOT_ADDED_BALANCER_STATUS and entry.status != "approved":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Registration must be approved before adding to balancer",
+                )
+            if auto_managed:
+                # ready/incomplete means "put in the pool" (add_to_balancer): the verdict comes from the roles.
+                entry.exclude_reason = None
+                entry.balancer_status = included_balancer_status(
+                    await resolve_roster(session, entry.registration_node_id, registration)
+                )
+            else:
                 entry.balancer_status = balancer_status_value
                 entry.exclude_reason = exclude_reason if balancer_status_value == EXCLUDED_BALANCER_STATUS else None
 

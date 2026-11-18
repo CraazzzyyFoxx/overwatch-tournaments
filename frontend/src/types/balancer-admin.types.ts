@@ -543,8 +543,8 @@ export interface AdminRegistrationUpdateInput {
    *  and BLANK clears its answer, which is how the editor empties a question. */
   answers?: Answers;
   status?: string | null;
-  /** `ready`/`incomplete` are rejected server-side (computed from role ranks
-   *  only); use `not_in_balancer`, `excluded`, or a custom slug. */
+  /** `ready`/`incomplete` add an approved registration to the pool; which of the two
+   *  it lands on is computed from role ranks, not taken from this value. */
   balancer_status?: string | null;
   /** Wins over `answers.roles` when both are sent. */
   roles?: AdminRegistrationRoleInput[] | null;
