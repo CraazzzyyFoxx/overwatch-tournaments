@@ -10,7 +10,7 @@ import {
   accentTextStyle,
   roleRankAccent,
   type RoleRankAccent
-} from "@/app/balancer/components/RoleRankControls";
+} from "@/components/RoleRankControls";
 import { rectSortingStrategy } from "@dnd-kit/sortable";
 
 import { SortableGrip, SortableRows, useSortableRow } from "@/components/kit/SortableRows";

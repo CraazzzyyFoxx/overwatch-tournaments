@@ -10,7 +10,7 @@ import {
   accentTextStyle,
   roleRankAccent,
   useDebouncedRank,
-} from "@/app/balancer/components/RoleRankControls";
+} from "@/components/RoleRankControls";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import RankHistory from "@/components/RankHistory";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";

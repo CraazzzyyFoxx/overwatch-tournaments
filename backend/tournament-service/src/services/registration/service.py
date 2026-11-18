@@ -1011,16 +1011,24 @@ class RegistrationService:
         values: Mapping[str, Any],
         schema: FormSchema,
         hero_catalog: HeroCatalog | None,
+        form_version_id: int | None,
     ) -> None:
         """Write a further intake's validated answers onto the shared profile, the keys the registrant may still move.
 
         The same writable set as the self-edit, judged over the profile's OTHER entries (``entry`` is brand new):
-        answers an earlier intake's review, balancer or check-in already acted on stay as they are.
+        answers an earlier intake's review, balancer or check-in already acted on stay as they are. A profile with no
+        other live entry (every earlier one was deleted) has nothing standing on its answers: the sign-up starts it
+        over like a first one, so every answer is written, and ``submitted_at`` and the form version move to it.
         """
         live = await self.entry_repo.live_for_registration(session, profile.id)
         siblings = [other for other in live if other is not entry]
-        writable = writable_answer_keys(profile, entry, siblings, schema)
-        answers = {key: value for key, value in values.items() if key in writable}
+        if siblings:
+            writable = writable_answer_keys(profile, entry, siblings, schema)
+            answers = {key: value for key, value in values.items() if key in writable}
+        else:
+            profile.submitted_at = datetime.now(UTC)
+            profile.form_version_id = form_version_id
+            answers = dict(values)
         if not answers:
             return
         await self.ensure_unique_primary_game_handles(
@@ -1177,6 +1185,7 @@ class RegistrationService:
                     values=values,
                     schema=schema,
                     hero_catalog=hero_catalog,
+                    form_version_id=form.current_version_id,
                 )
                 if config.auto_approve:
                     await enqueue_registration_approved(session, profile, registration_node_id=registration_node_id)

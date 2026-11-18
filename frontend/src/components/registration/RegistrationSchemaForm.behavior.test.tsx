@@ -32,6 +32,8 @@ vi.mock("@craazzzyyfoxx/admin-kit/ui/select", () => ({
 vi.mock("@/components/ui/switch", () => ({
   Switch: () => <button type="button" role="switch" aria-checked="false" />,
 }));
+// Radix's slider needs `HTMLFormElement`, which this window does not install; the rank's number field is the contract.
+vi.mock("@/components/ui/slider", () => ({ Slider: () => null }));
 // Radix portals do not work under happy-dom: the popover is an open/closed switch driven through its trigger (the
 // hero roster opens on a click; the organizer's account search stays closed, as it needs `ResizeObserver`).
 const PopoverCtx = createContext<{ open: boolean; setOpen: (open: boolean) => void }>({ open: false, setOpen: () => {} });
@@ -531,7 +533,7 @@ describe("RegistrationSchemaForm organizer edit without a questionnaire", () => 
   it("sends the stored assignments, ranks and picks along with a rank the organizer did change", async () => {
     const sent = await mountEdit();
     // Ranks render in role order: tank, damage, support.
-    const ranks = [...container.querySelectorAll('input[placeholder="—"]')];
+    const ranks = [...container.querySelectorAll('input[inputmode="numeric"]')];
     expect(ranks.map((input) => (input as HTMLInputElement).value)).toEqual(["3000", "2800", ""]);
     setInput(ranks[0], "3100");
     await save();

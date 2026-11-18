@@ -163,10 +163,11 @@ const MENTION = NAMESPACES.map((ns) => [ns, new RegExp(`["'\`]${ns}[."'\`]`)]);
  * is what the module needs, and a zone ships the union of its modules'
  * subtrees -- the whole namespace only when one of them names it bare. The mix
  * header and account settings render in the tools and root zones and need two
- * labels and the preset names, not the ~33 kB constructor and room copy.
+ * labels and the preset names, not the ~33 kB constructor and room copy; the
+ * shared rank controls need `balancerTool.playerEdit.rank`, not the whole tool.
  */
 const SPLIT = new Map(
-  ["pickBan"].map((ns) => [ns, new RegExp(`["'\`](${ns}(?:\\.[A-Za-z0-9_]+)*)(?=[."'\`])`, "g")]),
+  ["pickBan", "balancerTool"].map((ns) => [ns, new RegExp(`["'\`](${ns}(?:\\.[A-Za-z0-9_]+)*)(?=[."'\`])`, "g")]),
 );
 
 /** The deepest message node a dotted literal names: a full key ships itself, a literal past the tree its parent. */

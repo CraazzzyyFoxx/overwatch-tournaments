@@ -15214,8 +15214,6 @@
       "linkedAccountHint": "Optional. Anchors this registration on the selected account; empty handles are prefilled from its verified logins.",
       "displayName": "Display Name",
       "displayNamePlaceholder": "Display name",
-      "rank": "{role} rank",
-      "rankOnly": "Rank",
       "adminNotes": "Admin Notes",
       "adminNotesPlaceholder": "Internal notes for admins only",
       "registrationStatus": "Registration Status",

@@ -24,7 +24,7 @@ import { useSlotLabel } from "@/hooks/useSlotLabel";
 import type { RoleOntology } from "@/lib/roster/ontology";
 
 import { historyChangeKind } from "./playerEditSheet.model";
-import { AccentBadge, accentRowStyle, accentTextStyle, roleRankAccent } from "./RoleRankControls";
+import { AccentBadge, accentRowStyle, accentTextStyle, roleRankAccent } from "@/components/RoleRankControls";
 import type { PlayerRankHistoryState } from "./usePlayerEditForm";
 
 type HistoryPreviewCardProps = {
