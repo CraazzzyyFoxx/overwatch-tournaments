@@ -226,7 +226,9 @@ class RegistrationLifecycleService:
             include_deleted=include_deleted,
         )
         registrations = [entry.registration for entry in entries]
-        entry_by_registration = {entry.registration_id: entry for entry in entries}
+        # Newest wins: with ``include_deleted`` a re-registered profile lists its deleted entry too, and the roster and
+        # admission must come from the live (newest) one, not whichever row came last.
+        entry_by_registration = {entry.registration_id: entry for entry in reversed(entries)}
         tournament_id = await self.common.tournament_id_of_node(session, registration_node_id)
         status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id) if entries else None
         tournament = await self.common.ensure_tournament_exists(session, tournament_id)

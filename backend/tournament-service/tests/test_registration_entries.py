@@ -429,6 +429,32 @@ class EntryTests(FlowCase):
         self.assertEqual(registration_id, entry.registration_id)
         self.assertIsNone(entry.deleted_at)
 
+    async def test_signing_up_again_after_a_delete_starts_the_profile_over(self) -> None:
+        registration_id = await self._sign_up(self.a)
+        first = await self._profile(registration_id)
+        async with self.Session() as s:
+            # The review would lock the game handle on a live second intake; a deleted entry locks nothing.
+            await lifecycle_service.approve_registration(s, self.a, registration_id, reviewed_by=self.actor.id)
+        async with self.Session() as s:
+            await lifecycle_service.soft_delete_registration(s, self.a, registration_id, deleted_by=self.actor.id)
+        handle = f"New{self.tag[-6:]}#9999"
+        async with self.Session() as s:
+            entry = await registration_service.write_public_registration(
+                s,
+                tournament_id=self.tournament_id,
+                auth_user=self.user,
+                body=RegistrationSubmit(
+                    form_version_id=self.version_id,
+                    answers={"identity_battlenet": [handle], "public_notes": "again"},
+                ),
+                registration_node_id=self.a,
+            )
+
+        profile = await self._profile(registration_id)
+        self.assertEqual((registration_id, "pending"), (entry.registration_id, entry.status))
+        self.assertGreater(profile.submitted_at, first.submitted_at)
+        self.assertEqual(([handle], "again"), ([i.handle for i in profile.identities], profile.public_notes))
+
     async def test_a_feed_with_synced_rows_stays_on_its_node(self) -> None:
         mapping = {
             "targets": {
