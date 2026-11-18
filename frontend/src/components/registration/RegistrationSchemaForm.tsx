@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@craazzzyyfoxx/admin-kit/ui/select";
-import { Eyebrow, eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
+import { eyebrowClass } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { identityProvider } from "@/lib/forms/builtin-keys";
@@ -47,7 +47,14 @@ import type {
 import type { User } from "@/types/user.types";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
+import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useRoleName } from "@/hooks/useRoleName";
+import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import {
+  accentTextStyle,
+  RoleRankControls,
+  roleRankAccent
+} from "@/components/RoleRankControls";
 import type { DisciplineMetadata } from "@/types/discipline.types";
 
 import FieldLabel from "@/components/forms/FieldLabel";
@@ -213,10 +220,10 @@ function initialAnswers(
 function initialRanks(
   roleCodes: readonly RoleCode[],
   roles: readonly StoredRole[] | undefined
-): Record<string, string> {
-  const ranks: Record<string, string> = Object.fromEntries(roleCodes.map((code) => [code, ""]));
+): Record<string, number | null> {
+  const ranks: Record<string, number | null> = Object.fromEntries(roleCodes.map((code) => [code, null]));
   for (const role of roles ?? []) {
-    if (role.rank_value != null) ranks[roleOf(role.role)] = String(role.rank_value);
+    if (role.rank_value != null) ranks[roleOf(role.role)] = role.rank_value;
   }
   return ranks;
 }
@@ -463,9 +470,11 @@ function RegistrationSchemaFormBody({
   const [balancerStatus, setBalancerStatus] = useState(
     adminInitial?.balancer_status ?? "not_in_balancer"
   );
-  const [ranks, setRanks] = useState<Record<string, string>>(() =>
+  const [ranks, setRanks] = useState<Record<string, number | null>>(() =>
     initialRanks(roleCodes, initial?.roles)
   );
+  // The same grid the inspector and the balancer read these ranks on.
+  const divisionGrid = useDivisionGrid(form.discipline);
   const [authUserId, setAuthUserId] = useState<number | undefined>(undefined);
   const [authUserLabel, setAuthUserLabel] = useState<string | undefined>(undefined);
 
@@ -605,15 +614,13 @@ function RegistrationSchemaFormBody({
       // Admin rows carry ranks and activity, which `answers.roles` cannot — the server takes these over the
       // answer when both are sent, and a send REPLACES the registration's whole role set (assignments, ranks,
       // picks). Hence `adminRoles` below.
-      const adminRolesFrom = (answered: readonly RoleInput[], typedRanks: Record<string, string>) =>
+      const adminRolesFrom = (answered: readonly RoleInput[], rankOf: Record<string, number | null>) =>
         fromRoleSelections(roleCodes, toRoleSelections(roleCodes, answered), seededRole).map((role, index) => {
-          const typed = typedRanks[role.role]?.trim();
-          const rank = typed ? Number(typed) : null;
           return {
             role: toRoleRef(role.role, role.subrole ? `${role.role}_${role.subrole}` : null, dimension ?? ""),
             is_primary: role.is_primary,
             priority: index + 1,
-            rank_value: rank != null && Number.isFinite(rank) ? rank : null,
+            rank_value: rankOf[role.role] ?? null,
             is_active: true,
             // The persisted answer spells the picks `top_heroes`; the typed row is the native
             // `top_characters`.
@@ -686,7 +693,8 @@ function RegistrationSchemaFormBody({
         answers,
         isEditing ? (field) => lockedFields[field.key] === undefined : undefined
       ).findIndex((section) => section.fields.some((field) => rejected.includes(field.key)));
-      if (target >= 0) setStep(target);
+      // +1 in admin mode: the organizer step leads the schema's own.
+      if (target >= 0) setStep(target + (isAdmin ? 1 : 0));
       // A field-less rejection stays with the host: all three wizards already
       // render one banner, and the admin table has none — so it gets a toast.
       if (mapped.form && isAdmin) notify.error(mapped.form);
@@ -724,11 +732,7 @@ function RegistrationSchemaFormBody({
   };
 
   const organizerPanel = (
-    <section className="grid gap-4 rounded-2xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-4">
-      <Eyebrow as="h3" tone="muted">
-        {t("registrationOrganizer.form.organizer")}
-      </Eyebrow>
-
+    <div className="grid gap-4">
       <div className="space-y-2">
         <FieldLabel label={t("registrationOrganizer.form.linkedAccount")} />
         <AuthUserSearchCombobox
@@ -749,23 +753,66 @@ function RegistrationSchemaFormBody({
         onChange={setDisplayName}
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        {roles.map((role) => (
-          <TextField
-            key={role.code}
-            label={
-              onlyRole
-                ? t("registrationOrganizer.form.rankOnly")
-                : t("registrationOrganizer.form.rank", { role: nameOf(role) })
-            }
-            type="number"
-            placeholder="—"
-            value={ranks[role.code] ?? ""}
-            disabled={rolesReadOnly}
-            onChange={(next) => setRanks((prev) => ({ ...prev, [role.code]: next }))}
-          />
-        ))}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <AdminStatusSelect
+          t={tOrganizer}
+          label={t("registrationOrganizer.form.registrationStatus")}
+          value={status}
+          onChange={setStatus}
+          options={STATUS_OPTIONS}
+          custom={
+            adminInitial?.status_meta?.kind === "custom"
+              ? [{ value: adminInitial.status, name: adminInitial.status_meta.name }]
+              : []
+          }
+        />
+        <AdminStatusSelect
+          t={tOrganizer}
+          label={t("registrationOrganizer.form.balancerStatus")}
+          value={balancerStatus}
+          onChange={setBalancerStatus}
+          options={BALANCER_STATUS_OPTIONS}
+          custom={
+            adminInitial?.balancer_status_meta?.kind === "custom"
+              ? [
+                  {
+                    value: adminInitial.balancer_status,
+                    name: adminInitial.balancer_status_meta.name
+                  }
+                ]
+              : []
+          }
+        />
       </div>
+
+      {roles.map((role) => {
+        const accent = roleRankAccent(metadata, role.code);
+        const rank = ranks[role.code] ?? null;
+        return (
+          <div key={role.code} className="min-w-0 space-y-2">
+            {/* One rated role: the controls' own labels say it all, a header would only repeat "Rank". */}
+            {onlyRole ? null : (
+              <div className="flex items-center gap-1.5">
+                <PlayerRoleIcon role={role.code} ontology={metadata} size={15} decorative />
+                <span className="text-xs font-semibold" style={accentTextStyle(accent)}>
+                  {nameOf(role)}
+                </span>
+              </div>
+            )}
+            <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_130px]">
+              <RoleRankControls
+                rankValue={rank}
+                accent={accent}
+                active
+                disabled={rolesReadOnly}
+                grid={divisionGrid}
+                onClear={rank == null ? null : () => setRanks((prev) => ({ ...prev, [role.code]: null }))}
+                onChange={(next) => setRanks((prev) => ({ ...prev, [role.code]: next }))}
+              />
+            </div>
+          </div>
+        );
+      })}
       {rolesReadOnly && (
         <p className="text-label text-[color:var(--aqt-fg-dim)]">
           {t("registration.edit.rolesLocked")}
@@ -780,43 +827,11 @@ function RegistrationSchemaFormBody({
         value={adminNotes}
         onChange={setAdminNotes}
       />
-
-      <AdminStatusSelect
-        t={tOrganizer}
-        label={t("registrationOrganizer.form.registrationStatus")}
-        value={status}
-        onChange={setStatus}
-        options={STATUS_OPTIONS}
-        custom={
-          adminInitial?.status_meta?.kind === "custom"
-            ? [{ value: adminInitial.status, name: adminInitial.status_meta.name }]
-            : []
-        }
-      />
-      <AdminStatusSelect
-        t={tOrganizer}
-        label={t("registrationOrganizer.form.balancerStatus")}
-        value={balancerStatus}
-        onChange={setBalancerStatus}
-        options={BALANCER_STATUS_OPTIONS}
-        custom={
-          adminInitial?.balancer_status_meta?.kind === "custom"
-            ? [
-                {
-                  value: adminInitial.balancer_status,
-                  name: adminInitial.balancer_status_meta.name
-                }
-              ]
-            : []
-        }
-      />
-    </section>
+    </div>
   );
 
   const footer = (state: SchemaFormFooterState) => (
     <>
-      {isAdmin && organizerPanel}
-
       {showErrors && state.stepError && (
         <p role="alert" className="text-sm text-destructive">
           {state.stepError}
@@ -959,6 +974,7 @@ function RegistrationSchemaFormBody({
         showErrors={showErrors}
         lockedFields={lockedFields}
         skipLockedSteps={isEditing}
+        lead={isAdmin ? { label: t("registrationOrganizer.form.organizer"), content: organizerPanel } : undefined}
         footer={footer}
       />
     </div>

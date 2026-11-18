@@ -89,6 +89,11 @@ export interface SchemaFormProps {
    * still have work on them.
    */
   skipLockedSteps?: boolean;
+  /**
+   * A host-owned step before the schema's own, named in the same indicator: the
+   * admin editor's organizer panel. It has no fields, so it never holds Next.
+   */
+  lead?: { label: string; content: ReactNode };
   footer: (state: SchemaFormFooterState) => ReactNode;
 }
 
@@ -117,6 +122,7 @@ export default function SchemaForm({
   readOnly = false,
   lockedFields,
   skipLockedSteps = false,
+  lead,
   footer,
 }: Readonly<SchemaFormProps>) {
   const t = useTranslations("forms");
@@ -125,8 +131,10 @@ export default function SchemaForm({
     answers,
     skipLockedSteps ? (field) => lockedFields?.[field.key] === undefined : undefined,
   );
-  const index = Math.min(Math.max(step, 0), Math.max(steps.length - 1, 0));
-  const section = steps[index] as FormSection | undefined;
+  // `null` is the lead step: the host's content, no fields, no objections.
+  const entries: Array<FormSection | null> = lead ? [null, ...steps] : steps;
+  const index = Math.min(Math.max(step, 0), Math.max(entries.length - 1, 0));
+  const section = entries[index] ?? undefined;
   const fields = section?.fields.filter((field) => isVisible(field, answers)) ?? [];
 
   // Answering a `visible_when` controller can empty the step the registrant is
@@ -159,8 +167,8 @@ export default function SchemaForm({
   };
 
   /** First client-side objection among `entry`'s visible fields, or `null`. */
-  const objectionOn = (entry: FormSection): string | null => {
-    for (const field of entry.fields) {
+  const objectionOn = (entry: FormSection | null): string | null => {
+    for (const field of entry?.fields ?? []) {
       // A locked field's objection is not this viewer's to clear, so it must
       // not hold the step: an edit that may only touch `public_notes` would be
       // stuck behind a required question it is forbidden to answer.
@@ -180,7 +188,7 @@ export default function SchemaForm({
     const blocker =
       readOnly || target < index
         ? -1
-        : steps.slice(index, target).findIndex((entry) => objectionOn(entry) !== null);
+        : entries.slice(index, target).findIndex((entry) => objectionOn(entry) !== null);
     if (blocker < 0) onStepSelect(target, false);
     else onStepSelect(index + blocker, true);
   };
@@ -195,9 +203,9 @@ export default function SchemaForm({
 
   return (
     <div className="flex flex-col gap-4">
-      {steps.length > 1 && (
+      {entries.length > 1 && (
         <StepIndicator
-          steps={steps.map((entry) => ({ label: entry.title || entry.key }))}
+          steps={entries.map((entry) => ({ label: entry ? entry.title || entry.key : (lead?.label ?? "") }))}
           current={index}
           onSelect={selectStep}
         />
@@ -206,6 +214,7 @@ export default function SchemaForm({
       {/* A disabled fieldset disables every control inside it, which is the
           whole of read-only mode — the builder's preview tab needs nothing more. */}
       <fieldset disabled={readOnly} className="m-0 grid min-w-0 gap-4 border-0 p-0">
+        {lead && index === 0 ? lead.content : null}
         {section?.description ? (
           <p className="text-xs leading-5 text-[color:var(--aqt-fg-muted)]">
             {section.description}
@@ -270,7 +279,7 @@ export default function SchemaForm({
         })}
       </fieldset>
 
-      {footer({ canGoBack: index > 0, isLast: index >= steps.length - 1, stepError })}
+      {footer({ canGoBack: index > 0, isLast: index >= entries.length - 1, stepError })}
     </div>
   );
 }

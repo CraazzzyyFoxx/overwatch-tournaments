@@ -33,7 +33,7 @@ import {
   accentRowStyle,
   accentTextStyle,
   roleRankAccent
-} from "./RoleRankControls";
+} from "@/components/RoleRankControls";
 
 type SortableRoleEntryProps = {
   id: string;
