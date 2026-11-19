@@ -332,7 +332,7 @@ OPERATIONS: dict[str, Op] = {
         request=reg_form_schemas.RegistrationFormTemplateSave,
         response=reg_form_schemas.RegistrationFormTemplateRead,
     ),
-    "rpc.tournament.reg_list": Op(response=schemas.BalancerRegistrationRead, response_array=True),
+    "rpc.tournament.reg_list": Op(response=schemas.BalancerRegistrationListResponse),
     "rpc.tournament.reg_create_manual": Op(
         request=schemas.BalancerRegistrationCreateRequest, response=schemas.BalancerRegistrationRead
     ),

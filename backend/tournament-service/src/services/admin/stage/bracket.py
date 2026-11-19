@@ -10,6 +10,7 @@ from shared.core import enums
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.encounter_naming import build_encounter_name_from_ids
+from shared.domain.flow.config import FilterNodeConfig, parse_node_config
 from src.domain.admin.best_of import best_of_config, resolve_best_of
 from src.domain.bracket import (
     BracketSkeleton,
@@ -21,6 +22,7 @@ from src.domain.bracket import (
     template_to_skeleton,
     validate_template,
 )
+from src.domain.bracket.swiss import SwissThresholds, projected_status_count
 from src.domain.stage.seeds import lower_bracket_item as _lower_bracket_item
 from src.domain.stage.seeds import resolve_seeds as _resolve_seeds
 from src.services.admin.stage.base import StageServiceBase
@@ -28,6 +30,7 @@ from src.services.admin.stage_common import (
     BRACKET_STAGE_TYPES,
     _bracket_seeds,
 )
+from src.services.individual_swiss.standings import DEFAULT_PLAYOFF_TEAMS
 
 
 class StageBracketMixin(StageServiceBase):
@@ -67,7 +70,7 @@ class StageBracketMixin(StageServiceBase):
         if stage.bracket_template is not None:
             return sorted({match["round"] for match in stage.bracket_template["matches"]})
 
-        upper_count, lower_count = await self._bracket_seed_counts(session, stage)
+        upper_count, lower_count = await self._bracket_seed_counts(session, stage, estimate=True)
         skeleton = placeholder_bracket(stage.stage_type, upper_count, lower_count=lower_count)
         return sorted({pairing.round_number for pairing in skeleton.pairings})
 
@@ -106,7 +109,7 @@ class StageBracketMixin(StageServiceBase):
                 lower_ids = placeholder_seeds(template.lower_seeds, offset=template.upper_seeds)
 
         if len(upper_ids) + len(lower_ids) < 2:
-            upper_count, lower_count = await self._projected_bracket_seed_counts(session, stage)
+            upper_count, lower_count = await self._estimated_bracket_seed_counts(session, stage)
             if upper_count < 2:
                 return {"matches": []}
             upper_ids = placeholder_seeds(upper_count)
@@ -232,17 +235,22 @@ class StageBracketMixin(StageServiceBase):
         await self._finish_structure_write(session, stage, notify=True, commit=True, schedule_standings=False)
         return await self.get_bracket_template(session, stage_id)
 
-    async def _bracket_seed_counts(self, session: AsyncSession, stage: models.Stage) -> tuple[int, int]:
+    async def _bracket_seed_counts(
+        self, session: AsyncSession, stage: models.Stage, *, estimate: bool = False
+    ) -> tuple[int, int]:
         """How many teams start in ``stage``'s upper and lower bracket.
 
         Seated inputs are ground truth. Before any exist — the common case for a playoff seated only
         when it turns ``ready`` — the counts are projected from the rows of the stage's flow input, so the
-        bracket can be planned, and generated, while the groups are still running.
+        bracket can be planned, and generated, while the groups are still running; ``estimate`` reads
+        ``_estimated_bracket_seed_counts`` instead.
         """
         sorted_items = sorted(stage.items, key=lambda item: (item.order, item.id))
         upper, lower = _bracket_seeds(sorted_items, _lower_bracket_item(stage, sorted_items))
         if len(upper) + len(lower) >= 2:
             return len(upper), len(lower)
+        if estimate:
+            return await self._estimated_bracket_seed_counts(session, stage)
         return await self._projected_bracket_seed_counts(session, stage)
 
     async def _projected_bracket_seed_counts(self, session: AsyncSession, stage: models.Stage) -> tuple[int, int]:
@@ -255,3 +263,82 @@ class StageBracketMixin(StageServiceBase):
             else 0
         )
         return len(rows) - lower, lower
+
+    async def _estimated_bracket_seed_counts(self, session: AsyncSession, stage: models.Stage) -> tuple[int, int]:
+        """For drawing only (preview, planned rounds): ``_projected_bracket_seed_counts``, except that a stage fed by
+        a ``swiss_status`` filter is counted from what its Swiss will pass (``_projected_swiss_status_count``).
+
+        Never fed to generation: a bracket built off an estimate the Swiss then misses would refuse its real seeds
+        (``_fill_bracket_seeds``).
+        """
+        node, _ = await self._stage_input_rows(session, stage)
+        if node is not None and (passing := await self._projected_swiss_status_count(session, node)) is not None:
+            return passing, 0
+        return await self._projected_bracket_seed_counts(session, stage)
+
+    async def _projected_swiss_status_count(self, session: AsyncSession, node: models.FlowNode) -> int | None:
+        """How many teams a ``swiss_status`` filter wired straight off a running Swiss stage will pass.
+
+        Its rows only hold the teams decided so far, so they undercount the field until that stage completes; the
+        count is replayed from each scope instead (``swiss.projected_status_count``). ``None`` for any other input,
+        and once the Swiss stage completed: its rows are then the truth.
+        """
+        gate = await self._sole_source(session, node.id, port="participants")
+        if gate is None or gate.kind != enums.FlowNodeKind.FILTER:
+            return None
+        config = parse_node_config(gate.kind, gate.config)
+        if not isinstance(config, FilterNodeConfig) or config.mode != "swiss_status" or config.swiss_status is None:
+            return None
+        source = await self._sole_source(session, gate.id)
+        if source is None or source.stage_id is None or source.status == enums.FlowNodeStatus.COMPLETED:
+            return None
+        swiss = await self.get_stage(session, source.stage_id)
+        if swiss.stage_type != enums.StageType.SWISS:
+            return None
+        sizes = [
+            sum(inp.team_id is not None and inp.input_type != enums.StageItemInputType.EMPTY for inp in item.inputs)
+            for item in swiss.items
+        ]
+        if not any(sizes):
+            # Not seated yet: its estimated field, dealt evenly over its groups.
+            teams, groups = await self._estimated_team_count(session, source, swiss), max(1, len(swiss.items))
+            sizes = [teams // groups + (i < teams % groups) for i in range(groups)]
+        thresholds = SwissThresholds.of(swiss)
+        return sum(projected_status_count(size, swiss.max_rounds, thresholds, config.swiss_status) for size in sizes)
+
+    async def _estimated_team_count(self, session: AsyncSession, node: models.FlowNode, stage: models.Stage) -> int:
+        """The teams an unseated stage will get: its input's rows, else — no team formed yet — the K teams a draft
+        formation forms off an individual Swiss's qualifiers (``playoff_team_count``). 0 when neither tells."""
+        _, rows = await self._stage_input_rows(session, stage)
+        if rows:
+            return len(rows)
+        formation = await self._sole_source(session, node.id, port="participants")
+        if (
+            formation is None
+            or formation.kind != enums.FlowNodeKind.FORMATION
+            or formation.config.get("mode") != "draft"
+        ):
+            return 0
+        source = await self._sole_source(session, formation.id)
+        while source is not None and source.kind == enums.FlowNodeKind.FILTER:
+            source = await self._sole_source(session, source.id)
+        if source is None or source.stage_id is None:
+            return 0
+        qualifier = await self.get_stage(session, source.stage_id)
+        if qualifier.stage_type != enums.StageType.INDIVIDUAL_SWISS:
+            return 0
+        return qualifier.playoff_team_count or DEFAULT_PLAYOFF_TEAMS
+
+    async def _sole_source(
+        self, session: AsyncSession, node_id: int, *, port: str | None = None
+    ) -> models.FlowNode | None:
+        """The one node wired into ``node_id`` (on ``port``); ``None`` when none or several are."""
+        query = (
+            select(models.FlowNode)
+            .join(models.FlowEdge, models.FlowEdge.source_node_id == models.FlowNode.id)
+            .where(models.FlowEdge.target_node_id == node_id)
+        )
+        if port is not None:
+            query = query.where(models.FlowEdge.target_port == port)
+        sources = (await session.scalars(query)).all()
+        return sources[0] if len(sources) == 1 else None

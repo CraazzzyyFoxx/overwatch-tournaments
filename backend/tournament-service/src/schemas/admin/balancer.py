@@ -9,7 +9,8 @@ from shared.schemas.identity import PlayerIdentityRead
 from shared.schemas.role import RoleRef
 from src.schemas.admission import AdmissionRead
 from src.schemas.base import BaseRead
-from src.schemas.registration import SubroleOption
+from src.schemas.division_grid import DivisionGridVersionRead
+from src.schemas.registration import SubroleOption, TournamentHistoryEntry
 
 RegistrationStatus = str
 BalancerStatus = str
@@ -62,6 +63,7 @@ __all__ = (
     "BalancerPlayerExportRoster",
     "BalancerPlayerExportSource",
     "BalancerRegistrationCreateRequest",
+    "BalancerRegistrationListResponse",
     "BalancerRegistrationRead",
     "BalancerRankAutofillStage",
     "BalancerRegistrationRankAutofillRequest",
@@ -494,6 +496,21 @@ class BalancerRegistrationRead(BaseRead):
     #: re-derive it from the active roles' ranks.
     best_rank: int | None = None
     roles: list[BalancerRegistrationRoleRead] = Field(default_factory=list)
+    #: Past tournaments in this workspace, as on the public participants list. Resolved by the LIST read only;
+    #: each entry references its grid version in ``BalancerRegistrationListResponse.division_grids``.
+    tournament_history: list[TournamentHistoryEntry] = Field(default_factory=list)
+    tournament_history_count: int = 0
+
+
+class BalancerRegistrationListResponse(BaseModel):
+    """The admin registrations table of one node, with the history grids deduplicated as on the public list.
+
+    The grids ride here, behind the list's own authorization: a reader allowed the list may not be allowed the
+    workspace-scoped grid-version endpoint, and the client must not fall back to another crest.
+    """
+
+    registrations: list[BalancerRegistrationRead] = Field(default_factory=list)
+    division_grids: dict[str, DivisionGridVersionRead] = Field(default_factory=dict)
 
 
 class BalancerRegistrationCreateRequest(BaseModel):

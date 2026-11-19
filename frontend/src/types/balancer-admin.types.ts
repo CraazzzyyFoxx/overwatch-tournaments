@@ -11,6 +11,7 @@ import type {
   SubroleCatalog,
   SubscriptionOutcome,
   SubscriptionRequirement,
+  TournamentHistoryEntry,
 } from "@/types/registration.types";
 import type { TournamentStatus } from "@/types/tournament.types";
 
@@ -518,6 +519,10 @@ export interface AdminRegistration {
    *  the same reason as there: an optional field would put a defaulting branch
    *  back into every consumer. */
   admission: Admission;
+  /** Past tournaments in this workspace, sent by the LIST read only (mutation responses carry none), grids
+   *  rehydrated by `listRegistrations`: capped to the most recent few, `tournament_history_count` is the true total. */
+  tournament_history?: TournamentHistoryEntry[];
+  tournament_history_count?: number;
 }
 
 export interface AdminRegistrationCreateInput {
@@ -543,8 +548,8 @@ export interface AdminRegistrationUpdateInput {
    *  and BLANK clears its answer, which is how the editor empties a question. */
   answers?: Answers;
   status?: string | null;
-  /** `ready`/`incomplete` are rejected server-side (computed from role ranks
-   *  only); use `not_in_balancer`, `excluded`, or a custom slug. */
+  /** `ready`/`incomplete` add an approved registration to the pool; which of the two
+   *  it lands on is computed from role ranks, not taken from this value. */
   balancer_status?: string | null;
   /** Wins over `answers.roles` when both are sent. */
   roles?: AdminRegistrationRoleInput[] | null;

@@ -125,7 +125,19 @@ def projected_encounters(team_count: int, max_rounds: int, thresholds: SwissThre
     if not thresholds:
         circle = team_count if team_count % 2 else team_count - 1
         return max(0, min(max_rounds, circle)) * (team_count // 2)
-    records = [[0, 0] for _ in range(team_count)]  # [wins, losses]
+    return _replay(team_count, max_rounds, thresholds)[1]
+
+
+def projected_status_count(team_count: int, max_rounds: int, thresholds: SwissThresholds, status: SwissStatus) -> int:
+    """How many of a Swiss scope's ``team_count`` teams end with ``status``, replayed as
+    :func:`projected_encounters` replays them; a team left undecided by ``max_rounds`` has neither."""
+    records, _ = _replay(team_count, max_rounds, thresholds)
+    return sum(thresholds.status(wins, losses) == status for wins, losses in records)
+
+
+def _replay(team_count: int, max_rounds: int, thresholds: SwissThresholds) -> tuple[list[list[int]], int]:
+    """Every team's final ``[wins, losses]`` and the encounters played, under :func:`projected_encounters`' model."""
+    records = [[0, 0] for _ in range(team_count)]
     total = 0
     for _ in range(max_rounds):
         # Every undecided team has played as many rounds, so its wins alone rank it.
@@ -138,7 +150,7 @@ def projected_encounters(team_count: int, max_rounds: int, thresholds: SwissThre
             winner[0] += 1
             loser[1] += 1
         total += len(field) // 2
-    return total
+    return records, total
 
 
 @dataclass(frozen=True)

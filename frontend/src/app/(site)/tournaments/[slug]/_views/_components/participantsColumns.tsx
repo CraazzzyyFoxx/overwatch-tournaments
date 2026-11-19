@@ -17,7 +17,7 @@ import {
   SubscriptionStatusBadge,
   RegistrationStatusBadge,
 } from "@/components/status/RegistrationBadges";
-import TournamentHistoryCell from "./TournamentHistoryCell";
+import TournamentHistoryCell from "@/components/registration/TournamentHistoryCell";
 import { AnswerValue } from "@/components/forms/AnswerValue";
 import type { DivisionGrid } from "@/types/workspace.types";
 

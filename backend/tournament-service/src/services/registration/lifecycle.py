@@ -65,6 +65,7 @@ from src.services.registration.answers import answer_service
 from src.services.registration.rank_sources import native_ranks_by_registration
 from src.services.registration.read_model import (
     AdmissionChips,
+    _build_tournament_history,
     _resolve_top_heroes_config,
     registration_read_loaders,
 )
@@ -214,9 +215,9 @@ class RegistrationLifecycleService:
         inclusion_filter: str | None = None,
         source_filter: str | None = None,
         include_deleted: bool = False,
-    ) -> list[schemas.BalancerRegistrationRead]:
-        """The admin registrations table of ONE node: each filtered entry with its status meta, native ranks, roster
-        and admission."""
+    ) -> schemas.BalancerRegistrationListResponse:
+        """The admin registrations table of ONE node: each filtered entry with its status meta, native ranks, roster,
+        admission and past tournaments, plus the grid versions that history references."""
         entries = await self.list_registrations(
             session,
             registration_node_id,
@@ -257,6 +258,10 @@ class RegistrationLifecycleService:
         admissions = await self.registrations.resolve_admission_list(
             session, registrations, entry_by_registration, form=form, node_config=node_config(node)
         )
+        # Same past-tournaments read the public participants list carries, grids deduplicated the same way.
+        history_map, history_count_map, division_grids = await _build_tournament_history(
+            session, registrations, tournament_id, workspace_id
+        )
         provider = identity_provider(tournament.discipline)
         reads = []
         for entry in entries:
@@ -275,9 +280,11 @@ class RegistrationLifecycleService:
                     subscription_outcome=chips.subscription_outcome,
                     roster=rosters.get(registration.id),
                     submitted_late=submitted_late(entry, schedule),
+                    tournament_history=history_map.get(registration.id),
+                    tournament_history_count=history_count_map.get(registration.id, 0),
                 )
             )
-        return reads
+        return schemas.BalancerRegistrationListResponse(registrations=reads, division_grids=division_grids)
 
     async def get_registration_by_id(self, session: AsyncSession, registration_id: int) -> models.Registration:
         # ``populate_existing``: the post-write refetches (a created row, an edit of
@@ -585,22 +592,27 @@ class RegistrationLifecycleService:
             )
             entry.status = status_value
         if balancer_status_value is not None:
-            if balancer_status_value in AUTO_MANAGED_BALANCER_STATUSES:
-                sync_included_balancer_status(
-                    entry, await resolve_roster(session, entry.registration_node_id, registration)
-                )
-            else:
+            auto_managed = balancer_status_value in AUTO_MANAGED_BALANCER_STATUSES
+            if not auto_managed:
                 await self.validate_registration_status_value(
                     session,
                     workspace_id=registration.tournament.workspace_id,
                     scope="balancer",
                     value=balancer_status_value,
                 )
-                if balancer_status_value != NOT_ADDED_BALANCER_STATUS and entry.status != "approved":
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Registration must be approved before adding to balancer",
-                    )
+            # Checked after ``status_value`` is applied, so approve + add in one edit works.
+            if balancer_status_value != NOT_ADDED_BALANCER_STATUS and entry.status != "approved":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Registration must be approved before adding to balancer",
+                )
+            if auto_managed:
+                # ready/incomplete means "put in the pool" (add_to_balancer): the verdict comes from the roles.
+                entry.exclude_reason = None
+                entry.balancer_status = included_balancer_status(
+                    await resolve_roster(session, entry.registration_node_id, registration)
+                )
+            else:
                 entry.balancer_status = balancer_status_value
                 entry.exclude_reason = exclude_reason if balancer_status_value == EXCLUDED_BALANCER_STATUS else None
 

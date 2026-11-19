@@ -169,3 +169,13 @@ class ProjectedEncountersTests(TestCase):
         self.assertEqual(10, bracket.projected_encounters(8, 5, bracket.SwissThresholds(2, 2)))
         # The round limit still ends it.
         self.assertEqual(24, bracket.projected_encounters(16, 3, bracket.SwissThresholds(3, 3)))
+
+    def test_status_count_replays_who_ends_through_or_out(self) -> None:
+        major = bracket.SwissThresholds(3, 3)
+        self.assertEqual(8, bracket.projected_status_count(16, 5, major, "qualified"))
+        self.assertEqual(8, bracket.projected_status_count(16, 5, major, "eliminated"))
+        # Cut at round 3: only the 3-0 and 0-3 pairs are decided.
+        self.assertEqual(2, bracket.projected_status_count(16, 3, major, "qualified"))
+        # 2/2 in three rounds: the 2-0 pair, then two of the 1-1 four.
+        self.assertEqual(4, bracket.projected_status_count(8, 3, bracket.SwissThresholds(2, 2), "qualified"))
+        self.assertEqual(0, bracket.projected_status_count(8, 3, bracket.SwissThresholds(), "qualified"))

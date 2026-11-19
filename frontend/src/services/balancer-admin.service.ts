@@ -1,4 +1,6 @@
 import { apiFetch } from "@/lib/api/fetch";
+import { rehydrateHistoryGrids } from "@/services/registration.helpers";
+import type { DivisionGridVersion } from "@/types/workspace.types";
 import type { BalancerStatus } from "@/types/balancer-admin.types";
 import {
   AdminRegistration,
@@ -429,7 +431,9 @@ export default class balancerAdminService {
         query: { ...filters, registration_node_id: registrationNodeId }
       }
     );
-    return response.json();
+    const data: { registrations: AdminRegistration[]; division_grids: Record<string, DivisionGridVersion> } =
+      await response.json();
+    return rehydrateHistoryGrids(data.registrations, data.division_grids);
   }
 
   static async createManualRegistration(

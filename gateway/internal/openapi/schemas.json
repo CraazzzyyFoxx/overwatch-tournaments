@@ -11066,10 +11066,10 @@
       "summary": "Include registration in balancer"
     },
     "rpc.tournament.reg_list": {
-      "description": "Permission: workspace `registration.read` on the tournament's workspace. Lists a tournament's registrations with status metadata and per-registration OW-rank snapshots, filtered by status/inclusion/source and optionally including deleted.",
+      "description": "Permission: workspace `registration.read` on the tournament's workspace. Lists a tournament's registrations with status metadata, per-registration OW-rank snapshots and past tournaments, filtered by status/inclusion/source and optionally including deleted. Returns `{registrations, division_grids}`: history entries reference their grid version in `division_grids` by id.",
       "response": {
-        "array": true,
-        "ref": "tournament.BalancerRegistrationRead"
+        "array": false,
+        "ref": "tournament.BalancerRegistrationListResponse"
       },
       "summary": "List registrations (admin)"
     },
@@ -42873,6 +42873,27 @@
       "title": "BalancerRegistrationCreateRequest",
       "type": "object"
     },
+    "tournament.BalancerRegistrationListResponse": {
+      "description": "The admin registrations table of one node, with the history grids deduplicated as on the public list.\n\nThe grids ride here, behind the list's own authorization: a reader allowed the list may not be allowed the\nworkspace-scoped grid-version endpoint, and the client must not fall back to another crest.",
+      "properties": {
+        "division_grids": {
+          "additionalProperties": {
+            "$ref": "#/components/schemas/tournament.DivisionGridVersionRead"
+          },
+          "title": "Division Grids",
+          "type": "object"
+        },
+        "registrations": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.BalancerRegistrationRead"
+          },
+          "title": "Registrations",
+          "type": "array"
+        }
+      },
+      "title": "BalancerRegistrationListResponse",
+      "type": "object"
+    },
     "tournament.BalancerRegistrationRankAutofillPlayer": {
       "properties": {
         "balancer_reason": {
@@ -43610,6 +43631,18 @@
           ],
           "default": null,
           "title": "Subscription Outcome"
+        },
+        "tournament_history": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.TournamentHistoryEntry"
+          },
+          "title": "Tournament History",
+          "type": "array"
+        },
+        "tournament_history_count": {
+          "default": 0,
+          "title": "Tournament History Count",
+          "type": "integer"
         },
         "tournament_id": {
           "title": "Tournament Id",
@@ -62408,6 +62441,64 @@
         "schedule"
       ],
       "title": "TournamentFlowNodeRead",
+      "type": "object"
+    },
+    "tournament.TournamentHistoryEntry": {
+      "properties": {
+        "discipline": {
+          "title": "Discipline",
+          "type": "string"
+        },
+        "division": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Division"
+        },
+        "division_grid_version_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Division Grid Version Id"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.RoleRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tournament_id": {
+          "title": "Tournament Id",
+          "type": "integer"
+        },
+        "tournament_name": {
+          "title": "Tournament Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tournament_id",
+        "tournament_name",
+        "discipline"
+      ],
+      "title": "TournamentHistoryEntry",
       "type": "object"
     },
     "tournament.TournamentLinkCreate": {

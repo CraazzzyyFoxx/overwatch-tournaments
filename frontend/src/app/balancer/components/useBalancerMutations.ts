@@ -121,6 +121,8 @@ function mergeRegistrationForCache(
   return {
     ...fresh,
     profiles_open: fresh.profiles_open ?? existing.profiles_open,
+    tournament_history: existing.tournament_history,
+    tournament_history_count: existing.tournament_history_count,
     roles: fresh.roles.map((role) => ({
       ...role,
       ow_rank_value: role.ow_rank_value ?? previousOwRankByRole.get(role.role) ?? null

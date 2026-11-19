@@ -48,7 +48,15 @@ export function useRegistrationMutations({
     (row: AdminRegistration) => {
       queryClient.setQueriesData<AdminRegistration[]>(
         { queryKey: balancerQueryKeys.registrations(tournamentId, registrationNodeId) },
-        (old) => (old ? old.map((r) => (r.id === row.id ? row : r)) : old)
+        // History is list-only enrichment: the write's response carries none, so keep the row's.
+        (old) =>
+          old
+            ? old.map((r) =>
+                r.id === row.id
+                  ? { ...row, tournament_history: r.tournament_history, tournament_history_count: r.tournament_history_count }
+                  : r
+              )
+            : old
       );
     },
     [queryClient, tournamentId, registrationNodeId]
