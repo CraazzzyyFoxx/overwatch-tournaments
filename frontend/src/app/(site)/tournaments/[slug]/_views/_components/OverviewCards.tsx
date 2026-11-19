@@ -117,7 +117,8 @@ export function AboutTournamentCard({
       <OverviewInlineSections>
         {/* Columns per non-empty side: a tournament with no description or links gives the format the full row. */}
         <div className="grid gap-x-10 gap-y-6 md:auto-cols-fr md:grid-flow-col">
-          <div className="grid content-start gap-6 empty:hidden">
+          {/* `content-between` pins the links to the column's foot, level with the format card's last row. */}
+          <div className="grid content-between gap-6 empty:hidden">
             {aboutCard}
             {linksCard}
           </div>
