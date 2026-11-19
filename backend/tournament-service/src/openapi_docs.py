@@ -1002,7 +1002,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.reg_list": {
         "summary": "List registrations (admin)",
-        "description": "Permission: workspace `registration.read` on the tournament's workspace. Lists a tournament's registrations with status metadata and per-registration OW-rank snapshots, filtered by status/inclusion/source and optionally including deleted.",
+        "description": "Permission: workspace `registration.read` on the tournament's workspace. Lists a tournament's registrations with status metadata, per-registration OW-rank snapshots and past tournaments, filtered by status/inclusion/source and optionally including deleted. Returns `{registrations, division_grids}`: history entries reference their grid version in `division_grids` by id.",
     },
     "rpc.tournament.reg_create_manual": {
         "summary": "Create manual registration",

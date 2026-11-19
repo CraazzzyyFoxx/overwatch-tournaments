@@ -27,7 +27,13 @@ import {
 import { useCareerSignals } from "@/components/balancer/registrations/_hooks/useCareerSignals";
 import { useRegistrationFilters } from "@/components/balancer/registrations/_hooks/useRegistrationFilters";
 import { useRegistrationMutations } from "@/components/balancer/registrations/_hooks/useRegistrationMutations";
-import { DataTable, type DataTableGroup, type TableCommand, createKebabColumn } from "@craazzzyyfoxx/admin-kit/data-table";
+import {
+  DataTable,
+  type DataTableGroup,
+  type TableCommand,
+  columnMeta,
+  createKebabColumn
+} from "@craazzzyyfoxx/admin-kit/data-table";
 import { useAuditTrail } from "@/components/kit/AuditTrailSheet";
 import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { Inspector } from "@/components/kit/Inspector";
@@ -51,6 +57,7 @@ import { adminQueryKeys } from "@/lib/admin/query-keys";
 import adminService from "@/services/admin.service";
 import registrationNoteService from "@/services/registration-note.service";
 import { notesCountColumn } from "@/components/registration/notesCountColumn";
+import TournamentHistoryCell from "@/components/registration/TournamentHistoryCell";
 
 import { adminRoleForm } from "./registrationsTable.model";
 
@@ -258,6 +265,19 @@ export default function RegistrationsTable({
       ...(careerVisible
         ? [careerSignalsColumn({ header: tRegistrations("career.column.header"), byUser: careerSignals.byUser })]
         : []),
+      {
+        id: "tournament_history",
+        header: t("common.history"),
+        accessorFn: (registration) => registration.tournament_history_count ?? 0,
+        cell: ({ row }) => (
+          <TournamentHistoryCell
+            history={row.original.tournament_history ?? []}
+            count={row.original.tournament_history_count}
+            workspaceId={row.original.workspace_id}
+          />
+        ),
+        meta: columnMeta<AdminRegistration>({ category: "meta", defaultHidden: false, responsive: "md", align: "center" })
+      },
       notesCountColumn<AdminRegistration>({
         header: tNotes("column"),
         count: (registration) => noteCounts?.[String(registration.id)] ?? 0,
@@ -307,6 +327,7 @@ export default function RegistrationsTable({
       tRegistrations,
       noteCounts,
       tNotes,
+      t,
       careerVisible,
       careerSignals.byUser
     ]

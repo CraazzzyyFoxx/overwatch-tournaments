@@ -15,6 +15,7 @@ from shared.registration_statuses import (
 )
 from src import schemas
 from src.schemas.admission import AdmissionRead
+from src.schemas.registration import TournamentHistoryEntry
 from src.schemas.registration_form import RegistrationFormRead, RegistrationFormTemplateRead
 from src.services.registration.answers import answer_service
 from src.services.registration.roles_rules import is_flex_submission
@@ -79,6 +80,8 @@ def serialize_registration(
     subscription_outcome: str | None = None,
     roster: PlayerRoster | None = None,
     submitted_late: bool = False,
+    tournament_history: list[TournamentHistoryEntry] | None = None,
+    tournament_history_count: int = 0,
 ) -> schemas.BalancerRegistrationRead:
     binding = loaded_relationship_or_none(registration, "google_sheet_binding")
     roles = loaded_relationship_or_none(registration, "roles") or []
@@ -149,6 +152,8 @@ def serialize_registration(
             )
             for role in sorted_roles
         ],
+        tournament_history=tournament_history or [],
+        tournament_history_count=tournament_history_count,
     )
 
 

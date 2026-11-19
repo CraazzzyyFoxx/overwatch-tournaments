@@ -11,6 +11,7 @@ import type {
   SubroleCatalog,
   SubscriptionOutcome,
   SubscriptionRequirement,
+  TournamentHistoryEntry,
 } from "@/types/registration.types";
 import type { TournamentStatus } from "@/types/tournament.types";
 
@@ -518,6 +519,10 @@ export interface AdminRegistration {
    *  the same reason as there: an optional field would put a defaulting branch
    *  back into every consumer. */
   admission: Admission;
+  /** Past tournaments in this workspace, sent by the LIST read only (mutation responses carry none), grids
+   *  rehydrated by `listRegistrations`: capped to the most recent few, `tournament_history_count` is the true total. */
+  tournament_history?: TournamentHistoryEntry[];
+  tournament_history_count?: number;
 }
 
 export interface AdminRegistrationCreateInput {

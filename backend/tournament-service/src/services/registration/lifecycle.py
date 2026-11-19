@@ -65,6 +65,7 @@ from src.services.registration.answers import answer_service
 from src.services.registration.rank_sources import native_ranks_by_registration
 from src.services.registration.read_model import (
     AdmissionChips,
+    _build_tournament_history,
     _resolve_top_heroes_config,
     registration_read_loaders,
 )
@@ -214,9 +215,9 @@ class RegistrationLifecycleService:
         inclusion_filter: str | None = None,
         source_filter: str | None = None,
         include_deleted: bool = False,
-    ) -> list[schemas.BalancerRegistrationRead]:
-        """The admin registrations table of ONE node: each filtered entry with its status meta, native ranks, roster
-        and admission."""
+    ) -> schemas.BalancerRegistrationListResponse:
+        """The admin registrations table of ONE node: each filtered entry with its status meta, native ranks, roster,
+        admission and past tournaments, plus the grid versions that history references."""
         entries = await self.list_registrations(
             session,
             registration_node_id,
@@ -257,6 +258,10 @@ class RegistrationLifecycleService:
         admissions = await self.registrations.resolve_admission_list(
             session, registrations, entry_by_registration, form=form, node_config=node_config(node)
         )
+        # Same past-tournaments read the public participants list carries, grids deduplicated the same way.
+        history_map, history_count_map, division_grids = await _build_tournament_history(
+            session, registrations, tournament_id, workspace_id
+        )
         provider = identity_provider(tournament.discipline)
         reads = []
         for entry in entries:
@@ -275,9 +280,11 @@ class RegistrationLifecycleService:
                     subscription_outcome=chips.subscription_outcome,
                     roster=rosters.get(registration.id),
                     submitted_late=submitted_late(entry, schedule),
+                    tournament_history=history_map.get(registration.id),
+                    tournament_history_count=history_count_map.get(registration.id, 0),
                 )
             )
-        return reads
+        return schemas.BalancerRegistrationListResponse(registrations=reads, division_grids=division_grids)
 
     async def get_registration_by_id(self, session: AsyncSession, registration_id: int) -> models.Registration:
         # ``populate_existing``: the post-write refetches (a created row, an edit of

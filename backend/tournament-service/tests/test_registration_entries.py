@@ -156,8 +156,8 @@ class EntryTests(FlowCase):
             in_b = await lifecycle_service.list_registration_reads(
                 s, registration_node_id=self.b, workspace_id=self.workspace_id
             )
-        self.assertEqual([(self.a, "approved")], [(read.registration_node_id, read.status) for read in in_a])
-        self.assertEqual([(self.b, "pending")], [(read.registration_node_id, read.status) for read in in_b])
+        self.assertEqual([(self.a, "approved")], [(read.registration_node_id, read.status) for read in in_a.registrations])
+        self.assertEqual([(self.b, "pending")], [(read.registration_node_id, read.status) for read in in_b.registrations])
 
     async def test_same_member_two_nodes_withdraw_is_per_node(self) -> None:
         await self._sign_up(self.a)
