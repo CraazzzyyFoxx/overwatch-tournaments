@@ -1,5 +1,6 @@
 "use client";
 
+import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import PlayerName from "@/components/PlayerName";
@@ -12,6 +13,7 @@ import { useFormatter } from "@/lib/datetime/client";
 import { formationModes, nodesOfKind, registrationIntake } from "@/lib/tournament/flow-nodes";
 import { displayStatus } from "@/lib/tournament/status";
 import { roleColor, type RoleOntology } from "@/lib/roster/ontology";
+import { cn } from "@/lib/utils";
 import type { Registration, RegistrationListResponse } from "@/types/registration.types";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -287,8 +289,79 @@ function RegistrationNumbersCard({
   );
 }
 
-/** Rows in the side column's list: sized so that column ends level with the field and the reference beside it. */
+/** Rows in the side column's list where the column stacks (below `lg`) and has no height to fill. */
 const LIST_ROWS = 10;
+
+/**
+ * The side column's list, as many rows as its card has room for. From `lg` the list sits out of flow, so the card's
+ * height comes from the column beside it, and the rows (plus `more` under them, when some are left out) fill it.
+ */
+function FittedRegistrationRows({
+  registrations,
+  ontology,
+  trailing,
+  more
+}: Readonly<{
+  registrations: readonly Registration[];
+  ontology: RoleOntology | null;
+  trailing?: (registration: Registration) => React.ReactNode;
+  more?: (count: number) => string;
+}>) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const footRef = useRef<HTMLParagraphElement>(null);
+  const [rows, setRows] = useState(LIST_ROWS);
+  const total = registrations.length;
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const list = box?.querySelector("ol");
+    if (!box || !list) return;
+    const fit = () => {
+      if (getComputedStyle(box).position !== "absolute") return setRows(LIST_ROWS);
+      const shown = list.children.length;
+      if (shown === 0) return;
+      const rect = list.getBoundingClientRect();
+      const marginBottom = Number.parseFloat(getComputedStyle(list).marginBottom);
+      // Rows are one height (`RegistrationRows` keeps the role line even when empty), and the last is a divider
+      // shorter: k rows end at `(k - 1) * pitch + last` whichever rows are rendered, so a refit keeps the count.
+      // From a single rendered row the pitch misses the divider; the refit after that is exact.
+      const last = list.children[shown - 1].getBoundingClientRect().height;
+      const pitch = shown > 1 ? (rect.height - last) / (shown - 1) : last;
+      // Where zero rows would end, and what `more` adds under the list's end.
+      const boxRect = box.getBoundingClientRect();
+      const start = rect.top - boxRect.top + marginBottom;
+      const foot = footRef.current ? footRef.current.getBoundingClientRect().bottom - rect.bottom - marginBottom : 0;
+      const room = boxRect.height - start;
+      // Half a pixel of tolerance: subpixel layout, clipped from the last row's padding at worst.
+      const fits = (space: number) => Math.floor((space - last + 0.5) / pitch) + 1;
+      setRows(fits(room) >= total ? total : Math.max(1, fits(room - foot)));
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(box);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [total]);
+  const shown = registrations.slice(0, rows);
+  const hidden = total - shown.length;
+  return (
+    <div className="relative flex-1 lg:min-h-0">
+      <div ref={boxRef} className="lg:absolute lg:inset-0 lg:overflow-hidden">
+        <RegistrationRows registrations={shown} ontology={ontology} trailing={trailing} />
+        {more ? (
+          // Kept in the layout at `lg` even with nothing left out: its height is what a cut list must leave room for.
+          <p
+            ref={footRef}
+            className={cn(
+              "mt-4 text-label text-[color:var(--aqt-fg-dim)]",
+              hidden === 0 && "hidden lg:invisible lg:block"
+            )}
+          >
+            {more(hidden)}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 /**
  * The pre-start lists' row, in the draft room's shape: role icon, handle over the role in words, and an optional
@@ -320,11 +393,10 @@ function RegistrationRows({
             <PlayerRoleIcon role={role} ontology={ontology} size={16} decorative />
             <span className="min-w-0">
               <PlayerName display={registrationDisplay(registration)} className="text-caption" />
-              {isTournamentRole(base) ? (
-                <span className="block truncate text-label text-[color:var(--aqt-fg-dim)]">
-                  {tCommon(`roles.${base}`)}
-                </span>
-              ) : null}
+              {/* Kept when empty: every row one height, which `FittedRegistrationRows` counts on. */}
+              <span className="block truncate text-label text-[color:var(--aqt-fg-dim)]">
+                {isTournamentRole(base) ? tCommon(`roles.${base}`) : "\u00a0"}
+              </span>
             </span>
             <span className="aqt-tnum text-label text-[color:var(--aqt-fg-muted)]">
               {trailing?.(registration)}
@@ -344,12 +416,12 @@ function LatestCard({
   const format = useFormatter();
   // Null until hydration: the recency waits rather than disagree with the server render.
   const now = useMinuteClock();
-  const latest = [...active]
-    .sort((a, b) => String(b.submitted_at).localeCompare(String(a.submitted_at)))
-    .slice(0, LIST_ROWS);
+  const latest = [...active].sort((a, b) =>
+    String(b.submitted_at).localeCompare(String(a.submitted_at))
+  );
   return (
-    <OverviewSection title={t("overview.latest.title")}>
-      <RegistrationRows
+    <OverviewSection title={t("overview.latest.title")} fill>
+      <FittedRegistrationRows
         registrations={latest}
         ontology={ontology}
         trailing={(registration) =>
@@ -371,22 +443,18 @@ function NotCheckedInCard({
   const waiting = active.filter(
     (registration) => registration.status === "approved" && !registration.checked_in
   );
-  const shown = waiting.slice(0, LIST_ROWS);
   return (
-    <OverviewSection title={t("overview.notCheckedIn.title")}>
+    <OverviewSection title={t("overview.notCheckedIn.title")} fill>
       {waiting.length === 0 ? (
         <p className="text-caption text-[color:var(--aqt-fg-muted)]">
           {t("overview.notCheckedIn.none")}
         </p>
       ) : (
-        <>
-          <RegistrationRows registrations={shown} ontology={ontology} />
-          {waiting.length > shown.length ? (
-            <p className="mt-4 text-label text-[color:var(--aqt-fg-dim)]">
-              {t("overview.notCheckedIn.more", { count: waiting.length - shown.length })}
-            </p>
-          ) : null}
-        </>
+        <FittedRegistrationRows
+          registrations={waiting}
+          ontology={ontology}
+          more={(count) => t("overview.notCheckedIn.more", { count })}
+        />
       )}
     </OverviewSection>
   );
