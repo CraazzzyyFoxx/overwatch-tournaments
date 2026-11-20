@@ -11,6 +11,7 @@ import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
@@ -84,10 +85,15 @@ export function useBracketBestOf({
   });
 
   const pick = (patch: BestOfPatch) => {
+    const bronzeRow = sharedFinal && patch.kind === "round" && !patch.isFinal && patch.round === finalRound;
     // When bronze shares this round its by_round entry is not dead under the title override.
-    const next = sharedFinal && patch.kind === "round" && patch.isFinal
+    let next = sharedFinal && patch.kind === "round" && patch.isFinal
       ? { ...config, final: patch.value }
       : patchBestOf(config, patch);
+    // A title on Default reads that same row, so pin it before the bronze moves it.
+    if (bronzeRow && config.final == null) {
+      next = { ...next, final: resolveBestOf(config, finalRound, { isFinal: true }) };
+    }
     const count = generated.filter(
       (encounter) =>
         (!isSlotRearrangeable(encounter) || encounter.is_live) &&
@@ -104,6 +110,17 @@ export function useBracketBestOf({
     const byRound = config.by_round[String(header.round)];
     const own = isFinal ? config.final ?? (sharedFinal ? null : byRound) : byRound;
     const inherited = isFinal && sharedFinal ? byRound ?? config.default : config.default;
+    const options = (inheritedBo: number) => (
+      <>
+        <DropdownMenuRadioItem value="default">{t("inherit", { bo: inheritedBo })}</DropdownMenuRadioItem>
+        <DropdownMenuSeparator />
+        {BEST_OF_OPTIONS.map((n) => (
+          <DropdownMenuRadioItem key={n} value={String(n)}>{`Bo${n}`}</DropdownMenuRadioItem>
+        ))}
+      </>
+    );
+    // Bronze shares the title round: `final` sets the title match, the round's own row the bronze.
+    const withBronze = isFinal && sharedFinal;
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -120,6 +137,7 @@ export function useBracketBestOf({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
+          {withBronze ? <DropdownMenuLabel>{t("titleMatch")}</DropdownMenuLabel> : null}
           <DropdownMenuRadioGroup
             value={own == null ? "default" : String(own)}
             onValueChange={(value) =>
@@ -131,12 +149,27 @@ export function useBracketBestOf({
               })
             }
           >
-            <DropdownMenuRadioItem value="default">{t("inherit", { bo: inherited })}</DropdownMenuRadioItem>
-            <DropdownMenuSeparator />
-            {BEST_OF_OPTIONS.map((n) => (
-              <DropdownMenuRadioItem key={n} value={String(n)}>{`Bo${n}`}</DropdownMenuRadioItem>
-            ))}
+            {options(inherited)}
           </DropdownMenuRadioGroup>
+          {withBronze ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>{t("thirdPlace")}</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={byRound == null ? "default" : String(byRound)}
+                onValueChange={(value) =>
+                  pick({
+                    kind: "round",
+                    round: header.round,
+                    isFinal: false,
+                    value: value === "default" ? null : Number(value)
+                  })
+                }
+              >
+                {options(config.default)}
+              </DropdownMenuRadioGroup>
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     );

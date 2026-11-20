@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core import enums, tournament_state
+from shared.domain.bracket_roles import third_place_condition
 from shared.domain.pick_ban_config import has_pool
 from shared.repository.notification_recipients import NotificationRecipientRepository
 from shared.services.notifications import PersonalNotification, broadcast, notify, notify_users
@@ -255,17 +256,23 @@ class LifecycleNotifier:
                 models.BracketEncounter.encounter_id,
                 models.BracketEncounter.stage_id,
                 models.BracketEncounter.round,
+                third_place_condition(models.BracketEncounter.encounter_id, models.BracketEncounter.round),
             ).where(models.BracketEncounter.encounter_id.in_([encounter.id for encounter in seated]))
         )
-        positions = {encounter_id: (stage_id, round_) for encounter_id, stage_id, round_ in position_rows.all()}
-        stage_ids = sorted({stage_id for stage_id, _round in positions.values() if stage_id is not None})
+        positions = {
+            encounter_id: (stage_id, round_, third_place)
+            for encounter_id, stage_id, round_, third_place in position_rows.all()
+        }
+        stage_ids = sorted({stage_id for stage_id, _round, _third_place in positions.values() if stage_id is not None})
         unpublished: set[int] = set()
         if stage_ids:
             stage_rows = await session.execute(
                 sa.select(models.Stage.id, models.Stage.is_published).where(models.Stage.id.in_(stage_ids))
             )
             unpublished = {stage_id for stage_id, is_published in stage_rows.all() if not is_published}
-        live = [encounter for encounter in seated if positions.get(encounter.id, (None, 0))[0] not in unpublished]
+        live = [
+            encounter for encounter in seated if positions.get(encounter.id, (None, 0, False))[0] not in unpublished
+        ]
         if not live:
             return
 
@@ -296,13 +303,13 @@ class LifecycleNotifier:
         names = dict(name_rows.all())
         rosters = await self.recipient_repo.team_roster_auth_user_ids(session, team_ids)
 
-        pick_ban: dict[tuple[int, int | None, int], bool] = {}
+        pick_ban: dict[tuple[int, int | None, int, bool], bool] = {}
         rows: list[PersonalNotification] = []
         posts: list[tuple[dict, int, str]] = []
         for encounter in live:
             tournament = tournaments[encounter.tournament_id]
-            stage_id, round_ = positions.get(encounter.id, (None, 0))
-            coordinate = (encounter.tournament_id, stage_id, round_)
+            stage_id, round_, third_place = positions.get(encounter.id, (None, 0, False))
+            coordinate = (encounter.tournament_id, stage_id, round_, third_place)
             if coordinate not in pick_ban:
                 pick_ban[coordinate] = await self._has_pick_ban(session, *coordinate)
             # Normalized to UTC first: the same instant arriving as a naive column
@@ -344,7 +351,9 @@ class LifecycleNotifier:
                 dedupe_key=dedupe_key,
             )
 
-    async def _has_pick_ban(self, session: AsyncSession, tournament_id: int, stage_id: int | None, round_: int) -> bool:
+    async def _has_pick_ban(
+        self, session: AsyncSession, tournament_id: int, stage_id: int | None, round_: int, third_place: bool
+    ) -> bool:
         """Whether this bracket coordinate resolves to a pick-ban with a pool --
         the same question ``PregameRoomLink`` asks on the frontend.
 
@@ -361,6 +370,7 @@ class LifecycleNotifier:
                 kind=kind,
                 stage_id=stage_id,
                 round=round_,
+                third_place=third_place,
             )
             if config is not None and has_pool(config):
                 return True

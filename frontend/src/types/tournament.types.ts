@@ -828,6 +828,8 @@ export interface PickBanConfig {
   kind: PickBanKind;
   stage_id: number | null;
   round: number | null;
+  /** The round's third-place match, configured apart from the final it shares a round with. */
+  third_place: boolean;
   mode: MapVetoMode;
   first_pick_rule: PickBanFirstPickRule;
   first_ban_rotation: PickBanFirstBanRotation;
@@ -840,6 +842,7 @@ export interface PickBanConfigUpsertInput {
   kind: PickBanKind;
   stage_id?: number | null;
   round?: number | null;
+  third_place?: boolean;
   mode: MapVetoMode;
   first_pick_rule?: PickBanFirstPickRule;
   first_ban_rotation?: PickBanFirstBanRotation;

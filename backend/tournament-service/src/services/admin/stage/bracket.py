@@ -234,6 +234,8 @@ class StageBracketMixin(StageServiceBase):
                 },
             )
         stage.bracket_template = template.model_dump(mode="json")
+        # A drawn bronze is the stage's third-place match: pre-game offers its own scope by this flag.
+        stage.third_place_match = bool(template_to_skeleton(template).third_place_ids)
         await self._finish_structure_write(session, stage, notify=True, commit=True, schedule_standings=False)
         return await self.get_bracket_template(session, stage_id)
 

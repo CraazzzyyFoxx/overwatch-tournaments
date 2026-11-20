@@ -26,6 +26,7 @@ from shared import models
 from shared.core.enums import MapVetoMode, MapVetoSessionStatus, PickBanKind, VetoSeedSource
 from shared.disciplines import discipline as discipline_spec
 from shared.domain import pick_ban_rules as pbr
+from shared.domain.bracket_roles import is_third_place
 from shared.domain.pick_ban_config import pick_config
 from shared.models.encounter.team import EncounterTeam
 from shared.models.tournament.pick_ban import PickBanConfig
@@ -152,6 +153,7 @@ async def side_pick_required(session: AsyncSession, encounter: models.Encounter,
                 ),
                 stage_id=bracket.stage_id if bracket is not None else None,
                 round=bracket.round if bracket is not None else None,
+                third_place=await is_third_place(session, encounter.id),
             )
             if config is None:
                 continue

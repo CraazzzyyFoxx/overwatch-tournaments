@@ -164,7 +164,11 @@ export function stageBestOfRoundSections({
         : stageType === "single_elimination" && bracketTeamCount >= 2
           ? Math.ceil(Math.log2(bracketTeamCount))
           : flatRounds;
-    const shape: BracketRoundShape = { rounds: countUp(depth), finalRounds: [] };
+    const shape: BracketRoundShape = {
+      rounds: countUp(depth),
+      finalRounds: [],
+      singleElimination: stageType === "single_elimination"
+    };
     return withUnlistedRounds(
       [{ key: "rounds", label: null, rounds: labelRounds(shape.rounds, shape, formatRound) }],
       configuredRounds,

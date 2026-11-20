@@ -7,11 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core import enums
+from shared.domain.bracket_roles import third_place_condition
 from src.domain.admin.best_of import best_of_config, resolve_best_of, resolve_swiss_best_of
 from src.domain.bracket import SwissThresholds
 from src.services.admin.stage.base import StageServiceBase
 from src.services.admin.stage_common import BRACKET_STAGE_TYPES
-from src.services.bracket.roles import third_place_condition
 from src.services.bracket.swiss_state import bye_rounds
 from src.services.encounter.ffa import ffa_encounter_service
 from src.services.standings.service import rank_group, standings_service

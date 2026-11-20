@@ -125,6 +125,7 @@ function config(overrides: Partial<PickBanConfig>): PickBanConfig {
     kind: "map",
     stage_id: null,
     round: null,
+    third_place: false,
     mode: "pool",
     first_pick_rule: "higher_seed",
     first_ban_rotation: "alternate",

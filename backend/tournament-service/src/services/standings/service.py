@@ -13,6 +13,7 @@ from sqlalchemy.orm.strategy_options import _AbstractLoad
 from shared import models
 from shared.core import enums, utils
 from shared.core.enums import StageType
+from shared.domain.bracket_roles import third_place_condition
 from shared.domain.encounter_scoring import (
     STANDING_DIGITS,
     GameLine,
@@ -31,7 +32,6 @@ from shared.services.participant_result import write_participant_results
 from src import schemas
 from src.domain.bracket.swiss import SwissThresholds
 from src.domain.stage.pins import apply_pins
-from src.services.bracket.roles import third_place_condition
 from src.services.bracket.swiss_state import bye_counts_by_scope, stopped_scopes
 from src.services.encounter.ffa import ffa_encounter_service
 from src.services.individual_swiss.standings import recalculate_individual_stage

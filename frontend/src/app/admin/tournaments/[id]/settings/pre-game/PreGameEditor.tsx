@@ -47,7 +47,7 @@ export interface PreGameEditorProps {
   catalogue: CatalogueItem[];
   catalogueLoading: boolean;
   canManage: boolean;
-  describeScope: (scope: Pick<PickBanConfig, "stage_id" | "round">) => string;
+  describeScope: (scope: Pick<PickBanConfig, "stage_id" | "round"> & { third_place?: boolean }) => string;
   saving: boolean;
   resetting: boolean;
   /**
@@ -115,7 +115,7 @@ export function PreGameEditor({
   // A mode in the pool restricts which logs count; a room never offers it, so slots and rules see maps only.
   const roomCatalogue = useMemo(() => catalogue.filter((option) => !option.isMode), [catalogue]);
 
-  const scopeLabel = describeScope({ stage_id: scope.stageId, round: scope.round });
+  const scopeLabel = describeScope({ stage_id: scope.stageId, round: scope.round, third_place: scope.thirdPlace });
   const inheritedLabel =
     inheritedConfig == null
       ? null

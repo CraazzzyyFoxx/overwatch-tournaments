@@ -99,6 +99,8 @@ export interface PickBanDraftSlot {
  */
 export interface PickBanDraftRoundSlots {
   round: number;
+  /** The round's third-place match rather than the round itself. */
+  thirdPlace?: boolean;
   slots: PickBanDraftSlot[];
 }
 
@@ -119,6 +121,8 @@ export interface PickBanDraft {
   kind: PickBanKind;
   stageId: number | null;
   round: number | null;
+  /** The round's third-place match: its own scope, apart from the final it shares a round with. */
+  thirdPlace: boolean;
   mode: MapVetoMode;
   firstBanRotation: PickBanFirstBanRotation;
   /** The whole rules document, exactly as it is stored and validated. */
@@ -510,6 +514,7 @@ export function emptyPickBanDraft(kind: PickBanKind): PickBanDraft {
     kind,
     stageId: null,
     round: null,
+    thirdPlace: false,
     mode: "pool",
     firstBanRotation: "fixed",
     ruleset: emptyRuleset(kind),
@@ -526,6 +531,7 @@ export function pickBanDraftFromConfig(config: PickBanConfig): PickBanDraft {
     kind: config.kind,
     stageId: config.stage_id,
     round: config.round,
+    thirdPlace: config.third_place,
     mode: config.mode,
     firstBanRotation: config.first_ban_rotation,
     ruleset: config.ruleset,
@@ -563,6 +569,7 @@ export function pickBanDraftToInput(draft: PickBanDraft): PickBanConfigUpsertInp
     kind: draft.kind,
     stage_id: draft.stageId,
     round: draft.stageId != null ? draft.round : null,
+    third_place: draft.stageId != null && draft.round != null && draft.thirdPlace,
     mode: draft.mode,
     first_ban_rotation: draft.firstBanRotation,
     ruleset: draft.ruleset,
@@ -646,6 +653,7 @@ function ruleValues(draft: PickBanDraft): unknown[] {
     draft.slots.map((slot) => [slot.candidates, slot.reserveItemId]),
     draft.roundSlots.map((round) => [
       round.round,
+      round.thirdPlace ?? false,
       round.slots.map((slot) => [slot.candidates, slot.reserveItemId]),
     ]),
   ];
@@ -672,21 +680,23 @@ export function rescopePickBanDraft(
   draft: PickBanDraft,
   stageId: number | null,
   round: number | null,
-  configs: PickBanConfig[]
+  configs: PickBanConfig[],
+  thirdPlace = false
 ): PickBanDraft {
   const authored =
     draft.inheritedFrom == null && !sameRuleValues(draft, emptyPickBanDraft(draft.kind));
-  if (draft.configId != null || authored) return { ...draft, stageId, round };
+  if (draft.configId != null || authored) return { ...draft, stageId, round, thirdPlace };
 
   const source = findInheritedConfig(draft.kind, stageId, round, configs);
   // Nothing to inherit here: values carried over from a scope this one no longer
   // sits under are nobody's choice, so they go rather than passing for one.
-  if (source == null) return { ...emptyPickBanDraft(draft.kind), stageId, round };
+  if (source == null) return { ...emptyPickBanDraft(draft.kind), stageId, round, thirdPlace };
   return {
     ...pickBanDraftFromConfig(source),
     configId: null,
     stageId,
     round,
+    thirdPlace,
     inheritedFrom: { stageId: source.stage_id, round: source.round },
   };
 }
@@ -696,6 +706,7 @@ export interface PickBanScopeEncounter {
   stage_id: number | null;
   round: number;
   best_of: number;
+  is_third_place?: boolean;
 }
 
 /**
@@ -725,6 +736,25 @@ export function stageRoundOptions(
   ].sort((left, right) => left - right);
 }
 
+/**
+ * The round a stage's third-place match plays in, or null when the stage has none.
+ * A generated bronze names its round; before that the switched-on match shares
+ * the title round, the stage's last positive round.
+ */
+export function stageThirdPlaceRound(
+  stage: Stage | null | undefined,
+  rounds: number[],
+  encounters: PickBanScopeEncounter[] | undefined
+): number | null {
+  if (stage == null) return null;
+  const generated = (encounters ?? []).find(
+    (encounter) => encounter.stage_id === stage.id && encounter.is_third_place
+  );
+  if (generated != null) return generated.round;
+  const upper = rounds.filter((round) => round > 0);
+  return stage.third_place_match && upper.length > 0 ? Math.max(...upper) : null;
+}
+
 /** How confident the editor is about the series length it is previewing. */
 type SeriesLengthSource = "round" | "stage" | "variesByRound" | "variesByMatch";
 
@@ -752,16 +782,24 @@ export function resolveSeriesLength(
   stageId: number | null,
   round: number | null,
   stages: Stage[],
-  encounters: PickBanScopeEncounter[] | undefined
+  encounters: PickBanScopeEncounter[] | undefined,
+  thirdPlace = false
 ): SeriesLength {
   if (stageId == null) return { bestOf: DEFAULT_BEST_OF, source: "variesByMatch" };
 
   if (round != null) {
-    const generated = (encounters ?? []).find(
-      (encounter) => encounter.stage_id === stageId && encounter.round === round
-    );
-    if (generated != null && generated.best_of > 0) {
-      return { bestOf: generated.best_of, source: "round" };
+    // The third-place match shares the final's round but is its own scope.
+    const generated = (encounters ?? [])
+      .filter(
+        (encounter) =>
+          encounter.stage_id === stageId &&
+          encounter.round === round &&
+          (encounter.is_third_place ?? false) === thirdPlace
+      )
+      .map((encounter) => encounter.best_of)
+      .filter((bestOf) => bestOf > 0);
+    if (generated.length > 0) {
+      return { bestOf: Math.max(...generated), source: "round" };
     }
   }
 
@@ -769,6 +807,11 @@ export function resolveSeriesLength(
   // A stage the caller does not know plays the default series.
   if (stage == null) {
     return { bestOf: DEFAULT_BEST_OF, source: round != null ? "round" : "stage" };
+  }
+
+  // The third-place match plays its round's own length, never the championship override.
+  if (round != null && thirdPlace) {
+    return { bestOf: resolveBestOf(stage.best_of, round), source: "round" };
   }
 
   if (round != null) {
@@ -802,10 +845,11 @@ export function resolveSlotCount(
   stageId: number | null,
   round: number | null,
   stages: Stage[],
-  encounters: PickBanScopeEncounter[] | undefined
+  encounters: PickBanScopeEncounter[] | undefined,
+  thirdPlace = false
 ): number {
   if (stageId != null && round != null) {
-    return resolveSeriesLength(stageId, round, stages, encounters).bestOf;
+    return resolveSeriesLength(stageId, round, stages, encounters, thirdPlace).bestOf;
   }
 
   // Generated encounters are the truth once the bracket exists; the stage's
@@ -847,6 +891,7 @@ export function roundSlotsForStage({
   kind,
   stageId,
   rounds,
+  thirdPlaceRound = null,
   configs,
   fallback,
   slotCountFor,
@@ -854,16 +899,23 @@ export function roundSlotsForStage({
   kind: PickBanKind;
   stageId: number;
   rounds: number[];
+  /** The round the stage's third-place match plays in; it gets a section of its own. */
+  thirdPlaceRound?: number | null;
   configs: PickBanConfig[];
   fallback: PickBanDraftSlot[];
-  slotCountFor: (round: number) => number;
+  slotCountFor: (round: number, thirdPlace: boolean) => number;
 }): PickBanDraftRoundSlots[] {
-  return rounds.map((round) => {
+  const sections = [
+    ...rounds.map((round) => ({ round, thirdPlace: false })),
+    ...(thirdPlaceRound == null ? [] : [{ round: thirdPlaceRound, thirdPlace: true }]),
+  ];
+  return sections.map(({ round, thirdPlace }) => {
     const own = configs.find(
       (config) =>
         config.kind === kind &&
         config.stage_id === stageId &&
         config.round === round &&
+        config.third_place === thirdPlace &&
         config.mode === "slots"
     );
     const slots =
@@ -873,7 +925,7 @@ export function roundSlotsForStage({
             reserveItemId: slot.reserve_item_id,
           }))
         : fallback.map((slot) => ({ ...slot, candidates: [...slot.candidates] }));
-    return { round, slots: alignSlots(slots, slotCountFor(round)) };
+    return { round, thirdPlace, slots: alignSlots(slots, slotCountFor(round, thirdPlace)) };
   });
 }
 
@@ -892,6 +944,7 @@ export function fanOutRoundDrafts(draft: PickBanDraft): PickBanDraft[] {
     ...draft,
     configId: null,
     round: round.round,
+    thirdPlace: round.thirdPlace ?? false,
     slots: round.slots,
     roundSlots: [],
   }));
@@ -971,7 +1024,8 @@ export function findScopeCollision(
         config.id !== draft.configId &&
         config.kind === draft.kind &&
         config.stage_id === draft.stageId &&
-        config.round === round
+        config.round === round &&
+        config.third_place === (round != null && draft.thirdPlace)
     ) ?? null
   );
 }

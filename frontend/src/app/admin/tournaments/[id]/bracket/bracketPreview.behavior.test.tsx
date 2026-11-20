@@ -330,7 +330,7 @@ describe("Bracket preview", () => {
 });
 
 describe("Best-of on the bracket", () => {
-  async function pick(round: number, option: string) {
+  async function pick(round: number, option: string, group: "first" | "last" = "first") {
     const trigger = container.querySelector(`[data-round-best-of="${round}"]`);
     if (!trigger) throw new Error(`No best-of menu on round ${round}`);
     await act(async () => {
@@ -338,9 +338,10 @@ describe("Best-of on the bracket", () => {
         new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0, pointerType: "mouse" })
       );
     });
-    const item = Array.from(document.body.querySelectorAll('[role="menuitemradio"]')).find(
+    const items = Array.from(document.body.querySelectorAll('[role="menuitemradio"]')).filter(
       (candidate) => candidate.textContent?.trim() === option
     );
+    const item = group === "first" ? items[0] : items.at(-1);
     if (!item) throw new Error(`No "${option}" in the menu`);
     await act(async () => {
       item.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
@@ -378,6 +379,17 @@ describe("Best-of on the bracket", () => {
     await pick(2, "Bo5");
     expect(document.body.querySelector('[role="alertdialog"]')).toBeNull();
     expect(savedBestOf()).toMatchObject({ final: 5, by_round: { "2": 1 } });
+  });
+
+  it("sets the bronze's length without moving a final left on Default", async () => {
+    getAllEncounters.mockResolvedValue({ results: [
+      { ...generatedEncounter(), id: 901, round: 2, status: "open", result_status: "none", teams: [] },
+      { ...generatedEncounter(), id: 902, round: 2, is_third_place: true, status: "open", result_status: "none", teams: [] }
+    ], total: 2 });
+    await mount();
+    await pick(2, "Bo1", "last");
+    // The title on Default reads the round's row, so it is pinned to what it played before.
+    expect(savedBestOf()).toMatchObject({ final: 3, by_round: { "2": 1 } });
   });
 
   it("asks before changing a played match, then rewrites the existing ones", async () => {
