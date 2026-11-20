@@ -13,6 +13,8 @@ from shared.services.encounter.result import reopen
 from src import schemas
 from src.services.admin.stage import stage_service
 from src.services.challonge.sync.structure import ChallongeStructureService
+from src.services.encounter.flows import flows_service as encounter_flows
+from src.services.encounter.service import encounter_service
 from src.services.flow.lifecycle import flow_node_service
 from src.services.standings.service import standings_service
 from src.services.voice.plan import build_voice_plan
@@ -31,11 +33,22 @@ class StageNodeTests(FlowCase):
             await s.commit()
             self.teams = [team.id for team in teams]
 
-    async def seated_stage(self, *, order: int = 1, teams: tuple[int, ...] = (0, 1, 2, 3)) -> tuple[int, int]:
-        """A round-robin stage (through ``create_stage``) with one group seating ``teams`` as FINAL inputs."""
-        stage_id, node_id = await self.stage(order=order, name=f"S{order}")
+    async def seated_stage(
+        self,
+        *,
+        order: int = 1,
+        teams: tuple[int, ...] = (0, 1, 2, 3),
+        stage_type: enums.StageType = enums.StageType.ROUND_ROBIN,
+    ) -> tuple[int, int]:
+        """A stage with one item seating ``teams`` as FINAL inputs."""
+        stage_id, node_id = await self.stage(stage_type, order=order, name=f"S{order}")
         async with self.Session() as s:
-            item = models.StageItem(stage_id=stage_id, name="A", type=enums.StageItemType.GROUP, order=0)
+            item_type = (
+                enums.StageItemType.SINGLE_BRACKET
+                if stage_type == enums.StageType.SINGLE_ELIMINATION
+                else enums.StageItemType.GROUP
+            )
+            item = models.StageItem(stage_id=stage_id, name="A", type=item_type, order=0)
             s.add(item)
             await s.flush()
             s.add_all(
@@ -104,6 +117,60 @@ class StageNodeTests(FlowCase):
             published = await s.scalar(sa.select(models.Stage.is_published).where(models.Stage.id == stage_id))
         self.assertTrue(published)
         self.assertGreater(len(await self.encounters(stage_id)), 0)
+
+    async def test_third_place_setting_is_opt_in_and_frozen_after_generation(self) -> None:
+        stage_id, _ = await self.seated_stage(stage_type=enums.StageType.SINGLE_ELIMINATION)
+        async with self.Session() as s:
+            self.assertFalse((await stage_service.get_stage(s, stage_id)).third_place_match)
+            await stage_service.update_stage(s, stage_id, schemas.StageUpdate(third_place_match=True))
+            stage = await stage_service.get_stage(s, stage_id)
+            stage.best_of_final = 5
+            await s.commit()
+            preview = (await stage_service.get_bracket_preview(s, stage_id))["matches"]
+            final_round = max(match["round"] for match in preview)
+            self.assertEqual(
+                {False: 5, True: 3},
+                {match["is_third_place"]: match["best_of"] for match in preview if match["round"] == final_round},
+            )
+            generated = await stage_service.generate_encounters(s, stage_id)
+            detail = [await encounter_flows.get_encounter(s, encounter.id, []) for encounter in generated]
+            (title,) = [encounter for encounter in detail if encounter.is_final]
+            (bronze,) = [encounter for encounter in detail if encounter.is_third_place]
+            self.assertEqual((5, 3), (title.best_of, bronze.best_of))
+            self.assertFalse(bronze.is_final)
+            self.assertEqual({(1, 2), (2, 2)}, {(source.slot, source.source_position) for source in bronze.sources})
+            self.assertEqual(
+                {title.id: True, bronze.id: False},
+                await encounter_service.is_final_by_encounter(s, [title.id, bronze.id]),
+            )
+            stage = await stage_service.get_stage(s, stage_id)
+            stage.best_of_default = 1
+            stage.best_of_final = 7
+            await s.commit()
+            await stage_service.apply_best_of_to_existing(s, stage_id)
+            self.assertEqual(7, (await s.get_one(models.Encounter, title.id)).best_of)
+            self.assertEqual(1, (await s.get_one(models.Encounter, bronze.id)).best_of)
+
+        before = set(await self.encounters(stage_id))
+        self.assertEqual(4, len(before))
+        async with self.Session() as s:
+            with self.assertRaises(BaseAPIException) as caught:
+                await stage_service.update_stage(s, stage_id, schemas.StageUpdate(third_place_match=False))
+        self.assertEqual(409, caught.exception.status_code)
+        async with self.Session() as s:
+            renamed = await stage_service.update_stage(
+                s, stage_id, schemas.StageUpdate(name="Playoffs", third_place_match=True)
+            )
+        self.assertTrue(renamed.third_place_match)
+        self.assertEqual("Playoffs", renamed.name)
+        self.assertEqual(before, set(await self.encounters(stage_id)))
+
+    async def test_third_place_setting_rejects_group_stages(self) -> None:
+        stage_id, _ = await self.stage()
+        async with self.Session() as s:
+            with self.assertRaises(ApiHTTPException) as caught:
+                await stage_service.update_stage(s, stage_id, schemas.StageUpdate(third_place_match=True))
+        self.assertEqual(422, caught.exception.status_code)
 
     async def test_two_stages_live_at_once(self) -> None:
         _, first = await self.seated_stage(order=1, teams=(0, 1))

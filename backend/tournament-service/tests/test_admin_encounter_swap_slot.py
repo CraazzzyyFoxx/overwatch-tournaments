@@ -31,6 +31,7 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 
 from shared.models.encounter import Encounter, EncounterTeam  # noqa: E402
+from shared.models.tournament.encounter_link import EncounterLink  # noqa: E402
 from shared.models.tournament.stage import Stage, StageItem  # noqa: E402
 from tests._encounter_layer import EncounterLayerCase  # noqa: E402
 from tests._rpc_fakes import CapturingBroker, FakeSessionMaker, make_identity  # noqa: E402
@@ -154,6 +155,29 @@ class SwapSlots(SwapSlotCase):
         async with self.Session() as s:
             self.assertEqual("t1 vs t0", (await s.get_one(Encounter, encounter)).name)
         self.assertEqual(returned_source.id, returned_target.id)
+
+    async def test_bronze_origins_stay_on_the_bronze_card(self) -> None:
+        semis = [await self.encounter(0, 3), await self.encounter(1, 2)]
+        bronze = await self.encounter(3, 2, round_number=2)
+        final = await self.encounter(0, 1, round_number=2)
+        async with self.Session() as s:
+            s.add_all(
+                EncounterLink(
+                    tournament_id=self.tournament_id,
+                    source_encounter_id=semi,
+                    source_position=place,
+                    target_encounter_id=target,
+                    target_slot=slot,
+                )
+                for slot, semi in enumerate(semis, start=1)
+                for place, target in ((1, final), (2, bronze))
+            )
+            await s.commit()
+
+        with assert_http_status(self, 409):
+            await self.swap(bronze, 1, final, 1)
+        self.assertEqual([(1, "t3"), (2, "t2")], await self.seats(bronze))
+        self.assertEqual([(1, "t0"), (2, "t1")], await self.seats(final))
 
     async def test_rejects_the_same_slot_of_the_same_encounter(self) -> None:
         encounter = await self.encounter(0, 1)

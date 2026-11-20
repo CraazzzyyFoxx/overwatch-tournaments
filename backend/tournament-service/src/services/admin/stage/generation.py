@@ -482,7 +482,12 @@ class StageGenerationMixin(StageServiceBase):
         laid out, scheduled and configured while the groups are still running;
         ``_fill_bracket_seeds`` writes the teams into it once they resolve.
         """
-        stage = stage or await self.get_stage(session, stage_id)
+        # Read shape settings and existing encounters under the same lock as template/settings edits.
+        await self._lock_stage(session, stage_id)
+        if stage is None:
+            stage = await self.get_stage(session, stage_id, populate_existing=True)
+        else:
+            await session.refresh(stage, ["stage_type", "third_place_match", "bracket_template"])
 
         existing_by_item_result = await session.execute(
             select(models.BracketEncounter.stage_item_id, func.count())
@@ -519,7 +524,6 @@ class StageGenerationMixin(StageServiceBase):
         existing_by_item: dict[int | None, int],
     ) -> list[models.Encounter]:
         """Start the personal-table stage: freeze the pool and pair round 1 (later rounds come from the standings job)."""
-        await self._lock_stage(session, stage.id)
         if sum(existing_by_item.values()) > 0:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -589,9 +593,6 @@ class StageGenerationMixin(StageServiceBase):
         stage: models.Stage,
         existing_by_item: dict[int | None, int],
     ) -> list[models.Encounter]:
-        # Before anything is decided off ``existing_by_item`` or the stage's
-        # template: a concurrent template swap must wait, not land mid-generation.
-        await self._lock_stage(session, stage.id)
         sorted_items = sorted(stage.items, key=lambda it: (it.order, it.id))
         primary_item_id = sorted_items[0].id if sorted_items else None
         lb_item = _lower_bracket_item(stage, sorted_items)

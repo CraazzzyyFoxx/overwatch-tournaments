@@ -51,12 +51,6 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
   // are the stage, and the encounter list never answers a lobby.
   const showsFfaTable =
     variant !== "registration" && stage !== null && FFA_STAGE_TYPES.includes(stage.stage_type);
-  // A group-only tournament has no bracket to read third place off, so the
-  // podium falls back to the standings (plan §5).
-  const podiumNeedsStandings =
-    variant === "completed" &&
-    !(tournament?.stages ?? []).some((item) => ELIMINATION_TYPES[item.stage_type] === true);
-  const needsStandings = showsGroupTable || podiumNeedsStandings;
 
   // Same key and fetcher as `TournamentParticipantsPage` (`tournamentRegistrationsQueryOptions`), so the two
   // sections share one cache entry instead of each paying for the roster.
@@ -80,11 +74,15 @@ export function useTournamentOverviewData(tournamentId: number, slug: string) {
     refetchIntervalInBackground: false
   });
 
+  const podiumNeedsStandings = variant === "completed" && (
+    !(tournament?.stages ?? []).some((item) => ELIMINATION_TYPES[item.stage_type] === true) ||
+    encountersQuery.data?.results.some((match) => match.stage_id === stage?.id && match.is_third_place) === true
+  );
   // Same key as `TournamentStandingsPage`.
   const standingsQuery = useQuery({
     queryKey: tournamentQueryKeys.standings(tournamentId, workspaceId),
     queryFn: () => tournamentService.getStandings(tournamentId, workspaceId ?? null),
-    enabled: tournament !== undefined && needsStandings
+    enabled: tournament !== undefined && (showsGroupTable || podiumNeedsStandings)
   });
 
   // Same key as `TournamentTeamsPage` — the champion's battletags come off the

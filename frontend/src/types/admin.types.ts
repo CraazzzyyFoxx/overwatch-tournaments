@@ -475,6 +475,7 @@ export interface StageMergeGroupStagesInput {
 export interface StageBracketPreviewMatch {
   local_id: number;
   round: number;
+  is_third_place?: boolean;
   /** "A vs. B", with the wired teams' names when they are known. */
   name: string;
   best_of: number;

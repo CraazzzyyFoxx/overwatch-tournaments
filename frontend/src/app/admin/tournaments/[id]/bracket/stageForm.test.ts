@@ -72,3 +72,24 @@ describe("stage form for an individual Swiss stage", () => {
     expect(form).toMatchObject({ pairingMode: "score", playoffTeamCount: 4 });
   });
 });
+
+describe("third-place match setting", () => {
+  it.each(["single_elimination", "double_elimination"] as const)("round-trips the opt-in on %s", (stage_type) => {
+    const saved = stage({ stage_type });
+    const form = stageFormFromStage(saved);
+    expect(form.thirdPlaceMatch).toBe(false);
+    form.thirdPlaceMatch = true;
+    expect(stageFormChanges(saved, form)).toEqual(["thirdPlaceMatch"]);
+    expect(buildStageUpdatePayload(saved, form).third_place_match).toBe(true);
+    expect(stageFormFromStage({ ...saved, third_place_match: true }).thirdPlaceMatch).toBe(true);
+  });
+
+  it("omits the setting for unrelated saves, non-brackets and custom layouts", () => {
+    const saved = stage({ stage_type: "single_elimination" });
+    expect(buildStageUpdatePayload(saved, stageFormFromStage(saved))).not.toHaveProperty("third_place_match");
+    for (const locked of [stage(), { ...saved, has_custom_bracket: true }]) {
+      expect(buildStageUpdatePayload(locked, { ...stageFormFromStage(locked), thirdPlaceMatch: true }))
+        .not.toHaveProperty("third_place_match");
+    }
+  });
+});

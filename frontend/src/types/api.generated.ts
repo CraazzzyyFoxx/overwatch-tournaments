@@ -5659,7 +5659,7 @@ export interface paths {
         };
         /**
          * List registrations (admin)
-         * @description Permission: workspace `registration.read` on the tournament's workspace. Lists a tournament's registrations with status metadata and per-registration OW-rank snapshots, filtered by status/inclusion/source and optionally including deleted.
+         * @description Permission: workspace `registration.read` on the tournament's workspace. Lists a tournament's registrations with status metadata, per-registration OW-rank snapshots and past tournaments, filtered by status/inclusion/source and optionally including deleted. Returns `{registrations, division_grids}`: history entries reference their grid version in `division_grids` by id.
          *
          *     Accepts arbitrary query parameters (pagination/filtering); see the service for the full list.
          *
@@ -19756,6 +19756,11 @@ export interface components {
              * @default false
              */
             is_live: boolean;
+            /**
+             * Is Third Place
+             * @default false
+             */
+            is_third_place: boolean;
             /** Matches */
             matches: components["schemas"]["tournament.MatchRead"][];
             /** Name */
@@ -22097,6 +22102,11 @@ export interface components {
              */
             swiss_qualify_wins: number | null;
             /**
+             * Third Place Match
+             * @default false
+             */
+            third_place_match: boolean;
+            /**
              * Tiebreak Order
              * @default null
              */
@@ -22242,6 +22252,11 @@ export interface components {
              * @default null
              */
             swiss_qualify_wins: number | null;
+            /**
+             * Third Place Match
+             * @default false
+             */
+            third_place_match: boolean;
             /**
              * Tiebreak Order
              * @default null
@@ -28242,6 +28257,21 @@ export interface components {
              */
             status: string | null;
         };
+        /**
+         * BalancerRegistrationListResponse
+         * @description The admin registrations table of one node, with the history grids deduplicated as on the public list.
+         *
+         *     The grids ride here, behind the list's own authorization: a reader allowed the list may not be allowed the
+         *     workspace-scoped grid-version endpoint, and the client must not fall back to another crest.
+         */
+        "tournament.BalancerRegistrationListResponse": {
+            /** Division Grids */
+            division_grids?: {
+                [key: string]: components["schemas"]["tournament.DivisionGridVersionRead"];
+            };
+            /** Registrations */
+            registrations?: components["schemas"]["tournament.BalancerRegistrationRead"][];
+        };
         /** BalancerRegistrationRankAutofillPlayer */
         "tournament.BalancerRegistrationRankAutofillPlayer": {
             /**
@@ -28567,6 +28597,13 @@ export interface components {
              * @default null
              */
             subscription_outcome: string | null;
+            /** Tournament History */
+            tournament_history?: components["schemas"]["tournament.TournamentHistoryEntry"][];
+            /**
+             * Tournament History Count
+             * @default 0
+             */
+            tournament_history_count: number;
             /** Tournament Id */
             tournament_id: number;
             /**
@@ -32207,6 +32244,11 @@ export interface components {
              */
             swiss_qualify_wins: number | null;
             /**
+             * Third Place Match
+             * @default false
+             */
+            third_place_match: boolean;
+            /**
              * Tiebreak Order
              * @default null
              */
@@ -32404,6 +32446,11 @@ export interface components {
              * @default null
              */
             swiss_qualify_wins: number | null;
+            /**
+             * Third Place Match
+             * @default false
+             */
+            third_place_match: boolean;
             /**
              * Tiebreak Order
              * @default null
@@ -32938,6 +32985,27 @@ export interface components {
             start_date: string;
             /** Workspace Id */
             workspace_id: number;
+        };
+        /** TournamentHistoryEntry */
+        "tournament.TournamentHistoryEntry": {
+            /** Discipline */
+            discipline: string;
+            /**
+             * Division
+             * @default null
+             */
+            division: number | null;
+            /**
+             * Division Grid Version Id
+             * @default null
+             */
+            division_grid_version_id: number | null;
+            /** @default null */
+            role: components["schemas"]["tournament.RoleRef"] | null;
+            /** Tournament Id */
+            tournament_id: number;
+            /** Tournament Name */
+            tournament_name: string;
         };
         /** TournamentLinkCreate */
         "tournament.TournamentLinkCreate": {
@@ -54132,7 +54200,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["tournament.BalancerRegistrationRead"][];
+                    "application/json": components["schemas"]["tournament.BalancerRegistrationListResponse"];
                 };
             };
             /** @description Not authenticated (`unauthorized`). Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key. */

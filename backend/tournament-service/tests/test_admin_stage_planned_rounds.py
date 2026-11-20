@@ -48,7 +48,7 @@ def _item(
 
 
 def _stage(stage_type, items: list[SimpleNamespace]) -> SimpleNamespace:
-    return SimpleNamespace(id=5, stage_type=stage_type, items=items, bracket_template=None)
+    return SimpleNamespace(id=5, stage_type=stage_type, items=items, bracket_template=None, third_place_match=False)
 
 
 def _result_rows(upper: int, lower: int) -> list[SimpleNamespace]:

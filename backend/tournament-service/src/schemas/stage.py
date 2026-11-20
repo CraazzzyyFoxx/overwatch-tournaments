@@ -223,6 +223,7 @@ class _StageRegulationRead(BaseModel):
     #: Swiss: losses that put a team out; ``None`` = never.
     swiss_eliminate_losses: int | None = None
     de_grand_final_type: GrandFinalType = "no_reset"
+    third_place_match: bool = False
     seed_ranking: SeedRankingValue = "slot"
     #: ``individual_swiss`` only; ``None`` on every other type.
     pairing_mode: enums.StagePairingMode | None = None

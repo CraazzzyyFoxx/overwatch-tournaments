@@ -22,6 +22,7 @@ from shared.services.tournament.visibility import visible_tournament_ids_subquer
 from src import schemas
 from src.core.query_page import execute_page_with_total
 from src.core.workspace import workspace_filter
+from src.services.bracket.roles import third_place_condition
 from src.services.tournament import service as tournament_service
 
 
@@ -91,8 +92,7 @@ def _status_predicate(value: str, now: datetime) -> sa.ColumnElement[bool]:
 
 
 def _is_final_condition() -> sa.ColumnElement[bool]:
-    """In the last positive round of a single or double elimination stage: its final (a double elimination's grand
-    final -- the lower bracket's rounds are negative).
+    """The last positive championship round of an elimination stage, excluding bronze.
 
     Correlated on ``encounter`` and NULL-free, so the filter, its negation, an aggregate ``FILTER`` and the row's
     ``is_final`` all read the same predicate. Every inner table is aliased: a caller's own join of the same table
@@ -101,7 +101,14 @@ def _is_final_condition() -> sa.ColumnElement[bool]:
     position = aliased(models.BracketEncounter)
     sibling = aliased(models.BracketEncounter)
     stage = aliased(models.Stage)
-    last_round = sa.select(sa.func.max(sibling.round)).where(sibling.stage_id == position.stage_id).scalar_subquery()
+    last_round = (
+        sa.select(sa.func.max(sibling.round))
+        .where(
+            sibling.stage_id == position.stage_id,
+            ~third_place_condition(sibling.encounter_id, sibling.round),
+        )
+        .scalar_subquery()
+    )
     return sa.exists(
         sa.select(1)
         .select_from(position)
@@ -110,6 +117,7 @@ def _is_final_condition() -> sa.ColumnElement[bool]:
             position.encounter_id == models.Encounter.id,
             stage.stage_type.in_([enums.StageType.SINGLE_ELIMINATION, enums.StageType.DOUBLE_ELIMINATION]),
             position.round > 0,
+            ~third_place_condition(position.encounter_id, position.round),
             position.round == last_round,
         )
     )

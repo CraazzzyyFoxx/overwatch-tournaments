@@ -298,6 +298,47 @@ afterEach(() => {
 });
 
 describe("Bracket layout editor", () => {
+  it.each([
+    { format: "SE", current: stage, template: generatedTemplate, feeders: [1, 2], id: 4 },
+    { format: "DE", current: deStage, template: deTemplate, feeders: [3, 2], id: 5 }
+  ])("adds, wires, saves and reopens the $format third-place match", async ({ current, template, feeders, id }) => {
+    let response = template();
+    const original = response.template!;
+    getStageBracketTemplate.mockImplementation(async () => response);
+    setStageBracketTemplate.mockImplementation(async (_stageId, saved) => {
+      response = { ...response, custom: true, template: saved };
+      return response;
+    });
+    const label = en.bracketEditor.addThirdPlace;
+    await mount(current());
+    await click(button(label));
+    expect(button(label)).toBeUndefined();
+    expect(button("Save")?.disabled).toBe(true);
+    for (const [index, source] of feeders.entries()) {
+      await click(port(`${source}-loser`));
+      expect(container.querySelectorAll("[data-connect-target]")).toHaveLength(2);
+      await click(slot(`${id}-${index + 1}`));
+    }
+    await click(button("Save"));
+    expect(setStageBracketTemplate).toHaveBeenCalledWith(5, {
+      ...original,
+      matches: [...original.matches, {
+        id, round: 2,
+        slots: feeders.map((source_match, i) => ({ slot: i + 1, source_match, source_position: 2 }))
+      }]
+    });
+    act(() => root!.unmount());
+    await mount(current());
+    expect(container.querySelector(`[data-match-id="${id}"]`)?.textContent).toContain(en.bracket.thirdPlace);
+    expect(button(label)).toBeUndefined();
+    expect(port(`${id}-winner`)).toBeNull();
+    expect(slot(`${id}-1`)?.textContent).toContain(`L M${feeders[0]}`);
+    expect(slot(`${id}-2`)?.textContent).toContain(`L M${feeders[1]}`);
+    await click(port(`${feeders[0]}-loser`));
+    await click(slot(`${id}-2`));
+    expect(button("Save")?.disabled).toBe(true);
+  });
+
   it("saves the wiring drawn on the canvas", async () => {
     await mount();
 

@@ -26,6 +26,8 @@ type DraftSlot = TemplateSlot | null;
 export interface DraftMatch {
   id: number;
   round: number;
+  /** Local role survives clearing either input. Only the connections are saved. */
+  thirdPlace?: boolean;
   slots: DraftSlot[];
 }
 
@@ -43,7 +45,7 @@ export type DraftAction =
   /** Exchange two slots' contents; refused across rounds (a seed belongs to its round's column). */
   | { type: "swap"; a: { match: number; slot: DuelSlot }; b: { match: number; slot: DuelSlot } }
   /** `beforeFinal` renumbers the final out one round and takes its place. */
-  | { type: "addMatch"; round: number; beforeFinal?: boolean }
+  | { type: "addMatch"; round: number; beforeFinal?: boolean; thirdPlace?: boolean }
   | { type: "deleteMatch"; id: number }
   | { type: "move"; id: number; direction: -1 | 1 }
   | { type: "setSeeds"; upper: number; lower: number }
@@ -141,9 +143,8 @@ export function draftReducer(draft: Draft, action: DraftAction): Draft {
     case "addMatch": {
       const id = Math.max(0, ...draft.matches.map((match) => match.id)) + 1;
       if (id > MAX_MATCH_ID || Math.abs(action.round) > MAX_ROUND) return draft;
-      const added: DraftMatch = { id, round: action.round, slots: [null, null] };
-      // The final is the only match of the last positive round, so an upper
-      // round added "at the end" is really added before it.
+      const added: DraftMatch = { id, round: action.round, slots: [null, null], thirdPlace: action.thirdPlace };
+      // Inserting an upper round moves the championship column (including bronze) together.
       const matches = action.beforeFinal
         ? draft.matches.map((match) =>
             match.round === action.round ? { ...match, round: match.round + 1 } : match
@@ -199,6 +200,8 @@ export function draftFromTemplate(template: BracketTemplate): Draft {
     matches: template.matches.map((match) => ({
       id: match.id,
       round: match.round,
+      thirdPlace: match.round > 0 && match.slots.length === 2 &&
+        match.slots.every((slot) => slot.source_position === 2) || undefined,
       slots: match.slots.map(({ slot: _slot, ...rest }) => rest)
     }))
   };
@@ -243,6 +246,7 @@ export function draftToBracketMatches(draft: Draft): BracketMatch[] {
     return {
       id: match.id,
       round: match.round,
+      is_third_place: match.thirdPlace,
       status: "open",
       // A seed slot names its placeholder; anything else is TBD, and a wired
       // one gets its "W M3" hint from `sources` above.

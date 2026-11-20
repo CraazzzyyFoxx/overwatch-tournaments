@@ -38,8 +38,8 @@ from src.services.tournament.flows import flows_service as tournament_flows_serv
 # the dumped wire dicts in a persistent Redis that outlives a deploy, and cashews returns a value as it was stored, so
 # a wire change to those models needs a new namespace (``native_``, then ``:v2``, ``:v3`` for ``played_at`` and
 # ``is_live``, ``:v4`` for ``is_final`` and the overview's counts, ``:v5``/insights ``:v2`` for storing the wire dict
-# instead of the pickled model, ``:v6``/insights ``:v3`` for a roster player's ``display``), not a TTL wait. The key
-# names EVERY query param that changes the SQL: one without the
+# instead of the pickled model, ``:v6``/insights ``:v3`` for roster ``display``, then ``:v7``/insights ``:v4`` for
+# bronze), not a TTL wait. The key names EVERY query param that changes the SQL: one without the
 # game served the first game's page to every other game for the whole TTL. The viewer is in it for ``scope=my_team``
 # only: every other scope is passed ``None`` (``scope_viewer``), so logged-in readers share one entry.
 # ``ENCOUNTERS`` (``tournament/cache_resources.py``) names the writes that miss all three;
@@ -50,9 +50,9 @@ _ENCOUNTER_QUERY_KEY = (
     "{params.best_of}:{params.status}:{params.has_logs}:{params.is_final}:{params.is_upset}:{params.closeness_min}:"
     "{params.closeness_max}:{params.scope}:{params.discipline}:{params.slot_count}:{viewer_auth_user_id}"
 )
-ENCOUNTERS_CACHE_KEY = f"native_encounters:v6:{_ENCOUNTER_QUERY_KEY}"
-ENCOUNTERS_OVERVIEW_CACHE_KEY = f"native_encounters_overview:v6:{_ENCOUNTER_QUERY_KEY}"
-ENCOUNTERS_INSIGHTS_CACHE_KEY = f"native_encounters_insights:v3:{_ENCOUNTER_QUERY_KEY}"
+ENCOUNTERS_CACHE_KEY = f"native_encounters:v7:{_ENCOUNTER_QUERY_KEY}"
+ENCOUNTERS_OVERVIEW_CACHE_KEY = f"native_encounters_overview:v7:{_ENCOUNTER_QUERY_KEY}"
+ENCOUNTERS_INSIGHTS_CACHE_KEY = f"native_encounters_insights:v4:{_ENCOUNTER_QUERY_KEY}"
 
 #: The entities an encounter read honours: all a cached read's key keeps of the client's list (``canonical_entities``).
 READ_ENTITIES = frozenset({"tournament", "teams", "matches", "stage", "stage_item"})
@@ -188,6 +188,13 @@ def _encounter_read(
     encounter_dict["is_live"] = encounter_is_live(encounter, now)
     encounter_dict["played_at"] = facts.played_at.get(encounter.id)
     encounter_dict["is_final"] = facts.is_final.get(encounter.id, False)
+    sources = facts.slot_sources.get(encounter.id, ())
+    encounter_dict["is_third_place"] = (
+        position is not None
+        and position.round > 0
+        and bool(sources)
+        and all(source.source_position > 1 for source in sources)
+    )
 
     return schemas.EncounterRead(
         **encounter_dict,
@@ -210,7 +217,7 @@ def _encounter_read(
                 source_position=source.source_position,
                 slot=source.slot,
             )
-            for source in facts.slot_sources.get(encounter.id, ())
+            for source in sources
         ],
     )
 

@@ -67,6 +67,7 @@ export function useBracketBestOf({
   const [confirming, setConfirming] = useState<{ next: StageBestOfConfig; count: number } | null>(null);
   const config = stage.best_of;
   const finalRound = Math.max(0, ...matches.map((match) => match.round));
+  const sharedFinal = matches.some((match) => match.round === finalRound && match.is_third_place);
 
   const mutation = useMutation({
     mutationFn: async (next: StageBestOfConfig) => {
@@ -83,11 +84,16 @@ export function useBracketBestOf({
   });
 
   const pick = (patch: BestOfPatch) => {
-    const next = patchBestOf(config, patch);
+    // When bronze shares this round its by_round entry is not dead under the title override.
+    const next = sharedFinal && patch.kind === "round" && patch.isFinal
+      ? { ...config, final: patch.value }
+      : patchBestOf(config, patch);
     const count = generated.filter(
       (encounter) =>
         (!isSlotRearrangeable(encounter) || encounter.is_live) &&
-        resolveBestOf(next, encounter.round, { isFinal: encounter.round === finalRound }) !== encounter.best_of
+        resolveBestOf(next, encounter.round, {
+          isFinal: encounter.round === finalRound && !encounter.is_third_place
+        }) !== encounter.best_of
     ).length;
     if (count > 0) setConfirming({ next, count });
     else mutation.mutate(next);
@@ -95,9 +101,9 @@ export function useBracketBestOf({
 
   const renderHeaderAction = (header: LayoutHeader): ReactNode => {
     const isFinal = header.round === finalRound;
-    const own = isFinal
-      ? (config.final ?? config.by_round[String(header.round)])
-      : config.by_round[String(header.round)];
+    const byRound = config.by_round[String(header.round)];
+    const own = isFinal ? config.final ?? (sharedFinal ? null : byRound) : byRound;
+    const inherited = isFinal && sharedFinal ? byRound ?? config.default : config.default;
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -125,7 +131,7 @@ export function useBracketBestOf({
               })
             }
           >
-            <DropdownMenuRadioItem value="default">{t("inherit", { bo: config.default })}</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="default">{t("inherit", { bo: inherited })}</DropdownMenuRadioItem>
             <DropdownMenuSeparator />
             {BEST_OF_OPTIONS.map((n) => (
               <DropdownMenuRadioItem key={n} value={String(n)}>{`Bo${n}`}</DropdownMenuRadioItem>

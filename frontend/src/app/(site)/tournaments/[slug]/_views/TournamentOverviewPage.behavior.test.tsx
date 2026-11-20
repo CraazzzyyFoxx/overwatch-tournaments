@@ -1023,6 +1023,47 @@ describe("once it is over", () => {
     expect(text).toContain(COPY.result.exitedIn.replace("{round}", "LB Final"));
   });
 
+  it("shows the playoff standings' third place, not the lower-final loser or another stage's third", async () => {
+    const bronze = makeEncounter(5, 2, GAMMA, DELTA, [0, 2], { is_third_place: true });
+    getAllEncounters.mockResolvedValue(encounterList([bronze, ...playedBracket()]));
+    getStandings.mockResolvedValue([
+      { ...makeStanding(1, GAMMA, 3, 2, [1, 0, 1]), stage_id: 6 },
+      makeStanding(2, DELTA, 3, 2, [1, 0, 1])
+    ]);
+    await mount();
+    const result = card(COPY.result.title);
+    expect(result?.textContent).toContain("Alpha");
+    expect(result?.textContent).toContain("Beta");
+    expect(result?.textContent).toContain("Delta");
+    expect(result?.textContent).not.toContain("Gamma");
+    expect(result?.querySelector('a[href="/encounters/3"]')).not.toBeNull();
+    expect(container.querySelector('a[href$="/bracket?stage=7&match=5"]')?.textContent).toContain(en.bracket.thirdPlace);
+  });
+
+  it("never substitutes the lower-final loser for a missing official bronze placement", async () => {
+    getAllEncounters.mockResolvedValue(encounterList([
+      ...playedBracket(), makeEncounter(5, 2, GAMMA, DELTA, [0, 2], { is_third_place: true })
+    ]));
+    getStandings.mockResolvedValue([]);
+    await mount();
+    const podium = container.querySelector(`[aria-label="${en.tournamentDetail.podium.label}"]`);
+    expect(podium?.textContent).toContain("Alpha");
+    expect(podium?.textContent).not.toContain("Gamma");
+    expect(podium?.textContent).not.toContain("Delta");
+  });
+
+  it.each(["title", "reset"])("does not crown a winner while the %s is open, even after bronze", async (pending) => {
+    const matches = playedBracket();
+    const title = matches[matches.length - 1];
+    const unplayed = { ...title, status: "open", result_status: "none" as const, ended_at: null };
+    if (pending === "reset") matches.push({ ...unplayed, id: 6, round: title.round + 1 });
+    else matches[matches.length - 1] = unplayed;
+    matches.push(makeEncounter(5, 2, GAMMA, DELTA, [0, 2], { is_third_place: true }));
+    getAllEncounters.mockResolvedValue(encounterList(matches));
+    await mount();
+    expect(card(COPY.result.title)).toBeNull();
+  });
+
   it("ranks the most banned heroes once the pick-ban outcomes answer", async () => {
     getPickBanOutcomes.mockResolvedValue({
       hero_bans: [

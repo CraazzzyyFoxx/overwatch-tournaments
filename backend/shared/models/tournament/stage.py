@@ -133,6 +133,8 @@ class Stage(db.TimeStampIntegerMixin):
     #: Double elimination only: ``with_reset`` plays a second Grand Final when
     #: the lower-bracket team wins the first.
     de_grand_final_type: Mapped[str] = mapped_column(String(16), default="no_reset", server_default="no_reset")
+    #: Add a third-place match when generating an elimination bracket.
+    third_place_match: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false")
     #: How a bracket orders its seeds (``src.domain.stage.seeds.SeedRanking``).
     seed_ranking: Mapped[str] = mapped_column(String(16), default="slot", server_default="slot")
     #: Series length of an encounter in a round with no ``round_best_of`` row.

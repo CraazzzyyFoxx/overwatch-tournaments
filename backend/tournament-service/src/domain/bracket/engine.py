@@ -13,6 +13,7 @@ def generate_bracket(
     swiss_round_number: int = 1,
     swiss_bye_history: set[int] | None = None,
     lower_bracket_team_ids: list[int] | None = None,
+    third_place_match: bool = False,
 ) -> BracketSkeleton:
     """Dispatch bracket generation to the appropriate algorithm.
 
@@ -37,10 +38,12 @@ def generate_bracket(
         return round_robin.generate(team_ids)
 
     if stage_type == StageType.SINGLE_ELIMINATION:
-        return single_elimination.generate(team_ids)
+        return single_elimination.generate(team_ids, third_place_match=third_place_match)
 
     if stage_type == StageType.DOUBLE_ELIMINATION:
-        return double_elimination.generate(team_ids, lower_bracket_team_ids=lower_bracket_team_ids)
+        return double_elimination.generate(
+            team_ids, lower_bracket_team_ids=lower_bracket_team_ids, third_place_match=third_place_match
+        )
 
     if stage_type == StageType.SWISS:
         if swiss_standings is None:
@@ -70,6 +73,7 @@ def placeholder_bracket(
     upper_count: int,
     *,
     lower_count: int = 0,
+    third_place_match: bool = False,
 ) -> BracketSkeleton:
     """The bracket `generate_bracket` will build once the seeds are known.
 
@@ -91,6 +95,7 @@ def placeholder_bracket(
         stage_type,
         placeholder_seeds(upper_count),
         lower_bracket_team_ids=placeholder_seeds(lower_count, offset=upper_count),
+        third_place_match=third_place_match,
     )
 
 

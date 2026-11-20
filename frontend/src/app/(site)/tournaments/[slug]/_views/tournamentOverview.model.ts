@@ -138,14 +138,16 @@ export function findGrandFinal(
   encounters: readonly Encounter[],
   stageId: number
 ): Encounter | null {
-  const played = encounters.filter(
-    (encounter) =>
-      encounter.stage_id === stageId && encounter.round > 0 && isEncounterCompleted(encounter)
+  const hasBronze = encounters.some((match) => match.stage_id === stageId && match.is_third_place);
+  const candidates = encounters.filter((match) =>
+    match.stage_id === stageId && match.round > 0 && !match.is_third_place &&
+    (hasBronze || isEncounterCompleted(match))
   );
-  return played.reduce<Encounter | null>(
+  const final = candidates.reduce<Encounter | null>(
     (best, encounter) => (best === null || encounter.round > best.round ? encounter : best),
     null
   );
+  return final && isEncounterCompleted(final) ? final : null;
 }
 
 /**

@@ -57,3 +57,43 @@ class BracketSkeleton:
     total_rounds: int
     advancement_edges: list[AdvancementEdge] = field(default_factory=list)
     bye_team_id: int | None = None
+
+    @property
+    def third_place_ids(self) -> set[int]:
+        """Positive-round matches whose incoming edges all carry a losing position."""
+        losing, other = set(), set()
+        for edge in self.advancement_edges:
+            if edge.source_position > 1:
+                losing.add(edge.target_local_id)
+            else:
+                other.add(edge.target_local_id)
+        losing.difference_update(other)
+        return {p.local_id for p in self.pairings if p.round_number > 0 and p.local_id in losing}
+
+
+def third_place_sources(final_id: int, winner_targets: dict[int, int], *, double_elimination: bool) -> list[int]:
+    """Trace winners from the relevant bracket (upper for SE, lower for DE) back from the title."""
+    sources = [source for source, target in winner_targets.items() if target == final_id]
+    if double_elimination:
+        if len(sources) != 1:
+            return []
+        lower_final = sources[0]
+        sources.extend(source for source, target in winner_targets.items() if target == lower_final)
+    return sources if len(sources) == 2 else []
+
+
+def append_third_place(pairings: list[Pairing], edges: list[AdvancementEdge], *, double_elimination: bool) -> None:
+    """Append bronze to a generated bracket, whose last pairing is still the title."""
+    final = pairings[-1]
+    winner_targets = {
+        edge.source_local_id: edge.target_local_id
+        for edge in edges
+        if edge.source_position == 1 and (pairings[edge.source_local_id].round_number < 0) == double_elimination
+    }
+    sources = third_place_sources(final.local_id, winner_targets, double_elimination=double_elimination)
+    if sources:
+        bronze_id = len(pairings)
+        pairings.append(
+            Pairing(team_ids=(None, None), round_number=final.round_number, name="Third Place", local_id=bronze_id)
+        )
+        edges.extend(AdvancementEdge(source, 2, bronze_id, slot) for slot, source in enumerate(sources, start=1))

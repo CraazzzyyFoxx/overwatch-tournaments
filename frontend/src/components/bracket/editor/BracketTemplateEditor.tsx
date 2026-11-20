@@ -24,7 +24,7 @@ import { slotCollision, slotKeyboardCoordinates } from "../BracketView";
 import { buildLayout, CARD_HEIGHT, CARD_WIDTH, PADDING_Y } from "../layout";
 import { useBracketViewport } from "../useBracketViewport";
 import { TemplateMatchCard, type ConnectSource, type TemplateSlotDrag } from "./TemplateMatchCard";
-import { draftToBracketMatches, unusedSeeds, type Draft, type DraftAction } from "./templateDraft";
+import { draftToBracketMatches, unusedSeeds, type Draft, type DraftAction, type DraftMatch } from "./templateDraft";
 
 /** Room to the right of the tree for the two "+ round" buttons. */
 const ADD_COLUMN_WIDTH = 132;
@@ -34,6 +34,27 @@ interface BracketTemplateEditorProps {
   stageType: StageType;
   dispatch: (action: DraftAction) => void;
   highlightMatchId: number | null;
+}
+
+/** Follow every winner edge, then require duels; a seeded bye has no losing team to offer. */
+function thirdPlaceFeeders(final: DraftMatch | undefined, byId: Map<number, DraftMatch>, isDE: boolean): number[] {
+  const winnersFrom = (match: DraftMatch | undefined, lower: boolean) =>
+    (match?.slots ?? []).flatMap((slot) => {
+      const source = slot?.source_position === 1 ? byId.get(slot.source_match) : undefined;
+      return source && (source.round < 0) === lower ? [source] : [];
+    });
+  const isDuel = (match: DraftMatch) => match.slots.length === 2 && match.slots.every(Boolean);
+  const feeders = winnersFrom(final, isDE);
+  if (!isDE) {
+    return feeders.length === 2 && feeders[0].id !== feeders[1].id && feeders.every(isDuel)
+      ? feeders.map((match) => match.id)
+      : [];
+  }
+  const lowerFinal = feeders.length === 1 ? feeders[0] : undefined;
+  const previous = winnersFrom(lowerFinal, true);
+  return lowerFinal && previous.length === 1 && isDuel(lowerFinal) && isDuel(previous[0])
+    ? [lowerFinal.id, previous[0].id]
+    : [];
 }
 
 /**
@@ -104,9 +125,12 @@ export function BracketTemplateEditor({
   const rounds = draft.matches.map((match) => match.round);
   const upperRounds = rounds.filter((round) => round > 0);
   const lowerRounds = rounds.filter((round) => round < 0);
-  // The last positive round holds the final, which is the one upper match that
-  // drops nobody (`de_lower_loser`).
+  // Templates contain the base championship, not a conditional reset.
   const finalRound = upperRounds.length > 0 ? Math.max(...upperRounds) : 0;
+  const titleMatches = draft.matches.filter((match) => match.round === finalRound && !match.thirdPlace);
+  const feeders = thirdPlaceFeeders(titleMatches.length === 1 ? titleMatches[0] : undefined, byId, isDE);
+  const hasBronze = draft.matches.some((match) => match.thirdPlace);
+  const wiringBronze = hasBronze && connecting?.role === "loser" && feeders.includes(connecting.source);
   const lowerHeaderY = layout.headers.find((header) => header.section === "lower")?.y;
 
   const width = layout.width + ADD_COLUMN_WIDTH;
@@ -142,6 +166,17 @@ export function BracketTemplateEditor({
         screenReaderInstructions: { draggable: tDnd("instructions") }
       }}
     >
+      {!hasBronze && feeders.length === 2 && (
+        <Button
+          type="button"
+          variant="dashed"
+          size="sm"
+          onClick={() => dispatch({ type: "addMatch", round: finalRound, thirdPlace: true })}
+        >
+          <Plus aria-hidden />
+          {t("addThirdPlace")}
+        </Button>
+      )}
       <div
         ref={attachScroller}
         className={cn(
@@ -282,7 +317,9 @@ export function BracketTemplateEditor({
                   <TemplateMatchCard
                     match={match}
                     availableSeeds={match.round < 0 ? lowerSeeds : upperSeeds}
-                    showLoserPort={isDE && match.round > 0 && match.round !== finalRound}
+                    showLoserPort={(isDE && match.round > 0 && match.round !== finalRound) ||
+                      (hasBronze && feeders.includes(match.id))}
+                    canConnect={wiringBronze === Boolean(match.thirdPlace)}
                     connecting={connecting}
                     onPort={(role) =>
                       setConnecting((current) =>

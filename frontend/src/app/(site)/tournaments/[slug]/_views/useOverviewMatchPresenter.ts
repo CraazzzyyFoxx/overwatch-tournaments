@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { useFormatter } from "@/lib/datetime/client";
 import { UNKNOWN_ROUND_SHAPE, type BracketRoundShape } from "@/lib/bracket/round-name";
@@ -38,6 +39,7 @@ export function useOverviewMatchPresenter({
   liveTeamStreams: ReadonlyMap<number, StreamEntry>;
 }>): OverviewMatchPresenter {
   const format = useFormatter();
+  const t = useTranslations("bracket");
   const roundLabel = useBracketRoundLabel();
 
   const clock = (value: Date | string | null) => {
@@ -50,7 +52,7 @@ export function useOverviewMatchPresenter({
   };
 
   const encounterRound = (encounter: Encounter) =>
-    roundLabel(
+    encounter.is_third_place ? t("thirdPlace") : roundLabel(
       encounter.round,
       (encounter.stage_id === null ? undefined : roundShapeByStage[encounter.stage_id]) ??
         UNKNOWN_ROUND_SHAPE

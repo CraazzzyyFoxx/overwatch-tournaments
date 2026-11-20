@@ -35,6 +35,7 @@ export interface StageForm {
   /** Kept as strings: an empty field is "inherit", which `0` cannot express. */
   maxRounds: string;
   deGrandFinalType: "no_reset" | "with_reset";
+  thirdPlaceMatch: boolean;
   /** `individual_swiss`: how a round forms its lobbies. */
   pairingMode: StagePairingMode;
   /** `individual_swiss`: how many teams the playoff takes (each takes its role slots of the table). */
@@ -75,6 +76,7 @@ export function stageFormFromStage(stage: Stage): StageForm {
     stageType: stage.stage_type,
     maxRounds: String(stage.max_rounds ?? 5),
     deGrandFinalType: stage.de_grand_final_type,
+    thirdPlaceMatch: stage.third_place_match ?? false,
     pairingMode: stage.pairing_mode ?? "score",
     playoffTeamCount: stage.playoff_team_count ?? 4,
     rankWinDelta: stage.rank_win_delta ?? 0,
@@ -131,6 +133,9 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
     swiss_bye_points: emptyOrNumber(form.swissByePoints),
     swiss_qualify_wins: qualifyWins,
     swiss_eliminate_losses: eliminateLosses,
+    ...(isElimination && !stage.has_custom_bracket && form.thirdPlaceMatch !== (stage.third_place_match ?? false)
+      ? { third_place_match: form.thirdPlaceMatch }
+      : {}),
     de_grand_final_type:
       form.stageType === "double_elimination" ? form.deGrandFinalType : "no_reset",
     seed_ranking: isElimination ? form.seedRanking : "slot",
@@ -184,6 +189,7 @@ const FIELD_LABELS: Record<keyof StageForm, string> = {
   stageType: "format",
   maxRounds: "swissRounds",
   deGrandFinalType: "grandFinal",
+  thirdPlaceMatch: "thirdPlaceMatch",
   pairingMode: "pairingMode",
   playoffTeamCount: "playoffTeams",
   rankWinDelta: "rankWinDelta",

@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`rankcareer02_profile_public`** (190 revisions in `backend/migrations/versions/`).
+Alembic head: **`bronzematch01_stage_option`** (191 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1377,6 +1377,7 @@ erDiagram
         int swiss_qualify_wins "nullable"
         int swiss_eliminate_losses "nullable"
         varchar(16) de_grand_final_type
+        boolean third_place_match
         varchar(16) seed_ranking
         int best_of_default
         int best_of_final "nullable"

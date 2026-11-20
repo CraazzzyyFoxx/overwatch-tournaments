@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -154,6 +154,7 @@ export function StageEditor({
   onSelect
 }: Readonly<StageEditorProps>) {
   const reportUnsaved = useUnsavedReporter();
+  const queryClient = useQueryClient();
   const t = useTranslations("adminBracket.editor");
   const tRoot = useTranslations("adminBracket");
   const formatRound = useBracketRoundLabel();
@@ -241,6 +242,9 @@ export function StageEditor({
     onMutate: () => setSaveError(null),
     onSuccess: (saved) => {
       setForm(stageFormFromStage(saved));
+      if ((saved.third_place_match ?? false) !== (stage.third_place_match ?? false)) {
+        void queryClient.invalidateQueries({ queryKey: adminQueryKeys.stageBracketTemplate(stage.id) });
+      }
       onChanged();
     },
     onError: (error) => {
@@ -477,7 +481,9 @@ export function StageEditor({
           // The settings rail's rhythm: `SettingGroup` cards, each section building its own, packed over as many
           // columns as the panel fits.
           <SettingsGrid>
-            <GeneralSection stage={stage} form={form} onChange={patchForm} isSuperuser={isSuperuser}>
+            <GeneralSection
+              stage={stage} form={form} onChange={patchForm} isSuperuser={isSuperuser} hasEncounters={hasEncounters}
+            >
               <AdvancementRows stage={stage} stageType={form.stageType} advancement={advancement} />
             </GeneralSection>
             <SeedingSection form={form} onChange={patchForm} />

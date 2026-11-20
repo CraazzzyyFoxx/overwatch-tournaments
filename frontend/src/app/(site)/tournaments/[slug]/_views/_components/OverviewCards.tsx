@@ -30,12 +30,15 @@ export function OverviewSection({
   action,
   id,
   className,
+  fill = false,
   children
 }: Readonly<{
   title?: string;
   action?: ReactNode;
   id?: string;
   className?: string;
+  /** The card body stretches to the card's height, so content can size itself to the room it is given. */
+  fill?: boolean;
   children: ReactNode;
 }>) {
   const inline = useContext(InlineContext);
@@ -52,7 +55,12 @@ export function OverviewSection({
           {children}
         </>
       ) : (
-        <CardSurface title={title} action={action} className="flex-1">
+        <CardSurface
+          title={title}
+          action={action}
+          className={cn("flex-1", fill && "flex flex-col")}
+          bodyClassName={fill ? "flex min-h-0 flex-1 flex-col" : undefined}
+        >
           {children}
         </CardSurface>
       )}

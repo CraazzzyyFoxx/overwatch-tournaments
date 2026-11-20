@@ -369,6 +369,17 @@ describe("Best-of on the bracket", () => {
     expect(savedBestOf()).toMatchObject({ by_round: {}, final: 5 });
   });
 
+  it("changes only the championship length, preserving the played bronze's round override", async () => {
+    getAllEncounters.mockResolvedValue({ results: [
+      { ...generatedEncounter(), id: 901, round: 2, status: "open", result_status: "none", teams: [] },
+      { ...generatedEncounter(), id: 902, round: 2, is_third_place: true, best_of: 1 }
+    ], total: 2 });
+    await mount({ ...stage(), best_of: { ...stage().best_of, by_round: { "2": 1 } } });
+    await pick(2, "Bo5");
+    expect(document.body.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(savedBestOf()).toMatchObject({ final: 5, by_round: { "2": 1 } });
+  });
+
   it("asks before changing a played match, then rewrites the existing ones", async () => {
     getAllEncounters.mockResolvedValue({
       results: [

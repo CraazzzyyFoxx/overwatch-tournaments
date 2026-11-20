@@ -390,6 +390,22 @@ describe("BracketView round headers", () => {
 // used to switch inference off for the WHOLE bracket, leaving every unrecorded
 // match (a hand-created encounter, a legacy stage) floating unconnected.
 describe("BracketView connectors", () => {
+  it("links the championship to its reset even when bronze sorts first in the same round", () => {
+    render(<BracketView type="double_elimination" encounters={[
+      encounter({ id: 1, round: 1 }), encounter({ id: 2, round: -1 }),
+      encounter({ id: 3, round: 2, is_third_place: true }),
+      encounter({ id: 4, round: 2, sources: [{ encounter_id: 2, source_position: 1, slot: 1 }] }),
+      encounter({ id: 5, round: 3, sources: [
+        { encounter_id: 4, source_position: 1, slot: 1 }, { encounter_id: 4, source_position: 2, slot: 2 }
+      ] })
+    ]} />);
+    const bronze = container.querySelector('[data-match-id="3"]');
+    expect(bronze?.textContent).toContain(en.bracket.thirdPlace);
+    expect(bronze?.querySelector('a[href="/encounters/3"]')).not.toBeNull();
+    expect(container.querySelector('[data-edge="edge-3-5"]')).toBeNull();
+    expect(container.querySelector('[data-edge="edge-4-5"]')).not.toBeNull();
+  });
+
   it("draws recorded feeders and infers only the matches that record none", () => {
     render(
       <BracketView

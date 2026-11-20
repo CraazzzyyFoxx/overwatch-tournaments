@@ -142,8 +142,8 @@ class _AsyncSessionShim:
     async def rollback(self) -> None:
         self._session.rollback()
 
-    async def refresh(self, obj) -> None:  # noqa: ANN001
-        self._session.refresh(obj)
+    async def refresh(self, obj, attribute_names=None) -> None:  # noqa: ANN001
+        self._session.refresh(obj, attribute_names=attribute_names)
 
     async def get(self, entity, primary_key, **kwargs):  # noqa: ANN001, ANN003, ANN202
         # ``**kwargs`` for ``with_for_update``: bracket advancement locks the
