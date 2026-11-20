@@ -13,7 +13,7 @@ baselines and Discord channels live in `stats/`. `catalog/` writes only to `cata
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`bronzematch01_stage_option`** (191 revisions in `backend/migrations/versions/`).
+Alembic head: **`bronzecfg01_pick_ban_third_place`** (192 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1247,6 +1247,7 @@ erDiagram
         pickbankind kind
         bigint stage_id FK "nullable"
         int round "nullable"
+        boolean third_place
         pickbanmode mode
         pickbanfirstpickrule first_pick_rule
         pickbanrotation first_ban_rotation
