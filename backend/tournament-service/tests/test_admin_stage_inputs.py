@@ -40,6 +40,7 @@ stage_crud = importlib.import_module("src.services.admin.stage.crud")
 stage_generation = importlib.import_module("src.services.admin.stage.generation")
 schemas = importlib.import_module("src.schemas")
 enums = importlib.import_module("shared.core.enums")
+errors = importlib.import_module("shared.core.errors")
 
 from tests._stage_regulation import stage_regulation  # noqa: E402
 
@@ -284,12 +285,16 @@ class UpdateStageTests(IsolatedAsyncioTestCase):
 
     async def test_format_change_with_existing_matches_is_refused(self) -> None:
         stage = self._stage()
-        session = SimpleNamespace(commit=AsyncMock(), scalar=AsyncMock(return_value=7))
+        session = SimpleNamespace(
+            commit=AsyncMock(),
+            scalar=AsyncMock(side_effect=[stage.tournament_id, 7]),
+            execute=AsyncMock(),
+        )
         data = schemas.StageUpdate(stage_type=enums.StageType.SINGLE_ELIMINATION)
 
         with (
             patch.object(service, "get_stage", AsyncMock(return_value=stage)),
-            self.assertRaises(Exception) as ctx,
+            self.assertRaises(errors.BaseAPIException) as ctx,
         ):
             await service.update_stage(session, 1, data)
 
