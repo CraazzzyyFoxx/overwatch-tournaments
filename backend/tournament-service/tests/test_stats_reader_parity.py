@@ -652,8 +652,9 @@ def assert_tournament_golden(actual: dict) -> None:
         """Fields added after the frozen P4 capture are not reader output: ``TournamentRead.logs_official`` (P5) and
         ``pov_stream_delay_s``, ``flow_nodes`` (P3, opt-in; empty on a tournament without a flow), the owner context (``workspace_id``/``discipline``) P7 added to ``EncounterRead`` and
         ``MatchRead``, the catalog ``mode_id``/``mode`` a match and an encounter game gained with matchmode01, and the
-        browse's ``played_at``/``is_live``/``is_final`` on ``EncounterRead`` (a match's own ``played_at`` was captured
-        and stays), and the per-game person ``display`` every roster player gained (docs/users-identity.md §3.6). The
+        browse's ``played_at``/``is_live``/``is_final`` and bracket's ``is_third_place`` on ``EncounterRead``
+        (a match's own ``played_at`` was captured and stays), and the per-game person ``display`` every roster player
+        gained (docs/users-identity.md §3.6). The
         golden's nested ``tournament`` objects already carried theirs and keep them. ``TournamentRead`` lost its
         ``win_points``/``draw_points``/``loss_points`` after the capture (stagepts01): points live on the stage; and
         ``team_formation``/``draft_format_json`` (flowP7_01): the flow's formation node owns both."""
@@ -677,7 +678,7 @@ def assert_tournament_golden(actual: dict) -> None:
                 "draft_format_json",
                 *(("workspace_id", "discipline") if owner else ()),
                 *(("mode_id", "mode") if "map_id" in value else ()),
-                *(("played_at", "is_live", "is_final") if encounter else ()),
+                *(("played_at", "is_live", "is_final", "is_third_place") if encounter else ()),
                 *(("display",) if person else ()),
             }
             return {key: without_post_capture_fields(item) for key, item in value.items() if key not in dropped}

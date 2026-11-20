@@ -74,11 +74,6 @@ class _FakeScalarResult:
     def scalars(self) -> _FakeScalarResult:
         return self
 
-    def tuples(self) -> _FakeScalarResult:
-        """``apply_best_of_to_existing`` reads ``(Encounter, round)`` pairs now:
-        the round lives on ``tournament.bracket_encounter`` (D22)."""
-        return self
-
     def all(self) -> list:
         return self._rows
 
@@ -103,7 +98,7 @@ class _FakeSession:
         # The one ``IN`` list the lock statement binds: the ids it locks.
         ids = sorted(next(value for value in query.compile().params.values() if isinstance(value, list)))
         self.calls.append(f"lock {ids}")
-        everyone = {encounter.id: encounter for encounter, _round in self._rows}
+        everyone = {encounter.id: encounter for encounter, _, _ in self._rows}
         everyone.update({encounter.id: encounter for encounter in self._downstream})
         return _FakeScalarResult([everyone[encounter_id] for encounter_id in ids])
 
@@ -150,8 +145,8 @@ class ApplyBestOfToExistingTests(TestCase):
         must not lock its target after the first one's standings request took the recalculation state."""
         stage = _stage(id=13, tournament_id=4, stage_type=enums.StageType.ROUND_ROBIN, best_of_default=2)
         encounters = [
-            (SimpleNamespace(id=5, best_of=3, slot_count=4, scoring_preset="points"), 1),
-            (SimpleNamespace(id=6, best_of=3, slot_count=4, scoring_preset="points"), 1),
+            (SimpleNamespace(id=5, best_of=3, slot_count=4, scoring_preset="points"), 1, False),
+            (SimpleNamespace(id=6, best_of=3, slot_count=4, scoring_preset="points"), 1, False),
         ]
         # The playoff encounters the lobbies feed, and the final behind them: another stage, best_of untouched.
         playoff = (
@@ -178,13 +173,14 @@ class ApplyBestOfToExistingTests(TestCase):
             by_round={1: 1},
         )
         encounters = [
-            (SimpleNamespace(id=1, best_of=3, slot_count=2, scoring_preset="wins"), 1),  # by_round -> 1
-            (SimpleNamespace(id=2, best_of=3, slot_count=2, scoring_preset="wins"), 2),  # default (not max round)
-            (SimpleNamespace(id=3, best_of=3, slot_count=2, scoring_preset="wins"), 3),  # max round + elim -> final 5
+            (SimpleNamespace(id=1, best_of=3, slot_count=2, scoring_preset="wins"), 1, False),
+            (SimpleNamespace(id=2, best_of=3, slot_count=2, scoring_preset="wins"), 2, False),
+            (SimpleNamespace(id=3, best_of=3, slot_count=2, scoring_preset="wins"), 3, False),
+            (SimpleNamespace(id=4, best_of=3, slot_count=2, scoring_preset="wins"), 3, True),
         ]
         changed, session, published = self._run_backfill(stage, encounters)
 
-        self.assertEqual([e.best_of for e, _round in encounters], [1, 3, 5])
+        self.assertEqual([1, 3, 5, 3], [encounter.best_of for encounter, _, _ in encounters])
         self.assertEqual(changed, 2)  # rounds 1 and 3 changed; round 2 unchanged
         self.assertTrue(session.committed)
         self.assertEqual(published, [1])
@@ -201,19 +197,19 @@ class ApplyBestOfToExistingTests(TestCase):
             best_of_final=5,
         )
         encounters = [
-            (SimpleNamespace(id=1, best_of=3, slot_count=2, scoring_preset="wins"), 1),
+            (SimpleNamespace(id=1, best_of=3, slot_count=2, scoring_preset="wins"), 1, False),
             # Highest round, but not elimination.
-            (SimpleNamespace(id=2, best_of=3, slot_count=2, scoring_preset="wins"), 2),
+            (SimpleNamespace(id=2, best_of=3, slot_count=2, scoring_preset="wins"), 2, False),
         ]
         changed, session, _ = self._run_backfill(stage, encounters)
 
-        self.assertEqual([e.best_of for e, _round in encounters], [2, 2])
+        self.assertEqual([2, 2], [encounter.best_of for encounter, _, _ in encounters])
         self.assertEqual(changed, 2)
 
     def test_no_changes_leaves_commit_but_no_publish(self) -> None:
         # Nothing configured -> everything resolves to the default 3.
         stage = _stage(id=12, tournament_id=3, stage_type=enums.StageType.SINGLE_ELIMINATION)
-        encounters = [(SimpleNamespace(id=1, best_of=3, slot_count=2, scoring_preset="wins"), 1)]
+        encounters = [(SimpleNamespace(id=1, best_of=3, slot_count=2, scoring_preset="wins"), 1, False)]
         changed, session, published = self._run_backfill(stage, encounters)
 
         self.assertEqual(changed, 0)
