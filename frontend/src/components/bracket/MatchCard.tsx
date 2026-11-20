@@ -323,10 +323,10 @@ export const MatchCard = memo(function MatchCard({
         <SlotRow {...rowProps} slot={1} highlighted={highlighted.one} />
         <SlotRow {...rowProps} slot={2} highlighted={highlighted.two} />
 
-        <div className={CARD_FOOTER} style={{ height: footerHeight }}>
+        <div className={cn(CARD_FOOTER, "shrink-0")} style={{ height: footerHeight }}>
           {/* Look (view, rosters, pre-game) then act (edit, report), one hairline
               between; the series format keeps the right edge. */}
-          <div className="flex min-w-0 items-center gap-0.5">
+          <div className="flex shrink-0 items-center gap-0.5">
             {interactive && (
               <>
                 <Button asChild variant="ghost" size="icon-xs" className="text-[color:var(--aqt-fg-muted)]">
@@ -364,10 +364,15 @@ export const MatchCard = memo(function MatchCard({
             )}
             {actions}
           </div>
-          {bestOfLabel && (
-            <Eyebrow tone="muted" className="shrink-0">
-              {bestOfLabel}
-            </Eyebrow>
+          {(encounter.is_third_place || bestOfLabel) && (
+            <div className="flex min-w-0 items-center gap-1.5">
+              {encounter.is_third_place && (
+                <Eyebrow tone="muted" className="truncate" title={t("bracket.thirdPlace")}>
+                  {t("bracket.thirdPlace")}
+                </Eyebrow>
+              )}
+              {bestOfLabel && <Eyebrow tone="muted" className="shrink-0">{bestOfLabel}</Eyebrow>}
+            </div>
           )}
         </div>
       </div>

@@ -30,6 +30,7 @@ from src.domain.bracket.engine import (  # noqa: E402
     placeholder_bracket,
     placeholder_seeds,
 )
+from src.domain.bracket.types import AdvancementEdge, BracketSkeleton, Pairing  # noqa: E402
 from src.domain.stage.seeds import bracket_seeds  # noqa: E402
 
 
@@ -548,6 +549,66 @@ class EngineDispatchInvariants(TestCase):
         self.assertEqual([], [p for p in s.pairings if "Reset" in p.name])
         gf_round = max(p.round_number for p in s.pairings)
         self.assertEqual(gf_round, s.total_rounds)
+
+
+class ThirdPlaceInvariants(TestCase):
+    def test_only_the_two_loser_links_and_their_match_are_appended(self) -> None:
+        for stage_type, upper, lower, feeders in (
+            (StageType.SINGLE_ELIMINATION, 4, 0, (0, 1)),
+            (StageType.SINGLE_ELIMINATION, 5, 0, (1, 2)),
+            (StageType.DOUBLE_ELIMINATION, 4, 0, (4, 3)),
+            (StageType.DOUBLE_ELIMINATION, 2, 3, (3, 2)),
+        ):
+            with self.subTest(stage_type=stage_type, upper=upper, lower=lower):
+                base = placeholder_bracket(stage_type, upper, lower_count=lower)
+                bracket = placeholder_bracket(stage_type, upper, lower_count=lower, third_place_match=True)
+                bronze = bracket.pairings[-1]
+                self.assertEqual(set(), base.third_place_ids)
+                self.assertEqual({bronze.local_id}, bracket.third_place_ids)
+                self.assertEqual(base.total_rounds, bracket.total_rounds)
+                self.assertEqual(base.pairings, bracket.pairings[:-1])
+                self.assertNotIn(bronze.local_id, _local_ids(base))
+                self.assertEqual((None, None), bronze.team_ids)
+                self.assertEqual(base.pairings[-1].round_number, bronze.round_number)
+                self.assertEqual(base.advancement_edges, bracket.advancement_edges[:-2])
+                self.assertEqual(
+                    [
+                        AdvancementEdge(feeders[0], 2, bronze.local_id, 1),
+                        AdvancementEdge(feeders[1], 2, bronze.local_id, 2),
+                    ],
+                    bracket.advancement_edges[-2:],
+                )
+
+    def test_imported_matches_keep_the_positive_loser_only_role(self) -> None:
+        bracket = BracketSkeleton(
+            pairings=[
+                Pairing((1, 2, 3, 4), 1, local_id=0),
+                Pairing((5, 6), 1, local_id=1),
+                Pairing((None, 7), -1, local_id=2),
+                Pairing((None, None), 2, local_id=3),
+                Pairing((None, 8), 2, local_id=4),
+            ],
+            total_rounds=2,
+            advancement_edges=[
+                AdvancementEdge(0, 2, 2, 1),
+                AdvancementEdge(0, 1, 3, 1),
+                AdvancementEdge(1, 2, 3, 2),
+                AdvancementEdge(0, 3, 4, 1),
+            ],
+        )
+        self.assertEqual({4}, bracket.third_place_ids)
+
+    def test_a_bye_does_not_create_a_bronze_opponent(self) -> None:
+        for stage_type, upper, lower in (
+            (StageType.SINGLE_ELIMINATION, 3, 0),
+            (StageType.DOUBLE_ELIMINATION, 3, 0),
+            (StageType.DOUBLE_ELIMINATION, 2, 1),
+        ):
+            with self.subTest(stage_type=stage_type, upper=upper, lower=lower):
+                self.assertEqual(
+                    placeholder_bracket(stage_type, upper, lower_count=lower),
+                    placeholder_bracket(stage_type, upper, lower_count=lower, third_place_match=True),
+                )
 
 
 class PlaceholderBracketInvariants(TestCase):

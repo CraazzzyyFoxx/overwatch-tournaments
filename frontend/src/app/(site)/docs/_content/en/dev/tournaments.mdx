@@ -100,6 +100,7 @@ Generation depends on the stage type:
 - **Round-robin** — circle method, `bye` skipped; no advancement edges at all.
 - **Single and double elimination** — a skeleton plus edges. Double elimination can additionally seed its lower bracket from the stage before it: the `filter` node's `upper` (or `per_item_upper`) says how many of each group's advancing teams start upper; the rest start in the `bracket_lower` item.
   An admin can replace the generated layout with a custom bracket (`Stage.bracket_template`): a slot-by-slot drawing with `U#`/`L#` seed placeholders that preview, planned rounds and generation all build from, editable only while the stage has no matches.
+  The opt-in `third_place_match` stage setting adds a terminal duel with two losing-position edges. It shares the title round but has its own result and does not use the championship best-of override. Saved custom templates own those edges directly.
 - **Swiss** — one round at a time.
 - **Individual Swiss** — one round at a time, dealt from the personal table (see `individual_swiss` above).
 
@@ -138,7 +139,7 @@ The public reads are `/api/v1/tournaments`, `/api/v1/tournaments/{id}`, `/api/v1
 The encounter list filters on `tournament_id`, `stage_id`, `stage_item_id`, `best_of`, `discipline`, `status`, `has_logs`, `is_final`, `is_upset`, `closeness_min`/`closeness_max` and `scope` (`all` or `my_team`), and searches with `query`:
 
 - `status` is a stored status (`open`, `pending`, `completed`) or a derived one: `live` (in play) or `upcoming` (open or pending and not in play). Any other value is a 400.
-- `is_final=true` keeps the last positive round of a single or double elimination stage (a double elimination's grand final); `false` leaves it out. Every encounter also carries `is_final`.
+- `is_final=true` keeps the last positive championship round of an elimination stage; `false` leaves it out. The third-place match never matches this filter and instead carries `is_third_place=true`.
 - `is_upset=true` keeps the completed duels won by the seat standing lower (a larger `position`) in the same stage item; `false` leaves them out.
 - Closeness is the range `[closeness_min, closeness_max)`; a `closeness_max` of 1 closes it.
 - `query` with `fields=name` matches the title (either way round), the seats' names and the player names on their rosters.

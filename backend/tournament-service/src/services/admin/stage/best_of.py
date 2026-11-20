@@ -2,7 +2,7 @@
 
 from collections import Counter, defaultdict
 
-from sqlalchemy import select
+from sqlalchemy import false, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
@@ -11,6 +11,7 @@ from src.domain.admin.best_of import best_of_config, resolve_best_of, resolve_sw
 from src.domain.bracket import SwissThresholds
 from src.services.admin.stage.base import StageServiceBase
 from src.services.admin.stage_common import BRACKET_STAGE_TYPES
+from src.services.bracket.roles import third_place_condition
 from src.services.bracket.swiss_state import bye_rounds
 from src.services.encounter.ffa import ffa_encounter_service
 from src.services.standings.service import rank_group, standings_service
@@ -23,8 +24,8 @@ class StageBestOfMixin(StageServiceBase):
 
         Reads the stage's best-of config and rewrites each encounter's
         ``best_of`` in place (preserving scores/results). Applies the same
-        resolution the generator uses; ``final`` targets the max round among the
-        stage's encounters for elimination stages, and a Swiss stage with
+        resolution the generator uses; ``final`` skips the third-place match
+        and targets the last championship round. A Swiss stage with
         thresholds judges each encounter on the records its teams brought into
         its round. Returns the number of rows whose ``best_of`` actually changed.
         """
@@ -37,26 +38,30 @@ class StageBestOfMixin(StageServiceBase):
             else {}
         )
         is_elimination = stage.stage_type in BRACKET_STAGE_TYPES
+        position = models.BracketEncounter
+        bronze = third_place_condition(position.encounter_id, position.round) if is_elimination else false()
 
         # ``EncounterRepository.list_by_stage`` also predicates on tournament_id
         # and orders the rows; neither matches this backfill's scan.
         result = await session.execute(
-            select(models.Encounter, models.BracketEncounter.round)
-            .join(models.BracketEncounter, models.BracketEncounter.encounter_id == models.Encounter.id)
-            .where(models.BracketEncounter.stage_id == stage_id)
+            select(models.Encounter, position.round, bronze.label("third_place"))
+            .join(position, position.encounter_id == models.Encounter.id)
+            .where(position.stage_id == stage_id)
         )
         rows = result.all()
-        max_round = max((round_number for _encounter, round_number in rows), default=0)
+        max_round = max((round_number for _, round_number, is_bronze in rows if not is_bronze), default=0)
 
         targets: dict[int, int] = {}
-        for encounter, round_number in rows:
+        for encounter, round_number, is_bronze in rows:
             at_stake = stakes.get(encounter.id)
             targets[encounter.id] = (
                 resolve_swiss_best_of(cfg, round_number, qualification=at_stake[0], elimination=at_stake[1])
                 if at_stake is not None
-                else resolve_best_of(cfg, round_number, is_final=is_elimination and round_number == max_round)
+                else resolve_best_of(
+                    cfg, round_number, is_final=is_elimination and not is_bronze and round_number == max_round
+                )
             )
-        moving = sorted(encounter.id for encounter, _round in rows if encounter.best_of != targets[encounter.id])
+        moving = sorted(encounter.id for encounter, _, _ in rows if encounter.best_of != targets[encounter.id])
         if not moving:
             await session.commit()
             return 0
@@ -67,9 +72,7 @@ class StageBestOfMixin(StageServiceBase):
         # reopens also advances into -- or resets -- every encounter its links reach (``reset_downstream``
         # recurses), so that closure is locked up front with it.
         lobby_ids = [
-            encounter.id
-            for encounter, _round in rows
-            if encounter.id in moving and encounter.scoring_preset == "points"
+            encounter.id for encounter, _, _ in rows if encounter.id in moving and encounter.scoring_preset == "points"
         ]
         downstream: list[int] = []
         if lobby_ids:

@@ -195,6 +195,53 @@ class TemplateValidationTests(TestCase):
     def test_single_elimination_has_no_lower_bracket(self) -> None:
         self.assertIn((None, "se_shape"), _codes(_sketch(), StageType.SINGLE_ELIMINATION))
 
+    def test_lower_final_and_its_winner_feeder_may_send_losers_to_bronze(self) -> None:
+        raw = _sketch()
+        # The bronze card's id and position in the list do not identify it.
+        raw["matches"].insert(0, _match(42, 3, _loser(7), _loser(8)))
+        self.assertEqual([], _codes(raw))
+
+    def test_a_loser_edge_cannot_hide_behind_another_drop_from_the_same_match(self) -> None:
+        raw = _sketch()
+        raw["upper_seeds"] = 6
+        raw["matches"][0] = _match(0, 1, _seed("U1"), _seed("U4"), _seed("U5"))
+        raw["matches"][1] = _match(1, 2, _seed("U2"), _seed("U3"), _winner(0))
+        raw["matches"][2] = _match(2, 4, _winner(1), _winner(10))
+        raw["matches"][6] = _match(6, -2, _winner(4), {"source_match": 0, "source_position": 3})
+        raw["matches"][9]["round"] = 5
+        raw["matches"].insert(0, _match(10, 3, _loser(0), _seed("U6")))
+        raw["matches"][7]["slots"].append({"slot": 3, **_loser(10)})
+        raw["matches"].append(_match(11, 5, _loser(8), _loser(7)))
+        self.assertIn((10, 1, "de_upper_loser"), _flags(raw))
+
+    def test_a_lower_final_with_two_losers_cannot_feed_bronze(self) -> None:
+        raw = _sketch()
+        raw["lower_seeds"] = 5
+        raw["matches"][8] = _match(8, -4, _winner(7), _loser(2), _seed("L5"))
+        raw["matches"].append(_match(10, 3, _loser(8), _loser(7)))
+        self.assertIn((10, "final"), _codes(raw))
+
+    def test_only_one_terminal_bronze_with_exact_sources_and_round_is_allowed(self) -> None:
+        bronze = _match(10, 3, _loser(8), _loser(7))
+        for extra in (
+            [_match(10, 3, _loser(8), _loser(6))],  # wrong lower feeder
+            [_match(10, 2, _loser(8), _loser(7))],  # not alongside the final
+            [bronze, _match(11, 3, _loser(8), _loser(7))],
+            [bronze, _match(11, 4, _winner(10), _winner(9))],
+            [bronze, _match(11, 4, _loser(10), _winner(9))],
+            [_match(10, 3, _loser(8), _loser(7), _loser(6))],
+        ):
+            with self.subTest(extra=extra):
+                raw = _sketch()
+                raw["matches"].extend(extra)
+                self.assertTrue(_codes(raw))
+
+    def test_se_quarterfinal_losers_cannot_play_bronze(self) -> None:
+        skeleton = placeholder_bracket(StageType.SINGLE_ELIMINATION, 8)
+        raw = skeleton_to_template(skeleton, upper_seeds=8, lower_seeds=0).model_dump()
+        raw["matches"].append(_match(7, 3, _loser(0), _loser(1)))
+        self.assertTrue(_codes(raw, StageType.SINGLE_ELIMINATION))
+
 
 class TemplateBoundsTests(TestCase):
     """A template arrives from the network: every number it carries is bounded."""
@@ -263,3 +310,22 @@ class TemplateRoundTripTests(TestCase):
                         sorted(skeleton.advancement_edges, key=repr),
                         sorted(back.advancement_edges, key=repr),
                     )
+
+    def test_generated_bronze_loser_links_survive_a_template_round_trip(self) -> None:
+        for stage_type, upper, lower in (
+            (StageType.SINGLE_ELIMINATION, 5, 0),
+            (StageType.DOUBLE_ELIMINATION, 2, 3),
+        ):
+            with self.subTest(stage_type=stage_type):
+                bracket = placeholder_bracket(stage_type, upper, lower_count=lower, third_place_match=True)
+                template = skeleton_to_template(bracket, upper_seeds=upper, lower_seeds=lower)
+                self.assertEqual([], validate_template(template, stage_type))
+                restored = template_to_skeleton(template)
+                self.assertEqual({bracket.pairings[-1].local_id}, restored.third_place_ids)
+                self.assertCountEqual(bracket.advancement_edges, restored.advancement_edges)
+
+    def test_bronze_keeps_the_largest_previously_editable_bracket_editable(self) -> None:
+        bracket = placeholder_bracket(StageType.SINGLE_ELIMINATION, 257, third_place_match=True)
+        template = skeleton_to_template(bracket, upper_seeds=257, lower_seeds=0)
+        self.assertEqual([], validate_template(template, StageType.SINGLE_ELIMINATION))
+        self.assertEqual(257, len(template.matches))

@@ -26,6 +26,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/workspace/timezone";
+import { adminQueryKeys } from "@/lib/admin/query-keys";
 import type { EncounterUpdateInput } from "@/types/admin.types";
 import type { Encounter } from "@/types/encounter.types";
 import type { Stage } from "@/types/tournament.types";
@@ -236,25 +237,25 @@ async function settle(times = 12) {
 async function mount(stage: Stage = playoffStage(), encounters: Encounter[] = ENCOUNTERS) {
   getStages.mockResolvedValue([stage]);
   getTournament.mockResolvedValue({ id: 84, name: "Cup" });
-  getStagesProgress.mockResolvedValue([{ stage_id: 10, total: 7, completed: 0 }]);
+  getStagesProgress.mockResolvedValue([{ stage_id: stage.id, total: encounters.filter((e) => e.stage_id === stage.id).length, completed: 0 }]);
   getTeams.mockResolvedValue({ results: [] });
   getEncounters.mockResolvedValue({ results: encounters, total: encounters.length });
 
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={en}>
-        <QueryClientProvider
-          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-        >
+        <QueryClientProvider client={client}>
           <BracketTabPage />
         </QueryClientProvider>
       </NextIntlClientProvider>
     );
   });
   await settle();
+  return client;
 }
 
 async function click(element: Element | null | undefined) {
@@ -365,6 +366,37 @@ beforeEach(() => {
     container.remove();
   }
   updateEncounter.mockResolvedValue(undefined);
+});
+
+describe("Stage editor third-place setting", () => {
+  const control = () => container.querySelector<HTMLButtonElement>('[role="switch"][id$="-third-place"]');
+
+  it("saves the opt-in and invalidates the generated template", async () => {
+    const stage = playoffStage();
+    const client = await mount(stage, []);
+    const key = adminQueryKeys.stageBracketTemplate(stage.id);
+    client.setQueryData(key, { custom: false });
+    updateStage.mockResolvedValue({ ...stage, third_place_match: true });
+    expect(control()?.getAttribute("aria-checked")).toBe("false");
+    await click(control());
+    await click(saveButton());
+    expect(updateStage).toHaveBeenCalledWith(stage.id, expect.objectContaining({ third_place_match: true }));
+    expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+  });
+
+  it.each([
+    { custom: true, encounters: [], hint: en.adminBracket.settings.thirdPlaceCustom },
+    { custom: false, encounters: ENCOUNTERS, hint: en.adminBracket.settings.thirdPlaceLocked }
+  ])("explains the lock for custom=$custom", async ({ custom, encounters, hint }) => {
+    await mount({ ...playoffStage(), has_custom_bracket: custom }, encounters);
+    expect(control()?.disabled).toBe(true);
+    expect(container.textContent).toContain(hint);
+  });
+
+  it("does not offer the option in non-elimination stages", async () => {
+    await mount({ ...playoffStage(), stage_type: "swiss" }, []);
+    expect(control()).toBeNull();
+  });
 });
 
 describe("Stage editor round schedule", () => {

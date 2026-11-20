@@ -27,6 +27,7 @@ from src import schemas
 from src.domain.bracket import SwissThresholds
 from src.domain.individual_swiss import PoolError, PoolPlayer, check_playoff_team_count, teams_per_round
 from src.services.admin.stage.base import StageServiceBase
+from src.services.admin.stage_common import BRACKET_STAGE_TYPES
 from src.services.flow.corrections import assert_stage_correction_allowed
 from src.services.individual_swiss.standings import DEFAULT_PLAYOFF_TEAMS, stage_players
 from src.services.tournament.events import enqueue_tournament_recalculation
@@ -86,6 +87,20 @@ def _normalize_individual_swiss(stage: models.Stage) -> None:
         stage.playoff_team_count = None
         stage.rank_win_delta = None
         stage.rank_loss_delta = None
+
+
+def _validate_third_place_match(stage_type: enums.StageType, enabled: bool) -> None:
+    if enabled and stage_type not in BRACKET_STAGE_TYPES:
+        raise ApiHTTPException(
+            status_code=422,
+            detail=[
+                ApiExc(
+                    code="third_place_requires_elimination",
+                    field="third_place_match",
+                    msg="Only elimination stages can generate a third-place match",
+                )
+            ],
+        )
 
 
 def rule_values(stage_type: enums.StageType, block: dict[str, Any]) -> dict[str, Any]:
@@ -212,6 +227,7 @@ class StageCrudMixin(StageServiceBase):
         self, session: AsyncSession, tournament_id: int, data: schemas.StageCreate
     ) -> models.Stage:
         """The stage row with its scoring rule and Challonge link: flushes; no node, publish or commit."""
+        _validate_third_place_match(data.stage_type, data.third_place_match)
         tournament = await self.tournament_repo.get(session, tournament_id)
         if not tournament:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
@@ -303,9 +319,19 @@ class StageCrudMixin(StageServiceBase):
         -- a published Swiss silently becoming a single elimination leaves the
         bracket it already produced meaning nothing.
         """
-        stage = await self.get_stage(session, stage_id)
-        tournament_id = stage.tournament_id
         update_data = data.model_dump(exclude_unset=True)
+        changes_shape = "stage_type" in update_data or "third_place_match" in update_data
+        if changes_shape:
+            # Tournament before stage: the order flow transitions and bracket jobs already use.
+            tournament_id = await self.get_tournament_id(session, stage_id)
+            await session.execute(
+                select(models.Tournament.id)
+                .where(models.Tournament.id == tournament_id)
+                .with_for_update(key_share=True)
+            )
+            await self._lock_stage(session, stage_id)
+        stage = await self.get_stage(session, stage_id, populate_existing=changes_shape)
+        tournament_id = stage.tournament_id
 
         next_type = update_data.get("stage_type", stage.stage_type)
         if next_type != stage.stage_type:
@@ -323,6 +349,17 @@ class StageCrudMixin(StageServiceBase):
                         "matches; delete them first"
                     ),
                 )
+        if "third_place_match" in update_data:
+            _validate_third_place_match(next_type, update_data["third_place_match"])
+        if next_type not in BRACKET_STAGE_TYPES and stage.third_place_match:
+            update_data["third_place_match"] = False
+        if update_data.get("third_place_match", stage.third_place_match) != stage.third_place_match:
+            if stage.bracket_template is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Edit the third-place match in the custom bracket",
+                )
+            await self._assert_no_encounters(session, stage_id)
 
         rule_before = rule_values(stage.stage_type, stage.scoring)
         if "scoring" in update_data:

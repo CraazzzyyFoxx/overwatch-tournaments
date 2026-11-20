@@ -31,6 +31,7 @@ from shared.services.participant_result import write_participant_results
 from src import schemas
 from src.domain.bracket.swiss import SwissThresholds
 from src.domain.stage.pins import apply_pins
+from src.services.bracket.roles import third_place_condition
 from src.services.bracket.swiss_state import bye_counts_by_scope, stopped_scopes
 from src.services.encounter.ffa import ffa_encounter_service
 from src.services.individual_swiss.standings import recalculate_individual_stage
@@ -234,8 +235,12 @@ def _rounds(encounters: typing.Sequence[StageEncounter]) -> dict[int, int]:
 def _completed_encounters_in_finished_rounds(
     encounters: typing.Sequence[StageEncounter],
 ) -> list[StageEncounter]:
-    """Ignore partially completed playable rounds for standings purposes."""
-    return _shared_completed_encounters_in_finished_rounds(encounters, _rounds(encounters))
+    """Ignore partially completed rounds; a bronze result closes on its own."""
+    regular = [encounter for encounter in encounters if not encounter.third_place]
+    return [
+        *_shared_completed_encounters_in_finished_rounds(regular, _rounds(regular)),
+        *(encounter for encounter in encounters if encounter.third_place and is_completed_encounter(encounter)),
+    ]
 
 
 def _assign_final_round_placements(
@@ -612,8 +617,6 @@ def prepare_teams_for_playoffs_double_elimination(
         participant: {"win": 0, "lose": 0, "placement": 0} for participant in participants
     }
 
-    _assign_final_round_placements(encounters, data)
-
     for encounter in completed_encounters:
         winner = encounter.winner()
         if winner is not None:
@@ -638,6 +641,9 @@ def prepare_teams_for_playoffs_double_elimination(
         for loser in losers:
             data[loser]["placement"] = global_placement
         global_placement -= 1
+
+    # The bronze result overrides the lower bracket's provisional 3rd/4th.
+    _assign_final_round_placements(encounters, data)
 
     output: list[schemas.StandingTeamDataWithRanking] = []
     for team_id, team_data in data.items():
@@ -674,7 +680,7 @@ def prepare_teams_for_playoffs_single_elimination(
             data[winner]["win"] += 1
         for loser_id in _loser_ids(encounter):
             data[loser_id]["lose"] += 1
-            if round_of_loss[loser_id] is None:
+            if not encounter.third_place and round_of_loss[loser_id] is None:
                 round_of_loss[loser_id] = encounter.round
 
     valid_rounds = [encounter.round for encounter in completed_encounters if encounter.round > 0]
@@ -1153,32 +1159,21 @@ class StandingsService:
     async def load_stage_encounters(self, session: AsyncSession, stage_id: int) -> list[StageEncounter]:
         """One stage's encounters, flattened for the ranking engine.
 
-        Three queries for the whole stage: the cards with their bracket positions,
-        every live participation of them, and the upper-round cards only losers
-        feed (third-place matches). The engine never touches an ORM row
-        afterwards, which is what keeps it testable without a database.
+        Load bracket positions and roles together, then fetch the live seats in bulk.
         """
         rows = (
             await session.execute(
-                sa.select(models.Encounter, models.BracketEncounter)
+                sa.select(
+                    models.Encounter,
+                    models.BracketEncounter,
+                    third_place_condition(models.BracketEncounter.encounter_id, models.BracketEncounter.round),
+                )
                 .join(models.BracketEncounter, models.BracketEncounter.encounter_id == models.Encounter.id)
                 .where(models.BracketEncounter.stage_id == stage_id)
                 .order_by(models.Encounter.id)
             )
         ).all()
-        seats = await self._seats_by_encounter(session, [encounter.id for encounter, _position in rows])
-        third_place = set(
-            await session.scalars(
-                sa.select(models.EncounterLink.target_encounter_id)
-                .join(
-                    models.BracketEncounter,
-                    models.BracketEncounter.encounter_id == models.EncounterLink.target_encounter_id,
-                )
-                .where(models.BracketEncounter.stage_id == stage_id, models.BracketEncounter.round > 0)
-                .group_by(models.EncounterLink.target_encounter_id)
-                .having(sa.func.min(models.EncounterLink.source_position) > 1)
-            )
-        )
+        seats = await self._seats_by_encounter(session, [encounter.id for encounter, _, _ in rows])
         return [
             StageEncounter(
                 id=encounter.id,
@@ -1187,9 +1182,9 @@ class StandingsService:
                 stage_item_id=position.stage_item_id,
                 completed=is_completed_encounter(encounter),
                 seats=tuple(seats.get(encounter.id, ())),
-                third_place=encounter.id in third_place,
+                third_place=third_place,
             )
-            for encounter, position in rows
+            for encounter, position, third_place in rows
         ]
 
     async def get_completed_match_history_by_tournament(
@@ -1217,7 +1212,11 @@ class StandingsService:
         part of any stage's history and never enters the join.
         """
         query = (
-            sa.select(models.Encounter, models.BracketEncounter)
+            sa.select(
+                models.Encounter,
+                models.BracketEncounter,
+                third_place_condition(models.BracketEncounter.encounter_id, models.BracketEncounter.round),
+            )
             .join(models.BracketEncounter, models.BracketEncounter.encounter_id == models.Encounter.id)
             .options(selectinload(models.Encounter.teams))
             .where(models.Encounter.tournament_id == tournament_id)
@@ -1230,9 +1229,9 @@ class StandingsService:
             )
         )
         rows = (await session.execute(query)).all()
-        by_id = {encounter.id: (encounter, position) for encounter, position in rows}
+        by_id = {encounter.id: (encounter, position) for encounter, position, _ in rows}
         by_scope: defaultdict[tuple[int | None, int | None], list[StageEncounter]] = defaultdict(list)
-        for encounter, position in rows:
+        for encounter, position, third_place in rows:
             by_scope[(position.stage_id, position.stage_item_id)].append(
                 StageEncounter(
                     id=encounter.id,
@@ -1246,6 +1245,7 @@ class StandingsService:
                         for row in sorted(encounter.teams, key=lambda row: row.slot)
                         if row.active and row.team_id is not None
                     ),
+                    third_place=third_place,
                 )
             )
         # Groups are keyed by the leading ORDER BY columns and each keeps its

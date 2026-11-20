@@ -25,6 +25,7 @@ from shared.services.stats_evidence import capture_stats_evidence, owner_scopes,
 from shared.services.stats_owner_delete import capture_owner_delete, stage_owner_delete
 from src import schemas
 from src.services.bracket.advancement import reset_downstream
+from src.services.bracket.roles import third_place_condition
 from src.services.bracket.swiss_state import remove_swiss_bye_round
 from src.services.flow.corrections import assert_encounter_correction_allowed
 from src.services.notifications.lifecycle import after_encounter_teams_changed, lifecycle_notifier
@@ -498,6 +499,19 @@ class AdminEncounterService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Target encounter does not belong to the same stage",
+            )
+        if source is not target and await session.scalar(
+            select(models.BracketEncounter.encounter_id)
+            .where(
+                models.BracketEncounter.encounter_id.in_((source.id, target.id)),
+                third_place_condition(models.BracketEncounter.encounter_id, models.BracketEncounter.round),
+            )
+            .limit(1)
+        ):
+            # Its two loser links define the card; moving one would make another card bronze.
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A third-place match can only swap its own two seats",
             )
 
         touched = [source] if source is target else [source, target]

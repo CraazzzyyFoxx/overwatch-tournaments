@@ -521,7 +521,7 @@ export function buildLayout(
   }
 
   if (isDE && finalRounds.length > 0) {
-    const gfMatch = finalRounds[0].matches[0];
+    const gfMatch = finalRounds[0].matches.find((match) => !match.is_third_place);
     const gfNode = gfMatch ? nodesById.get(`match-${gfMatch.id}`) : undefined;
 
     if (gfNode && gfMatch && !wiredTargets.has(gfMatch.id)) {
@@ -535,7 +535,7 @@ export function buildLayout(
     // GF → GF Reset edge (if reset match exists).
     const gfrMatch = finalRounds[1]?.matches[0];
     const gfrNode = gfrMatch ? nodesById.get(`match-${gfrMatch.id}`) : undefined;
-    if (gfNode && gfrNode) edges.push(edgeBetween(gfNode, gfrNode));
+    if (gfNode && gfrNode && !wiredTargets.has(gfrNode.encounter.id)) edges.push(edgeBetween(gfNode, gfrNode));
   }
 
   const height = fullContentHeight + PADDING_Y;

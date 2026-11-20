@@ -67,7 +67,10 @@ async def persist_skeleton(
     names_by_id = {team_id: seat.name for team_id, seat in teams_by_id.items()}
     encounters: list[Encounter] = []
     by_local_id: dict[int, Encounter] = {}
-    max_round = max((pairing.round_number for pairing in skeleton.pairings), default=0)
+    third_place_ids = skeleton.third_place_ids if is_elimination else set()
+    max_round = max(
+        (pairing.round_number for pairing in skeleton.pairings if pairing.local_id not in third_place_ids), default=0
+    )
     for pairing in skeleton.pairings:
         encounter = Encounter(
             workspace_id=tournament.workspace_id,
@@ -80,7 +83,9 @@ async def persist_skeleton(
             if pairing.best_of is not None
             else best_of_for_round(
                 pairing.round_number,
-                is_final=is_elimination and pairing.round_number == max_round,
+                is_final=is_elimination
+                and pairing.round_number == max_round
+                and pairing.local_id not in third_place_ids,
             ),
             status=enums.EncounterStatus.OPEN,
         )

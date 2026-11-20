@@ -174,10 +174,11 @@ class EncounterRead(BaseRead):
     played_at: datetime | None = None
     #: The server's one reading of "in play" (``service._live_condition``); readers never re-derive it from the clocks.
     is_live: bool = False
-    #: The last positive round of an elimination stage (``service._is_final_condition``) -- the same predicate as the
+    #: The last positive championship round (excluding the third-place match) -- the same predicate as the
     #: browse's ``is_final`` filter. Set on the browse, the detail and the overview/insights strips; a match's nested
     #: encounter leaves it ``False``, like ``played_at``.
     is_final: bool = False
+    is_third_place: bool = False
 
     stage: StageSummaryRead | None
     stage_item: StageItemSummaryRead | None

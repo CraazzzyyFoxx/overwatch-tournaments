@@ -96,16 +96,17 @@ export function MatchCard({
   );
   const body = (
     <>
-      {/* The mini tile sits under a column heading that already names the
-          round, so it carries no eyebrow of its own — only the live marker. */}
-      {size === "md" || live ? (
+      {/* The compact card's column names the round, but not a third-place match sharing it. */}
+      {size === "md" || live || encounter.is_third_place ? (
         <div
           className={cn(
             eyebrowClass(),
             "flex items-center justify-between gap-2 border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-2.5 py-1"
           )}
         >
-          <span className="truncate">{size === "md" ? eyebrow : null}</span>
+          <span className="truncate">
+            {size === "md" ? eyebrow : encounter.is_third_place ? t("bracket.thirdPlace") : null}
+          </span>
           {live ? (
             <TournamentStatusPill status="live" className="shrink-0 px-1.5 py-0">
               {t("common.live")}

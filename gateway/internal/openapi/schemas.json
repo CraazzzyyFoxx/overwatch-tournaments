@@ -44226,7 +44226,7 @@
           "items": {
             "$ref": "#/components/schemas/tournament.TemplateMatch"
           },
-          "maxItems": 256,
+          "maxItems": 257,
           "minItems": 1,
           "title": "Matches",
           "type": "array"
@@ -48547,6 +48547,11 @@
         "is_live": {
           "default": false,
           "title": "Is Live",
+          "type": "boolean"
+        },
+        "is_third_place": {
+          "default": false,
+          "title": "Is Third Place",
           "type": "boolean"
         },
         "matches": {
@@ -59059,6 +59064,11 @@
           "default": null,
           "title": "Swiss Qualify Wins"
         },
+        "third_place_match": {
+          "default": false,
+          "title": "Third Place Match",
+          "type": "boolean"
+        },
         "tiebreak_order": {
           "anyOf": [
             {
@@ -59607,6 +59617,11 @@
           "default": null,
           "title": "Swiss Qualify Wins"
         },
+        "third_place_match": {
+          "default": false,
+          "title": "Third Place Match",
+          "type": "boolean"
+        },
         "tiebreak_order": {
           "anyOf": [
             {
@@ -60058,6 +60073,11 @@
           "default": null,
           "title": "Swiss Qualify Wins"
         },
+        "third_place_match": {
+          "default": false,
+          "title": "Third Place Match",
+          "type": "boolean"
+        },
         "tiebreak_order": {
           "anyOf": [
             {
@@ -60294,6 +60314,11 @@
           ],
           "default": null,
           "title": "Swiss Qualify Wins"
+        },
+        "third_place_match": {
+          "default": false,
+          "title": "Third Place Match",
+          "type": "boolean"
         },
         "tiebreak_order": {
           "anyOf": [

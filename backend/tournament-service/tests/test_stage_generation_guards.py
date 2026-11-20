@@ -294,11 +294,11 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             stage_type=enums.StageType.SINGLE_ELIMINATION,
             items=[_item(1, "Bracket")],
             is_published=False,
-            **stage_regulation(),
+            **stage_regulation(third_place_match=True),
         )
-        # The TBD bracket generated earlier: two semifinals and a final.
-        existing = [_encounter(1, 10), _encounter(1, 11), _encounter(2, 12)]
-        session = _queued_session([_rows_result([(1, 3)]), _tuples_result(existing)])
+        # The TBD bracket generated earlier: two semifinals, a final and bronze.
+        existing = [_encounter(1, 10), _encounter(1, 11), _encounter(2, 12), _encounter(2, 13)]
+        session = _queued_session([_rows_result([(1, 4)]), _tuples_result(existing)])
 
         with (
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=stage)),
@@ -327,7 +327,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             [(call.args[1].id, call.kwargs["slot"], call.kwargs["team_id"]) for call in seat.await_args_list],
         )
         self.assertEqual("A vs D", existing[0][0].name)
-        self.assertEqual("TBD vs TBD", existing[2][0].name)
+        self.assertEqual(["TBD vs TBD", "TBD vs TBD"], [encounter.name for encounter, _ in existing[2:]])
 
     async def test_refuses_to_reseed_a_bracket_that_is_already_being_played(self) -> None:
         stage = SimpleNamespace(

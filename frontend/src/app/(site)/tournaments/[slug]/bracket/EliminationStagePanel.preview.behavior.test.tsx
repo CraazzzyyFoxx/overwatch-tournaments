@@ -228,6 +228,15 @@ describe("EliminationStagePanel preview", () => {
     expect(container.textContent).not.toContain(en.bracket.reportMatch);
   });
 
+  it("labels the mobile bronze separately and keeps its own published actions", () => {
+    isMobile = true;
+    renderPanel(true, [encounter, { ...encounter, id: 12, is_third_place: true }]);
+    const bronze = container.querySelector('a[href="/encounters/12"]')?.closest("li");
+    expect(bronze?.textContent).toContain(en.bracket.thirdPlace);
+    expect(bronze?.textContent).toContain(en.bracket.reportMatch);
+    expect(container.querySelector('a[href="/encounters/11"]')?.textContent).not.toContain(en.bracket.thirdPlace);
+  });
+
   it("still switches between the bracket and the standings", () => {
     renderPanel(false);
 
@@ -260,6 +269,14 @@ describe("EliminationStagePanel preview", () => {
           { local_id: 1, source_position: 1, slot: 1 },
           { local_id: 2, source_position: 1, slot: 2 }
         ]
+      },
+      {
+        local_id: 4, round: 2, name: "TBD vs TBD", best_of: 3, is_third_place: true,
+        slot_count: 2, team_ids: [null, null],
+        sources: [
+          { local_id: 1, source_position: 2, slot: 1 },
+          { local_id: 2, source_position: 2, slot: 2 }
+        ]
       }
     ]);
     renderPanel(false, []);
@@ -274,7 +291,10 @@ describe("EliminationStagePanel preview", () => {
     expect(getStageBracketPreview).toHaveBeenCalledWith(1, 3);
     expect(container.textContent).not.toContain(en.common.noMatches.replace("{stage}", "Playoffs"));
     expect(container.textContent).toContain("M3");
-    expect(container.textContent).not.toContain("M4");
+    const bronze = container.querySelector('[data-match-id="4"]');
+    expect(bronze?.textContent).toContain(en.bracket.thirdPlace);
+    expect(bronze?.textContent).toContain("L M1");
+    expect(bronze?.textContent).toContain("L M2");
     expect(container.querySelector("a")).toBeNull();
   });
 });

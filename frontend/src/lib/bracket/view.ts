@@ -30,6 +30,7 @@ export interface BracketMatch {
   id: number;
   name?: string | null;
   round: number;
+  is_third_place?: boolean;
   status: string;
   best_of?: number | null;
   slot_count?: number;
@@ -64,6 +65,7 @@ export function previewToBracketMatches(
     id: row.local_id,
     name: row.name,
     round: row.round,
+    is_third_place: row.is_third_place,
     status: "open",
     best_of: row.best_of,
     slot_count: row.slot_count,
@@ -208,6 +210,7 @@ export function getDoubleEliminationFinalRounds(encounters: BracketMatch[]): Set
 
   const matchesPerRound = new Map<number, number>();
   for (const match of encounters) {
+    if (match.is_third_place) continue;
     matchesPerRound.set(match.round, (matchesPerRound.get(match.round) ?? 0) + 1);
   }
   return new Set(getFinalRounds(true, [...matchesPerRound.keys()], matchesPerRound));
@@ -311,6 +314,7 @@ export function activeRoundNumber(groups: RoundGroup[]): number | null {
 export interface StageScopedRound {
   stage_id: number | null;
   round: number;
+  is_third_place?: boolean;
 }
 
 /**
@@ -330,7 +334,7 @@ function stageFinalRounds(
 
   const matchesPerRound = new Map<number, number>();
   for (const encounter of encounters ?? []) {
-    if (encounter.stage_id !== stageId) continue;
+    if (encounter.stage_id !== stageId || encounter.is_third_place) continue;
     matchesPerRound.set(encounter.round, (matchesPerRound.get(encounter.round) ?? 0) + 1);
   }
   return getFinalRounds(true, rounds, matchesPerRound.size > 0 ? matchesPerRound : undefined);
@@ -516,7 +520,7 @@ function inferBracketSlotHints(
   }
 
   if (isDE && finalRounds.length > 0) {
-    const grandFinal = finalRounds[0]?.matches[0];
+    const grandFinal = finalRounds[0].matches.find((match) => !match.is_third_place);
     if (grandFinal) {
       const upperFinal = upperRounds[upperRounds.length - 1]?.matches[0];
       const lowerFinal = lowerRounds[lowerRounds.length - 1]?.matches[0];

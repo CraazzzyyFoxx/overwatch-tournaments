@@ -95,8 +95,9 @@ export interface Encounter {
   played_at: string | null;
   /** The server's live definition; never re-derive it from the stamps. */
   is_live: boolean;
-  /** In the last positive round of an elimination stage: the server's "final" (`is_final` filter). */
+  /** Championship round, excluding a third-place match in the same round. */
   is_final: boolean;
+  is_third_place?: boolean;
   /** Empty on a bracket whose advancement edges were never recorded. */
   sources?: EncounterSlotSource[];
 

@@ -153,7 +153,7 @@ export function MobileBracket({
                 >
                   <MatchCard
                     encounter={encounter}
-                    eyebrow={`${label(match.round)} · Bo${encounter.best_of}`}
+                    eyebrow={`${match.is_third_place ? t("bracket.thirdPlace") : label(match.round)} · Bo${encounter.best_of}`}
                     href={interactive ? `/encounters/${match.id}` : undefined}
                   />
                   {editable || reportable || liveStreams.length > 0 ? (

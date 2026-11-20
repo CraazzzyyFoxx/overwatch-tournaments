@@ -62,6 +62,7 @@ def stage_regulation(*, by_round: dict[int, int] | None = None, **overrides: Any
         "swiss_qualify_wins": None,
         "swiss_eliminate_losses": None,
         "de_grand_final_type": "no_reset",
+        "third_place_match": False,
         "seed_ranking": "slot",
         "best_of_default": 3,
         "best_of_final": None,

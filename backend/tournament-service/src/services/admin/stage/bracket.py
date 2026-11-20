@@ -71,7 +71,9 @@ class StageBracketMixin(StageServiceBase):
             return sorted({match["round"] for match in stage.bracket_template["matches"]})
 
         upper_count, lower_count = await self._bracket_seed_counts(session, stage, estimate=True)
-        skeleton = placeholder_bracket(stage.stage_type, upper_count, lower_count=lower_count)
+        skeleton = placeholder_bracket(
+            stage.stage_type, upper_count, lower_count=lower_count, third_place_match=stage.third_place_match
+        )
         return sorted({pairing.round_number for pairing in skeleton.pairings})
 
     async def get_bracket_preview(self, session: AsyncSession, stage_id: int) -> dict:
@@ -119,7 +121,11 @@ class StageBracketMixin(StageServiceBase):
 
         team_names_by_id = await self._load_team_names(session, upper_ids + lower_ids)
         best_of_cfg = best_of_config(stage)
-        max_round = max((pairing.round_number for pairing in skeleton.pairings), default=0)
+        third_place_ids = skeleton.third_place_ids
+        max_round = max(
+            (pairing.round_number for pairing in skeleton.pairings if pairing.local_id not in third_place_ids),
+            default=0,
+        )
         sources: dict[int, list[dict]] = {}
         for edge in skeleton.advancement_edges:
             # A PLACE in the source encounter and a SEAT of the target: no
@@ -141,8 +147,9 @@ class StageBracketMixin(StageServiceBase):
                     "best_of": resolve_best_of(
                         best_of_cfg,
                         pairing.round_number,
-                        is_final=pairing.round_number == max_round,
+                        is_final=pairing.round_number == max_round and pairing.local_id not in third_place_ids,
                     ),
+                    "is_third_place": pairing.local_id in third_place_ids,
                     "slot_count": pairing.slot_count,
                     "team_ids": list(pairing.team_ids),
                     "sources": sources.get(pairing.local_id, []),
@@ -165,7 +172,9 @@ class StageBracketMixin(StageServiceBase):
                 ),
             )
         if stage.bracket_template is None:
-            return generate_bracket(stage.stage_type, upper_ids, lower_bracket_team_ids=lower_ids)
+            return generate_bracket(
+                stage.stage_type, upper_ids, lower_bracket_team_ids=lower_ids, third_place_match=stage.third_place_match
+            )
         template = BracketTemplate.model_validate(stage.bracket_template)
         if (len(upper_ids), len(lower_ids)) != (template.upper_seeds, template.lower_seeds):
             raise HTTPException(
@@ -195,7 +204,9 @@ class StageBracketMixin(StageServiceBase):
         if stage.bracket_template is not None:
             template: dict | None = BracketTemplate.model_validate(stage.bracket_template).model_dump(mode="json")
         elif upper >= 2:
-            generated = placeholder_bracket(stage.stage_type, upper, lower_count=lower)
+            generated = placeholder_bracket(
+                stage.stage_type, upper, lower_count=lower, third_place_match=stage.third_place_match
+            )
             template = skeleton_to_template(generated, upper_seeds=upper, lower_seeds=lower).model_dump(mode="json")
         else:
             template = None

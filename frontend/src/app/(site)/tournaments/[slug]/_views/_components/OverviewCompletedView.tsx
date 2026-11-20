@@ -111,8 +111,8 @@ function TopHeroesCard({
 }
 
 /**
- * The finished tournament's podium: off the grand final (and the lower final
- * for third) of a bracket, else off the standings of a group-only event.
+ * A bracket's title comes from the final; its third place comes from the
+ * stage standings for a bronze playoff, otherwise from the legacy lower final.
  */
 function useCompletedPodium({
   encounters,
@@ -177,7 +177,10 @@ function useCompletedPodium({
       })
     );
     let third: PodiumTeam | null = null;
-    if (lowerFinal) {
+    if (podiumNeedsStandings) {
+      const row = standings.find((entry) => entry.stage_id === stageId && entry.position === 3);
+      if (row) third = podiumTeam(teamById.get(row.team_id) ?? row.team, t("bracket.thirdPlace"));
+    } else if (lowerFinal) {
       const lowerWinner = getEncounterWinner(lowerFinal);
       third = podiumTeam(
         seatAt(lowerFinal.teams, lowerWinner === 1 ? 2 : 1),
@@ -187,7 +190,7 @@ function useCompletedPodium({
       );
     }
     if (first && second) podium = { first, second, third };
-  } else if (podiumNeedsStandings) {
+  } else if (podiumNeedsStandings && (!stage || !ELIMINATION_TYPES[stage.stage_type])) {
     // Group-only: third by standings (plan §5).
     // One row per team: across consecutive group stages a team owns several
     // standings, and unranked rows sit at overall_position 0.
@@ -384,6 +387,7 @@ function MyTournamentCard({
   stageId: number | null;
 }>) {
   const t = useTranslations("tournamentDetail");
+  const tBracket = useTranslations("bracket");
   const format = useFormatter();
   const roundLabel = useBracketRoundLabel();
   const entry = roster.byUser.get(viewerId);
@@ -497,9 +501,9 @@ function MyTournamentCard({
                   encounter={encounter}
                   seat={seat}
                   round={
-                    encounter.stage_id === stageId
-                      ? roundLabel(encounter.round, roundShape)
-                      : t("common.round", { round: encounter.round })
+                    encounter.is_third_place ? tBracket("thirdPlace") :
+                      encounter.stage_id === stageId ? roundLabel(encounter.round, roundShape) :
+                        t("common.round", { round: encounter.round })
                   }
                 />
               </li>

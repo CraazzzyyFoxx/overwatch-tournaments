@@ -99,8 +99,9 @@ interface TemplateMatchCardProps {
   match: DraftMatch;
   /** Seeds no slot holds yet: everything the slot menu may offer. */
   availableSeeds: string[];
-  /** A DE upper match that is not the final — the only kind that drops a loser. */
+  /** A normal DE drop or an eligible third-place feeder. */
   showLoserPort: boolean;
+  canConnect: boolean;
   connecting: ConnectSource | null;
   onPort: (role: "winner" | "loser") => void;
   onConnect: (slot: DuelSlot) => void;
@@ -121,6 +122,7 @@ export function TemplateMatchCard({
   match,
   availableSeeds,
   showLoserPort,
+  canConnect,
   connecting,
   onPort,
   onConnect,
@@ -130,8 +132,9 @@ export function TemplateMatchCard({
   onDelete
 }: Readonly<TemplateMatchCardProps>) {
   const t = useTranslations("bracketEditor");
+  const tBracket = useTranslations("bracket");
   // A match cannot feed itself, so its own rows are never targets.
-  const targeting = connecting !== null && connecting.source !== match.id;
+  const targeting = canConnect && connecting !== null && connecting.source !== match.id;
 
   const slotRow = (slotNumber: DuelSlot) => {
     const slot = match.slots[slotNumber - 1] ?? null;
@@ -191,7 +194,7 @@ export function TemplateMatchCard({
             </RowButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
-            {availableSeeds.map((seed) => (
+            {!match.thirdPlace && availableSeeds.map((seed) => (
               <DropdownMenuItem key={seed} onSelect={() => onSeed(slotNumber, seed)}>
                 {seed}
               </DropdownMenuItem>
@@ -202,7 +205,7 @@ export function TemplateMatchCard({
       );
     }
 
-    return (
+    return match.thirdPlace ? control : (
       <SlotDnd
         data={{ match: match.id, slot: slotNumber, round: match.round, label }}
         draggable={!targeting && slot?.seed != null}
@@ -248,11 +251,12 @@ export function TemplateMatchCard({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {match.thirdPlace && <span className="text-label">{tBracket("thirdPlace")}</span>}
         </div>
       </div>
 
       {/* The outputs, on the edge the connectors leave from. */}
-      <div className="flex shrink-0 flex-col items-center justify-center gap-1 border-l border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-1">
+      {!match.thirdPlace && <div className="flex shrink-0 flex-col items-center justify-center gap-1 border-l border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-1">
         <Button
           type="button"
           variant="outline"
@@ -289,7 +293,7 @@ export function TemplateMatchCard({
             L
           </Button>
         ) : null}
-      </div>
+      </div>}
     </div>
   );
 }

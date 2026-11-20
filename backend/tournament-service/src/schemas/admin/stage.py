@@ -33,6 +33,7 @@ class StageCreate(BaseModel):
     swiss_qualify_wins: int | None = Field(default=None, ge=1)
     swiss_eliminate_losses: int | None = Field(default=None, ge=1)
     de_grand_final_type: GrandFinalType = "no_reset"
+    third_place_match: bool = False
     seed_ranking: SeedRankingValue = "slot"
     pairing_mode: StagePairingMode | None = None
     playoff_team_count: int | None = Field(default=None, ge=1)
@@ -61,6 +62,7 @@ class StageUpdate(BaseModel):
     swiss_qualify_wins: int | None = Field(default=None, ge=1)
     swiss_eliminate_losses: int | None = Field(default=None, ge=1)
     de_grand_final_type: GrandFinalType = "no_reset"
+    third_place_match: bool = False
     seed_ranking: SeedRankingValue = "slot"
     pairing_mode: StagePairingMode | None = None
     playoff_team_count: int | None = Field(default=None, ge=1)

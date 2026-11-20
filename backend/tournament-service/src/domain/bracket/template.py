@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from shared.core.enums import StageType
 
-from .types import AdvancementEdge, BracketSkeleton, Pairing
+from .types import AdvancementEdge, BracketSkeleton, Pairing, third_place_sources
 
 __all__ = (
     "BracketTemplate",
@@ -78,7 +78,8 @@ class BracketTemplate(BaseModel):
     version: Literal[1] = 1
     upper_seeds: int = Field(ge=2, le=512)
     lower_seeds: int = Field(ge=0, le=512)
-    matches: list[TemplateMatch] = Field(min_length=1, max_length=256)
+    # One extra card for a validated third-place match; ``validate_template`` enforces the old cap otherwise.
+    matches: list[TemplateMatch] = Field(min_length=1, max_length=257)
 
 
 @dataclass(frozen=True)
@@ -152,6 +153,37 @@ def skeleton_to_template(skeleton: BracketSkeleton, *, upper_seeds: int, lower_s
     )
 
 
+def _terminal_third_place(
+    terminals: list[TemplateMatch],
+    by_id: dict[int, TemplateMatch],
+    feeds: dict[tuple[int, int], tuple[int, int]],
+    stage_type: StageType,
+) -> TemplateMatch | None:
+    if len(terminals) != 2 or stage_type not in (StageType.SINGLE_ELIMINATION, StageType.DOUBLE_ELIMINATION):
+        return None
+    a, b = terminals
+    if a.round != b.round or a.round <= 0:
+        return None
+    for bronze, title in ((a, b), (b, a)):
+        if len(bronze.slots) != 2 or not all(slot.source_position == 2 for slot in bronze.slots):
+            continue
+        if (bronze.id, 2) in feeds:  # Its winner is already terminal; its loser must be out too.
+            continue
+        double_elimination = stage_type == StageType.DOUBLE_ELIMINATION
+        winner_targets = {
+            source: target
+            for (source, position), (target, _) in feeds.items()
+            if position == 1 and (by_id[source].round < 0) == double_elimination
+        }
+        expected = third_place_sources(title.id, winner_targets, double_elimination=double_elimination)
+        # A wider feeder would leave more than one team on the provisional place bronze replaces.
+        if all(len(by_id[source].slots) == 2 for source in expected) and {
+            slot.source_match for slot in bronze.slots
+        } == set(expected):
+            return bronze
+    return None
+
+
 def validate_template(template: BracketTemplate, stage_type: StageType) -> list[TemplateProblem]:
     """Every convention ``template`` breaks, in match order; ``[]`` when it is sound."""
     problems: list[TemplateProblem] = []
@@ -172,7 +204,7 @@ def validate_template(template: BracketTemplate, stage_type: StageType) -> list[
 
     seeded = Counter(slot.seed for match in template.matches for slot in match.slots if slot.seed is not None)
     feeds: dict[tuple[int, int], tuple[int, int]] = {}  # (source, position) -> (target, slot)
-    lower_to_upper: list[tuple[int, int]] = []
+    lower_to_upper: list[tuple[int, int, int]] = []
     for match in template.matches:
         for slot in match.slots:
             if slot.seed is not None:
@@ -230,10 +262,7 @@ def validate_template(template: BracketTemplate, stage_type: StageType) -> list[
                     slot.slot,
                 )
             elif not source_upper and target_upper:
-                if slot.source_position != 1:
-                    add("edge_direction", "Only the first place leaves the lower bracket", match.id, slot.slot)
-                else:
-                    lower_to_upper.append((match.id, slot.slot))
+                lower_to_upper.append((match.id, slot.slot, slot.source_position))
 
     for pool, count in (("U", template.upper_seeds), ("L", template.lower_seeds)):
         for number in range(1, count + 1):
@@ -249,6 +278,11 @@ def validate_template(template: BracketTemplate, stage_type: StageType) -> list[
     # ``edge_direction`` and ``final`` still keep them forward-only and connected.
 
     terminals = [match for match in template.matches if (match.id, 1) not in feeds]
+    bronze = _terminal_third_place(terminals, by_id, feeds, stage_type)
+    if bronze is not None:
+        terminals.remove(bronze)
+    if bronze is None and len(template.matches) > 256:
+        add("too_many_matches", "A bracket has at most 256 matches, plus its third-place match")
     final: TemplateMatch | None = None
     if not terminals:
         add("final", "Every match feeds another one, so the bracket has no final")
@@ -262,27 +296,47 @@ def validate_template(template: BracketTemplate, stage_type: StageType) -> list[
     else:
         final = terminals[0]
         top_round = upper_rounds[-1] if upper_rounds else None
-        if final.round != top_round or sum(1 for match in template.matches if match.round == top_round) != 1:
-            add("final", "The final must be the only match of the last upper round", final.id)
+        if final.round != top_round or any(
+            match is not final and match is not bronze and match.round == top_round for match in template.matches
+        ):
+            add("final", "Only the championship and its third-place match may share the last upper round", final.id)
 
-    for target_id, slot_number in lower_to_upper:
-        if final is None or target_id != final.id:
+    bronze_id = bronze.id if bronze is not None else None
+    for target_id, slot_number, position in lower_to_upper:
+        if target_id == bronze_id:
+            continue
+        if position != 1:
+            add("edge_direction", "Only the first place leaves the lower bracket", target_id, slot_number)
+        elif final is None or target_id != final.id:
             add("edge_direction", "A lower-bracket winner can only go to the final", target_id, slot_number)
 
     # Where every losing position of a match ends up, if anywhere.
-    drops = {source: by_id[target] for (source, position), (target, _) in feeds.items() if position > 1}
+    losing_edges = [
+        (source, by_id[target], slot)
+        for (source, position), (target, slot) in feeds.items()
+        if position > 1 and target != bronze_id
+    ]
+    drops = {source: target for source, target, _ in losing_edges}
     if stage_type == StageType.DOUBLE_ELIMINATION and final is not None:
         if not any(
             slot.source_match is not None and by_id.get(slot.source_match, final).round < 0 for slot in final.slots
         ):
             add("de_final_needs_lower", "The final needs the lower bracket's winner in one of its slots", final.id)
         for match in template.matches:
+            if match is bronze:
+                continue
             is_final = match.id == final.id
             drop = drops.get(match.id)
-            if match.round > 0 and not is_final and (drop is None or drop.round > 0):
+            if match.round > 0 and not is_final and drop is None:
                 add("de_upper_loser", f"The loser of match {match.id} must drop to the lower bracket", match.id)
-            if (match.round < 0 or is_final) and drop is not None:
-                add("de_lower_loser", f"The loser of match {match.id} is out; it cannot go to another match", drop.id)
+        for source_id, target, slot_number in losing_edges:
+            source = by_id[source_id]
+            if source.round > 0 and source.id != final.id and target.round > 0:
+                add("de_upper_loser", f"Every losing place of match {source.id} must drop", target.id, slot_number)
+            if source.round < 0 or source.id == final.id:
+                add(
+                    "de_lower_loser", f"The loser of match {source.id} is out; it cannot go to another match", target.id
+                )
     if stage_type == StageType.SINGLE_ELIMINATION:
         has_lower = any(match.round < 0 for match in template.matches)
         if template.lower_seeds or drops or has_lower:

@@ -144,6 +144,7 @@ export interface StageRegulation {
   /** Swiss: losses that eliminate a team and stop pairing it; `null` = off. */
   swiss_eliminate_losses: number | null;
   de_grand_final_type: "no_reset" | "with_reset";
+  third_place_match?: boolean;
   seed_ranking: SeedRanking;
   best_of: StageBestOfConfig;
 }

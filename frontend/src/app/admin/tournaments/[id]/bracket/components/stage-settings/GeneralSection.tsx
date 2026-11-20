@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
 import { Input } from "@craazzzyyfoxx/admin-kit/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -16,7 +17,7 @@ import {
 import { tiebreakersForStageType } from "@/lib/tournament/tiebreakers";
 import type { StagePairingMode, StageType } from "@/types/tournament.types";
 
-import { defaultTiebreakOrder, STAGE_TYPE_LABELS } from "@/lib/bracket/projection";
+import { BRACKET_STAGE_TYPES, defaultTiebreakOrder, STAGE_TYPE_LABELS } from "@/lib/bracket/projection";
 import type { SectionProps } from "./types";
 
 /** `children`: more rows of the stage's basics, after its own (where its participants come from). */
@@ -25,8 +26,9 @@ export function GeneralSection({
   form,
   onChange,
   isSuperuser,
+  hasEncounters,
   children
-}: SectionProps & { isSuperuser: boolean; children?: ReactNode }) {
+}: SectionProps & { isSuperuser: boolean; hasEncounters: boolean; children?: ReactNode }) {
   const t = useTranslations("adminBracket.settings");
   const tRoot = useTranslations("adminBracket");
   const ids = useId();
@@ -158,6 +160,21 @@ export function GeneralSection({
             />
           </SettingRow>
         </>
+      ) : null}
+
+      {BRACKET_STAGE_TYPES.includes(form.stageType) ? (
+        <SettingRow
+          htmlFor={`${ids}-third-place`}
+          label={t("thirdPlaceMatch")}
+          hint={stage.has_custom_bracket ? t("thirdPlaceCustom") : hasEncounters ? t("thirdPlaceLocked") : undefined}
+        >
+          <Switch
+            id={`${ids}-third-place`}
+            checked={form.thirdPlaceMatch}
+            disabled={hasEncounters || stage.has_custom_bracket}
+            onCheckedChange={(thirdPlaceMatch) => onChange({ thirdPlaceMatch })}
+          />
+        </SettingRow>
       ) : null}
 
       {form.stageType === "double_elimination" ? (

@@ -4,6 +4,7 @@ Generates pairings for a full single-elim bracket with:
 - power-of-2 bracket sizes via first-round byes
 - standard 1v16, 8v9, etc. seeding
 - explicit advancement edges (position 1 of match X → slot Y of match Z)
+- optional third place between the two real semifinal losers, in the title round
 
 The generator populates ``local_id`` on every :class:`Pairing` and a list of
 :class:`AdvancementEdge` on the :class:`BracketSkeleton`;
@@ -15,10 +16,10 @@ from __future__ import annotations
 import math
 
 from .seeding_order import seeding_order
-from .types import AdvancementEdge, BracketSkeleton, Pairing
+from .types import AdvancementEdge, BracketSkeleton, Pairing, append_third_place
 
 
-def generate(team_ids: list[int]) -> BracketSkeleton:
+def generate(team_ids: list[int], *, third_place_match: bool = False) -> BracketSkeleton:
     n = len(team_ids)
     if n < 2:
         return BracketSkeleton(pairings=[], total_rounds=0)
@@ -150,6 +151,9 @@ def generate(team_ids: list[int]) -> BracketSkeleton:
 
         prev_match_local_ids = new_match_local_ids
         prev_autoadvance = new_autoadvance
+
+    if third_place_match:
+        append_third_place(pairings, edges, double_elimination=False)
 
     return BracketSkeleton(
         pairings=pairings,

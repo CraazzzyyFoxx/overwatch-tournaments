@@ -22,6 +22,7 @@ Returns a :class:`BracketSkeleton` with complete advancement edges:
   would have played in is empty, to the first LB match that has an opponent.
 - LB reduction rounds produce position-1 edges to the next LB round.
 - UB final and LB final both feed the Grand Final.
+- An optional third-place match takes the LB final's loser and its LB winner feeder's loser.
 
 The Grand Final Reset is NEVER materialised on generation — it is created on
 demand, by the advancement engine, if the LB champion wins the first Grand
@@ -34,7 +35,7 @@ import math
 from collections.abc import Callable
 
 from .seeding_order import seeding_order
-from .types import AdvancementEdge, BracketSkeleton, Pairing
+from .types import AdvancementEdge, BracketSkeleton, Pairing, append_third_place
 
 # Where the team occupying a bracket slot comes from: ``(source, value)``.
 # ``_TEAM`` is not a place at all -- ``value`` is then a team id. The other two
@@ -51,6 +52,7 @@ def generate(
     team_ids: list[int],
     *,
     lower_bracket_team_ids: list[int] | None = None,
+    third_place_match: bool = False,
 ) -> BracketSkeleton:
     """Generate a double-elimination skeleton.
 
@@ -218,6 +220,9 @@ def generate(
     dropped = [tid for tid in (*team_ids, *lb_seeds) if tid not in seeded]
     if dropped:
         raise ValueError(f"double elimination dropped teams: {dropped}")
+
+    if third_place_match:
+        append_third_place(pairings, edges, double_elimination=True)
 
     return BracketSkeleton(pairings=pairings, total_rounds=total_rounds, advancement_edges=edges)
 

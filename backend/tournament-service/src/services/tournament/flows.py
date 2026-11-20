@@ -274,7 +274,7 @@ class TournamentFlowsService:
     @versioned(
         generations=tournament_generations("{id}", DETAIL),
         ttl=config.settings.tournaments_cache_ttl,
-        key="tournaments:v2/{id}:{entities}",
+        key="tournaments:v3/{id}:{entities}",
         prefix="fastapi:",
     )
     async def get_read(self, session: AsyncSession, id: int, entities: list[str]) -> dict[str, typing.Any]:
