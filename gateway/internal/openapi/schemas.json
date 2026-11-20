@@ -54301,6 +54301,11 @@
           ],
           "default": null,
           "title": "Stage Id"
+        },
+        "third_place": {
+          "default": false,
+          "title": "Third Place",
+          "type": "boolean"
         }
       },
       "required": [
