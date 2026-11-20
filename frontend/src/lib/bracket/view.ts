@@ -352,7 +352,11 @@ export function stageRoundShape(
   rounds: number[],
   encounters: StageScopedRound[] | undefined
 ): BracketRoundShape {
-  return { rounds, finalRounds: stageFinalRounds(stageId, stageType, rounds, encounters) };
+  return {
+    rounds,
+    finalRounds: stageFinalRounds(stageId, stageType, rounds, encounters),
+    singleElimination: stageType === "single_elimination"
+  };
 }
 
 /** The same, for a screen that holds one bracket's matches: the bracket itself. */
@@ -365,7 +369,8 @@ export function bracketRoundShape(
     finalRounds:
       stageType === "double_elimination"
         ? [...getDoubleEliminationFinalRounds(encounters)].sort((left, right) => left - right)
-        : []
+        : [],
+    singleElimination: stageType === "single_elimination"
   };
 }
 

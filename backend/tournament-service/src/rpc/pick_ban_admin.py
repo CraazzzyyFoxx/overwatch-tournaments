@@ -202,6 +202,7 @@ class PickBanConfigUpsert(BaseModel):
     kind: PickBanKind
     stage_id: int | None = None
     round: int | None = None
+    third_place: bool = False
     mode: MapVetoMode
     first_pick_rule: FirstPickRule = FirstPickRule.HIGHER_SEED
     first_ban_rotation: FirstBanRotation = FirstBanRotation.FIXED
@@ -276,6 +277,7 @@ def register(broker: Any, logger: Any) -> None:
                 slots=[(slot.candidates, slot.reserve_item_id) for slot in body.slots],
                 stage_id=body.stage_id,
                 round=body.round,
+                third_place=body.third_place,
                 discipline=discipline,
                 tournament_id=tournament_id,
             )
@@ -285,6 +287,7 @@ def register(broker: Any, logger: Any) -> None:
                 kind=body.kind,
                 stage_id=body.stage_id,
                 round=body.round,
+                third_place=body.third_place,
                 mode=body.mode,
                 first_pick_rule=body.first_pick_rule,
                 first_ban_rotation=body.first_ban_rotation,
@@ -308,6 +311,7 @@ def register(broker: Any, logger: Any) -> None:
                     "kind": body.kind,
                     "stage_id": body.stage_id,
                     "round": body.round,
+                    "third_place": body.third_place,
                     "mode": body.mode,
                     "first_pick_rule": body.first_pick_rule,
                     "first_ban_rotation": body.first_ban_rotation,

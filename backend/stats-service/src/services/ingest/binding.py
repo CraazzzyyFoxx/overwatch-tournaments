@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared import models
 from shared.core import enums
 from shared.disciplines.ingest import BoundMatch, BoundParticipant
+from shared.domain.bracket_roles import third_place_condition
 from shared.domain.pick_ban_config import pool_items
 from shared.repository.pick_ban import CONFIG_POOL_LOAD, PickBanConfigRepository
 from shared.repository.roles import CatalogRoleRepository
@@ -488,17 +489,19 @@ async def pool_refusal(
     ):
         return None
     tournament_id = encounter.tournament_id
-    stage_id, round_ = (
+    stage_id, round_, third_place = (
         await session.execute(
-            sa.select(models.BracketEncounter.stage_id, models.BracketEncounter.round).where(
-                models.BracketEncounter.encounter_id == encounter_id
-            )
+            sa.select(
+                models.BracketEncounter.stage_id,
+                models.BracketEncounter.round,
+                third_place_condition(models.BracketEncounter.encounter_id, models.BracketEncounter.round),
+            ).where(models.BracketEncounter.encounter_id == encounter_id)
         )
-    ).first() or (None, None)
+    ).first() or (None, None, False)
     pools = await PickBanConfigRepository().list_by_tournament(
         session, tournament_id, kind=enums.PickBanKind.MAP, options=CONFIG_POOL_LOAD
     )
-    items = pool_items(pools, stage_id=stage_id, round=round_)
+    items = pool_items(pools, stage_id=stage_id, round=round_, third_place=third_place)
     if not items:
         return None
     modes = set(

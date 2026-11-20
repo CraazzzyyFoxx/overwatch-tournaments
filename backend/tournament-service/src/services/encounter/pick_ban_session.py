@@ -46,6 +46,7 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.disciplines import discipline, rated_role_codes
 from shared.domain import pick_ban_engine as engine
 from shared.domain import pick_ban_rules as pbr
+from shared.domain.bracket_roles import is_third_place
 from shared.domain.encounter_scoring import GameLine, ScoringRules, resolve_placements
 from shared.domain.pick_ban_config import has_pool, pick_config
 from shared.models.catalog.entity import CatalogEntity
@@ -500,8 +501,9 @@ class PickBanSessionService:
         kind: PickBanKind,
         stage_id: int | None,
         round: int | None,
+        third_place: bool = False,
     ) -> PickBanConfig | None:
-        """The config this ``(tournament, kind, stage, round)`` coordinate resolves to.
+        """The config this ``(tournament, kind, stage, round, third_place)`` coordinate resolves to.
 
         The cascade itself, addressed by coordinate rather than by encounter, so a
         caller that has no encounter in hand — the scrim room's "copy this round's
@@ -509,7 +511,8 @@ class PickBanSessionService:
         asks, instead of reimplementing the ranking and drifting from it.
 
         Ranking, most specific first: an exact stage+round config (2), the stage's
-        round-less config (1), the tournament-wide config (0).
+        round-less config (1), the tournament-wide config (0). The bronze match is its
+        own round-level scope: it never falls back to the final's round config.
 
         A pool-less row is a rules template: it plays nothing, "as if no row
         existed". So a more specific empty fan-out must not shadow a parent's
@@ -534,7 +537,7 @@ class PickBanSessionService:
             )
             .options(*CONFIG_ROOM_LOAD)
         )
-        return pick_config(result.scalars().all(), stage_id=stage_id, round=round)
+        return pick_config(result.scalars().all(), stage_id=stage_id, round=round, third_place=third_place)
 
     async def resolve_config(
         self, session: AsyncSession, encounter: Encounter, kind: PickBanKind
@@ -554,6 +557,7 @@ class PickBanSessionService:
             kind=kind,
             stage_id=position.stage_id if position is not None else None,
             round=position.round if position is not None else None,
+            third_place=await is_third_place(session, encounter.id),
         )
 
     async def settled_map_rounds(

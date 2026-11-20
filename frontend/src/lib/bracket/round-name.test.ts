@@ -43,14 +43,16 @@ describe("bracket round names", () => {
     expect(bracketRoundLabelEn(3, withReset)).toBe("UB Final");
   });
 
-  it("leaves a single elimination flat — it has one bracket to name", () => {
-    const single: BracketRoundShape = { rounds: [1, 2, 3], finalRounds: [] };
+  it("names a single elimination's last two rounds, and leaves Swiss flat", () => {
+    const single: BracketRoundShape = { rounds: [1, 2, 3], finalRounds: [], singleElimination: true };
+    const swiss: BracketRoundShape = { rounds: [1, 2, 3], finalRounds: [] };
 
     expect(single.rounds.map((round) => bracketRoundLabelEn(round, single))).toEqual([
       "Round 1",
-      "Round 2",
-      "Round 3"
+      "Semifinal",
+      "Final"
     ]);
+    expect(bracketRoundLabelEn(3, swiss)).toBe("Round 3");
   });
 
   it("drops the UB prefix for the tree, and keeps LB", () => {

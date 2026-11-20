@@ -113,6 +113,7 @@ function config(overrides: Partial<PickBanConfig> = {}): PickBanConfig {
     kind: "map",
     stage_id: null,
     round: null,
+    third_place: false,
     mode: "pool",
     first_pick_rule: "higher_seed",
     first_ban_rotation: "fixed",
@@ -399,6 +400,43 @@ describe("scope resolution", () => {
       bestOf: 7,
       source: "round",
     });
+  });
+
+  it("sizes the final and its third-place match apart -- they share a round, not a scope", () => {
+    const round = [
+      { stage_id: 10, round: 2, best_of: 5 },
+      { stage_id: 10, round: 2, best_of: 3, is_third_place: true },
+    ];
+    expect(resolveSlotCount(10, 2, stages, round)).toBe(5);
+    expect(resolveSlotCount(10, 2, stages, round, true)).toBe(3);
+    // Before generation the bronze plays its round's own length, never `final`.
+    const withFinal = [stage({ id: 10, best_of: { default: 3, by_round: {}, final: 5, swiss_qualify: null, swiss_eliminate: null } })];
+    expect(resolveSeriesLength(10, 2, withFinal, [], true).bestOf).toBe(3);
+  });
+
+  it("authors the third-place match as its own section, from its own config", () => {
+    const sections = roundSlotsForStage({
+      kind: "map",
+      stageId: 10,
+      rounds: [1, 2],
+      thirdPlaceRound: 2,
+      configs: [
+        config({ id: 7, stage_id: 10, round: 2, mode: "slots", slots: [{ position: 1, reserve_item_id: null, candidates: [1, 2] }] }),
+        config({ id: 8, stage_id: 10, round: 2, third_place: true, mode: "slots", slots: [{ position: 1, reserve_item_id: null, candidates: [3, 4] }] }),
+      ],
+      fallback: [],
+      slotCountFor: () => 1,
+    });
+    expect(sections.map((section) => [section.round, section.thirdPlace, section.slots[0].candidates])).toEqual([
+      [1, false, []],
+      [2, false, [1, 2]],
+      [2, true, [3, 4]],
+    ]);
+    expect(fanOutRoundDrafts({ ...draft({ mode: "slots", stageId: 10 }), roundSlots: sections }).map((one) => [one.round, one.thirdPlace])).toEqual([
+      [1, false],
+      [2, false],
+      [2, true],
+    ]);
   });
 
   it("labels a stage-wide or tournament-wide scope as a preview, not a promise", () => {

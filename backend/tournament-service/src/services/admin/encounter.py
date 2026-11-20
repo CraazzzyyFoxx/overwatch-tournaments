@@ -9,6 +9,7 @@ from shared.core import enums
 from shared.core import http_status as status
 from shared.core.errors import ApiExc
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.bracket_roles import third_place_condition
 from shared.domain.encounter_naming import build_encounter_name
 from shared.repository import (
     CatalogEntityRepository,
@@ -25,7 +26,6 @@ from shared.services.stats_evidence import capture_stats_evidence, owner_scopes,
 from shared.services.stats_owner_delete import capture_owner_delete, stage_owner_delete
 from src import schemas
 from src.services.bracket.advancement import reset_downstream
-from src.services.bracket.roles import third_place_condition
 from src.services.bracket.swiss_state import remove_swiss_bye_round
 from src.services.flow.corrections import assert_encounter_correction_allowed
 from src.services.notifications.lifecycle import after_encounter_teams_changed, lifecycle_notifier

@@ -264,8 +264,8 @@ describe("projectStage", () => {
 
     expect(projection.rounds.map((round) => round.label)).toEqual([
       "Round 1",
-      "Round 2",
-      "Round 3"
+      "Semifinal",
+      "Final"
     ]);
     expect(projection.rounds.at(-1)).toMatchObject({ isFinal: true, bestOf: 5 });
   });

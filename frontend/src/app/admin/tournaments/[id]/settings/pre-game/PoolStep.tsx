@@ -49,8 +49,8 @@ export function PoolStep({
   isStageScope: boolean;
   /** The stage's rounds are still being predicted, so they cannot be listed. */
   roundsLoading: boolean;
-  /** What the bracket calls a round — "LB Round 1", "Grand Final", not "-1". */
-  roundLabelFor: (round: number) => string;
+  /** What the bracket calls a round — "LB Round 1", "Grand Final", not "-1" — or its third-place match. */
+  roundLabelFor: (round: number, thirdPlace?: boolean) => string;
   catalogue: CatalogueItem[];
   catalogueById: Map<number, CatalogueItem>;
   catalogueLoading: boolean;
@@ -155,8 +155,8 @@ export function PoolStep({
           <FieldDescription>{t("roundGroupsHint")}</FieldDescription>
 
           {draft.roundSlots.map((section, roundIndex) => (
-            <section key={section.round} className="flex flex-col">
-              <FieldTitle className="text-sm">{roundLabelFor(section.round)}</FieldTitle>
+            <section key={`${section.round}:${section.thirdPlace ?? false}`} className="flex flex-col">
+              <FieldTitle className="text-sm">{roundLabelFor(section.round, section.thirdPlace)}</FieldTitle>
               <div className="flex flex-col divide-y divide-border">
                 {section.slots.map((slot, index) => (
                   <SlotCard

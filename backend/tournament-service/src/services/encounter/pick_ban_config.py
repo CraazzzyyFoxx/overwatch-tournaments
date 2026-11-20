@@ -36,6 +36,7 @@ from shared.core.errors import ApiExc
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.disciplines import DISCIPLINES, DisciplineSpec
 from shared.domain import pick_ban_rules as pbr
+from shared.domain.bracket_roles import third_place_condition
 from shared.domain.pick_ban_config import has_pool, pick_config
 from shared.models.catalog.entity import CatalogEntity
 from shared.models.encounter.encounter import Encounter
@@ -219,7 +220,13 @@ async def assert_pool_in_discipline(
 
 
 async def scope_best_of(
-    session: AsyncSession, *, tournament_id: int, kind: PickBanKind, stage_id: int | None, round: int | None
+    session: AsyncSession,
+    *,
+    tournament_id: int,
+    kind: PickBanKind,
+    stage_id: int | None,
+    round: int | None,
+    third_place: bool = False,
 ) -> int | None:
     """The longest series a config saved at this cascade level would play.
 
@@ -227,14 +234,22 @@ async def scope_best_of(
     serves (they never reach this one). ``None`` before the bracket exists -- the editor's preview is the check then.
     """
     query = (
-        select(BracketEncounter.stage_id, BracketEncounter.round, Encounter.best_of)
+        select(
+            BracketEncounter.stage_id,
+            BracketEncounter.round,
+            Encounter.best_of,
+            third_place_condition(BracketEncounter.encounter_id, BracketEncounter.round),
+        )
         .join(Encounter, Encounter.id == BracketEncounter.encounter_id)
         .where(BracketEncounter.tournament_id == tournament_id)
     )
     if stage_id is not None:
         query = query.where(BracketEncounter.stage_id == stage_id)
     if round is not None:
-        query = query.where(BracketEncounter.round == round)
+        query = query.where(
+            BracketEncounter.round == round,
+            third_place_condition(BracketEncounter.encounter_id, BracketEncounter.round) == third_place,
+        )
     level = 0 if stage_id is None else 1 if round is None else 2
     narrower = [
         config
@@ -243,8 +258,9 @@ async def scope_best_of(
     ]
     lengths = [
         best_of
-        for encounter_stage, encounter_round, best_of in (await session.execute(query)).all()
-        if pick_config(narrower, stage_id=encounter_stage, round=encounter_round) is None
+        for encounter_stage, encounter_round, best_of, encounter_third_place in (await session.execute(query)).all()
+        if pick_config(narrower, stage_id=encounter_stage, round=encounter_round, third_place=encounter_third_place)
+        is None
     ]
     return max(lengths, default=None)
 
@@ -260,6 +276,7 @@ async def validate_config(
     stage_id: int | None,
     round: int | None,
     discipline: str,
+    third_place: bool = False,
     tournament_id: int | None = None,
 ) -> None:
     """The whole save gate of a config body: the pool's membership in the discipline's catalog, the ruleset against
@@ -268,7 +285,9 @@ async def validate_config(
     modes = await assert_pool_in_discipline(session, kind=kind, discipline=discipline, item_ids=item_ids, slots=slots)
     best_of = None
     if mode == MapVetoMode.PROGRESSIVE and tournament_id is not None:
-        best_of = await scope_best_of(session, tournament_id=tournament_id, kind=kind, stage_id=stage_id, round=round)
+        best_of = await scope_best_of(
+            session, tournament_id=tournament_id, kind=kind, stage_id=stage_id, round=round, third_place=third_place
+        )
     validate_config_payload(
         kind=kind,
         mode=mode,
@@ -278,6 +297,7 @@ async def validate_config(
         stage_id=stage_id,
         round=round,
         discipline=discipline,
+        third_place=third_place,
         groups=await group_vocabulary(session, kind, discipline),
         modes=modes,
         best_of=best_of,
@@ -370,6 +390,7 @@ def validate_config_payload(
     stage_id: int | None,
     round: int | None,
     discipline: str,
+    third_place: bool = False,
     groups: Sequence[str] | None = None,
     modes: Collection[int] = (),
     best_of: int | None = None,
@@ -399,6 +420,8 @@ def validate_config_payload(
     """
     if round is not None and stage_id is None:
         raise HTTPException(status_code=422, detail="round requires stage_id")
+    if third_place and round is None:
+        raise HTTPException(status_code=422, detail="third_place requires round")
 
     issues = pbr.validate_ruleset(ruleset, kind=kind.value, mode=mode.value, discipline=discipline, groups=groups)
     errors = [issue for issue in issues if issue.severity == "error"]
@@ -494,6 +517,7 @@ def serialize_pick_ban_config(config: PickBanConfig) -> dict:
         "kind": config.kind,
         "stage_id": config.stage_id,
         "round": config.round,
+        "third_place": config.third_place,
         "mode": config.mode,
         "first_pick_rule": config.first_pick_rule,
         "first_ban_rotation": config.first_ban_rotation,
@@ -561,6 +585,7 @@ class PickBanConfigService:
             PickBanConfig.kind.asc(),
             PickBanConfig.stage_id.asc().nulls_first(),
             PickBanConfig.round.asc().nulls_first(),
+            PickBanConfig.third_place.asc(),
             PickBanConfig.id.asc(),
         )
         result = await session.execute(query)
@@ -582,6 +607,7 @@ class PickBanConfigService:
         kind: PickBanKind,
         stage_id: int | None = None,
         round: int | None = None,
+        third_place: bool = False,
         mode: MapVetoMode,
         first_pick_rule: FirstPickRule,
         first_ban_rotation: FirstBanRotation,
@@ -589,7 +615,7 @@ class PickBanConfigService:
         item_ids: list[int],
         slots: Sequence[SlotSpec] = (),
     ) -> PickBanConfig:
-        """Create or update the config at the ``(tournament, kind, stage, round)``
+        """Create or update the config at the ``(tournament, kind, stage, round, third_place)``
         cascade level, replacing its pool wholesale.
 
         Does NOT commit: the caller owns the unit of work (and, for the admin
@@ -609,7 +635,7 @@ class PickBanConfigService:
 
         ruleset_json = normalized_ruleset(ruleset)
 
-        # Upsert key = (tournament_id, kind, stage_id, round): one config per
+        # Upsert key = (tournament_id, kind, stage_id, round, third_place): one config per
         # cascade level and kind.
         config = await self.config_repo.find_for_stage_round(
             session,
@@ -617,6 +643,7 @@ class PickBanConfigService:
             kind=kind,
             stage_id=stage_id,
             round=round,
+            third_place=third_place,
             options=CONFIG_POOL_LOAD,
         )
 
@@ -626,6 +653,7 @@ class PickBanConfigService:
                 kind=kind,
                 stage_id=stage_id,
                 round=round,
+                third_place=third_place,
                 mode=mode,
                 first_pick_rule=first_pick_rule,
                 first_ban_rotation=first_ban_rotation,

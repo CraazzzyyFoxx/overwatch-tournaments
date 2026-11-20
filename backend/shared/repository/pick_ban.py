@@ -47,9 +47,10 @@ class PickBanConfigRepository(BaseRepository[models.PickBanConfig]):
         kind: Any,
         stage_id: int | None,
         round: int | None,
+        third_place: bool = False,
         options: Sequence[_AbstractLoad] | None = None,
     ) -> models.PickBanConfig | None:
-        """Exact-scope lookup: the config bound to this (stage, round) pair.
+        """Exact-scope lookup: the config bound to this (stage, round, third_place) triple.
 
         ``stage_id``/``round`` are matched with ``IS NULL`` semantics rather than
         ``= NULL`` so a tournament-wide config (both columns NULL) is findable.
@@ -62,6 +63,7 @@ class PickBanConfigRepository(BaseRepository[models.PickBanConfig]):
                 if stage_id is None
                 else models.PickBanConfig.stage_id == stage_id,
                 models.PickBanConfig.round.is_(round) if round is None else models.PickBanConfig.round == round,
+                models.PickBanConfig.third_place == third_place,
             ),
             options,
         )

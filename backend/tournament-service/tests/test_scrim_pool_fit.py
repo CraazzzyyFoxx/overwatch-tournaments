@@ -97,6 +97,8 @@ TABLE_NAMES = (
     "stats.match",
     "encounter.game",
     "encounter.readiness",
+    # The bronze flag of the room's config cascade reads the bracket graph.
+    "tournament.encounter_link",
     "tournament.pick_ban_config",
     "tournament.pick_ban_config_item",
     "tournament.pick_ban_config_slot",

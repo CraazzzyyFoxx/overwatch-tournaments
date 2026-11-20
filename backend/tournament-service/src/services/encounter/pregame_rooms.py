@@ -38,6 +38,7 @@ from shared.core.enums import (
     PickBanKind,
 )
 from shared.domain import pick_ban_rules as pbr
+from shared.domain.bracket_roles import third_place_condition
 from shared.domain.pick_ban_config import has_pool, pick_config
 from shared.models.encounter.encounter import Encounter
 from shared.models.encounter.game import EncounterGame
@@ -90,12 +91,18 @@ class PregameRoomsService:
             return schemas.PregameRoomsRead(tournament_id=tournament_id, generated_at=now, rooms=[])
 
         encounter_ids = [encounter.id for encounter in encounters]
-        positions = {
-            row.encounter_id: row
-            for row in await _rows(
-                session, select(BracketEncounter).where(BracketEncounter.encounter_id.in_(encounter_ids))
+        positions: dict[int, BracketEncounter] = {}
+        bronze_ids: set[int] = set()
+        for position, is_bronze in (
+            await session.execute(
+                select(
+                    BracketEncounter, third_place_condition(BracketEncounter.encounter_id, BracketEncounter.round)
+                ).where(BracketEncounter.encounter_id.in_(encounter_ids))
             )
-        }
+        ).all():
+            positions[position.encounter_id] = position
+            if is_bronze:
+                bronze_ids.add(position.encounter_id)
         stages = {
             stage.id: stage for stage in await _rows(session, select(Stage).where(Stage.tournament_id == tournament_id))
         }
@@ -165,6 +172,7 @@ class PregameRoomsService:
                 stage=stage,
                 teams=teams_by_encounter.get(encounter.id, []),
                 configs_by_kind=configs_by_kind,
+                third_place=encounter.id in bronze_ids,
                 sessions_by_key=sessions_by_key,
                 submissions=submissions,
                 picked_per_session=picked_per_session,
@@ -193,6 +201,7 @@ class PregameRoomsService:
         stage: Stage | None,
         teams: list[EncounterTeam],
         configs_by_kind: dict[PickBanKind, list[PickBanConfig]],
+        third_place: bool,
         sessions_by_key: dict[tuple[int, str], PickBanSession],
         submissions: dict[int, list[PickBanSubmission]],
         picked_per_session: dict[int, int],
@@ -217,6 +226,7 @@ class PregameRoomsService:
                 configs_by_kind.get(kind, ()),
                 stage_id=position.stage_id if position is not None else None,
                 round=position.round if position is not None else None,
+                third_place=third_place,
             )
             for kind in _KINDS
         }

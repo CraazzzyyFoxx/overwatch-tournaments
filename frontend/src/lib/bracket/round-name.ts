@@ -9,8 +9,8 @@
  *
  * The vocabulary is the generator's own (`services/bracket/double_elimination`):
  * `UB Round n` / `UB Semifinal` / `UB Final`, `LB Round n` / `LB Final`,
- * `Grand Final` / `Grand Final Reset`. Single elimination, Swiss and round
- * robin play a flat `Round n` — they have no two brackets to tell apart.
+ * `Grand Final` / `Grand Final Reset`. Single elimination names its last two
+ * rounds `Semifinal` / `Final`; Swiss and round robin play a flat `Round n`.
  */
 
 /** A stage's round numbers and which of them are its finals. */
@@ -26,6 +26,8 @@ export interface BracketRoundShape {
    * double elimination. Comes from `stageFinalRounds` / `bracketRoundShape`.
    */
   finalRounds: number[];
+  /** A single elimination: its last round is the Final, the one before it the Semifinal. */
+  singleElimination?: boolean;
 }
 
 /**
@@ -73,7 +75,14 @@ export function bracketRoundLabel(round: number, shape: BracketRoundShape): Brac
 
   // No grand final: single elimination, Swiss, round robin. One bracket, so its
   // rounds carry no side prefix.
-  if (finalRounds.length === 0) return { key: "round", n: round };
+  if (finalRounds.length === 0) {
+    if (shape.singleElimination && round > 0 && rounds.includes(round)) {
+      const last = Math.max(...rounds);
+      if (round === last) return { key: "final" };
+      if (round === last - 1) return { key: "semifinal" };
+    }
+    return { key: "round", n: round };
+  }
 
   // A positive round the shape does not know — a stale `by_round` key past the
   // bracket's depth — belongs to neither bracket, so it keeps its bare number.

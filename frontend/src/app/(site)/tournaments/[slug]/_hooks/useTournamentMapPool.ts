@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { UNKNOWN_ROUND_SHAPE } from "@/lib/bracket/round-name";
@@ -143,6 +144,7 @@ function roundOrder(round: number | null): number {
  */
 export function useTournamentMapPool(tournamentId: number, discipline: string): TournamentMapPool {
   const roundLabel = useBracketRoundLabel();
+  const tBracket = useTranslations("bracket");
   // No `.catch(() => ({ configs: [] }))` here: a failed read must stay
   // distinguishable from "the organizer configured nothing".
   const configsQuery = useQuery({
@@ -187,16 +189,24 @@ export function useTournamentMapPool(tournamentId: number, discipline: string): 
         // No encounters are read here, so the stage's shape is unknown: a round
         // keeps its plain depth rather than being guessed into a final.
         const round =
-          config.round == null ? null : roundLabel(config.round, UNKNOWN_ROUND_SHAPE);
+          config.round == null
+            ? null
+            : config.third_place
+              ? tBracket("thirdPlace")
+              : roundLabel(config.round, UNKNOWN_ROUND_SHAPE);
         return {
-          key: config.round == null ? `stage:${stageId}` : `round:${stageId}:${config.round}`,
+          key:
+            config.round == null
+              ? `stage:${stageId}`
+              : `${config.third_place ? "third" : "round"}:${stageId}:${config.round}`,
           stageId,
           stageName,
           round,
           title: round == null ? stageName : `${stageName} · ${round}`,
           pool: groupByGamemode(resolve(collectPoolIds([config]))),
           slots: slots.length > 0 ? slots : null,
-          order: (stage?.order ?? stageId) * 1000 + roundOrder(config.round)
+          // The third-place match reads right after the round it shares.
+          order: (stage?.order ?? stageId) * 1000 + roundOrder(config.round) + (config.third_place ? 0.5 : 0)
         };
       })
       .sort((left, right) => left.order - right.order);
@@ -224,7 +234,7 @@ export function useTournamentMapPool(tournamentId: number, discipline: string): 
     }
 
     return { pool, stages };
-  }, [configsQuery.data, mapsQuery.data, stagesQuery.data, roundLabel]);
+  }, [configsQuery.data, mapsQuery.data, stagesQuery.data, roundLabel, tBracket]);
 
   return {
     ...derived,

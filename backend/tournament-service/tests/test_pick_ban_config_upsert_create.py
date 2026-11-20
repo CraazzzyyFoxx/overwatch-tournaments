@@ -17,7 +17,9 @@ from __future__ import annotations
 import sys
 import warnings
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock
 
 import sqlalchemy as sa
 from sqlalchemy.ext.compiler import compiles
@@ -149,6 +151,19 @@ class UpsertConfigCreatePathTest(IsolatedAsyncioTestCase):
         assert [item.item_id for item in config.items] == [4]
         assert [item.item_id for item in config.slots[0].items] == [4]
         assert self.session.scalar(sa.select(sa.func.count()).select_from(PickBanConfig)) == 1
+
+    async def test_bronze_and_final_at_one_round_are_two_rows(self) -> None:
+        self.service.stage_repo = SimpleNamespace(get_tournament_id=AsyncMock(return_value=TOURNAMENT_ID))
+        final = await self._upsert(stage_id=3, round=4)
+        bronze = await self._upsert(stage_id=3, round=4, third_place=True)
+        self.session.commit()
+
+        assert final.id != bronze.id
+        assert (final.third_place, bronze.third_place) == (False, True)
+        assert self.session.scalar(sa.select(sa.func.count()).select_from(PickBanConfig)) == 2
+
+        again = await self._upsert(stage_id=3, round=4, third_place=True, item_ids=[9], slots=[])
+        assert again.id == bronze.id
 
 
 if __name__ == "__main__":

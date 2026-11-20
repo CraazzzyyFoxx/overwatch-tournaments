@@ -5,8 +5,10 @@ log -- live in the match layer (``shared.models.encounter.pick_ban``); what
 stays here belongs to the tournament, not to any one encounter.
 """
 
+import sqlalchemy as sa
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     Enum,
     ForeignKey,
@@ -50,7 +52,7 @@ PICK_BAN_ROTATION_ENUM = Enum(
 class PickBanConfig(db.TimeStampIntegerMixin):
     """Organizer config for one pick-ban flow (map veto or hero bans).
 
-    Same ``(tournament_id, stage_id, round)`` cascade as ``MapVetoConfig``, now
+    Same ``(tournament_id, stage_id, round, third_place)`` cascade as ``MapVetoConfig``, now
     partitioned additionally by ``kind`` — a tournament may run a map config and
     a hero config at the same cascade level side by side.
     """
@@ -58,6 +60,7 @@ class PickBanConfig(db.TimeStampIntegerMixin):
     __tablename__ = "pick_ban_config"
     __table_args__ = (
         CheckConstraint("round IS NULL OR stage_id IS NOT NULL", name="ck_pick_ban_config_round_requires_stage"),
+        CheckConstraint("NOT third_place OR round IS NOT NULL", name="ck_pick_ban_config_third_place_requires_round"),
         # No ``slots``/``preset`` cross-check any more: v2 expresses a slot veto
         # as a phase generator, so mode and ruleset cannot disagree the way the
         # v1 preset column could.
@@ -67,6 +70,7 @@ class PickBanConfig(db.TimeStampIntegerMixin):
             "kind",
             "stage_id",
             "round",
+            "third_place",
             unique=True,
             postgresql_nulls_not_distinct=True,
         ),
@@ -77,6 +81,8 @@ class PickBanConfig(db.TimeStampIntegerMixin):
     kind: Mapped[enums.PickBanKind] = mapped_column(PICK_BAN_KIND_ENUM)
     stage_id: Mapped[int | None] = mapped_column(ForeignKey(Stage.id, ondelete="CASCADE"), nullable=True)
     round: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # The bronze match shares its round with the final; this makes the config its own round-level scope.
+    third_place: Mapped[bool] = mapped_column(Boolean(), default=False, server_default=sa.false())
     mode: Mapped[enums.MapVetoMode] = mapped_column(
         PICK_BAN_MODE_ENUM,
         default=enums.MapVetoMode.POOL,

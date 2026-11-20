@@ -9,6 +9,8 @@ import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useQueryParams } from "@/hooks/useQueryParams";
+import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
+import { stageRoundShape } from "@/lib/bracket/view";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
 import pickBanService from "@/services/pickBan.service";
@@ -21,6 +23,7 @@ import { useHubEncountersQuery, useHubStagesQuery } from "../../hubQueries";
 import { SettingsSectionPage } from "../SettingsSection";
 import { PreGameEditor } from "./PreGameEditor";
 import { ScopeTree } from "./ScopeTree";
+import { useStageRounds } from "./useStageRounds";
 import type { CatalogueItem } from "./CataloguePicker";
 import {
   PRE_GAME_KINDS,
@@ -142,12 +145,24 @@ function PreGamePhase({
 
   const stages = useMemo(() => stagesQuery.data ?? [], [stagesQuery.data]);
   const stagesById = useMemo(() => new Map(stages.map((stage) => [stage.id, stage])), [stages]);
-  const describeScope = (target: Pick<PickBanConfig, "stage_id" | "round">): string => {
+  // The tree's own rounds (same query key, so free): the heading names a round the way the tree does.
+  const scopeStage = scope?.stageId == null ? undefined : stagesById.get(scope.stageId);
+  const { rounds: scopeRounds } = useStageRounds(scopeStage, encountersQuery.data?.results);
+  const roundLabel = useBracketRoundLabel();
+  const tBracket = useTranslations("bracket");
+  const describeScope = (target: Pick<PickBanConfig, "stage_id" | "round"> & { third_place?: boolean }): string => {
     if (target.stage_id == null) return t("tournamentLevel");
-    const name = stagesById.get(target.stage_id)?.name ?? t("unknownStage", { id: target.stage_id });
-    return target.round == null
-      ? t("scopeStage", { stage: name })
-      : t("scopeStageRound", { stage: name, round: target.round });
+    const stage = stagesById.get(target.stage_id);
+    const name = stage?.name ?? t("unknownStage", { id: target.stage_id });
+    if (target.round == null) return t("scopeStage", { stage: name });
+    if (target.third_place) return t("scopeStageRound", { stage: name, round: tBracket("thirdPlace") });
+    const shape = stageRoundShape(
+      target.stage_id,
+      stage?.stage_type,
+      target.stage_id === scopeStage?.id ? scopeRounds : [],
+      encountersQuery.data?.results
+    );
+    return t("scopeStageRound", { stage: name, round: roundLabel(target.round, shape) });
   };
 
   const upsertMutation = useMutation({

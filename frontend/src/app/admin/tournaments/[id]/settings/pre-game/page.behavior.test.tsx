@@ -236,6 +236,7 @@ const CUSTOM_HERO_CONFIG: PickBanConfig = {
   kind: "hero",
   stage_id: 11,
   round: null,
+  third_place: false,
   mode: "pool",
   first_pick_rule: "higher_seed",
   first_ban_rotation: "alternate",
@@ -251,6 +252,7 @@ const TOURNAMENT_MAP_CONFIG: PickBanConfig = {
   kind: "map",
   stage_id: null,
   round: null,
+  third_place: false,
   mode: "pool",
   first_pick_rule: "higher_seed",
   first_ban_rotation: "alternate",
@@ -1104,8 +1106,8 @@ describe("Settings › Pre-game phase predicts a round scope before the bracket 
     await act(async () => resolvePrediction([1, 2]));
     await settle();
 
-    expect(roundLabels()).toContain("Round 1");
-    expect(roundLabels()).toContain("Round 2");
+    expect(roundLabels()).toContain("Semifinal");
+    expect(roundLabels()).toContain("Final");
   });
 
   // The tree and the bracket name the same round: an organizer who scopes rules
@@ -1119,8 +1121,8 @@ describe("Settings › Pre-game phase predicts a round scope before the bracket 
     const labels = roundLabels();
     expect(labels).toContain("LB Round 1");
     expect(labels).toContain("LB Final");
-    expect(labels).toContain("Round 1");
-    expect(labels).toContain("Round 2");
+    expect(labels).toContain("Semifinal");
+    expect(labels).toContain("Final");
   });
 
   it("calls a double elimination's deciding round the Grand Final, not a bare round number", async () => {
@@ -1137,6 +1139,28 @@ describe("Settings › Pre-game phase predicts a round scope before the bracket 
     // Round 2 is the last upper-bracket round, and the bracket calls it that.
     expect(labels).toContain("UB Final");
     expect(labels).toContain("LB Final");
+  });
+
+  it("gives a switched-on third-place match its own scope and saves it apart from the final", async () => {
+    getStagePlannedRounds.mockResolvedValue([1, 2]);
+    await openPlayoffs();
+    await settle();
+    expect(roundLabels()).not.toContain("Third place");
+
+    const stages = STAGES.map((stage) =>
+      stage.id === 11 ? { ...stage, third_place_match: true } : stage
+    ) as unknown as Stage[];
+    act(() => root.unmount());
+    root = createRoot(container);
+    await mount({ stages, url: "?scope=third:11:2&kind=map&step=rules" });
+    await settle();
+
+    expect(roundLabels()).toEqual(expect.arrayContaining(["Final", "Third place"]));
+    expect(editor().textContent).toContain("Playoffs · Third place");
+    await type(labelledInput("Step timer"), "45");
+    await click(only("Save rules"));
+
+    expect(upsertConfig.mock.calls[0][1]).toMatchObject({ stage_id: 11, round: 2, third_place: true });
   });
 
   it("explains an unresolved scope when neither encounters nor team inputs exist yet", async () => {
@@ -1607,7 +1631,7 @@ describe("Settings › Pre-game phase only guards edits an organizer made", () =
     await click(treeLink("Round 2"));
 
     expect(document.body.textContent).not.toContain("Discard changes?");
-    expect(editor().textContent).toContain("Group stage · round 2");
+    expect(editor().textContent).toContain("Group stage · Round 2");
   });
 
   it("still stops a scope switch that would lose an edit", async () => {
@@ -1621,6 +1645,6 @@ describe("Settings › Pre-game phase only guards edits an organizer made", () =
     await click(treeLink("Round 2"));
 
     expect(document.body.textContent).toContain("Discard changes?");
-    expect(editor().textContent).toContain("Group stage · round 1");
+    expect(editor().textContent).toContain("Group stage · Round 1");
   });
 });

@@ -12,6 +12,7 @@ from shared import models
 from shared.core import enums, errors, pagination, utils
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.bracket_roles import third_place_condition
 from shared.repository import (
     EncounterRepository,
     EncounterSavedViewRepository,
@@ -22,7 +23,6 @@ from shared.services.tournament.visibility import visible_tournament_ids_subquer
 from src import schemas
 from src.core.query_page import execute_page_with_total
 from src.core.workspace import workspace_filter
-from src.services.bracket.roles import third_place_condition
 from src.services.tournament import service as tournament_service
 
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { stageRoundShape } from "@/lib/bracket/view";
@@ -16,6 +17,7 @@ import {
   resolveSeriesLength,
   resolveSlotCount,
   roundSlotsForStage,
+  stageThirdPlaceRound,
   validatePickBanDraft,
   type PickBanDraft,
   type PickBanDraftSlot,
@@ -54,6 +56,7 @@ export function usePreGameDraft({
 }>) {
   const savedConfig = findScopeConfig(kind, scope, configs);
   const inheritedConfig = findInheritedConfig(kind, scope.stageId, scope.round, configs);
+  const thirdPlace = scope.thirdPlace ?? false;
 
   // What the scope above says today, field by field. A saved override stores a
   // COPY of its parent's rules (`rescopePickBanDraft`) -- usually authored to
@@ -61,7 +64,7 @@ export function usePreGameDraft({
   // the moment the tournament level is edited again.
   const inheritedDraft = inheritedConfig == null ? null : pickBanDraftFromConfig(inheritedConfig);
 
-  const slotCount = resolveSlotCount(scope.stageId, scope.round, stages, encounters);
+  const slotCount = resolveSlotCount(scope.stageId, scope.round, stages, encounters, thirdPlace);
 
   // A stage covers several rounds of the bracket, and a regulation routinely
   // plays different maps in each. A config's scope key is `(stage, round)`, so
@@ -76,6 +79,9 @@ export function usePreGameDraft({
   );
   const roundShape = stageRoundShape(scope.stageId, stage?.stage_type, rounds, encounters);
   const roundLabel = useBracketRoundLabel();
+  const tBracket = useTranslations("bracket");
+  // The third-place match is authored beside the rounds, as a section of its own.
+  const thirdPlaceRound = isStageScope ? stageThirdPlaceRound(stage, rounds, encounters) : null;
 
   // A stage screen that saved per-round groups leaves nothing at the stage
   // level, so it has to reopen on what its rounds store — otherwise the groups
@@ -113,9 +119,10 @@ export function usePreGameDraft({
             ...pickBanDraftFromConfig(source),
             configId: savedConfig?.id ?? null,
             stageId: scope.stageId,
-            round: scope.round
+            round: scope.round,
+            thirdPlace
           }
-        : rescopePickBanDraft(emptyPickBanDraft(kind), scope.stageId, scope.round, configs);
+        : rescopePickBanDraft(emptyPickBanDraft(kind), scope.stageId, scope.round, configs, thirdPlace);
     if (stored.mode !== "slots") return stored;
     if (isStageScope && rounds.length > 0) {
       return {
@@ -125,9 +132,10 @@ export function usePreGameDraft({
           kind,
           stageId: scope.stageId as number,
           rounds,
+          thirdPlaceRound,
           configs,
           fallback: stored.slots,
-          slotCountFor: (round) => resolveSlotCount(scope.stageId, round, stages, encounters)
+          slotCountFor: (round, bronze) => resolveSlotCount(scope.stageId, round, stages, encounters, bronze)
         })
       };
     }
@@ -138,6 +146,8 @@ export function usePreGameDraft({
     kind,
     scope.stageId,
     scope.round,
+    thirdPlace,
+    thirdPlaceRound,
     configs,
     slotCount,
     isStageScope,
@@ -158,7 +168,7 @@ export function usePreGameDraft({
     setDraft(baseDraft);
   }
 
-  const series = resolveSeriesLength(scope.stageId, scope.round, stages, encounters);
+  const series = resolveSeriesLength(scope.stageId, scope.round, stages, encounters, thirdPlace);
   const issues = validatePickBanDraft(draft);
 
   const patch = (values: Partial<PickBanDraft>) =>
@@ -197,9 +207,10 @@ export function usePreGameDraft({
           kind,
           stageId: scope.stageId as number,
           rounds,
+          thirdPlaceRound,
           configs,
           fallback: draft.slots,
-          slotCountFor: (round) => resolveSlotCount(scope.stageId, round, stages, encounters)
+          slotCountFor: (round, bronze) => resolveSlotCount(scope.stageId, round, stages, encounters, bronze)
         })
       });
     }
@@ -232,8 +243,9 @@ export function usePreGameDraft({
     // an already-saved config can be clean.
     edited,
     dirty: savedConfig == null || edited,
-    /** What the bracket calls a round — "LB Round 1", "Grand Final", not "-1". */
-    roundLabelFor: (round: number) => roundLabel(round, roundShape),
+    /** What the bracket calls a round — "LB Round 1", "Grand Final", not "-1" — or its third-place match. */
+    roundLabelFor: (round: number, bronze = false) =>
+      bronze ? tBracket("thirdPlace") : roundLabel(round, roundShape),
     discard: () => setDraft(baseDraft),
     patch,
     changeMode,

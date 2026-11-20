@@ -8,7 +8,7 @@ import { stageRoundShape } from "@/lib/bracket/view";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { cn } from "@/lib/utils";
 import type { PickBanConfig, PickBanKind, Stage } from "@/types/tournament.types";
-import type { PickBanScopeEncounter } from "@/lib/tournament/pick-ban-config";
+import { stageThirdPlaceRound, type PickBanScopeEncounter } from "@/lib/tournament/pick-ban-config";
 import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { useStageRounds } from "./useStageRounds";
 import {
@@ -58,6 +58,7 @@ export function ScopeTree({
   hrefFor
 }: Readonly<ScopeTreeProps>) {
   const t = useTranslations("pickBan.admin");
+  const tBracket = useTranslations("bracket");
   const roundLabel = useBracketRoundLabel();
 
   const sortedStages = useMemo(
@@ -74,11 +75,15 @@ export function ScopeTree({
     rounds,
     encounters
   );
+  const thirdPlaceRound = stageThirdPlaceRound(expandedStage, rounds, encounters);
 
   const node = (scope: PreGameScope, label: string, depth: 0 | 1 | 2) => {
     const state = scopeConfigState(kind, scope, configs);
     const isSelected =
-      selected != null && selected.stageId === scope.stageId && selected.round === scope.round;
+      selected != null &&
+      selected.stageId === scope.stageId &&
+      selected.round === scope.round &&
+      (selected.thirdPlace ?? false) === (scope.thirdPlace ?? false);
 
     return (
       <li key={encodePreGameScope(scope)}>
@@ -130,13 +135,18 @@ export function ScopeTree({
                         {t("roundHintUnknown")}
                       </li>
                     ) : (
-                      rounds.map((round) =>
-                        node(
-                          { stageId: stage.id, round },
-                          roundLabel(round, roundShape),
-                          2
-                        )
-                      )
+                      [
+                        ...rounds.map((round) =>
+                          node({ stageId: stage.id, round }, roundLabel(round, roundShape), 2)
+                        ),
+                        thirdPlaceRound == null
+                          ? null
+                          : node(
+                              { stageId: stage.id, round: thirdPlaceRound, thirdPlace: true },
+                              tBracket("thirdPlace"),
+                              2
+                            )
+                      ]
                     )}
                   </ul>
                 </li>

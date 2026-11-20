@@ -239,11 +239,12 @@ describe("bracket round names", () => {
     expect(bracketRoundLabel(3, shape)).toEqual({ key: "grandFinal" });
   });
 
-  it("leaves a single elimination's rounds plain -- it has no grand final", () => {
+  it("names a single elimination's last round the Final -- it has no grand final", () => {
     const shape = stageRoundShape(1, "single_elimination", [1, 2, 3], generated);
 
     expect(shape.finalRounds).toEqual([]);
-    expect(bracketRoundLabel(3, shape)).toEqual({ key: "round", n: 3 });
+    expect(bracketRoundLabel(3, shape)).toEqual({ key: "final" });
+    expect(bracketRoundLabel(1, shape)).toEqual({ key: "round", n: 1 });
   });
 });
 

@@ -6,10 +6,12 @@ import {
   sameRuleValues
 } from "@/lib/tournament/pick-ban-config";
 
-/** One node of the scope tree: the tournament, a stage, or a stage's round. */
+/** One node of the scope tree: the tournament, a stage, a stage's round, or its third-place match. */
 export interface PreGameScope {
   stageId: number | null;
   round: number | null;
+  /** The third-place match of `round`, a scope apart from the final it shares the round with. */
+  thirdPlace?: boolean;
 }
 
 const TOURNAMENT_SCOPE_VALUE = "tournament";
@@ -30,7 +32,8 @@ export const PRE_GAME_KINDS = ["map", "hero"] as const;
  */
 export function encodePreGameScope(scope: PreGameScope): string {
   if (scope.stageId == null) return TOURNAMENT_SCOPE_VALUE;
-  return scope.round == null ? `stage:${scope.stageId}` : `round:${scope.stageId}:${scope.round}`;
+  if (scope.round == null) return `stage:${scope.stageId}`;
+  return `${scope.thirdPlace ? "third" : "round"}:${scope.stageId}:${scope.round}`;
 }
 
 /** `null` for an absent or unparseable value: nothing is selected. */
@@ -41,8 +44,14 @@ export function decodePreGameScope(value: string | null | undefined): PreGameSco
   const stageMatch = /^stage:(-?\d+)$/.exec(value);
   if (stageMatch) return { stageId: Number(stageMatch[1]), round: null };
 
-  const roundMatch = /^round:(-?\d+):(-?\d+)$/.exec(value);
-  if (roundMatch) return { stageId: Number(roundMatch[1]), round: Number(roundMatch[2]) };
+  const roundMatch = /^(round|third):(-?\d+):(-?\d+)$/.exec(value);
+  if (roundMatch) {
+    return {
+      stageId: Number(roundMatch[2]),
+      round: Number(roundMatch[3]),
+      ...(roundMatch[1] === "third" ? { thirdPlace: true } : {})
+    };
+  }
 
   return null;
 }
@@ -58,7 +67,8 @@ export function findScopeConfig(
       (config) =>
         config.kind === kind &&
         config.stage_id === scope.stageId &&
-        config.round === scope.round
+        config.round === scope.round &&
+        config.third_place === (scope.thirdPlace ?? false)
     ) ?? null
   );
 }
