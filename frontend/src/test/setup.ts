@@ -52,6 +52,14 @@ vi.mock("next-intl", async (importOriginal) => {
   };
 });
 
+// The app mounts `AdminKitProvider adapter={nextAdapter}`; suites render the kit bare, so it reads
+// Next's router and next-intl there too, each file's own mocks of them included.
+vi.mock("@craazzzyyfoxx/admin-kit/provider", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@craazzzyyfoxx/admin-kit/provider")>();
+  const { nextAdapter } = await import("@craazzzyyfoxx/admin-kit/next");
+  return { ...actual, useAdapter: () => nextAdapter };
+});
+
 // The admin kit's `useIsMobile` asks `matchMedia`, which happy-dom answers from its own viewport —
 // not from the `window.innerWidth` a test sets. Answer width queries from `innerWidth`, evaluated on
 // every read; a test that stubs `matchMedia` itself overrides this.

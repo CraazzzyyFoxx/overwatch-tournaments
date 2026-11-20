@@ -8,6 +8,7 @@ import {
   QueryClientProvider
 } from "@tanstack/react-query";
 import { AdminKitProvider, type ErrorDescription } from "@craazzzyyfoxx/admin-kit/provider";
+import { nextAdapter } from "@craazzzyyfoxx/admin-kit/next";
 import React from "react";
 
 import AuthBootstrap from "@/components/auth/AuthBootstrap";
@@ -91,7 +92,7 @@ export function Providers({ children }: Readonly<{ children: React.ReactNode }>)
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AdminKitProvider describeError={describeError}>
+      <AdminKitProvider adapter={nextAdapter} describeError={describeError}>
         <AuthBootstrap />
         <WorkspaceBootstrap />
         {children}
