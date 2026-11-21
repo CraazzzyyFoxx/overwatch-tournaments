@@ -356,3 +356,57 @@ class UserMergeRosterTests(IsolatedAsyncioTestCase):
         await self._merge()
 
         self.assertEqual([target_member.id, target_member.id], await self._seat_members(seat_ids))
+
+    async def test_merging_onto_a_survivor_member_keeps_the_player_in_an_individual_swiss_pool(self):
+        """The pool row cascades with the member: a merge mid-stage once left the pool a player short and stopped every
+        later round. The source's row moves to the survivor; where the survivor already has one, theirs stays."""
+        source_member = models.WorkspaceMember(workspace_id=self.workspace.id, player_id=self.source.id)
+        target_member = models.WorkspaceMember(workspace_id=self.workspace.id, player_id=self.target.id)
+        stages = [
+            models.Stage(
+                tournament_id=self.tournament_id,
+                scoring_rule_id=self.rule_id,
+                name=name,
+                stage_type=enums.StageType.INDIVIDUAL_SWISS,
+            )
+            for name in ("source only", "both")
+        ]
+        self.session.add_all([source_member, target_member, *stages])
+        await self.session.flush()
+        only, both = (stage.id for stage in stages)
+
+        def row(stage_id: int, member_id: int, rank: int) -> models.PlayerStanding:
+            return models.PlayerStanding(
+                tournament_id=self.tournament_id,
+                stage_id=stage_id,
+                workspace_member_id=member_id,
+                display_name=f"m{member_id}",
+                role="damage",
+                start_rank=rank,
+                rank=rank,
+            )
+
+        self.session.add_all(
+            [
+                row(only, source_member.id, 3500),
+                row(both, source_member.id, 1000),
+                row(both, target_member.id, 2000),
+                models.PlayerStandingPin(stage_id=only, workspace_member_id=source_member.id, position=1),
+            ]
+        )
+        await self.session.flush()
+
+        await self._merge()
+
+        pool = await self.session.execute(
+            sa.select(
+                models.PlayerStanding.stage_id, models.PlayerStanding.workspace_member_id, models.PlayerStanding.rank
+            ).where(models.PlayerStanding.stage_id.in_([only, both]))
+        )
+        self.assertEqual({(only, target_member.id, 3500), (both, target_member.id, 2000)}, set(pool.all()))
+        pins = await self.session.execute(
+            sa.select(models.PlayerStandingPin.stage_id, models.PlayerStandingPin.workspace_member_id).where(
+                models.PlayerStandingPin.stage_id == only
+            )
+        )
+        self.assertEqual([(only, target_member.id)], list(pins.all()))

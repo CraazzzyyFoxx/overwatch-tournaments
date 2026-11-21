@@ -52,47 +52,26 @@ def split_two(
     return team_a, team_b
 
 
-def split_pool(
-    players: Sequence[PoolPlayer], shape: Mapping[str, int], team_count: int, rng: random.Random
+def teams_from_ids(
+    team_ids: Sequence[Sequence[int]], players: Sequence[PoolPlayer], shape: Mapping[str, int], team_count: int
 ) -> list[list[PoolPlayer]]:
-    """Random start, then first-improvement same-role swaps while the rank totals get more even."""
-    # shortcut: no teammate/opponent history penalty; upgrade when the backlog item lands
-    groups = _by_role(players, shape, team_count)
-    teams: list[list[PoolPlayer]] = [[] for _ in range(team_count)]
-    for role, n in shape.items():
-        pool = groups[role]
-        rng.shuffle(pool)
-        for t in range(team_count):
-            teams[t].extend(pool[t * n : (t + 1) * n])
-    totals = [sum(p.rank for p in team) for team in teams]
-    improved = True
-    while improved:
-        improved = False
-        for i, j in combinations(range(team_count), 2):
-            for x, a in enumerate(teams[i]):
-                for y, b in enumerate(teams[j]):
-                    d = b.rank - a.rank
-                    # change of the sum of squared deviations (the mean is fixed): 2d(Ti - Tj) + 2d^2
-                    if a.role == b.role and d * (totals[i] - totals[j]) + d * d < 0:
-                        teams[i][x], teams[j][y] = b, a
-                        totals[i] += d
-                        totals[j] -= d
-                        improved = True
-                        break
-                else:
-                    continue
-                break
+    """The balancer's teams as pool players: ``team_count`` teams of ``shape``, every player exactly once."""
+    by_member = {p.member_id: p for p in players}
+    seated = [member for team in team_ids for member in team]
+    if len(team_ids) != team_count or sorted(seated) != sorted(by_member):
+        raise PoolError("balancer_invalid_result", "Балансер вернул составы не на весь пул раунда")
+    teams = [[by_member[member] for member in team] for team in team_ids]
+    for team in teams:
+        _by_role(team, shape, 1)
     return teams
 
 
-def pair_randomly(
-    teams: Sequence[list[PoolPlayer]], rng: random.Random
-) -> list[tuple[list[PoolPlayer], list[PoolPlayer]]]:
+def pair_closest(teams: Sequence[list[PoolPlayer]]) -> list[tuple[list[PoolPlayer], list[PoolPlayer]]]:
+    """Teams ordered by rank total, neighbours paired: the smallest total gap per match. Ties by member ids."""
     if len(teams) % 2:
         raise PoolError("odd_team_count", f"Нужно чётное число команд: сейчас {len(teams)}")
-    shuffled = list(teams)
-    rng.shuffle(shuffled)
-    return [(shuffled[i], shuffled[i + 1]) for i in range(0, len(shuffled), 2)]
+    ordered = sorted(teams, key=lambda team: (sum(p.rank for p in team), sorted(p.member_id for p in team)))
+    return [(ordered[i], ordered[i + 1]) for i in range(0, len(ordered), 2)]
 
 
 def round_captain(team: Sequence[PoolPlayer]) -> PoolPlayer:

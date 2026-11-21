@@ -1,13 +1,14 @@
 """Rounds of an ``individual_swiss`` stage: start (freeze the pool, round 1) and the next round once one is closed.
 
-Every round reshuffles the stage's players into new teams. A round team has no ``tournament.team``: its seat is
-written with ``team_id = NULL`` and the roster, role and captain live in the ``encounter.team_member`` snapshot.
+Every round reshuffles the stage's players into new teams: in ``balance`` mode balancer-service forms them
+(``rpc.balancer.round_teams``) and the teams closest in rank total meet. A round team has no ``tournament.team``: its
+seat is written with ``team_id = NULL`` and the roster, role and captain live in the ``encounter.team_member`` snapshot.
 """
 
 from __future__ import annotations
 
 import random
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import sqlalchemy as sa
 from loguru import logger
@@ -20,23 +21,25 @@ from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.encounter_naming import build_encounter_name
 from shared.domain.roster import PlayerRoster
+from shared.messaging.rpc import request_rpc
 from shared.repository import BracketEncounterRepository, CatalogRoleRepository, EncounterRepository, StageRepository
 from shared.repository.player_standing import PlayerStandingRepository
 from shared.services.encounter.participants import MemberSnapshot, place_team
 from shared.services.flow_queries import stage_node_status
 from shared.services.roster import roster_engine
 from shared.services.team_format import tournament_slot_shape
+from src.core.broker import optional_broker
 from src.domain.admin.best_of import best_of_config, resolve_best_of
 from src.domain.individual_swiss import (
     PoolError,
     PoolPlayer,
     StandingLine,
     check_playoff_team_count,
-    pair_randomly,
+    pair_closest,
     round_captain,
     score_lobbies,
-    split_pool,
     split_two,
+    teams_from_ids,
     teams_per_round,
 )
 from src.services.individual_swiss.standings import (
@@ -65,6 +68,33 @@ def _refuse(code: str, message: str) -> HTTPException:
 
 def _roster_name(roster: PlayerRoster) -> str:
     return (roster.display_name or roster.handle or roster.player_name or f"#{roster.registration_id}")[:255]
+
+
+_ROUND_TEAMS_SUBJECT = "rpc.balancer.round_teams"
+#: Above the solver's own 30 s stop: a timeout here means balancer-service is gone, not slow.
+_ROUND_TEAMS_TIMEOUT = 60.0
+
+
+async def _balanced_teams(pool: Sequence[PoolPlayer], shape: Mapping[str, int], discipline: str) -> list[Team]:
+    """The round's teams from balancer-service; a ``PoolError`` when it cannot answer, so the round is refused."""
+    team_count = teams_per_round(pool, shape)
+    broker = optional_broker()
+    if broker is None:
+        raise PoolError("balancer_unavailable", "Балансер недоступен: нет подключения к брокеру")
+    payload = {
+        "discipline": discipline,
+        "shape": dict(shape),
+        "players": [{"id": p.member_id, "role": p.role, "rank": p.rank} for p in pool],
+    }
+    try:
+        reply = await request_rpc(broker, payload, _ROUND_TEAMS_SUBJECT, timeout=_ROUND_TEAMS_TIMEOUT)
+    except Exception as exc:
+        logger.exception("Individual Swiss: balancer-service did not answer")
+        raise PoolError("balancer_unavailable", f"Балансер не ответил: {type(exc).__name__}") from exc
+    if reply is None or not reply.ok:
+        message = reply.message if reply is not None else "ответ не в формате RPC"
+        raise PoolError("balancer_failed", f"Балансер не собрал команды: {message}")
+    return teams_from_ids(reply.data["teams"], pool, shape, team_count)
 
 
 class IndividualSwissRoundsService:
@@ -194,7 +224,7 @@ class IndividualSwissRoundsService:
         rng = random.Random(f"{stage.id}:{round_number}")
         try:
             if stage.pairing_mode == enums.StagePairingMode.BALANCE:
-                pairs = pair_randomly(split_pool(pool, shape, teams_per_round(pool, shape), rng), rng)
+                pairs = pair_closest(await _balanced_teams(pool, shape, tournament.discipline))
             else:
                 by_member = {player.member_id: player for player in pool}
                 lines = [

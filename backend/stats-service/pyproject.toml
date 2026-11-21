@@ -9,6 +9,9 @@ dependencies = [
     "faststream[rabbit,cli]>=0.6.7",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
+    # Overwatch decoder (shared/disciplines/overwatch: ingest, impact, baselines); was transitive via ortools.
+    "numpy>=1.26.0",
+    "pandas>=3.0",
     "pydantic[email]>=2.10.5",
     "redis>=5.2.1",
     "sqlalchemy>=2.1",
