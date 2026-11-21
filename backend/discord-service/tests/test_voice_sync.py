@@ -190,6 +190,42 @@ class ApplyTests(IsolatedAsyncioTestCase):
         self.assertEqual(["commit", "discord"], order[:2])
 
 
+async def _run_sync(
+    guild: _Guild, rows: list[MagicMock], plan: MagicMock, ops: list[vd.Op], before: dict[str, str] | None = None
+) -> VoiceSync:
+    """One ``_sync`` of tournament 5 against ``guild``: the plan, rows and diff given, Postgres a no-op double.
+    ``before`` are the routes a previous sync left, so this one is a round change."""
+    session = MagicMock(commit=AsyncMock(), in_transaction=MagicMock(return_value=False))
+
+    @asynccontextmanager
+    async def session_maker():
+        yield session
+
+    sync = VoiceSync(
+        bot=MagicMock(get_guild=MagicMock(return_value=guild)), session_maker=session_maker, queues=GuildQueues()
+    )
+    if before is not None:
+        sync._remember(5, rows, before)
+    with (
+        patch.object(sync, "_plan", AsyncMock(return_value=plan)),
+        patch.object(sync, "_models", AsyncMock(return_value=rows)),
+        patch.object(sync, "_report", AsyncMock()),
+        patch.object(VoiceSync, "_permission_issues", return_value=[]),
+        patch("src.services.voice_sync.observe"),
+        patch.object(vd, "diff", return_value=vd.Diff(ops=ops)),
+    ):
+        await sync._sync(5)
+    return sync
+
+
+def _slots(guild: _Guild, *channels: MagicMock) -> list[MagicMock]:
+    guild.channels.update({channel.id: channel for channel in channels})
+    return [
+        MagicMock(slot_key=f"slot:1:{index}", kind="swiss_slot", discord_channel_id=channel.id)
+        for index, channel in enumerate(channels)
+    ]
+
+
 class SyncRoutingTests(IsolatedAsyncioTestCase):
     async def test_a_rejected_overwrite_routes_nobody_to_that_slot(self) -> None:
         """A private lobby whose new overwrites Discord refused still admits the last round's roster: nobody is
@@ -197,34 +233,30 @@ class SyncRoutingTests(IsolatedAsyncioTestCase):
         guild = _Guild()
         refused = MagicMock(id=700, edit=AsyncMock(side_effect=discord.Forbidden(MagicMock(status=403), "no")))
         granted = MagicMock(id=701, edit=AsyncMock())
-        guild.channels.update({700: refused, 701: granted})
-        rows = [
-            MagicMock(slot_key="slot:1:0", kind="swiss_slot", discord_channel_id=700),
-            MagicMock(slot_key="slot:1:1", kind="swiss_slot", discord_channel_id=701),
-        ]
-        session = MagicMock(commit=AsyncMock(), in_transaction=MagicMock(return_value=False))
-
-        @asynccontextmanager
-        async def session_maker():
-            yield session
-
-        sync = VoiceSync(
-            bot=MagicMock(get_guild=MagicMock(return_value=guild)), session_maker=session_maker, queues=GuildQueues()
-        )
+        rows = _slots(guild, refused, granted)
         overwrites = {("member", 42): (1024, 0)}
         plan = MagicMock(guild_id="9", routes={"42": "slot:1:0", "43": "slot:1:1"}, channels=[])
-        diff = vd.Diff(
-            ops=[vd.EditChannel("slot:1:0", overwrites=overwrites), vd.EditChannel("slot:1:1", overwrites=overwrites)]
+
+        sync = await _run_sync(
+            guild,
+            rows,
+            plan,
+            [vd.EditChannel("slot:1:0", overwrites=overwrites), vd.EditChannel("slot:1:1", overwrites=overwrites)],
         )
-        with (
-            patch.object(sync, "_plan", AsyncMock(return_value=plan)),
-            patch.object(sync, "_models", AsyncMock(return_value=rows)),
-            patch.object(sync, "_report", AsyncMock()),
-            patch.object(VoiceSync, "_permission_issues", return_value=[]),
-            patch("src.services.voice_sync.observe"),
-            patch.object(vd, "diff", return_value=diff),
-        ):
-            await sync._sync(5)
 
         granted.edit.assert_awaited_once()
         self.assertEqual({"43": "slot:1:1"}, sync._routes[5])
+
+    async def test_a_channel_is_renamed_before_the_round_moves_a_player_into_it(self) -> None:
+        """A player arriving in their new lobby sees it already named after their match."""
+        guild, order = _Guild(), []
+        player = MagicMock(id=42, move_to=AsyncMock(side_effect=lambda *_, **__: order.append("move")))
+        target = MagicMock(id=700, members=[], edit=AsyncMock(side_effect=lambda **_: order.append("rename")))
+        sitting = MagicMock(id=701, members=[player], edit=AsyncMock())
+        rows = _slots(guild, target, sitting)
+        guild.get_member = lambda member_id: player if member_id == 42 else None
+        plan = MagicMock(guild_id="9", routes={"42": "slot:1:0"}, channels=[])
+
+        await _run_sync(guild, rows, plan, [vd.EditChannel("slot:1:0", name="Матч 1 · Команда A")], {"42": "slot:1:1"})
+
+        self.assertEqual(["rename", "move"], order)

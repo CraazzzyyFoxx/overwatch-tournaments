@@ -249,23 +249,25 @@ class VoiceSync:
                 result = vd.diff(plan, [_row(r) for r in rows], observe(guild))
                 issues += result.issues
                 await session.commit()  # end the read: what follows waits on Discord
-                # Access first (creations, category moves, overwrites), then the routes and round moves, then the
-                # renames and reorders: a move never waits behind a rate-limited rename, and never lands a team in
-                # a private lobby still carrying the last round's overwrites.
+                # Access first (creations, category moves, overwrites), then the renames and reorders, then the
+                # routes and round moves: a player lands in a channel already named after their match, and never in a
+                # private lobby still carrying the last round's overwrites. A rename past the 2-per-10-minutes limit is
+                # deferred (``retry_in``) rather than waited for; the moves then go under the old name.
                 access, cosmetic = vd.split_cosmetic(result.ops)
                 applier = _Apply(self, guild, session, tournament_id, {r.slot_key: r for r in rows}, result.categories)
                 await applier.run(access)
+                # A slot whose access write Discord refused keeps the last round's overwrites: route nobody there.
+                refused = set(applier.failed)
+                await applier.run(cosmetic)
+                issues += applier.issues
+                retry_in = applier.retry_in
                 rows = await self._models(session, tournament_id)
                 await session.commit()
-                # A slot whose access write Discord refused keeps the last round's overwrites: route nobody there.
-                routes = {user: key for user, key in plan.routes.items() if key not in applier.failed}
+                routes = {user: key for user, key in plan.routes.items() if key not in refused}
                 previous = self._routes.get(tournament_id)
                 self._remember(tournament_id, rows, routes)
                 if previous is not None:
                     await self._round_moves(guild, tournament_id, plan, previous, routes)
-                await applier.run(cosmetic)
-                issues += applier.issues
-                retry_in = applier.retry_in
             await self._report(session, tournament_id, issues, rows)
         return retry_in
 

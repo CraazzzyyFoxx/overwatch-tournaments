@@ -177,11 +177,11 @@ class Diff:
 
 
 def split_cosmetic(ops: Sequence[Op]) -> tuple[list[Op], list[Op]]:
-    """``(access, cosmetic)``: what has to land before players are routed, and channel renames and reorders,
-    which may wait behind Discord's rate limits after the moves.
+    """``(access, cosmetic)``: creations, category moves and permission writes, then renames and reorders. The sync
+    applies both before it routes and moves players, access first.
 
-    Creations, category moves and permission writes are access: routing a new team into a private lobby that still
-    carries the last round's overwrites would let the wrong roster in. A rename riding on such an edit is split off.
+    Access is apart because a failed write there keeps the last round's overwrites on a private lobby, and nobody may
+    be routed into it; a failed rename only leaves an old name. A rename riding on an access edit is split off.
     """
     access: list[Op] = []
     cosmetic: list[Op] = []
