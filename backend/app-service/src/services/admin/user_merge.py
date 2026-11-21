@@ -869,8 +869,10 @@ class UserMergeService:
         participation, or both active in the same encounter) is dropped, since
         it is the same person twice. The now seat-free source row is the one
         duplicate-identity row the user delete cascades away. The same holds for
-        ``mix.round_member`` rows (one per round and member) and ``draft.player``
-        seats (a mix seat has no registration to fall back to).
+        ``mix.round_member`` rows (one per round and member), ``draft.player``
+        seats (a mix seat has no registration to fall back to) and an individual
+        Swiss stage's pool rows and pinned places (``tournament.player_standing``,
+        ``player_standing_pin``), which cascade with the member.
         """
         source_rows = (
             await session.execute(
@@ -981,6 +983,27 @@ class UserMergeService:
                 .values(workspace_member_id=target_member_id)
                 .execution_options(synchronize_session=False)
             )
+            # An individual Swiss pool row and its pinned place cascade with the member: left on the source, the player
+            # drops out of the stage and every later round of it stops pairing. One row per (stage, member): on a
+            # collision the survivor's row wins.
+            for table in (models.PlayerStanding, models.PlayerStandingPin):
+                other = sa.orm.aliased(table)
+                await session.execute(
+                    sa.delete(table)
+                    .where(
+                        table.workspace_member_id == source_member_id,
+                        sa.exists()
+                        .where(other.workspace_member_id == target_member_id, other.stage_id == table.stage_id)
+                        .correlate(table),
+                    )
+                    .execution_options(synchronize_session=False)
+                )
+                await session.execute(
+                    sa.update(table)
+                    .where(table.workspace_member_id == source_member_id)
+                    .values(workspace_member_id=target_member_id)
+                    .execution_options(synchronize_session=False)
+                )
 
     async def _delete_source_user_row(self, session: AsyncSession, source_user_id: int) -> None:
         # A set-based DELETE rather than an ORM instance delete: the row's dependents
