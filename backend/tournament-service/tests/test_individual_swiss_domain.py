@@ -21,13 +21,13 @@ from src.domain.individual_swiss import (  # noqa: E402
     check_playoff_team_count,
     compute_totals,
     order_role,
-    pair_randomly,
+    pair_closest,
     pick_captains,
     qualify,
     round_captain,
     score_lobbies,
-    split_pool,
     split_two,
+    teams_from_ids,
     teams_per_round,
 )
 
@@ -142,30 +142,26 @@ def test_split_two_single_slot_roles() -> None:
     assert sorted(p.role for p in a) == sorted("abcde") == sorted(p.role for p in b)
 
 
-def test_split_pool_even_teams() -> None:
-    players = [
-        PoolPlayer(i, None, f"p{i}", role, rank)
-        for i, (role, rank) in enumerate(
-            [(r, 1 + (i * 7) % 40) for r, n in (("tank", 8), ("damage", 16), ("support", 16)) for i in range(n)], 1
-        )
-    ]
-    assert len(players) == 40
-    teams = split_pool(players, SHAPE, 8, random.Random("7:2"))
-    assert len(teams) == 8
-    for team in teams:
-        assert sorted(p.role for p in team) == ["damage", "damage", "support", "support", "tank"]
-    assert sorted(p.member_id for t in teams for p in t) == list(range(1, 41))
-    totals = [sum(p.rank for p in t) for t in teams]
-    assert max(totals) - min(totals) <= max(p.rank for p in players)
+def test_teams_from_ids_takes_only_a_whole_pool_in_the_teams_shape() -> None:
+    roles = ["tank", "damage", "damage", "support", "support"] * 2
+    players = [PoolPlayer(i, None, f"p{i}", role, 10) for i, role in enumerate(roles, 1)]
+    teams = teams_from_ids([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]], players, SHAPE, 2)
+    assert [[p.member_id for p in team] for team in teams] == [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]]
+    for bad in (
+        [[1, 2, 3, 4, 5], [6, 7, 8, 9]],  # a player left out
+        [[1, 2, 3, 4, 5], [5, 7, 8, 9, 10]],  # a player twice
+        [[1, 2, 3, 4, 6], [5, 7, 8, 9, 10]],  # two tanks on one team
+    ):
+        with pytest.raises(PoolError):
+            teams_from_ids(bad, players, SHAPE, 2)
 
 
-def test_pair_randomly_and_captain() -> None:
-    teams = [[PoolPlayer(i, None, f"p{i}", "tank", i)] for i in range(1, 5)]
-    pairs = pair_randomly(teams, random.Random(3))
-    assert sorted(t[0].member_id for pair in pairs for t in pair) == [1, 2, 3, 4]
-    assert len(pairs) == 2
+def test_pair_closest_meets_the_teams_nearest_in_total_and_captain() -> None:
+    teams = [[PoolPlayer(i, None, f"p{i}", "tank", rank)] for i, rank in ((1, 100), (2, 40), (3, 95), (4, 45))]
+    pairs = pair_closest(teams)
+    assert [sorted(t[0].member_id for t in pair) for pair in pairs] == [[2, 4], [1, 3]]
     with pytest.raises(PoolError):
-        pair_randomly(teams[:3], random.Random(3))
+        pair_closest(teams[:3])
     team = [
         PoolPlayer(5, None, "a", "tank", 7),
         PoolPlayer(2, None, "b", "damage", 7),

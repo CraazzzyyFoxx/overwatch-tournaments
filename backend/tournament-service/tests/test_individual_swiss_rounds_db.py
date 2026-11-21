@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 from collections import defaultdict
+from unittest.mock import patch
 
 import sqlalchemy as sa
 
@@ -16,12 +17,14 @@ from shared.core import enums
 from shared.core.errors import BaseAPIException
 from shared.models.registration.registration import Registration, RegistrationRole
 from shared.repository import CatalogRoleRepository
+from shared.schemas.rpc import RpcReply
 from shared.services.encounter.participants import active_teams
 from shared.services.encounter.result import apply_result
 from shared.testing.factories import add_entry
 from src import schemas
 from src.services.admin.stage import stage_service
 from src.services.individual_swiss import individual_swiss_rounds_service
+from src.services.individual_swiss import rounds as rounds_module
 from src.services.individual_swiss.qualification import qualification_service
 from src.services.standings.service import standings_service
 from tests._encounter_layer import EncounterLayerCase, move_stage
@@ -336,24 +339,52 @@ class IndividualSwissRoundsTests(EncounterLayerCase):
             await move_stage(self.Session, stage_id, enums.FlowNodeStatus.READY, enums.FlowNodeStatus.LIVE)
         self.assertEqual("playoff_too_large", raised.exception.detail["code"])
 
-    async def test_balance_mode_splits_the_whole_pool_into_four_teams(self) -> None:
+    async def test_balance_mode_seats_the_balancers_teams_and_pairs_the_closest(self) -> None:
+        """Balance mode asks balancer-service for the round's teams (stubbed here: the solver is its own service) and
+        seats exactly those; the two teams closest in rank total meet."""
         await self._seed_pool(ROLES)
-        stage_id = await self._start(pairing_mode=enums.StagePairingMode.BALANCE)
-        round_one = await self._round(stage_id, 1)
-        self.assertEqual(2, len(round_one))
-        table = await self._table(stage_id)
-        members: list[int] = []
-        for encounter_id in round_one:
-            for team_id, _, seat_members in await self._seats(encounter_id):
-                self.assertIsNone(team_id)
-                ids = [member_id for member_id, _ in seat_members]
-                members.extend(ids)
-                self.assertEqual(
-                    {"tank": 1, "damage": 2, "support": 2},
-                    {r: sum(table[i].role == r for i in ids) for r in ROLES},
-                )
-        self.assertEqual(set(table), set(members))
-        self.assertEqual(20, len(members))
+        asked: list[dict[str, object]] = []
+        returned: list[list[int]] = []
+
+        async def balancer(_broker, payload, subject, *, timeout):
+            asked.append({"subject": subject, "shape": payload["shape"]})
+            by_role: dict[str, list[int]] = defaultdict(list)
+            for player in payload["players"]:
+                by_role[player["role"]].append(player["id"])
+            teams: list[list[int]] = [[] for _ in range(4)]
+            for role, count in payload["shape"].items():
+                for index, member_id in enumerate(by_role[role]):
+                    teams[index // count].append(member_id)
+            returned.extend(teams)
+            return RpcReply(ok=True, data={"teams": teams})
+
+        with (
+            patch.object(rounds_module, "optional_broker", return_value=object()),
+            patch.object(rounds_module, "request_rpc", side_effect=balancer),
+        ):
+            stage_id = await self._start(pairing_mode=enums.StagePairingMode.BALANCE)
+        self.assertEqual(
+            [{"subject": "rpc.balancer.round_teams", "shape": {"tank": 1, "damage": 2, "support": 2}}], asked
+        )
+        rank = {member_id: row.rank for member_id, row in (await self._table(stage_id)).items()}
+        matches: list[list[list[int]]] = []
+        for encounter_id in await self._round(stage_id, 1):
+            seats = await self._seats(encounter_id)
+            self.assertEqual([None, None], [team_id for team_id, _, _ in seats])
+            matches.append([sorted(member_id for member_id, _ in members) for _, _, members in seats])
+        self.assertEqual(sorted(sorted(team) for team in returned), sorted(team for match in matches for team in match))
+        total = {tuple(team): sum(rank[m] for m in team) for match in matches for team in match}
+        order = sorted(total.values())
+        self.assertEqual(
+            [order[0:2], order[2:4]], sorted(sorted(total[tuple(team)] for team in match) for match in matches)
+        )
+
+    async def test_balance_mode_refuses_the_round_without_the_balancer(self) -> None:
+        await self._seed_pool(ROLES)
+        with patch.object(rounds_module, "optional_broker", return_value=None):
+            with self.assertRaises(BaseAPIException) as refused:
+                await self._start(pairing_mode=enums.StagePairingMode.BALANCE)
+        self.assertEqual("balancer_unavailable", refused.exception.detail["code"])
 
     async def test_a_started_stage_starts_again_only_when_its_matches_are_gone(self) -> None:
         await self._seed_pool(ROLES)

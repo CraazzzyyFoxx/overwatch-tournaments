@@ -37,6 +37,7 @@ from src.rpc import jobs as rpc_jobs
 from src.rpc import players as rpc_players
 from src.rpc import prefs as rpc_prefs
 from src.rpc import ranks as rpc_ranks
+from src.rpc import round_teams as rpc_round_teams
 from src.services.balancer.jobs import execute_balance_job
 from src.services.bot_lobby import shutdown_scheduler as shutdown_bot_lobby_poll
 from src.services.bot_lobby import start_scheduler as start_bot_lobby_poll
@@ -85,6 +86,8 @@ rpc_players.register(broker, logger)
 rpc_ranks.register(broker, logger)
 # The host's own solver knobs, which every mix they host balances with.
 rpc_prefs.register(broker, logger)
+# The teams of an individual Swiss round, for tournament-service's round generation (internal subject).
+rpc_round_teams.register(broker, logger)
 
 
 # Balance jobs run for minutes (MOO solver); isolate them from the RPC channel.
