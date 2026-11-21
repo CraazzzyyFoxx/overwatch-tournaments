@@ -84,13 +84,15 @@ async def _team_rosters(session: AsyncSession, tournament_id: int, stages: list[
 
 
 async def _round_encounters(session: AsyncSession, stage_id: int):
-    """Every round of an individual Swiss stage as ``Encounter`` sides, plus the member names of the latest round."""
+    """Every round of an individual Swiss stage as ``Encounter`` sides, the member names of the latest round, and the
+    latest round's seat names by encounter (in encounter order, the order the site numbers its matches in)."""
     rows = (
         await session.execute(
             sa.select(
                 models.BracketEncounter.round,
                 models.BracketEncounter.encounter_id,
                 models.EncounterTeam.slot,
+                models.EncounterTeam.name,
                 models.EncounterTeamMember.workspace_member_id,
                 models.EncounterTeamMember.display_name_snapshot,
             )
@@ -114,15 +116,31 @@ async def _round_encounters(session: AsyncSession, stage_id: int):
     ).all()
     # round -> encounter -> slot -> members; an encounter with no roster yet still holds its lobby.
     tree: dict[int, dict[int, dict[int, list[int]]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    seat_names: dict[int, dict[int, dict[int, str]]] = defaultdict(lambda: defaultdict(dict))
     names: dict[int, str] = {}
-    for round_, encounter_id, slot, member_id, name in rows:
+    for round_, encounter_id, slot, seat_name, member_id, name in rows:
         tree[round_][encounter_id][slot].append(member_id)
+        seat_names[round_][encounter_id][slot] = seat_name
         names[member_id] = name
     rounds: list[list[Encounter]] = [
         [(sides.get(1, []), sides.get(2, [])) for _id, sides in sorted(encounters.items())]
         for _round, encounters in sorted(tree.items())
     ]
-    return rounds, names
+    if not tree:
+        return rounds, names, []
+    latest = max(tree)
+    # Numbered over every encounter of the round, rostered or not, exactly as the site numbers its matches.
+    order = await session.scalars(
+        sa.select(models.BracketEncounter.encounter_id)
+        .where(models.BracketEncounter.stage_id == stage_id, models.BracketEncounter.round == latest)
+        .order_by(models.BracketEncounter.encounter_id)
+    )
+    number = {encounter_id: n for n, encounter_id in enumerate(order.all(), 1)}
+    labels = [
+        (number[encounter_id], (seats.get(1, ""), seats.get(2, "")))
+        for encounter_id, seats in sorted(seat_names[latest].items())
+    ]
+    return rounds, names, labels
 
 
 async def build_voice_plan(session: AsyncSession, tournament_id: int) -> VoicePlan:
@@ -168,16 +186,23 @@ async def build_voice_plan(session: AsyncSession, tournament_id: int) -> VoicePl
     teams, team_roster = await _team_rosters(session, tournament_id, stages, settings.early_teams)
 
     # Latest round of each live individual Swiss stage: its seats fill the stage's slots.
-    slots: list[tuple[int, dict[int, int], int]] = []  # (stage id, member -> slot index, slot count)
+    slots: list[tuple[int, dict[int, int], int, dict[int, str]]] = []  # (stage id, member -> slot, slot count, names)
     seat_names: dict[int, str] = {}
     for stage in stages:
         if stage.stage_type != enums.StageType.INDIVIDUAL_SWISS or stage.status != _LIVE:
             continue
-        rounds, names = await _round_encounters(session, stage.id)
+        rounds, names, labels = await _round_encounters(session, stage.id)
         if not rounds:
             continue
         seats = assign_round_slots(rounds)[-1]
-        slots.append((stage.id, seats, 2 * len(rounds[-1])))
+        # A slot is named after the match and team the site shows for whoever sits in it this round.
+        slot_names = {
+            seats[members[0]]: f"Матч {number} · {label[side]}"
+            for encounter, (number, label) in zip(rounds[-1], labels, strict=True)
+            for side, members in enumerate(encounter)
+            if members
+        }
+        slots.append((stage.id, seats, 2 * len(rounds[-1]), slot_names))
         seat_names.update({member_id: names[member_id] for member_id in seats})
     return await _compose(session, plan, teams, team_roster, slots, seat_names)
 
@@ -187,7 +212,7 @@ async def _compose(
     plan: VoicePlan,
     teams: list[sa.Row],
     team_roster: dict[int, dict[int, str]],
-    slots: list[tuple[int, dict[int, int], int]],
+    slots: list[tuple[int, dict[int, int], int, dict[int, str]]],
     seat_names: dict[int, str],
 ) -> VoicePlan:
     wanted = {member_id for roster in team_roster.values() for member_id in roster} | set(seat_names)
@@ -228,18 +253,19 @@ async def _compose(
                 routes.setdefault(discord[member_id], key)
 
     slot_routes: dict[str, str] = {}
-    for stage_id, seats, count in slots:
+    for stage_id, seats, count, slot_names in slots:
         by_slot: dict[int, list[int]] = defaultdict(list)
         for member_id, index in seats.items():
             by_slot[index].append(member_id)
-        for index in range(count):
+        # Named slots in match order (how ``slot_names`` was built), so the channel list reads like the site's.
+        for index in [*slot_names, *(i for i in range(count) if i not in slot_names)]:
             key = f"slot:{stage_id}:{index}"
             members = sorted(by_slot[index])
             channels.append(
                 VoicePlanChannel(
                     slot_key=key,
                     kind="swiss_slot",
-                    name=f"Лобби {index // 2 + 1} · {'AB'[index % 2]}",
+                    name=slot_names.get(index, f"Лобби {index // 2 + 1} · {'AB'[index % 2]}")[:_NAME_LIMIT],
                     position=0,
                     stage_id=stage_id,
                     member_discord_ids=sorted({discord[m] for m in members if m in discord}),

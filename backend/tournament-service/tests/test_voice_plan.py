@@ -160,7 +160,10 @@ class VoicePlanCase(EncounterLayerCase):
                 )
                 for slot, members in enumerate(sides, 1):
                     seat = EncounterTeam(
-                        encounter_id=encounter.id, tournament_id=tournament.id, slot=slot, name=f"Seat {slot}"
+                        encounter_id=encounter.id,
+                        tournament_id=tournament.id,
+                        slot=slot,
+                        name=f"Команда m{members[0]}" if members else f"Seat {slot}",
                     )
                     s.add(seat)
                     await s.flush()
@@ -296,8 +299,18 @@ class VoicePlanSwissTests(VoicePlanCase):
 
         plan = await self.plan()
         slots = {c.slot_key: c for c in plan.channels if c.kind == "swiss_slot"}
-        self.assertEqual([f"slot:{swiss}:{i}" for i in range(4)], list(slots))
-        self.assertEqual(["Лобби 1 · A", "Лобби 1 · B", "Лобби 2 · A", "Лобби 2 · B"], [c.name for c in slots.values()])
+        # Each slot carries the site's match number and the team seated in it, listed in match order: match 1 seats
+        # m5's team on slot 1 and m1's on slot 0 (slot 0 kept m1 and m2 from round 1).
+        self.assertEqual([f"slot:{swiss}:{i}" for i in (1, 0, 2, 3)], list(slots))
+        self.assertEqual(
+            [
+                f"Матч 1 · Команда m{m5}",
+                f"Матч 1 · Команда m{m1}",
+                f"Матч 2 · Команда m{m3}",
+                f"Матч 2 · Команда m{m6}",
+            ],
+            [c.name for c in slots.values()],
+        )
         # Round 2 laid out to keep 1, 2 and 6 where round 1 put them.
         self.assertEqual(f"slot:{swiss}:0", plan.routes[self.discord[m1]])
         self.assertEqual(f"slot:{swiss}:0", plan.routes[self.discord[m2]])
@@ -307,6 +320,18 @@ class VoicePlanSwissTests(VoicePlanCase):
         self.assertIn(self.team_key(0), [c.slot_key for c in plan.channels])
         self.assertEqual([("player_without_discord", m6)], [(w.code, w.workspace_member_id) for w in plan.warnings])
         self.assertEqual(list(range(len(plan.channels))), [c.position for c in plan.channels])
+
+    async def test_a_match_without_a_roster_still_counts_in_the_match_numbers(self) -> None:
+        """The site numbers every match of the round; an earlier one with nobody seated yet must not shift the rest."""
+        swiss = await self.stage(1, kind=IS, status="live", is_published=True)
+        a, b = await self.member("a"), await self.member("b")
+        await self.seat_round(swiss, 1, [([], []), ([a], [b])])
+
+        plan = await self.plan()
+        self.assertEqual(
+            [f"Матч 2 · Команда m{a}", f"Матч 2 · Команда m{b}"],
+            [c.name for c in plan.channels if c.kind == "swiss_slot"],
+        )
 
     async def test_a_completed_swiss_stage_has_no_slots(self) -> None:
         swiss = await self.stage(1, kind=IS, status="live", is_published=True)
