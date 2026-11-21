@@ -257,10 +257,12 @@ class VoiceSync:
                 await applier.run(access)
                 rows = await self._models(session, tournament_id)
                 await session.commit()
+                # A slot whose access write Discord refused keeps the last round's overwrites: route nobody there.
+                routes = {user: key for user, key in plan.routes.items() if key not in applier.failed}
                 previous = self._routes.get(tournament_id)
-                self._remember(tournament_id, rows, plan.routes)
+                self._remember(tournament_id, rows, routes)
                 if previous is not None:
-                    await self._round_moves(guild, tournament_id, plan, previous)
+                    await self._round_moves(guild, tournament_id, plan, previous, routes)
                 await applier.run(cosmetic)
                 issues += applier.issues
                 retry_in = applier.retry_in
@@ -337,7 +339,12 @@ class VoiceSync:
             logger.warning(f"⚠️ Could not send {member.id} from the hub of tournament {tournament_id}: {exc}")
 
     async def _round_moves(
-        self, guild: discord.Guild, tournament_id: int, plan: VoicePlan, previous: dict[str, str]
+        self,
+        guild: discord.Guild,
+        tournament_id: int,
+        plan: VoicePlan,
+        previous: dict[str, str],
+        routes: dict[str, str],
     ) -> None:
         sitting: dict[str, int] = {}
         for channel_id, owner in self._tracked.items():
@@ -346,7 +353,7 @@ class VoiceSync:
                     sitting[str(member.id)] = channel_id
         moves = vd.select_round_moves(
             previous,
-            plan.routes,
+            routes,
             sitting,
             self._channels.get(tournament_id, {}),
             {c.slot_key: c.position for c in plan.channels},
@@ -474,20 +481,28 @@ class _Apply:
         self.issues: list[vd.Issue] = []
         #: Seconds until a deferred rename may be tried.
         self.retry_in: float | None = None
+        #: Slots an operation failed on; a failed access write leaves the channel open to the wrong roster.
+        self.failed: set[str] = set()
 
     async def run(self, ops: Sequence[vd.Op]) -> None:
         for op in ops:
             try:
                 await self._apply(op)
             except discord.Forbidden:
+                self._failed(op)
                 with_overwrites = getattr(op, "overwrites", None) is not None
                 self.issues.append(
                     vd.Issue(f"missing_permission:{'manage_roles' if with_overwrites else 'manage_channels'}")
                 )
             except discord.HTTPException as exc:
+                self._failed(op)
                 self.issues.append(
                     vd.Issue("discord_error", f"{type(op).__name__}: HTTP {exc.status} (code {exc.code})")
                 )
+
+    def _failed(self, op: vd.Op) -> None:
+        if (slot_key := getattr(op, "slot_key", None)) is not None:
+            self.failed.add(slot_key)
 
     async def _submit[T](self, work: Callable[[], Awaitable[T]]) -> T:
         # Never hold a transaction while Discord answers: a rate-limited wait outlives the database's

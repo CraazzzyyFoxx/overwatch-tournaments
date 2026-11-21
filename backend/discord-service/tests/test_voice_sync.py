@@ -6,6 +6,7 @@ Fakes only: a guild double that records its calls, a session double that records
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -187,3 +188,43 @@ class ApplyTests(IsolatedAsyncioTestCase):
         await applier.run([vd.CreateChannel("hub", "hub", "Общий", "category:1")])
 
         self.assertEqual(["commit", "discord"], order[:2])
+
+
+class SyncRoutingTests(IsolatedAsyncioTestCase):
+    async def test_a_rejected_overwrite_routes_nobody_to_that_slot(self) -> None:
+        """A private lobby whose new overwrites Discord refused still admits the last round's roster: nobody is
+        routed or moved into it until a later sync writes them."""
+        guild = _Guild()
+        refused = MagicMock(id=700, edit=AsyncMock(side_effect=discord.Forbidden(MagicMock(status=403), "no")))
+        granted = MagicMock(id=701, edit=AsyncMock())
+        guild.channels.update({700: refused, 701: granted})
+        rows = [
+            MagicMock(slot_key="slot:1:0", kind="swiss_slot", discord_channel_id=700),
+            MagicMock(slot_key="slot:1:1", kind="swiss_slot", discord_channel_id=701),
+        ]
+        session = MagicMock(commit=AsyncMock(), in_transaction=MagicMock(return_value=False))
+
+        @asynccontextmanager
+        async def session_maker():
+            yield session
+
+        sync = VoiceSync(
+            bot=MagicMock(get_guild=MagicMock(return_value=guild)), session_maker=session_maker, queues=GuildQueues()
+        )
+        overwrites = {("member", 42): (1024, 0)}
+        plan = MagicMock(guild_id="9", routes={"42": "slot:1:0", "43": "slot:1:1"}, channels=[])
+        diff = vd.Diff(
+            ops=[vd.EditChannel("slot:1:0", overwrites=overwrites), vd.EditChannel("slot:1:1", overwrites=overwrites)]
+        )
+        with (
+            patch.object(sync, "_plan", AsyncMock(return_value=plan)),
+            patch.object(sync, "_models", AsyncMock(return_value=rows)),
+            patch.object(sync, "_report", AsyncMock()),
+            patch.object(VoiceSync, "_permission_issues", return_value=[]),
+            patch("src.services.voice_sync.observe"),
+            patch.object(vd, "diff", return_value=diff),
+        ):
+            await sync._sync(5)
+
+        granted.edit.assert_awaited_once()
+        self.assertEqual({"43": "slot:1:1"}, sync._routes[5])
