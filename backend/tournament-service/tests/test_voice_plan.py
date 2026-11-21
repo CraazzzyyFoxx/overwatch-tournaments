@@ -299,13 +299,13 @@ class VoicePlanSwissTests(VoicePlanCase):
 
         plan = await self.plan()
         slots = {c.slot_key: c for c in plan.channels if c.kind == "swiss_slot"}
-        # Each slot carries the site's match number and the team seated in it, listed in match order: match 1 seats
-        # m5's team on slot 1 and m1's on slot 0 (slot 0 kept m1 and m2 from round 1).
-        self.assertEqual([f"slot:{swiss}:{i}" for i in (1, 0, 2, 3)], list(slots))
+        # Each slot carries the site's match number and the team seated in it, in slot order: match 1 seats m1's
+        # team on slot 0 (slot 0 kept m1 and m2 from round 1) and m5's on slot 1.
+        self.assertEqual([f"slot:{swiss}:{i}" for i in range(4)], list(slots))
         self.assertEqual(
             [
-                f"Матч 1 · Команда m{m5}",
                 f"Матч 1 · Команда m{m1}",
+                f"Матч 1 · Команда m{m5}",
                 f"Матч 2 · Команда m{m3}",
                 f"Матч 2 · Команда m{m6}",
             ],

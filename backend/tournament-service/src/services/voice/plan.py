@@ -257,8 +257,8 @@ async def _compose(
         by_slot: dict[int, list[int]] = defaultdict(list)
         for member_id, index in seats.items():
             by_slot[index].append(member_id)
-        # Named slots in match order (how ``slot_names`` was built), so the channel list reads like the site's.
-        for index in [*slot_names, *(i for i in range(count) if i not in slot_names)]:
+        # Slot order, not match order: reordering every round costs a rate-limited Discord call per channel.
+        for index in range(count):
             key = f"slot:{stage_id}:{index}"
             members = sorted(by_slot[index])
             channels.append(
