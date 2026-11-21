@@ -51,7 +51,7 @@ Otherwise:
 |---|---|---|---|---|
 | Hub | `hub` | any other channel exists | public | `Общий · <tournament>` |
 | Team | `team:<team_id>` | the team holds a FINAL input of an active non-`individual_swiss` stage; before any stage was published (`Stage.is_published`, sticky) only with `early_teams` | every `Player` row of the team (substitutes and the players they replaced) | team name |
-| Round slot | `slot:<stage_id>:<index>` | its `individual_swiss` stage is active, not completed and has a round; `index < 2 × encounters of the latest round` (= `teams_per_round`) | the members of the seat assigned to the slot in the latest round | `Матч <n> · <seat name>`: the site's match number (encounters of the round in id order) and the seat's team name; listed in match order; `Лобби <n> · A/B` for a slot nobody sits in |
+| Round slot | `slot:<stage_id>:<index>` | its `individual_swiss` stage is active, not completed and has a round; `index < 2 × encounters of the latest round` (= `teams_per_round`) | the members of the seat assigned to the slot in the latest round | `Матч <n> · <seat name>`: the site's match number (every encounter of the round, in id order) and the seat's team name; listed in slot order (a per-round reorder is a rate-limited Discord call per channel); `Лобби <n> · A/B` for a slot nobody sits in |
 
 Elimination (rule "a"): activating the next stage deactivates the previous one, so a team that did not
 advance drops out of the plan at that moment.
@@ -80,9 +80,14 @@ the plain bracket order. Round 1 uses the bracket order. It is deterministic, re
 - **Drift.** A tracked channel deleted or edited by hand triggers a sync, which restores it. Edit events during a
   sync and for 5 s after it are ignored, so the bot's own edits do not loop.
 - **Hub.** Joining the hub moves the member to `routes[member]`; anyone without a route stays.
-- **Round change.** After a sync, members whose route changed and who sit in one of the tournament's
-  channels are moved to the new one, in slot order. Others get there through the hub. Routes live in process
-  memory: after a restart nobody is moved until the routes change again.
+- **Round change.** Before a sync applies its changes, the new routes are installed for the channels that already
+  exist and members whose route changed and who sit in one of the tournament's channels are moved there, in slot
+  order; a second pass after the changes covers channels the sync created. Renames never hold a move back. Others
+  get there through the hub. Routes live in process memory: after a restart nobody is moved until the routes change
+  again.
+- **Transactions.** No database transaction is held while Discord answers (a rate-limited wait outlives the
+  database's idle-in-transaction timeout): the sync commits its read before the first Discord call and before every
+  later one.
 - **Members outside the guild.** Their overwrites are dropped and reported as `member_overwrite_failed`.
 - **Queue.** One sequential queue per guild, by priority: hub moves and mix moves, round moves, creates and
   permission edits, deletions. discord.py waits out 429s; Discord does not publish the move or create limits.

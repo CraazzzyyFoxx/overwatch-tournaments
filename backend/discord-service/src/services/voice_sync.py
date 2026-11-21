@@ -248,12 +248,21 @@ class VoiceSync:
                 issues += self._permission_issues(guild, plan, rows)
                 result = vd.diff(plan, [_row(r) for r in rows], observe(guild))
                 issues += result.issues
+                await session.commit()  # end the read: what follows waits on Discord
+                # Players first: the routes and round moves only need channels that already exist, so they do not
+                # wait behind renames and reorders Discord may rate-limit for minutes. Channels created below get
+                # their members by a second pass.
+                previous = self._routes.get(tournament_id)
+                self._remember(tournament_id, rows, plan.routes)
+                if previous is not None:
+                    await self._round_moves(guild, tournament_id, plan, previous)
+                previous = self._routes.get(tournament_id)
                 applier = _Apply(self, guild, session, tournament_id, {r.slot_key: r for r in rows}, result.categories)
                 await applier.run(result.ops)
                 issues += applier.issues
                 retry_in = applier.retry_in
                 rows = await self._models(session, tournament_id)
-                previous = self._routes.get(tournament_id)
+                await session.commit()
                 self._remember(tournament_id, rows, plan.routes)
                 if previous is not None:
                     await self._round_moves(guild, tournament_id, plan, previous)
@@ -482,8 +491,12 @@ class _Apply:
                     vd.Issue("discord_error", f"{type(op).__name__}: HTTP {exc.status} (code {exc.code})")
                 )
 
-    def _submit[T](self, work: Callable[[], Awaitable[T]]) -> asyncio.Future[T]:
-        return self._queues.submit(self._guild.id, Priority.STRUCTURE, work)
+    async def _submit[T](self, work: Callable[[], Awaitable[T]]) -> T:
+        # Never hold a transaction while Discord answers: a rate-limited wait outlives the database's
+        # idle-in-transaction timeout and the connection is closed under the rest of the sync.
+        if self._session.in_transaction():
+            await self._session.commit()
+        return await self._queues.submit(self._guild.id, Priority.STRUCTURE, work)
 
     @property
     def _queues(self) -> GuildQueues:

@@ -166,3 +166,24 @@ class ApplyTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(channel.edit.await_count, 2)  # the third waits
         self.assertGreater(applier.retry_in, 500)
+
+    async def test_an_open_transaction_is_committed_before_discord_is_asked(self) -> None:
+        """A rate-limited Discord wait outlives the database's idle-in-transaction timeout, so no transaction may be
+        open across one."""
+        guild = _Guild()
+        applier, session, _ = _apply(guild)
+        order: list[str] = []
+        session.in_transaction = MagicMock(return_value=True)
+        session.commit = AsyncMock(side_effect=lambda: order.append("commit"))
+        made = guild.create_voice_channel
+
+        async def create(name: str, **fields):
+            order.append("discord")
+            return await made(name, **fields)
+
+        guild.create_voice_channel = create
+        applier._categories["category:1"] = discord.Object(10)
+
+        await applier.run([vd.CreateChannel("hub", "hub", "Общий", "category:1")])
+
+        self.assertEqual(["commit", "discord"], order[:2])

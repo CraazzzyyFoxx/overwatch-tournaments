@@ -75,7 +75,9 @@ _ROUND_TEAMS_SUBJECT = "rpc.balancer.round_teams"
 _ROUND_TEAMS_TIMEOUT = 60.0
 
 
-async def _balanced_teams(pool: Sequence[PoolPlayer], shape: Mapping[str, int], discipline: str) -> list[Team]:
+async def _balanced_teams(
+    session: AsyncSession, pool: Sequence[PoolPlayer], shape: Mapping[str, int], discipline: str
+) -> list[Team]:
     """The round's teams from balancer-service; a ``PoolError`` when it cannot answer, so the round is refused."""
     team_count = teams_per_round(pool, shape)
     broker = optional_broker()
@@ -86,6 +88,9 @@ async def _balanced_teams(pool: Sequence[PoolPlayer], shape: Mapping[str, int], 
         "shape": dict(shape),
         "players": [{"id": p.member_id, "role": p.role, "rank": p.rank} for p in pool],
     }
+    # The round is generated inside the caller's transaction, which sits idle while the solver runs: production's
+    # idle_in_transaction_session_timeout (30 s) closed the connection under a 27 s solve. Outlast our own wait.
+    await session.execute(sa.text("SET LOCAL idle_in_transaction_session_timeout = '90s'"))
     try:
         reply = await request_rpc(broker, payload, _ROUND_TEAMS_SUBJECT, timeout=_ROUND_TEAMS_TIMEOUT)
     except Exception as exc:
@@ -224,7 +229,7 @@ class IndividualSwissRoundsService:
         rng = random.Random(f"{stage.id}:{round_number}")
         try:
             if stage.pairing_mode == enums.StagePairingMode.BALANCE:
-                pairs = pair_closest(await _balanced_teams(pool, shape, tournament.discipline))
+                pairs = pair_closest(await _balanced_teams(session, pool, shape, tournament.discipline))
             else:
                 by_member = {player.member_id: player for player in pool}
                 lines = [
