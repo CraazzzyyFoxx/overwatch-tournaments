@@ -80,11 +80,11 @@ the plain bracket order. Round 1 uses the bracket order. It is deterministic, re
 - **Drift.** A tracked channel deleted or edited by hand triggers a sync, which restores it. Edit events during a
   sync and for 5 s after it are ignored, so the bot's own edits do not loop.
 - **Hub.** Joining the hub moves the member to `routes[member]`; anyone without a route stays.
-- **Round change.** Before a sync applies its changes, the new routes are installed for the channels that already
-  exist and members whose route changed and who sit in one of the tournament's channels are moved there, in slot
-  order; a second pass after the changes covers channels the sync created. Renames never hold a move back. Others
-  get there through the hub. Routes live in process memory: after a restart nobody is moved until the routes change
-  again.
+- **Round change.** A sync applies access first (creations, category moves, permission writes), then installs the
+  new routes and moves members whose route changed and who sit in one of the tournament's channels, in slot
+  order, and only then renames and reorders: a move never waits behind a rate-limited rename, and never lands a
+  team in a private lobby still carrying the last round's overwrites. Others get there through the hub. Routes live
+  in process memory: after a restart nobody is moved until the routes change again.
 - **Transactions.** No database transaction is held while Discord answers (a rate-limited wait outlives the
   database's idle-in-transaction timeout): the sync commits its read before the first Discord call and before every
   later one.

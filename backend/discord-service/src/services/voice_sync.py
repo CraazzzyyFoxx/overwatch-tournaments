@@ -249,23 +249,21 @@ class VoiceSync:
                 result = vd.diff(plan, [_row(r) for r in rows], observe(guild))
                 issues += result.issues
                 await session.commit()  # end the read: what follows waits on Discord
-                # Players first: the routes and round moves only need channels that already exist, so they do not
-                # wait behind renames and reorders Discord may rate-limit for minutes. Channels created below get
-                # their members by a second pass.
-                previous = self._routes.get(tournament_id)
-                self._remember(tournament_id, rows, plan.routes)
-                if previous is not None:
-                    await self._round_moves(guild, tournament_id, plan, previous)
-                previous = self._routes.get(tournament_id)
+                # Access first (creations, category moves, overwrites), then the routes and round moves, then the
+                # renames and reorders: a move never waits behind a rate-limited rename, and never lands a team in
+                # a private lobby still carrying the last round's overwrites.
+                access, cosmetic = vd.split_cosmetic(result.ops)
                 applier = _Apply(self, guild, session, tournament_id, {r.slot_key: r for r in rows}, result.categories)
-                await applier.run(result.ops)
-                issues += applier.issues
-                retry_in = applier.retry_in
+                await applier.run(access)
                 rows = await self._models(session, tournament_id)
                 await session.commit()
+                previous = self._routes.get(tournament_id)
                 self._remember(tournament_id, rows, plan.routes)
                 if previous is not None:
                     await self._round_moves(guild, tournament_id, plan, previous)
+                await applier.run(cosmetic)
+                issues += applier.issues
+                retry_in = applier.retry_in
             await self._report(session, tournament_id, issues, rows)
         return retry_in
 
