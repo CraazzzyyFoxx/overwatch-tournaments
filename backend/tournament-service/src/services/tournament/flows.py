@@ -120,7 +120,9 @@ class TournamentFlowsService:
             if participants_counts is not None:
                 participants_count = participants_counts.get(tournament.id, 0)
             else:
-                participants_count = await team_service.get_player_count_by_tournament(session, tournament.id)
+                participants_count = await registration_service.get_participants_count_by_tournament(
+                    session, tournament.id
+                )
         if "registrations_count" in entities:
             if registrations_counts is not None:
                 registrations_count = registrations_counts.get(tournament.id, 0)
@@ -446,7 +448,7 @@ class TournamentFlowsService:
         )
         tournament_ids = [result.id for result in results]
         participants_counts = (
-            await team_service.get_player_count_by_tournament_bulk(session, tournament_ids)
+            await registration_service.get_participants_count_by_tournament_bulk(session, tournament_ids)
             if "participants_count" in params.entities
             else None
         )

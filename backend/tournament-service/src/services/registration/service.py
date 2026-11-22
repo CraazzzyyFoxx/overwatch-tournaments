@@ -54,6 +54,7 @@ from src.schemas.registration import (
 )
 from src.schemas.registration_form import RegistrationFormRead
 from src.services.admission import AdmissionConfig, AdmissionEvaluation
+from src.services.admission.participants import participants_count_expr
 from src.services.admission.resolve import resolve_admission
 from src.services.registration._common import (
     _common_service,
@@ -962,6 +963,23 @@ class RegistrationService:
                 models.RegistrationEntry.status != "withdrawn",
             )
             .group_by(models.Registration.tournament_id)
+        )
+        return {row[0]: row[1] for row in result.all()}
+
+    async def get_participants_count_by_tournament(self, session: AsyncSession, tournament_id: int) -> int:
+        """Admitted people in one tournament (see ``participants_count_expr``)."""
+        return int(await session.scalar(sa.select(participants_count_expr(tournament_id))) or 0)
+
+    async def get_participants_count_by_tournament_bulk(
+        self, session: AsyncSession, tournament_ids: list[int]
+    ) -> dict[int, int]:
+        """Admitted people keyed by tournament id, in one query; the same number as the single read."""
+        if not tournament_ids:
+            return {}
+        result = await session.execute(
+            sa.select(models.Tournament.id, participants_count_expr(models.Tournament.id)).where(
+                models.Tournament.id.in_(tournament_ids)
+            )
         )
         return {row[0]: row[1] for row in result.all()}
 
