@@ -10821,6 +10821,7 @@
     },
     "individual": {
       "description": "Each role is ranked on its own. Pin a place to keep a player there whatever results arrive; the others fill the free places in computed order. The heavier line marks the playoff cut.",
+      "help": "How the table works",
       "empty": "The table appears once the first round is generated.",
       "place": "Place",
       "player": "Player",
