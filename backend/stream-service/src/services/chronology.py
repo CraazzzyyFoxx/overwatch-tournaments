@@ -89,7 +89,12 @@ class StreamChronologyReader:
         seats = await self._chronology.team_encounters(
             session, tournament_id, {team for teams in teams_of.values() for team in teams}, encounter_id=encounter_id
         )
-        encounter_ids = {seat.encounter_id for seat in seats}
+        # A stage with no tournament roster (individual_swiss) has no team to seat: its participants are the
+        # members of the seats, found through their workspace member.
+        member_seats = await self._chronology.member_encounters(
+            session, tournament_id, set(players), encounter_id=encounter_id
+        )
+        encounter_ids = {seat.encounter_id for seat in (*seats, *member_seats)}
         maps: dict[int, list[LoggedMap]] = defaultdict(list)
         for logged in await self._chronology.logged_maps(session, encounter_ids):
             maps[logged.encounter_id].append(
@@ -114,8 +119,12 @@ class StreamChronologyReader:
 
         timings: dict[int, EncounterTiming] = {}
         encounters_of_team: dict[int, set[int]] = defaultdict(set)
+        encounters_of_user: dict[int, set[int]] = defaultdict(set)
         for seat in seats:
             encounters_of_team[seat.team_id].add(seat.encounter_id)
+        for member_seat in member_seats:
+            encounters_of_user[member_seat.user_id].add(member_seat.encounter_id)
+        for seat in (*seats, *member_seats):
             room = pregame.get(seat.encounter_id)
             timings[seat.encounter_id] = EncounterTiming(
                 encounter_id=seat.encounter_id,
@@ -136,9 +145,10 @@ class StreamChronologyReader:
             player = players.get(row.user_id)
             if player is None:
                 continue
-            encounter_ids = {e for team in teams_of[row.user_id] for e in encounters_of_team[team]}
+            played = {e for team in teams_of[row.user_id] for e in encounters_of_team[team]}
+            played |= encounters_of_user[row.user_id]
             found = chapters(
-                (timings[e] for e in encounter_ids),
+                (timings[e] for e in played),
                 started_at=row.started_at,
                 last_seen_at=row.last_seen_at,
                 delay_s=delay_s,

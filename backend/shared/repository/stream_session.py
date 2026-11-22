@@ -25,6 +25,7 @@ __all__ = (
     "ChronologyEncounterRow",
     "ChronologyGameRow",
     "ChronologyMapRow",
+    "ChronologyMemberSeatRow",
     "ChronologyPregameRow",
     "ChronologyRoundEndRow",
     "EncounterOwnerRow",
@@ -80,6 +81,17 @@ class ChronologyEncounterRow(NamedTuple):
     """One active seat of a tournament team in an encounter, with the series timing."""
 
     team_id: int
+    encounter_id: int
+    name: str
+    started_at: datetime | None
+    ended_at: datetime | None
+    confirmed_at: datetime | None
+
+
+class ChronologyMemberSeatRow(NamedTuple):
+    """One encounter a user is rostered in through its seat's members, with the series timing."""
+
+    user_id: int
     encounter_id: int
     name: str
     started_at: datetime | None
@@ -274,6 +286,45 @@ class StreamChronologyRepository:
         if encounter_id is not None:
             stmt = stmt.where(encounter.id == encounter_id)
         return [ChronologyEncounterRow(*values) for values in (await session.execute(stmt)).all()]
+
+    async def member_encounters(
+        self,
+        session: AsyncSession,
+        tournament_id: int,
+        user_ids: Collection[int],
+        *,
+        encounter_id: int | None = None,
+    ) -> Sequence[ChronologyMemberSeatRow]:
+        """Every encounter of ``tournament_id`` in which one of ``user_ids`` is an ACTIVE seat member.
+
+        The only link for a stage with no tournament roster (``individual_swiss``: no ``tournament.player`` or
+        ``tournament.team`` rows, the seats' members are the participants), and it holds for team stages too.
+        """
+        if not user_ids:
+            return []
+        encounter, seat_member, member = models.Encounter, models.EncounterTeamMember, models.WorkspaceMember
+        stmt = (
+            sa.select(
+                member.player_id,
+                encounter.id,
+                encounter.name,
+                encounter.started_at,
+                encounter.ended_at,
+                encounter.confirmed_at,
+            )
+            .select_from(seat_member)
+            .join(member, member.id == seat_member.workspace_member_id)
+            .join(encounter, encounter.id == seat_member.encounter_id)
+            .where(
+                encounter.tournament_id == tournament_id,
+                member.player_id.in_(list(user_ids)),
+                seat_member.active.is_(True),
+            )
+            .distinct()
+        )
+        if encounter_id is not None:
+            stmt = stmt.where(encounter.id == encounter_id)
+        return [ChronologyMemberSeatRow(*values) for values in (await session.execute(stmt)).all()]
 
     async def logged_maps(self, session: AsyncSession, encounter_ids: Collection[int]) -> Sequence[ChronologyMapRow]:
         """Every logged map of ``encounter_ids``, with its log's upload time and file name.
