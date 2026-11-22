@@ -260,3 +260,39 @@ class SyncRoutingTests(IsolatedAsyncioTestCase):
         await _run_sync(guild, rows, plan, [vd.EditChannel("slot:1:0", name="Матч 1 · Команда A")], {"42": "slot:1:1"})
 
         self.assertEqual(["rename", "move"], order)
+
+
+class HubTests(IsolatedAsyncioTestCase):
+    def _hub(self, sync: VoiceSync, routes: dict[str, str]) -> tuple[MagicMock, MagicMock, MagicMock]:
+        hub, lobby = MagicMock(id=100), MagicMock(id=200)
+        guild = MagicMock(id=9, get_channel=lambda channel_id: {100: hub, 200: lobby}.get(channel_id))
+        member = MagicMock(id=42, guild=guild, move_to=AsyncMock())
+        member.voice.channel = hub
+        sync._tracked = {100: 5, 200: 5}
+        sync._channels = {5: {"hub": 100, "slot:1:0": 200}}
+        sync._routes = {5: routes}
+        return member, hub, lobby
+
+    async def test_the_hub_sends_a_member_along_their_route(self) -> None:
+        sync = _sync()
+        member, hub, lobby = self._hub(sync, {"42": "slot:1:0"})
+
+        await sync.hub_joined(member, hub)
+
+        member.move_to.assert_awaited_once()
+        self.assertIs(member.move_to.await_args.args[0], lobby)
+
+    async def test_a_finished_match_does_not_send_its_player_back_from_the_hub_before_the_new_plan_lands(self) -> None:
+        """The match ended (a sync is pending) and the player walks into the hub: the old route must not be used."""
+        sync = _sync()
+        member, hub, _lobby = self._hub(sync, {"42": "slot:1:0"})
+
+        async def finished_plan(tournament_id: int) -> None:
+            sync._routes[tournament_id] = {}  # the new plan gave the player no route
+
+        sync._sync = finished_plan
+        with patch("src.services.voice_sync.DEBOUNCE_SECONDS", 0.01):
+            sync.request(5, explicit=True)
+            await sync.hub_joined(member, hub)
+
+        member.move_to.assert_not_awaited()

@@ -57,7 +57,10 @@ Elimination (rule "a"): activating the next stage deactivates the previous one, 
 advance drops out of the plan at that moment.
 
 `routes` maps every participant's Discord id to their current `slot_key`; a current Swiss round slot
-wins over a team voice. `warnings` lists roster members with no linked Discord (`player_without_discord`).
+wins over a team voice. A participant whose current encounter has finished has no route: a Swiss member
+seated in a completed encounter of the latest round, or a team member whose team has encounters in the live
+stages and none unfinished. Their channels stay; a team with no encounter yet keeps its route.
+`warnings` lists roster members with no linked Discord (`player_without_discord`).
 
 Round slot assignment: each round's encounters are laid onto the lobby pairs, and seats onto sides, so
 that as many people as possible stay in the slot they had last round; the result is never worse than
@@ -79,7 +82,9 @@ the plain bracket order. Round 1 uses the bracket order. It is deterministic, re
   after the drop, whichever comes first.
 - **Drift.** A tracked channel deleted or edited by hand triggers a sync, which restores it. Edit events during a
   sync and for 5 s after it are ignored, so the bot's own edits do not loop.
-- **Hub.** Joining the hub moves the member to `routes[member]`; anyone without a route stays.
+- **Hub.** Joining the hub moves the member to `routes[member]`; anyone without a route (including members whose
+  encounter finished) stays in the hub. While a sync of the tournament is pending or running, the hub waits for it and
+  uses the routes it installs, so a match that has just finished does not send its players back on the old route.
 - **Round change.** A sync applies access first (creations, category moves, permission writes), then renames and
   reorders, and only then installs the new routes and moves members whose route changed and who sit in one of the
   tournament's channels, in slot order: a player arrives in a channel already named after their match. A slot whose
