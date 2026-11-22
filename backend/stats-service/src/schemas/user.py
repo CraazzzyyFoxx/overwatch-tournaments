@@ -512,7 +512,7 @@ class CharacterStatBest(BaseModel):
     encounter_id: int
     tournament_name: str
     map_name: str
-    map_image_path: str
+    map_image_path: str | None
     value: float
     display: PersonDisplayRead
 

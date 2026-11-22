@@ -32516,8 +32516,15 @@
           "type": "integer"
         },
         "map_image_path": {
-          "title": "Map Image Path",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Map Image Path"
         },
         "map_name": {
           "title": "Map Name",

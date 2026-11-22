@@ -17151,7 +17151,7 @@ export interface components {
             /** Encounter Id */
             encounter_id: number;
             /** Map Image Path */
-            map_image_path: string;
+            map_image_path: string | null;
             /** Map Name */
             map_name: string;
             /** Tournament Name */
