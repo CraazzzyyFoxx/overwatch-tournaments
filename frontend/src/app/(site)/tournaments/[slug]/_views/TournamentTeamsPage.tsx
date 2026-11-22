@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LayoutGrid, List } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -70,7 +70,7 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
   const myTeamId = viewerId === null ? null : (roster.byUser.get(viewerId)?.team.id ?? null);
   // `scrollTo` is the team still to be revealed: clearing a filter shows its row only on a later render.
   const [highlightId, setHighlightId] = useState<number | null>(null);
-  const [scrollTo, setScrollTo] = useState<number | null>(null);
+  const scrollTo = useRef<number | null>(null);
 
   const groups = useMemo(() => {
     const counts = new Map<string, number>();
@@ -125,7 +125,7 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
 
   // Every render until the target exists; a no-op while nothing is pending.
   useEffect(() => {
-    if (scrollTo !== null && revealTeam(scrollTo)) setScrollTo(null);
+    if (scrollTo.current !== null && revealTeam(scrollTo.current)) scrollTo.current = null;
   });
 
   if (presentation.initialState === "error") {
@@ -205,8 +205,10 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
               <FilterChip
                 onClick={() => {
                   setHighlightId(myTeamId);
-                  setScrollTo(myTeamId);
-                  if (!visibleTeams.some((team) => team.id === myTeamId)) {
+                  if (visibleTeams.some((team) => team.id === myTeamId)) {
+                    revealTeam(myTeamId);
+                  } else {
+                    scrollTo.current = myTeamId;
                     setParams({ q: null, group: null });
                   }
                 }}
