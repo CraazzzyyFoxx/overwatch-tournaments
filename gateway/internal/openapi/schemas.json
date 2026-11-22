@@ -52010,6 +52010,11 @@
           "title": "Is Captain",
           "type": "boolean"
         },
+        "player_id": {
+          "description": "``players.user.id`` — the key a live stream's ``player.id`` carries.",
+          "title": "Player Id",
+          "type": "integer"
+        },
         "rank": {
           "anyOf": [
             {
@@ -52039,6 +52044,7 @@
       },
       "required": [
         "workspace_member_id",
+        "player_id",
         "display_name",
         "role",
         "rank",

@@ -51,6 +51,8 @@ class PlayerStandingRead(BaseModel):
 
 class IndividualRoundSeatMemberRead(BaseModel):
     workspace_member_id: int
+    #: ``players.user.id`` — the key a live stream's ``player.id`` carries.
+    player_id: int
     display_name: str
     #: The player's role code in the stage's personal table.
     role: str | None

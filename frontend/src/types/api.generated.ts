@@ -20319,6 +20319,11 @@ export interface components {
             display_name: string;
             /** Is Captain */
             is_captain: boolean;
+            /**
+             * Player Id
+             * @description ``players.user.id`` — the key a live stream's ``player.id`` carries.
+             */
+            player_id: number;
             /** Rank */
             rank: number | null;
             /** Role */

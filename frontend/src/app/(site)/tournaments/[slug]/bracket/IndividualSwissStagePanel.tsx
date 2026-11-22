@@ -1,27 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useContext, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, ListChecks } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 
 import { TournamentTeamCardFrame, TournamentTeamTable } from "@/components/TournamentTeamCard";
 import { LinkTabs } from "@/components/kit/LinkTabs";
+import { StreamWatchContext } from "@/components/stream/stream-watch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
 import { Card } from "@craazzzyyfoxx/admin-kit/ui/card";
 import { Eyebrow } from "@craazzzyyfoxx/admin-kit/ui/eyebrow";
 import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
+import { StatusDot } from "@craazzzyyfoxx/admin-kit/ui/status-dot";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
 import { useFormatter } from "@/lib/datetime/client";
+import { pregameRoomHref } from "@/lib/encounter/pregame-room";
 import { resolveDivisionFromRank } from "@/lib/divisions/grid";
 import type { TeamRosterPlayer } from "@/lib/player";
 import { ratedDimension, type RoleOntology } from "@/lib/roster/ontology";
 import { toRoleRef } from "@/lib/roster/role-ref";
+import { streamEntryKey } from "@/lib/social/stream-platform";
 import { cn } from "@/lib/utils";
+import type { TournamentStreams } from "@/types/stream.types";
 import type { Stage, Tournament } from "@/types/tournament.types";
 
 import { ViewSegment, readViewParam } from "../_components/ViewSegment";
@@ -33,6 +38,7 @@ import {
   type RoundSeat
 } from "../_views/individualRounds.model";
 import { isStagePreview } from "./bracketData";
+import { liveStreamForPlayers } from "./bracketLiveStreams";
 import type { BracketTabs } from "./bracketStages.model";
 
 /**
@@ -48,11 +54,13 @@ import type { BracketTabs } from "./bracketStages.model";
 export function IndividualSwissStagePanel({
   tournament,
   stage,
-  bracketTabs
+  bracketTabs,
+  streams
 }: Readonly<{
   tournament: Tournament;
   stage: Stage;
   bracketTabs?: BracketTabs;
+  streams?: TournamentStreams;
 }>) {
   const t = useTranslations();
   const searchParams = useSearchParams();
@@ -156,6 +164,7 @@ export function IndividualSwissStagePanel({
                 key={lobby.encounterId}
                 tournament={tournament}
                 ontology={ontology}
+                streams={streams}
                 lobby={lobby}
                 linked={!isPreview}
                 open={expanded.has(lobby.encounterId)}
@@ -172,6 +181,7 @@ export function IndividualSwissStagePanel({
 function LobbyCard({
   tournament,
   ontology,
+  streams,
   lobby,
   linked,
   open,
@@ -179,12 +189,17 @@ function LobbyCard({
 }: Readonly<{
   tournament: Tournament;
   ontology: RoleOntology | null;
+  streams?: TournamentStreams;
   lobby: RoundLobby;
   linked: boolean;
   open: boolean;
   onToggle: () => void;
 }>) {
   const t = useTranslations("tournamentDetail.individualRounds");
+  const tBracket = useTranslations("bracket");
+  const pathname = usePathname();
+  const search = useSearchParams().toString();
+  const returnTo = search ? `${pathname}?${search}` : pathname;
   const title = t("match", { number: lobby.number, bestOf: lobby.bestOf });
   const [first, second] = lobby.seats;
   const seatCard = (seat: RoundSeat | undefined) =>
@@ -192,6 +207,8 @@ function LobbyCard({
       <SeatCard
         tournament={tournament}
         ontology={ontology}
+        // Like the other brackets: never once the match is decided.
+        streams={lobby.completed ? undefined : streams}
         seat={seat}
         collapsed={!open}
         mirrored={seat === second}
@@ -218,6 +235,13 @@ function LobbyCard({
             title
           )}
         </h4>
+        {linked ? (
+          <Button asChild variant="ghost" size="icon-xs" className="text-[color:var(--aqt-fg-muted)]">
+            <Link href={pregameRoomHref(tournament.id, lobby.encounterId, returnTo)} aria-label={tBracket("pregameRoom")}>
+              <ListChecks aria-hidden />
+            </Link>
+          </Button>
+        ) : null}
         <Button
           variant="ghost"
           size="icon-sm"
@@ -287,6 +311,7 @@ function LobbyScore({
 function SeatCard({
   tournament,
   ontology,
+  streams,
   seat,
   collapsed,
   mirrored,
@@ -294,6 +319,7 @@ function SeatCard({
 }: Readonly<{
   tournament: Tournament;
   ontology: RoleOntology | null;
+  streams?: TournamentStreams;
   seat: RoundSeat;
   collapsed: boolean;
   mirrored: boolean;
@@ -328,7 +354,12 @@ function SeatCard({
     <TournamentTeamCardFrame
       mirrored={mirrored}
       className={cn(lost && "opacity-70 hover:opacity-100")}
-      name={seat.name}
+      name={
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate">{seat.name}</span>
+          <SeatLiveMarker streams={streams} seat={seat} />
+        </span>
+      }
       collapsed={collapsed}
       metricLabel={avgRank != null ? t("avgRank") : undefined}
       metricValue={avgRank != null ? format.number(avgRank, { maximumFractionDigits: 0 }) : undefined}
@@ -341,5 +372,49 @@ function SeatCard({
         captainUserId={captain?.workspace_member_id}
       />
     </TournamentTeamCardFrame>
+  );
+}
+
+/** The seat's live-stream marker, as in the other brackets: opens the stream in the corner dock when the shell has one. */
+function SeatLiveMarker({ streams, seat }: Readonly<{ streams?: TournamentStreams; seat: RoundSeat }>) {
+  const t = useTranslations();
+  const watcher = useContext(StreamWatchContext);
+  const stream = liveStreamForPlayers(streams, new Set(seat.members.map((member) => member.player_id)));
+  if (stream === undefined) return null;
+
+  const streamer = stream.player?.name ?? stream.channel;
+  const canWatch = watcher !== null;
+  const label =
+    stream.viewer_count == null
+      ? t(canWatch ? "bracket.watchTeamStream" : "bracket.liveTeamStream", { player: streamer })
+      : t(canWatch ? "bracket.watchTeamStreamWithViewers" : "bracket.liveTeamStreamWithViewers", {
+          player: streamer,
+          count: stream.viewer_count
+        });
+  const dot = (
+    <StatusDot
+      pulse
+      className="size-[7px] text-[color:var(--aqt-status-live)] shadow-[0_0_0_3px_color-mix(in_srgb,var(--aqt-status-live)_18%,transparent)]"
+    />
+  );
+
+  return canWatch ? (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      aria-label={label}
+      title={label}
+      aria-pressed={watcher.watchingKey === streamEntryKey(stream)}
+      data-live-team-stream={stream.channel}
+      onClick={(event) => watcher.watch(stream, event.currentTarget)}
+      className="relative shrink-0 rounded-full before:absolute before:-inset-0.5 before:content-[''] hover:bg-[color:color-mix(in_srgb,var(--aqt-status-live)_16%,transparent)] aria-pressed:bg-[color:color-mix(in_srgb,var(--aqt-status-live)_16%,transparent)] aria-pressed:shadow-[inset_0_0_0_1.5px_var(--aqt-status-live)]"
+    >
+      {dot}
+    </Button>
+  ) : (
+    <span role="img" aria-label={label} title={label} data-live-team-stream={stream.channel} className="inline-flex shrink-0 items-center">
+      {dot}
+    </span>
   );
 }

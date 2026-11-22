@@ -117,6 +117,15 @@ class IndividualSwissReadsService:
                 )
             ).all()
         )
+        player_ids = dict(
+            (
+                await session.execute(
+                    sa.select(models.WorkspaceMember.id, models.WorkspaceMember.player_id).where(
+                        models.WorkspaceMember.id.in_({m.workspace_member_id for m in members})
+                    )
+                )
+            ).all()
+        )
         roles = await role_order(session, tournament_id)
 
         members_by_seat: defaultdict[int, list[models.EncounterTeamMember]] = defaultdict(list)
@@ -144,6 +153,7 @@ class IndividualSwissReadsService:
                 members=[
                     swiss_schemas.IndividualRoundSeatMemberRead(
                         workspace_member_id=m.workspace_member_id,
+                        player_id=player_ids[m.workspace_member_id],
                         display_name=m.display_name_snapshot,
                         role=pool_roles.get(m.workspace_member_id),
                         rank=m.rank,

@@ -12,6 +12,8 @@ export type RoundLobby = {
   seats: RoundSeat[];
   /** A pending lobby has not started: its 0–0 is not a result. */
   scored: boolean;
+  /** The encounter is decided: nothing is on air for it any more. */
+  completed: boolean;
   /** Slot of the team ahead on a finished lobby; `null` while it is open or level. */
   winnerSlot: number | null;
 };
@@ -34,6 +36,7 @@ export function buildRoundViews(rounds: readonly IndividualRound[]): RoundView[]
           bestOf: encounter.best_of,
           seats,
           scored: encounter.status !== "pending",
+          completed: finished,
           winnerSlot:
             finished && first && second && first.score !== second.score
               ? first.score > second.score

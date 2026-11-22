@@ -234,6 +234,7 @@ function TournamentBracketView({ tournament }: Readonly<{ tournament: Tournament
                       tournament={tournament}
                       stage={panel.stage}
                       bracketTabs={index === 0 ? bracketTabs : undefined}
+                      streams={streamsQuery.data}
                     />
                   ) : (
                     <GroupStagePanel
