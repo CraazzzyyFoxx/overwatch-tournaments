@@ -133,12 +133,13 @@ function ActiveMixCard({
         : null;
 
   return (
-    <li className="min-w-0">
+    <li className="@container min-w-0">
       <Link
         href={`/balancer/mix/${game.id}`}
-        className="flex min-w-0 flex-col gap-4 rounded-xl border border-[color:color-mix(in_srgb,var(--aqt-teal)_32%,var(--aqt-border))] bg-[color:var(--aqt-card)] p-4 transition-colors hover:border-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)] sm:p-5 lg:flex-row lg:items-center lg:gap-6"
+        className="flex min-w-0 flex-col gap-4 rounded-xl border border-[color:color-mix(in_srgb,var(--aqt-teal)_32%,var(--aqt-border))] bg-[color:var(--aqt-card)] p-4 transition-colors hover:border-[color:var(--aqt-teal)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)] sm:p-5 @3xl:flex-row @3xl:items-center @3xl:gap-6"
       >
-        <span className="flex min-w-0 flex-1 items-center gap-3">
+        {/* min-w-40: in the row layout the stats must not squeeze the name to nothing */}
+        <span className="flex min-w-40 flex-1 items-center gap-3">
           {community ? <WorkspaceAvatar workspace={community} size={40} /> : null}
           <span className="min-w-0">
             <span className="block truncate font-display text-heading font-semibold text-[color:var(--aqt-fg)]">
@@ -178,7 +179,7 @@ function ActiveMixCard({
           </div>
         </dl>
 
-        <span className="flex shrink-0 items-center justify-between gap-4 lg:justify-end">
+        <span className="flex shrink-0 items-center justify-between gap-4 @3xl:justify-end">
           {status ? <TournamentStatusPill status={status.variant}>{status.label}</TournamentStatusPill> : <span />}
           <span className="inline-flex items-center gap-1.5 text-caption font-semibold text-[color:var(--aqt-teal)]">
             {t("open")}
