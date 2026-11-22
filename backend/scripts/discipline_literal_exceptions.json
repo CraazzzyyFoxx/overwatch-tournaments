@@ -286,7 +286,17 @@
       "rule": "stat-code",
       "token": "impact_rank",
       "context": ").label(\"impact_rank\"),",
-      "count": 2,
+      "count": 1,
+      "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
+      "owner": "P9",
+      "remove_when": "P9 relocates it into shared.disciplines.overwatch"
+    },
+    {
+      "path": "backend/stats-service/src/services/user/queries/profile.py",
+      "rule": "stat-code",
+      "token": "impact_rank",
+      "context": "\"impact_rank\"",
+      "count": 1,
       "reason": "OW-only stats/analytics code P5/P6 kept in core (LogStatsName/MatchEvent/HeroClass, MVP/impact SQL, OW-only services; C21)",
       "owner": "P9",
       "remove_when": "P9 relocates it into shared.disciplines.overwatch"
