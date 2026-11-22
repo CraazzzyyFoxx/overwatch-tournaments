@@ -394,8 +394,9 @@ The only external API is the game source behind the bot lobby (deadlock-api, cal
   ingest status.
 
 Balancer algorithm parameters are *not* environment configuration. Defaults, limits and presets live
-in `src/services/balancer/config/` and are served by `rpc.balancer.config`; persisted overrides live
-in `balancer.workspace_config` / `balancer.tournament_config`.
+in `src/domain/balancer/config/` and are served by `rpc.balancer.config`; persisted overrides live
+in `balancer.tournament_config` (tournaments) and `balancer.user_config` (a host's mixes). How the
+solver uses each of them: [`../../docs/balancer-algorithm.md`](../../docs/balancer-algorithm.md).
 
 ## Running
 
