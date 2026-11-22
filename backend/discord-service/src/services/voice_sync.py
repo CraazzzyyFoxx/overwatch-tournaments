@@ -80,6 +80,7 @@ def observe(guild: discord.Guild) -> vd.Seen:
             is_category=is_category,
             synced=bool(ours and not is_category and channel.permissions_synced),
             overwrites=_overwrites(channel) if ours else {},
+            user_limit=int(getattr(channel, "user_limit", 0) or 0),
         )
     return vd.Seen(
         channels=channels,
@@ -633,7 +634,9 @@ class _Apply:
 
         def create(overwrites: vd.Overwrites | None) -> Awaitable[discord.VoiceChannel]:
             extra = {} if overwrites is None else {"overwrites": self._targets(overwrites)}
-            return guild.create_voice_channel(op.name, category=parent, reason=_REASON, **extra)
+            return guild.create_voice_channel(
+                op.name, category=parent, user_limit=op.user_limit, reason=_REASON, **extra
+            )
 
         channel = await self._with_members(op.overwrites, create)
         self._save(
@@ -664,6 +667,8 @@ class _Apply:
             options["category"] = parent
         if op.sync:
             options["sync_permissions"] = True
+        if op.user_limit is not None:
+            options["user_limit"] = op.user_limit
         if not options and op.overwrites is None:
             return
 

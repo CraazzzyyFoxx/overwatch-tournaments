@@ -19,6 +19,7 @@ from shared.core.tournament_state import FINISHED_STATUSES
 from shared.repository import WorkspaceMemberRepository
 from shared.schemas.voice import VoicePlan, VoicePlanChannel, VoicePlanWarning
 from shared.services.flow_queries import stage_node_status
+from shared.services.team_format import tournament_slot_shape
 from src.domain.voice import Encounter, assign_round_slots
 
 __all__ = ("build_voice_plan",)
@@ -321,6 +322,10 @@ async def _compose(
         routes.pop(discord.get(member_id, ""), None)
 
     if channels:
+        # A team or lobby voice holds one team as the roster shape seats it: substitutes do not count.
+        seats = (await tournament_slot_shape(session, plan.tournament_id)).team_size
+        for channel in channels:
+            channel.user_limit = seats
         hub = VoicePlanChannel(
             slot_key="hub", kind="hub", name=f"Общий · {plan.tournament_name}"[:_NAME_LIMIT], position=0
         )

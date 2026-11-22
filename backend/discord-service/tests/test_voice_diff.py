@@ -98,6 +98,19 @@ class DiffTests(TestCase):
 
         self.assertEqual(result.ops, [vd.EditChannel("team:1", name="New name")])
 
+    def test_the_user_limit_is_created_with_the_channel_and_corrected_when_it_drifts(self) -> None:
+        capped = team(1).model_copy(update={"user_limit": 5})
+
+        created = vd.diff(plan(hub(), capped), [], seen()).ops
+        self.assertEqual([0, 5], [op.user_limit for op in created if isinstance(op, vd.CreateChannel)])
+
+        rows = [own_category(), row("hub", 11), row("team:1", 12)]
+        world = seen(category(10, "Cup"), voice(11, "Общий · Cup", 10, 0), voice(12, "Team 1", 10, 1, user_limit=0))
+        self.assertEqual(vd.diff(plan(hub(), capped), rows, world).ops, [vd.EditChannel("team:1", user_limit=5)])
+
+        world = seen(category(10, "Cup"), voice(11, "Общий · Cup", 10, 0), voice(12, "Team 1", 10, 1, user_limit=5))
+        self.assertEqual(vd.diff(plan(hub(), capped), rows, world).ops, [])
+
     def test_the_tournament_name_renames_the_bots_category(self) -> None:
         rows = [own_category(), row("hub", 11)]
         world = seen(category(10, "Old Cup"), voice(11, "Общий · Cup", 10))

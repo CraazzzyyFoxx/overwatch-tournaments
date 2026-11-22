@@ -33,6 +33,8 @@ class VoicePlanChannel(BaseModel):
     team_id: int | None = None
     #: Discord user ids granted access when the plan is private; empty for the hub.
     member_discord_ids: list[str] = Field(default_factory=list)
+    #: Discord's voice user limit: the roster shape's seat count (substitutes left out); 0 = no limit (the hub).
+    user_limit: int = Field(default=0, ge=0, le=99)
 
 
 class VoicePlanWarning(BaseModel):
