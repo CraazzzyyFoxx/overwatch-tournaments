@@ -87,6 +87,8 @@ class SeenChannel:
     #: A voice channel whose permissions follow its category.
     synced: bool = False
     overwrites: Overwrites = field(default_factory=dict)
+    #: A voice channel's user limit; 0 = none.
+    user_limit: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +131,7 @@ class CreateChannel:
     team_id: int | None = None
     #: ``None``: public, follows the category.
     overwrites: Overwrites | None = None
+    user_limit: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +143,8 @@ class EditChannel:
     sync: bool = False
     #: Write exactly these overwrites (private channel).
     overwrites: Overwrites | None = None
+    #: Set the voice user limit to this (0 = none); ``None`` = leave it.
+    user_limit: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,7 +195,7 @@ def split_cosmetic(ops: Sequence[Op]) -> tuple[list[Op], list[Op]]:
             cosmetic.append(op)
         elif isinstance(op, EditChannel) and op.name is not None:
             rest = replace(op, name=None)
-            if rest.category_ref is not None or rest.sync or rest.overwrites is not None:
+            if rest.category_ref is not None or rest.sync or rest.overwrites is not None or rest.user_limit is not None:
                 access.append(rest)
             cosmetic.append(EditChannel(op.slot_key, name=op.name))
         else:
@@ -354,7 +359,14 @@ def diff(plan: VoicePlan, rows: Sequence[Row], seen: Seen) -> Diff:
         if current is None:
             out.ops.append(
                 CreateChannel(
-                    channel.slot_key, channel.kind, channel.name, ref, channel.stage_id, channel.team_id, desired
+                    channel.slot_key,
+                    channel.kind,
+                    channel.name,
+                    ref,
+                    channel.stage_id,
+                    channel.team_id,
+                    desired,
+                    channel.user_limit,
                 )
             )
             continue
@@ -368,8 +380,15 @@ def diff(plan: VoicePlan, rows: Sequence[Row], seen: Seen) -> Diff:
             category_ref=ref if moved else None,
             sync=desired is None and (moved or not current.synced),
             overwrites=desired if desired is not None and _norm(current.overwrites) != desired else None,
+            user_limit=channel.user_limit if current.user_limit != channel.user_limit else None,
         )
-        if edit.name is not None or edit.category_ref is not None or edit.sync or edit.overwrites is not None:
+        if (
+            edit.name is not None
+            or edit.category_ref is not None
+            or edit.sync
+            or edit.overwrites is not None
+            or edit.user_limit is not None
+        ):
             out.ops.append(edit)
 
     if dropped:

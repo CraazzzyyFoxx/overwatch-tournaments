@@ -14,6 +14,7 @@ from shared.messaging.config import TOURNAMENT_VOICE_SYNC_ROUTING_KEY
 from shared.models.encounter import Encounter, EncounterTeam, EncounterTeamMember
 from shared.models.tournament.bracket_encounter import BracketEncounter
 from shared.models.tournament.stage import Stage, StageItem, StageItemInput
+from shared.services.team_format import tournament_slot_shape
 from src.schemas import voice as voice_schemas
 from src.services.voice import admin as voice_admin
 from src.services.voice.plan import build_voice_plan
@@ -236,6 +237,10 @@ class VoicePlanCase(EncounterLayerCase):
     async def keys(self) -> list[str]:
         return [channel.slot_key for channel in (await self.plan()).channels]
 
+    async def shape(self):
+        async with self.Session() as s:
+            return await tournament_slot_shape(s, self.tournament_id)
+
     def team_key(self, index: int) -> str:
         return f"team:{self.teams[index]}"
 
@@ -257,6 +262,20 @@ class VoicePlanTeamTests(VoicePlanCase):
         plan = await self.plan()
         self.assertEqual(([], {}), (plan.channels, plan.routes))
         self.assertTrue(plan.enabled)
+
+    async def test_a_ready_stage_seats_its_teams_voices_before_it_is_published(self) -> None:
+        """A stage moved to ``ready`` shows its bracket as a preview; its teams get their voices so they can gather
+        before the matches are published. A stage still in draft gives none."""
+        await self.stage(1, kind=IS, status="completed", is_published=True)
+        groups = await self.stage(2, teams=(0, 1))
+        self.assertEqual([], await self.keys())
+
+        await self.flag(groups, status="ready")
+        plan = await self.plan()
+        self.assertEqual(["hub", self.team_key(0), self.team_key(1)], [c.slot_key for c in plan.channels])
+        # A team voice holds the roster shape's seats (substitutes left out); the hub has no limit.
+        seats = (await self.shape()).team_size
+        self.assertEqual([0, seats, seats], [c.user_limit for c in plan.channels])
 
     async def test_nothing_exists_when_disabled_without_a_guild_or_after_the_tournament(self) -> None:
         await self.stage(1, teams=(0, 1), status="live", is_published=True)
