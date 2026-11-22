@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LayoutGrid, List } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -40,7 +40,17 @@ import {
 } from "./tournamentTeams.model";
 import { overviewVariant } from "./tournamentOverview.model";
 import { useIsNarrowViewport, useStoredTeamsView, writeStoredView } from "./useTeamsViewPreference";
+import { useTournamentRoster, useViewerUserId } from "./useTournamentRoster";
 import { useTournamentTeamsData } from "./useTournamentTeamsData";
+
+/** Opens and centres the team's row or card; `false` while it is not rendered yet. */
+function revealTeam(teamId: number): boolean {
+  const anchor = document.getElementById(`team-${teamId}`);
+  if (!anchor) return false;
+  if (anchor instanceof HTMLDetailsElement) anchor.open = true;
+  anchor.scrollIntoView({ behavior: "smooth", block: "center" });
+  return true;
+}
 
 const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slug: string }) => {
   const t = useTranslations();
@@ -54,6 +64,13 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
   const narrow = useIsNarrowViewport();
 
   const teams = useMemo(() => teamsQuery.data?.results ?? [], [teamsQuery.data]);
+
+  const roster = useTournamentRoster(tournament);
+  const viewerId = useViewerUserId((id) => roster.byUser.has(id));
+  const myTeamId = viewerId === null ? null : (roster.byUser.get(viewerId)?.team.id ?? null);
+  // `scrollTo` is the team still to be revealed: clearing a filter shows its row only on a later render.
+  const [highlightId, setHighlightId] = useState<number | null>(null);
+  const [scrollTo, setScrollTo] = useState<number | null>(null);
 
   const groups = useMemo(() => {
     const counts = new Map<string, number>();
@@ -104,6 +121,11 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
     isPending: teamsQuery.isPending,
     isError: teamsQuery.isError,
     isFetching: teamsQuery.isFetching
+  });
+
+  // Every render until the target exists; a no-op while nothing is pending.
+  useEffect(() => {
+    if (scrollTo !== null && revealTeam(scrollTo)) setScrollTo(null);
   });
 
   if (presentation.initialState === "error") {
@@ -179,6 +201,19 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
               />
             }
           >
+            {myTeamId !== null ? (
+              <FilterChip
+                onClick={() => {
+                  setHighlightId(myTeamId);
+                  setScrollTo(myTeamId);
+                  if (!visibleTeams.some((team) => team.id === myTeamId)) {
+                    setParams({ q: null, group: null });
+                  }
+                }}
+              >
+                {t("tournamentDetail.matches.myTeam")}
+              </FilterChip>
+            ) : null}
             {groupChips.length > 0 ? (
               <>
                 <FilterChip
@@ -238,6 +273,7 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
                       team={team}
                       medal={medal}
                       showGroup={showGroup}
+                      highlighted={team.id === highlightId}
                       discipline={tournament.discipline}
                       ontology={ontology}
                     />
@@ -256,6 +292,7 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
                   record={records?.get(team.id) ?? null}
                   needle={needle}
                   showGroup={showGroup}
+                  highlighted={team.id === highlightId}
                   registrationsByUser={registrationsByUser}
                   heroesMap={heroesMap}
                   ontology={ontology}

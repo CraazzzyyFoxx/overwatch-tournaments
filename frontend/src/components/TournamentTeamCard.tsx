@@ -392,6 +392,8 @@ export function TeamPlacement({ placement, medal }: { placement: number; medal: 
 /** The group card's surface over `Card`: overlay fill and rim; under the pointer the rim lifts. */
 export const TEAM_CARD_CLASS =
   "overflow-hidden border-[color:var(--aqt-overlay-border)] bg-[color:var(--aqt-overlay-1)] transition-colors hover:border-[color:var(--aqt-border-3)] hover:bg-[color:var(--aqt-overlay-2)]";
+/** The card the viewer jumped to from "My team". */
+export const TEAM_CARD_HIGHLIGHT = "ring-2 ring-[color:var(--aqt-teal)]";
 /** The header band above the divider. */
 export const TEAM_CARD_HEADER = "px-3.5 pb-3 pt-2.5";
 /** The card's name: one truncating line. */
@@ -499,12 +501,14 @@ export const TournamentTeamCard = ({
   team,
   medal,
   showGroup,
+  highlighted = false,
   discipline,
   ontology
 }: {
   team: Team;
   medal: boolean;
   showGroup: boolean;
+  highlighted?: boolean;
   discipline: string;
   /** The team's own game's scoped ontology, for the roster's role column. */
   ontology?: RoleOntology | null;
@@ -514,7 +518,8 @@ export const TournamentTeamCard = ({
 
   return (
     <TournamentTeamCardFrame
-      id={team.id.toString()}
+      id={`team-${team.id}`}
+      className={highlighted ? TEAM_CARD_HIGHLIGHT : undefined}
       name={<TeamName team={team} size="md" />}
       leadingTag={
         showGroup && team.group?.name ? (

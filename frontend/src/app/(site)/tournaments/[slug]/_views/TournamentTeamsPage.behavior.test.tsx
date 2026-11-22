@@ -42,6 +42,8 @@ const getEncounters = vi.fn();
 vi.mock("@/services/team.service", () => ({
   default: { getAll: (...args: unknown[]) => getTeams(...args) }
 }));
+let authUser: unknown = null;
+vi.mock("@/hooks/useAuthProfile", () => ({ useAuthProfile: () => ({ user: authUser }) }));
 vi.mock("@/services/encounter.service", () => ({
   default: { getAll: (...args: unknown[]) => getEncounters(...args) }
 }));
@@ -284,6 +286,7 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   search = new URLSearchParams();
+  authUser = null;
 });
 
 /** Let queued promise callbacks and React Query's own scheduling drain. */
@@ -476,5 +479,36 @@ describe("nothing to show", () => {
 
     expect(text).toContain(en.tournamentDetail.pageState.empty.title);
     expect(container.querySelectorAll("details")).toHaveLength(0);
+  });
+});
+
+describe("the My team chip", () => {
+  const chip = () =>
+    Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === en.tournamentDetail.matches.myTeam
+    );
+
+  it("is hidden without a team of the viewer's", async () => {
+    await render();
+    expect(chip()).toBeUndefined();
+
+    authUser = { linkedPlayers: [{ playerId: 99999 }] };
+    await render();
+    expect(chip()).toBeUndefined();
+  });
+
+  it("opens, centres and highlights the viewer's team", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    authUser = { linkedPlayers: [{ playerId: FREAKS.players[0]!.user_id }] };
+    await render();
+
+    await act(async () => chip()?.click());
+    await settle();
+
+    const row = container.querySelector<HTMLDetailsElement>(`#team-${FREAKS.id}`);
+    expect(row?.open).toBe(true);
+    expect(row?.className).toContain("ring-2");
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 });

@@ -10,6 +10,7 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import {
   TEAM_CARD_CLASS,
   TEAM_CARD_HEADER,
+  TEAM_CARD_HIGHLIGHT,
   TEAM_CARD_NAME,
   TeamCardDivider,
   TeamCardMetric,
@@ -59,6 +60,7 @@ export const TeamListRow = ({
   record,
   needle,
   showGroup,
+  highlighted,
   registrationsByUser,
   heroesMap,
   ontology
@@ -69,6 +71,8 @@ export const TeamListRow = ({
   record: TeamRecord | null | undefined;
   needle: string;
   showGroup: boolean;
+  /** The viewer jumped here from "My team". */
+  highlighted: boolean;
   registrationsByUser: Map<number, Registration>;
   heroesMap: Map<string, CatalogEntityChip>;
   /** The tournament's own game's scoped ontology; `null` while it loads. */
@@ -93,8 +97,11 @@ export const TeamListRow = ({
   }));
 
   return (
-    <Card asChild className={cn(TEAM_CARD_CLASS, "group/disclosure")}>
-      <details>
+    <Card
+      asChild
+      className={cn(TEAM_CARD_CLASS, "group/disclosure", highlighted && TEAM_CARD_HIGHLIGHT)}
+    >
+      <details id={`team-${team.id}`}>
         <summary className="cursor-pointer list-none rounded-xl focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] [&::-webkit-details-marker]:hidden">
           <div className={cn(TEAM_CARD_HEADER, "grid items-center gap-2.5 sm:gap-5", columns)}>
             {hasPlacement ? (
