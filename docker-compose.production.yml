@@ -152,7 +152,9 @@ services:
       - app-network
 
   redis:
-    image: 'dockerhub.timeweb.cloud/redis/redis-stack:latest'
+    # Pinned by digest (= Docker Hub's :latest since 2025-11-03, already on the host): `pull --policy missing`
+    # re-checks a :latest tag against the mirror on every deploy, and a mirror outage then blocks the release.
+    image: 'dockerhub.timeweb.cloud/redis/redis-stack@sha256:5d5154123426693540ea6c1d9e638eae2bf2024879c839db6fcfdd7717e817c7'
     logging: *log-rotate
     # maxmemory must be set explicitly: redis-server ignores the container's
     # cgroup limit below, so INFO memory reports maxmemory=0 (unlimited) and
