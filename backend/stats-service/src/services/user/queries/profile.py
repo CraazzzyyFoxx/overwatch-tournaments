@@ -3,7 +3,7 @@
 import typing
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import aggregate_order_by
+from sqlalchemy.dialects.postgresql import aggregate_order_by, distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -27,6 +27,32 @@ from ._scope import (
 )
 
 
+def _member_standings() -> sa.Subquery:
+    """One row per member per tournament of the individual Swiss personal tables: the role and start rank of the
+    member's first such stage, the results summed over every one."""
+    standing = models.PlayerStanding
+    member = (standing.tournament_id, standing.workspace_member_id)
+
+    def total(column: typing.Any) -> sa.ColumnElement[int]:
+        return sa.func.sum(column).over(partition_by=member)
+
+    return (
+        sa.select(
+            standing.tournament_id,
+            standing.workspace_member_id,
+            standing.role,
+            standing.start_rank,
+            total(standing.wins).label("wins"),
+            total(standing.draws).label("draws"),
+            total(standing.losses).label("losses"),
+        )
+        .join(models.Stage, models.Stage.id == standing.stage_id)
+        .ext(distinct_on(*member))
+        .order_by(*member, models.Stage.order, standing.stage_id)
+        .subquery("member_standing")
+    )
+
+
 class UserProfileQueries(DisciplineQueries):
     """Single-user reads: tournaments, roles and hero statistics."""
 
@@ -40,14 +66,13 @@ class UserProfileQueries(DisciplineQueries):
         self, session: AsyncSession, user_id: int, workspace_id: int | None = None
     ) -> tuple[int, int, int]:
         """A user's ``(maps won, maps lost, average encounter closeness)`` across this game's (or, unbound, every game's)
-        tournaments, or the workspace's tournaments of this game when ``workspace_id`` is given.
+        tournaments, or the workspace's tournaments of this game when ``workspace_id`` is given. Team-less seats (an
+        individual Swiss lobby) count beside the team ones.
         """
 
-        seat = Seat()
-
-        q = (
+        seat, loose = Seat(), Seat("loose_seat")
+        team_sides = (
             sa.select(
-                models.WorkspaceMember.player_id.label("user_id"),
                 seat.maps_won.label("maps_won"),
                 seat.maps_lost.label("maps_lost"),
                 models.Encounter.closeness.label("closeness"),
@@ -60,24 +85,30 @@ class UserProfileQueries(DisciplineQueries):
                 models.WorkspaceMember.player_id == user_id,
             )
         )
-        q = seat.join(q, models.Team.id)
-        q = q.join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id).where(
-            *self.discipline_filter(models.Tournament.discipline)
+        team_sides = seat.join(team_sides, models.Team.id)
+        teamless_sides = loose.teamless_sides(
+            loose.maps_won.label("maps_won"),
+            loose.maps_lost.label("maps_lost"),
+            models.Encounter.closeness.label("closeness"),
+            user_id=user_id,
         )
-        if workspace_id is not None:
-            q = q.where(models.Tournament.workspace_id == workspace_id)
-        sides = q.subquery("profile_map_sides")
-        query = (
-            sa.select(
-                sa.func.sum(sides.c.maps_won).label("won_maps"),
-                sa.func.sum(sides.c.maps_lost).label("lost_maps"),
-                sa.func.avg(sides.c.closeness).label("closeness"),
-            )
-            .select_from(sides)
-            .group_by(sides.c.user_id)
-        )
+        sides = sa.union_all(
+            *(self._in_tournament_scope(q, workspace_id) for q in (team_sides, teamless_sides))
+        ).subquery("profile_map_sides")
+        query = sa.select(
+            sa.func.sum(sides.c.maps_won).label("won_maps"),
+            sa.func.sum(sides.c.maps_lost).label("lost_maps"),
+            sa.func.avg(sides.c.closeness).label("closeness"),
+        ).having(sa.func.count() > 0)
         matches = await session.execute(query)
         return matches.first()
+
+    def _in_tournament_scope(self, query: sa.Select, workspace_id: int | None) -> sa.Select:
+        """``query`` (its encounter joined) kept to this game's tournaments, and to the workspace's when given."""
+        query = query.join(models.Tournament, models.Encounter.tournament_id == models.Tournament.id).where(
+            *self.discipline_filter(models.Tournament.discipline)
+        )
+        return query if workspace_id is None else query.where(models.Tournament.workspace_id == workspace_id)
 
     async def get_teams(
         self,
@@ -133,12 +164,63 @@ class UserProfileQueries(DisciplineQueries):
         result_total = await session.execute(total_query)
         return teams, result_total.scalar_one()
 
+    async def get_teamless_tournaments(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        workspace_id: int | None = None,
+        *,
+        tournament_id: int | None = None,
+    ) -> typing.Sequence[models.Tournament]:
+        """The tournaments a user played a team-less seat in (an individual Swiss lobby): history ``get_teams`` misses,
+        scoped like it (``tournament_id``: only that one). A tournament the user also has a team in is listed by both.
+        Each carries its ``division_grid_version``."""
+        played = Seat("teamless_seat").teamless_sides(models.Encounter.tournament_id, user_id=user_id, duel=False)
+        query = (
+            sa.select(models.Tournament)
+            .options(selectinload(models.Tournament.division_grid_version))
+            .where(
+                models.Tournament.id.in_(played),
+                models.Tournament.is_hidden.is_(False),
+                *self.discipline_filter(models.Tournament.discipline),
+            )
+        )
+        if workspace_id is not None:
+            query = query.where(models.Tournament.workspace_id == workspace_id)
+        if tournament_id is not None:
+            query = query.where(models.Tournament.id == tournament_id)
+        return (await session.scalars(query)).all()
+
+    async def get_individual_standings(
+        self, session: AsyncSession, user_id: int, tournament_ids: typing.Collection[int]
+    ) -> dict[int, sa.Row[int, str, int, int, int, int]]:
+        """``{tournament_id: (role, start_rank, wins, draws, losses)}`` of the user's individual Swiss rows."""
+        standing = _member_standings()
+        query = (
+            sa.select(
+                standing.c.tournament_id,
+                standing.c.role,
+                standing.c.start_rank,
+                standing.c.wins,
+                standing.c.draws,
+                standing.c.losses,
+            )
+            .join(models.WorkspaceMember, models.WorkspaceMember.id == standing.c.workspace_member_id)
+            .where(models.WorkspaceMember.player_id == user_id, standing.c.tournament_id.in_(tournament_ids))
+        )
+        return {row.tournament_id: row for row in (await session.execute(query)).all()}
+
     async def get_placements(
         self, session: AsyncSession, user_id: int, workspace_id: int | None = None
-    ) -> dict[int, int]:
-        """``{tournament_id: placement}`` over the user's ranked ``participant_result`` rows in this game."""
+    ) -> dict[int, tuple[int, int]]:
+        """``{tournament_id: (placement, field size)}`` over the user's ranked ``participant_result`` rows in this
+        game."""
         query = (
-            sa.select(models.ParticipantResult.tournament_id, models.ParticipantResult.placement)
+            sa.select(
+                models.ParticipantResult.tournament_id,
+                models.ParticipantResult.placement,
+                models.ParticipantResult.field_size,
+            )
             .join(models.WorkspaceMember, models.WorkspaceMember.id == models.ParticipantResult.workspace_member_id)
             .join(models.Tournament, models.Tournament.id == models.ParticipantResult.tournament_id)
             .where(
@@ -149,7 +231,9 @@ class UserProfileQueries(DisciplineQueries):
         )
         if workspace_id is not None:
             query = query.where(models.Tournament.workspace_id == workspace_id)
-        return dict((await session.execute(query)).all())
+        # ``placement IS NOT NULL`` above.
+        rows = typing.cast(typing.Iterable[tuple[int, int, int]], await session.execute(query))
+        return {tournament_id: (placement, size) for tournament_id, placement, size in rows}
 
     async def get_roles(
         self, session: AsyncSession, user_id: int, workspace_id: int | None = None
@@ -164,64 +248,95 @@ class UserProfileQueries(DisciplineQueries):
         then id): ids follow creation, not play, across workspaces. ``recency`` is
         that order across ALL of the user's tournaments here (1 = newest), so entries of different roles compare.
         """
-
-        seat = Seat()
         start, end, _ = tournament_chrono_key()
-
-        q = (
+        seat, loose, standing = Seat(), Seat("loose_seat"), _member_standings()
+        team_sides = (
             sa.select(
-                models.Player.role,
-                models.Tournament.discipline,
-                models.Player.sub_role,
+                models.Player.role.label("role"),
+                models.Tournament.discipline.label("discipline"),
+                models.Player.sub_role.label("sub_role"),
                 seat.maps_won.label("maps_won"),
                 seat.maps_lost.label("maps_lost"),
                 models.Team.tournament_id.label("tournament_id"),
                 models.Player.rank.label("rank"),
                 start.label("chrono_start"),
                 end.label("chrono_end"),
-                sa.func.dense_rank().over(order_by=[*(c.desc() for c in tournament_chrono_key())]).label("recency"),
                 tournament_effective_version_id_expr(models.Team.tournament_id).label("division_grid_version_id"),
             )
             .join(models.Team, models.Team.id == models.Player.team_id)
             .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)
-            .where(models.Tournament.discipline == self.discipline)
             .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
             .where(
                 models.Player.is_substitution.is_(False),
                 models.WorkspaceMember.player_id == user_id,
             )
         )
-        q = seat.join(q, models.Team.id)
-        if workspace_id is not None:
-            q = q.where(models.Tournament.workspace_id == workspace_id)
-        sides = q.subquery("profile_role_sides")
+        team_sides = seat.join(team_sides, models.Team.id)
+        # A team-less seat plays the role (and starts at the rank) of the member's individual Swiss row.
+        teamless_sides = loose.teamless_sides(
+            standing.c.role,
+            models.Tournament.discipline,
+            sa.cast(sa.null(), sa.String),
+            loose.maps_won,
+            loose.maps_lost,
+            models.Encounter.tournament_id,
+            standing.c.start_rank,
+            start,
+            end,
+            tournament_effective_version_id_expr(models.Tournament.id),
+            user_id=user_id,
+        )
+        teamless_sides = teamless_sides.join(
+            models.Tournament, models.Tournament.id == models.Encounter.tournament_id
+        ).outerjoin(
+            standing,
+            sa.and_(
+                standing.c.tournament_id == models.Encounter.tournament_id,
+                standing.c.workspace_member_id == models.EncounterTeamMember.workspace_member_id,
+            ),
+        )
+        scoped = [
+            q.where(
+                models.Tournament.discipline == self.discipline,
+                *([models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []),
+            )
+            for q in (team_sides, teamless_sides)
+        ]
+        sides = sa.union_all(*scoped).subquery("profile_role_sides")
+        # Recency over both kinds of seat, so entries of different roles compare.
+        ranked = sa.select(
+            sides,
+            sa.func.dense_rank()
+            .over(order_by=(sides.c.chrono_start.desc(), sides.c.chrono_end.desc(), sides.c.tournament_id.desc()))
+            .label("recency"),
+        ).subquery("profile_role_ranked")
         query = (
             sa.select(
-                sides.c.role,
-                sides.c.discipline,
-                sides.c.sub_role,
-                sa.func.sum(sides.c.maps_won).label("won_maps"),
-                sa.func.sum(sides.c.maps_lost).label("lost_maps"),
+                ranked.c.role,
+                ranked.c.discipline,
+                ranked.c.sub_role,
+                sa.func.sum(ranked.c.maps_won).label("won_maps"),
+                sa.func.sum(ranked.c.maps_lost).label("lost_maps"),
                 sa.func.jsonb_agg(
                     aggregate_order_by(
                         sa.func.jsonb_build_object(
                             "tournament",
-                            sides.c.tournament_id,
+                            ranked.c.tournament_id,
                             "rank",
-                            sides.c.rank,
+                            ranked.c.rank,
                             "division_grid_version_id",
-                            sides.c.division_grid_version_id,
+                            ranked.c.division_grid_version_id,
                             "recency",
-                            sides.c.recency,
+                            ranked.c.recency,
                         ),
-                        sides.c.chrono_start.desc(),
-                        sides.c.chrono_end.desc(),
-                        sides.c.tournament_id.desc(),
+                        ranked.c.chrono_start.desc(),
+                        ranked.c.chrono_end.desc(),
+                        ranked.c.tournament_id.desc(),
                     )
                 ),
             )
-            .select_from(sides)
-            .group_by(sides.c.role, sides.c.discipline, sides.c.sub_role)
+            .select_from(ranked)
+            .group_by(ranked.c.role, ranked.c.discipline, ranked.c.sub_role)
         )
         result = await session.execute(query)
         return [
@@ -234,15 +349,17 @@ class UserProfileQueries(DisciplineQueries):
         session: AsyncSession,
         user_id: int,
         workspace_id: int | None = None,
-    ) -> typing.Sequence[tuple[models.Team, int, int, int]]:
-        """A user's tournament history as ``(team, maps won, maps lost, average encounter closeness)`` rows: one per
-        tournament, the member's final team (§11.2), so a merged league is one row, not one per day team.
+    ) -> typing.Sequence[tuple[models.Tournament, models.Team | None, int, int, float]]:
+        """A user's tournament history as ``(tournament, team, maps won, maps lost, average encounter closeness)`` rows,
+        newest event first: one per tournament, with the member's final team (§11.2), so a merged league is one row,
+        not one per day team. ``team`` is ``None`` where the user played only team-less seats (an individual Swiss
+        lobby); such seats count in the maps and closeness of their tournament's row either way.
         """
 
-        seat = Seat()
-
-        q = (
+        seat, loose = Seat(), Seat("loose_seat")
+        team_sides = (
             sa.select(
+                models.Team.tournament_id.label("tournament_id"),
                 models.Team.id.label("team_id"),
                 seat.maps_won.label("maps_won"),
                 seat.maps_lost.label("maps_lost"),
@@ -250,67 +367,85 @@ class UserProfileQueries(DisciplineQueries):
             )
             .select_from(models.Player)
             .join(models.Team, models.Team.id == models.Player.team_id)
-            .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)
-            .where(*self.discipline_filter(models.Tournament.discipline))
             .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
             .where(
                 models.WorkspaceMember.player_id == user_id,
                 models.Player.is_substitution.is_(False),
                 is_member_tournament_row(),
-                # Hidden tournaments never appear in a user's public
-                # tournament list. This read is cashews-cached without the viewer,
-                # so exclude unconditionally; admins/allowlisted view hidden
-                # tournaments through the gated tournament pages instead.
-                models.Tournament.is_hidden.is_(False),
             )
         )
-        q = seat.join(q, models.Team.id)
-        if workspace_id is not None:
-            q = q.where(models.Tournament.workspace_id == workspace_id)
-        sides = q.subquery("profile_tournament_sides")
+        team_sides = seat.join(team_sides, models.Team.id)
+        teamless_sides = loose.teamless_sides(
+            models.Encounter.tournament_id,
+            sa.cast(sa.null(), sa.BigInteger),
+            loose.maps_won,
+            loose.maps_lost,
+            models.Encounter.closeness,
+            user_id=user_id,
+        )
+        sides = sa.union_all(team_sides, teamless_sides).subquery("profile_tournament_sides")
         agg = (
             sa.select(
-                sides.c.team_id,
+                sides.c.tournament_id,
+                # ``is_member_tournament_row`` leaves one team per tournament.
+                sa.func.max(sides.c.team_id).label("team_id"),
                 sa.func.sum(sides.c.maps_won).label("won_maps"),
                 sa.func.sum(sides.c.maps_lost).label("lost_maps"),
                 sa.func.avg(sides.c.closeness).label("closeness"),
             )
-            .group_by(sides.c.team_id)
+            .group_by(sides.c.tournament_id)
             .subquery("profile_tournament_stats")
         )
         query = (
             sa.select(
+                models.Tournament,
                 models.Team,
                 agg.c.won_maps,
                 agg.c.lost_maps,
                 agg.c.closeness,
             )
-            # Only the columns of the tournament and the team's standings are read (``get_tournaments``).
+            # Only the team's roster and standings are read (``get_tournaments``).
             .options(
                 selectinload(models.Team.players).selectinload(models.Player.workspace_member),
-                selectinload(models.Team.tournament),
                 selectinload(models.Team.standings),
             )
-            .join(agg, agg.c.team_id == models.Team.id)
-            .join(models.Tournament, models.Tournament.id == models.Team.tournament_id)
-            .where(*self.discipline_filter(models.Tournament.discipline))
+            .join(agg, agg.c.tournament_id == models.Tournament.id)
+            .outerjoin(models.Team, models.Team.id == agg.c.team_id)
+            .where(
+                *self.discipline_filter(models.Tournament.discipline),
+                # Hidden tournaments never appear in a user's public
+                # tournament list. This read is cashews-cached without the viewer,
+                # so exclude unconditionally; admins/allowlisted view hidden
+                # tournaments through the gated tournament pages instead.
+                models.Tournament.is_hidden.is_(False),
+                *([models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []),
+            )
             # Newest event first by the tournament chronology (an undated tournament at its creation time).
             .order_by(*(c.desc() for c in tournament_chrono_key()))
         )
 
         result = await session.execute(query)
-        return result.unique().all()
+        return typing.cast(
+            typing.Sequence[tuple[models.Tournament, models.Team | None, int, int, float]], result.unique().all()
+        )
 
     async def get_tournament_stats_overall(
         self, session: AsyncSession, tournament: models.Tournament, user_id: int
     ) -> tuple[int, int, int, float]:
         """A user's totals for one tournament: ``(maps won, maps lost, average encounter
-        closeness, total playtime in seconds)``.
+        closeness, total playtime in seconds)``, team-less seats (an individual Swiss lobby) included.
         """
 
-        seat = Seat(name="playtime_seat")
+        facts = self._facts
+        playtime_facts = (
+            facts.c.player_id == user_id,
+            facts.c.stat_code == enums.LogStatsName.HeroTimePlayed,
+            facts.c.entity_id.is_(None),
+            facts.c.segment == 0,
+        )
+        seat, loose = Seat(name="playtime_seat"), Seat(name="playtime_loose_seat")
         playtime_query = (
-            sa.select(self._facts.c.value, self._facts.c.match_id, self._facts.c.workspace_member_id)
+            sa.select(facts.c.value, facts.c.match_id, facts.c.workspace_member_id)
             .select_from(models.Player)
             .join(models.Team, models.Team.id == models.Player.team_id)
             .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
@@ -318,18 +453,20 @@ class UserProfileQueries(DisciplineQueries):
                 models.WorkspaceMember.player_id == user_id,
                 models.Player.is_substitution.is_(False),
                 models.Team.tournament_id == tournament.id,
-                self._facts.c.player_id == models.WorkspaceMember.player_id,
-                self._facts.c.stat_code == enums.LogStatsName.HeroTimePlayed,
-                self._facts.c.entity_id.is_(None),
-                self._facts.c.segment == 0,
             )
         )
-        playtime_query = (
-            seat.join(playtime_query, models.Team.id, duel=False)
-            .join(self._matches, self._matches.c.encounter_id == models.Encounter.id)
-            .join(self._facts, self._facts.c.match_id == self._matches.c.id)
-        )
-        playtime_rows = playtime_query.subquery("profile_playtime_sides")
+        playtime_query = seat.join(playtime_query, models.Team.id, duel=False)
+        teamless_playtime = loose.teamless_sides(
+            facts.c.value, facts.c.match_id, facts.c.workspace_member_id, user_id=user_id, duel=False
+        ).where(models.Encounter.tournament_id == tournament.id)
+        playtime_rows = sa.union_all(
+            *(
+                q.join(self._matches, self._matches.c.encounter_id == models.Encounter.id)
+                .join(facts, facts.c.match_id == self._matches.c.id)
+                .where(*playtime_facts)
+                for q in (playtime_query, teamless_playtime)
+            )
+        ).subquery("profile_playtime_sides")
         playtime_subquery = sa.select(
             sa.func.sum(
                 aggregate_order_by(
@@ -340,7 +477,7 @@ class UserProfileQueries(DisciplineQueries):
             )
         ).scalar_subquery()
 
-        maps_seat = Seat(name="maps_seat")
+        maps_seat, maps_loose = Seat(name="maps_seat"), Seat(name="maps_loose_seat")
         maps_query = (
             sa.select(
                 maps_seat.maps_won.label("maps_won"),
@@ -356,7 +493,12 @@ class UserProfileQueries(DisciplineQueries):
                 models.Team.tournament_id == tournament.id,
             )
         )
-        map_sides = maps_seat.join(maps_query, models.Team.id).subquery("profile_tournament_map_sides")
+        teamless_maps = maps_loose.teamless_sides(
+            maps_loose.maps_won, maps_loose.maps_lost, models.Encounter.closeness, user_id=user_id
+        ).where(models.Encounter.tournament_id == tournament.id)
+        map_sides = sa.union_all(maps_seat.join(maps_query, models.Team.id), teamless_maps).subquery(
+            "profile_tournament_map_sides"
+        )
         query = sa.select(
             sa.func.coalesce(sa.func.sum(map_sides.c.maps_won), 0).label("won_maps"),
             sa.func.coalesce(sa.func.sum(map_sides.c.maps_lost), 0).label("lost_maps"),
@@ -562,13 +704,17 @@ class UserProfileQueries(DisciplineQueries):
     ) -> tuple[typing.Sequence[tuple[models.User, float, int, int, float | None, float | None]], int]:
         """A user's best teammates as ``(teammate, win rate together, tournaments together,
         distinct maps together, average impact rank, average KDA)`` rows, plus the total count.
+
+        A teammate shares a tournament team with the user, or a team-less seat (an individual Swiss lobby): such a
+        seat has no ``tournament.player``, only its roster snapshot.
         """
         self_player = sa.orm.aliased(models.Player, name="self_player")
         teammate_player = sa.orm.aliased(models.Player, name="teammate_player")
         self_member = sa.orm.aliased(models.WorkspaceMember, name="self_member")
         teammate_member = sa.orm.aliased(models.WorkspaceMember, name="teammate_member")
+        workspace_scope = [models.Tournament.workspace_id == workspace_id] if workspace_id is not None else []
 
-        shared_teams_select = (
+        shared_teams = (
             sa.select(
                 teammate_member.player_id.label("teammate_id"),
                 teammate_player.team_id.label("team_id"),
@@ -585,24 +731,62 @@ class UserProfileQueries(DisciplineQueries):
                 teammate_player.is_substitution.is_(False),
                 teammate_member.player_id != user_id,
                 models.Tournament.discipline == self.discipline,
+                *workspace_scope,
             )
             .distinct()
+            .cte("shared_teams")
         )
 
-        if workspace_id is not None:
-            shared_teams_select = shared_teams_select.where(models.Tournament.workspace_id == workspace_id)
-
-        shared_teams = shared_teams_select.cte("shared_teams")
-
-        encounter_seat = Seat(name="teammate_seat")
-        teammate_encounters = encounter_seat.join(
+        self_row = sa.orm.aliased(models.EncounterTeamMember, name="self_row")
+        teammate_row = sa.orm.aliased(models.EncounterTeamMember, name="teammate_row")
+        lobby = sa.orm.aliased(models.EncounterTeam, name="shared_lobby")
+        shared_lobbies = (
             sa.select(
-                shared_teams.c.teammate_id.label("teammate_id"),
-                models.Encounter.tournament_id.label("tournament_id"),
-                encounter_seat.maps_won.label("won_score"),
-                encounter_seat.maps_lost.label("lost_score"),
-            ).select_from(shared_teams),
-            shared_teams.c.team_id,
+                teammate_member.player_id.label("teammate_id"),
+                lobby.id.label("seat_id"),
+                lobby.tournament_id.label("tournament_id"),
+            )
+            .select_from(self_row)
+            .join(
+                lobby,
+                sa.and_(lobby.id == self_row.encounter_team_id, lobby.team_id.is_(None), lobby.active.is_(True)),
+            )
+            .join(teammate_row, teammate_row.encounter_team_id == self_row.encounter_team_id)
+            .join(self_member, self_member.id == self_row.workspace_member_id)
+            .join(teammate_member, teammate_member.id == teammate_row.workspace_member_id)
+            .join(models.Tournament, models.Tournament.id == lobby.tournament_id)
+            .where(
+                self_member.player_id == user_id,
+                self_row.is_substitute.is_(False),
+                teammate_row.is_substitute.is_(False),
+                teammate_member.player_id != user_id,
+                models.Tournament.discipline == self.discipline,
+                *workspace_scope,
+            )
+            .distinct()
+            .cte("shared_lobbies")
+        )
+
+        team_seat, lobby_seat = Seat(name="teammate_seat"), Seat(name="teammate_lobby_seat")
+        teammate_encounters = sa.union_all(
+            team_seat.join(
+                sa.select(
+                    shared_teams.c.teammate_id.label("teammate_id"),
+                    models.Encounter.tournament_id.label("tournament_id"),
+                    team_seat.maps_won.label("won_score"),
+                    team_seat.maps_lost.label("lost_score"),
+                ).select_from(shared_teams),
+                shared_teams.c.team_id,
+            ),
+            lobby_seat.join_id(
+                sa.select(
+                    shared_lobbies.c.teammate_id,
+                    models.Encounter.tournament_id,
+                    lobby_seat.maps_won,
+                    lobby_seat.maps_lost,
+                ).select_from(shared_lobbies),
+                shared_lobbies.c.seat_id,
+            ),
         ).cte("teammate_encounters")
 
         teammates_query = (
@@ -626,37 +810,51 @@ class UserProfileQueries(DisciplineQueries):
         # (impact_rank, kda) pair via an outer join (keeps a teammate with zero stat rows in the result with
         # NULLs), THEN average per teammate.
         teammate_codes = [enums.LogStatsName.ImpactRank, enums.LogStatsName.KDA]
+        facts = self._facts
+
+        def teammate_facts(units: sa.CTE, together: sa.ColumnElement[bool]) -> sa.Select:
+            """The teammate's facts in the matches played ``together`` with the user in ``units``."""
+            return (
+                sa.select(
+                    units.c.teammate_id.label("user_id"),
+                    facts.c.match_id,
+                    facts.c.stat_code,
+                    facts.c.value,
+                )
+                .select_from(units)
+                .join(teammates_query, teammates_query.c.user_id == units.c.teammate_id)
+                .outerjoin(
+                    facts,
+                    sa.and_(
+                        together,
+                        facts.c.player_id == units.c.teammate_id,
+                        facts.c.segment == 0,
+                        facts.c.entity_id.is_(None),
+                        facts.c.stat_code.in_(teammate_codes),
+                        # The same stats by id: lets the fact index probe (member, stat) directly instead of reading
+                        # every stat of each match and joining stat_def per row (44k lookups for a 950-match career).
+                        facts.c.stat_id.in_(
+                            sa.select(models.StatDef.id).where(
+                                models.StatDef.discipline == self.discipline, models.StatDef.code.in_(teammate_codes)
+                            )
+                        ),
+                    ),
+                )
+            )
+
+        fact_rows = sa.union_all(
+            teammate_facts(shared_teams, facts.c.tournament_team_id == shared_teams.c.team_id),
+            teammate_facts(shared_lobbies, facts.c.encounter_team_id == shared_lobbies.c.seat_id),
+        ).subquery("teammate_fact_rows")
         stats_per_match = (
             sa.select(
-                shared_teams.c.teammate_id.label("user_id"),
-                self._facts.c.match_id.label("match_id"),
-                sa.func.max(
-                    sa.case((self._facts.c.stat_code == enums.LogStatsName.ImpactRank, self._facts.c.value))
-                ).label("impact_rank"),
-                sa.func.max(sa.case((self._facts.c.stat_code == enums.LogStatsName.KDA, self._facts.c.value))).label(
-                    "kda"
+                fact_rows.c.user_id,
+                fact_rows.c.match_id,
+                sa.func.max(sa.case((fact_rows.c.stat_code == enums.LogStatsName.ImpactRank, fact_rows.c.value))).label(
+                    "impact_rank"
                 ),
-            )
-            .select_from(shared_teams)
-            .join(teammates_query, teammates_query.c.user_id == shared_teams.c.teammate_id)
-            .outerjoin(
-                self._facts,
-                sa.and_(
-                    self._facts.c.tournament_team_id == shared_teams.c.team_id,
-                    self._facts.c.player_id == shared_teams.c.teammate_id,
-                    self._facts.c.segment == 0,
-                    self._facts.c.entity_id.is_(None),
-                    self._facts.c.stat_code.in_(teammate_codes),
-                    # The same stats by id: lets the fact index probe (member, stat) directly instead of reading every
-                    # stat of each match and joining stat_def per row (44k lookups for a 950-match career).
-                    self._facts.c.stat_id.in_(
-                        sa.select(models.StatDef.id).where(
-                            models.StatDef.discipline == self.discipline, models.StatDef.code.in_(teammate_codes)
-                        )
-                    ),
-                ),
-            )
-            .group_by(shared_teams.c.teammate_id, self._facts.c.match_id)
+                sa.func.max(sa.case((fact_rows.c.stat_code == enums.LogStatsName.KDA, fact_rows.c.value))).label("kda"),
+            ).group_by(fact_rows.c.user_id, fact_rows.c.match_id)
         ).cte("teammate_stats_per_match")
 
         mvp_placement = stats_per_match.c.impact_rank
@@ -676,8 +874,8 @@ class UserProfileQueries(DisciplineQueries):
 
         # Distinct maps played together (separate CTE so the encounter→match fan-out
         # does not skew the winrate/tournament aggregates in teammates_query).
-        map_seat = Seat(name="teammate_map_seat")
-        map_sides = (
+        map_seat, map_lobby_seat = Seat(name="teammate_map_seat"), Seat(name="teammate_map_lobby_seat")
+        map_sides = sa.union_all(
             map_seat.join(
                 sa.select(
                     shared_teams.c.teammate_id.label("user_id"),
@@ -687,10 +885,15 @@ class UserProfileQueries(DisciplineQueries):
                 .join(teammates_query, teammates_query.c.user_id == shared_teams.c.teammate_id),
                 shared_teams.c.team_id,
                 duel=False,
-            )
-            .outerjoin(self._matches, self._matches.c.encounter_id == models.Encounter.id)
-            .subquery("teammate_map_sides")
-        )
+            ).outerjoin(self._matches, self._matches.c.encounter_id == models.Encounter.id),
+            map_lobby_seat.join_id(
+                sa.select(shared_lobbies.c.teammate_id, self._matches.c.map_entity_id)
+                .select_from(shared_lobbies)
+                .join(teammates_query, teammates_query.c.user_id == shared_lobbies.c.teammate_id),
+                shared_lobbies.c.seat_id,
+                duel=False,
+            ).outerjoin(self._matches, self._matches.c.encounter_id == models.Encounter.id),
+        ).subquery("teammate_map_sides")
         maps_query = (
             sa.select(
                 map_sides.c.user_id,

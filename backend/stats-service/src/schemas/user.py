@@ -268,8 +268,9 @@ class UserTournament(BaseModel):
     name: str
     workspace_id: int
     discipline: str
-    team_id: int
-    team: str
+    #: ``None`` (with an empty ``players``) where the user played only team-less seats, e.g. an individual Swiss stage.
+    team_id: int | None
+    team: str | None
     players: list[UserTournamentPlayer]
     closeness: float
     placement: int | None

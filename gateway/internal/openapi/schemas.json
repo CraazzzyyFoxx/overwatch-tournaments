@@ -40365,12 +40365,26 @@
           "default": null
         },
         "team": {
-          "title": "Team",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Team"
         },
         "team_id": {
-          "title": "Team Id",
-          "type": "integer"
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Team Id"
         },
         "won": {
           "title": "Won",

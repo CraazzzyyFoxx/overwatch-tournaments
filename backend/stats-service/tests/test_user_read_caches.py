@@ -205,7 +205,7 @@ class VersionedEncounterFamiliesTests(_CacheTestBase):
             await read()
             stored = sorted([key async for key in cache.scan("backend:*")])
             self.assertEqual(
-                ["backend:user_encounters:v9:404:", "backend:user_tournament_encounters:v9:404:"],
+                ["backend:user_encounters:v10:404:", "backend:user_tournament_encounters:v10:404:"],
                 [key[: key.index("404:") + 4] for key in stored],
             )
             await read()

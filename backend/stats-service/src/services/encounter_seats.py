@@ -17,7 +17,42 @@ from sqlalchemy.orm import aliased
 from shared import models
 from shared.core import enums
 
-__all__ = ("Seat",)
+__all__ = ("Seat", "teamless_seat_ids", "user_live_seat_ids")
+
+
+def teamless_seat_ids(user_id: typing.Any) -> sa.Select[int]:
+    """Ids of the tournament seats with no source team (an individual Swiss lobby) whose roster names ``user_id`` as a
+    non-substitute, live or retired: every match such a seat played is one the user played."""
+    member, seat = models.EncounterTeamMember, models.EncounterTeam
+    return (
+        sa.select(member.encounter_team_id)
+        .join(seat, seat.id == member.encounter_team_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == member.workspace_member_id)
+        .where(
+            models.WorkspaceMember.player_id == user_id,
+            member.is_substitute.is_(False),
+            seat.team_id.is_(None),
+            seat.tournament_id.is_not(None),
+        )
+    )
+
+
+def user_live_seat_ids(user_id: typing.Any, *more: sa.Select[typing.Any]) -> sa.CompoundSelect[int]:
+    """Ids of the live seats ``user_id`` played as a non-substitute: their teams' and the team-less ones, with the
+    seat ids ``more`` selects."""
+    seat = aliased(models.EncounterTeam, name="user_team_seat")
+    teams = (
+        sa.select(seat.id)
+        .join(models.Player, models.Player.team_id == seat.team_id)
+        .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
+        .where(
+            seat.active.is_(True),
+            models.WorkspaceMember.player_id == user_id,
+            models.Player.is_substitution.is_(False),
+        )
+    )
+    loose = Seat("user_teamless_seat")
+    return sa.union(teams, loose.teamless_sides(loose.team.id, user_id=user_id, duel=False), *more)
 
 
 class Seat:
@@ -32,14 +67,49 @@ class Seat:
         self.team = aliased(models.EncounterTeam, name=name)
         self._others = aliased(models.EncounterTeam, name=f"{name}_others")
 
-    def join(self, query: sa.Select, team_id_column: typing.Any, *, duel: bool = True) -> sa.Select:
-        """Join the seat of ``team_id_column`` and then its encounter onto ``query``."""
+    def _join_encounter(self, query: sa.Select, *, duel: bool) -> sa.Select:
         encounter_on = models.Encounter.id == self.team.encounter_id
         if duel:
             encounter_on = sa.and_(encounter_on, models.Encounter.slot_count == 2)
-        return query.join(self.team, sa.and_(self.team.team_id == team_id_column, self.team.active.is_(True))).join(
-            models.Encounter, encounter_on
+        return query.join(models.Encounter, encounter_on)
+
+    def join(self, query: sa.Select, team_id_column: typing.Any, *, duel: bool = True) -> sa.Select:
+        """Join the seat of ``team_id_column`` and then its encounter onto ``query``."""
+        query = query.join(self.team, sa.and_(self.team.team_id == team_id_column, self.team.active.is_(True)))
+        return self._join_encounter(query, duel=duel)
+
+    def join_id(self, query: sa.Select, seat_id_column: typing.Any, *, duel: bool = True) -> sa.Select:
+        """Join the live seat ``seat_id_column`` names and then its encounter onto ``query``."""
+        query = query.join(self.team, sa.and_(self.team.id == seat_id_column, self.team.active.is_(True)))
+        return self._join_encounter(query, duel=duel)
+
+    def teamless_sides(self, *columns: typing.Any, user_id: typing.Any = None, duel: bool = True) -> sa.Select:
+        """``columns`` per non-substitute roster member of a live tournament seat with no source team, joined to its
+        encounter.
+
+        Such a seat (an individual Swiss lobby, a deleted team's seat) has no ``tournament.player`` behind it: its
+        roster snapshot (``encounter.team_member``) is the only record of who played. Mix seats never count (their
+        stats live inside the mix). ``user_id`` keeps that user's rows.
+        """
+        member = models.EncounterTeamMember
+        query = (
+            sa.select(*columns)
+            .select_from(member)
+            .join(models.WorkspaceMember, models.WorkspaceMember.id == member.workspace_member_id)
+            .join(
+                self.team,
+                sa.and_(
+                    self.team.id == member.encounter_team_id,
+                    self.team.active.is_(True),
+                    self.team.team_id.is_(None),
+                    self.team.tournament_id.is_not(None),
+                ),
+            )
+            .where(member.is_substitute.is_(False))
         )
+        if user_id is not None:
+            query = query.where(models.WorkspaceMember.player_id == user_id)
+        return self._join_encounter(query, duel=duel)
 
     def _games(self, *conditions: typing.Callable[[typing.Any], sa.ColumnElement[bool]]) -> sa.ColumnElement[int]:
         """How many confirmed games of this encounter this participation played and ``conditions`` hold for."""

@@ -232,9 +232,9 @@ const SingleDossier = ({
             </div>
             <div className="mt-1.5 flex items-center gap-2 text-caption text-[color:var(--aqt-fg-muted)]">
               <PlayerRoleIcon role={t.role} ontology={ontology} size={15} />
-              <span className="aqt-tnum truncate">
-                {tr("users.tournaments.teamName", { name: String(t.team) })}
-              </span>
+              {t.team != null ? (
+                <span className="aqt-tnum truncate">{tr("users.tournaments.teamName", { name: t.team })}</span>
+              ) : null}
               <DivisionIcon
                 division={t.division}
                 tournamentGrid={t.division_grid_version}

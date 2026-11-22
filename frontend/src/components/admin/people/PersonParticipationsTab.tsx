@@ -186,7 +186,8 @@ export function PersonParticipationsTab({
     () =>
       participations.flatMap((entry) => {
         const player = entry.players.find((candidate) => candidate.user_id === personId);
-        if (!player) return [];
+        // A team-less entry (individual Swiss) has no player row to edit.
+        if (!player || entry.team_id == null || entry.team == null) return [];
         return [
           {
             id: player.id,

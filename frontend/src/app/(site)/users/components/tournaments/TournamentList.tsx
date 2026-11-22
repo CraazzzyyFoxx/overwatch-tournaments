@@ -72,7 +72,9 @@ const TournamentRow = ({
         </div>
         <div className="mt-0.5 flex items-center gap-1.5 text-label text-[color:var(--aqt-fg-dim)]">
           <PlayerRoleIcon role={t.role} ontology={ontology} size={13} />
-          <span className="truncate">{tr("users.tournaments.teamName", { name: String(t.team) })}</span>
+          {t.team != null ? (
+            <span className="truncate">{tr("users.tournaments.teamName", { name: t.team })}</span>
+          ) : null}
           {wr != null ? (
             <span className="aqt-tnum ml-auto shrink-0 pl-2 text-[color:var(--aqt-fg-faint)]">
               {tr("users.tournaments.list.mapsWr", { maps: String(agg.mapsWon + agg.mapsLost), wr: String(Math.round(wr)) })}

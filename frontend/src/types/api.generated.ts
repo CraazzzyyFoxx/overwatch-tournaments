@@ -18935,9 +18935,9 @@ export interface components {
             /** @default null */
             role: components["schemas"]["stats.RoleRef"] | null;
             /** Team */
-            team: string;
+            team: string | null;
             /** Team Id */
-            team_id: number;
+            team_id: number | null;
             /** Won */
             won: number;
             /** Workspace Id */
