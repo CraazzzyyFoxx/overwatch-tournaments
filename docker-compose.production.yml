@@ -152,27 +152,25 @@ services:
       - app-network
 
   redis:
-    # Pinned by digest (= Docker Hub's :latest since 2025-11-03, already on the host): `pull --policy missing`
-    # re-checks a :latest tag against the mirror on every deploy, and a mirror outage then blocks the release.
-    image: 'dockerhub.timeweb.cloud/redis/redis-stack@sha256:5d5154123426693540ea6c1d9e638eae2bf2024879c839db6fcfdd7717e817c7'
+    # Valkey 9.0.8 (valkey/valkey:9.0-alpine), pinned by digest: `pull --policy missing` skips an image already on
+    # the host without asking the mirror, so a mirror outage cannot block a deploy. The service keeps the `redis`
+    # name so every REDIS_URL / depends_on / exporter target stays as it is.
+    image: 'dockerhub.timeweb.cloud/valkey/valkey@sha256:139d21c97b1a956e42e29b1e4ede4752a6ff52d1a0db9ef0ff4954a570f23976'
     logging: *log-rotate
-    # maxmemory must be set explicitly: redis-server ignores the container's
+    # maxmemory must be set explicitly: the server ignores the container's
     # cgroup limit below, so INFO memory reports maxmemory=0 (unlimited) and
     # `redis_memory_used_bytes / redis_memory_max_bytes` in the Prometheus
     # alert divides by zero (+Inf%) regardless of actual usage. 400mb leaves
-    # headroom under the 512M limit for redis-stack module overhead
-    # (RediSearch/RedisJSON). allkeys-lru is safe: every key here (RBAC
+    # headroom under the 512M limit. allkeys-lru is safe: every key here (RBAC
     # cache, OAuth/SSO tickets, session blacklist, feature cache) is
     # TTL-bound and callers already treat cache misses as a graceful
     # DB-fallback path, not a correctness failure.
     #
-    # Set via REDIS_ARGS (not `command:`) — the image's /entrypoint.sh CMD
-    # hardcodes --protected-mode no and --loadmodule for every redis-stack
-    # module (RediSearch/RedisJSON/etc.) and appends ${REDIS_ARGS} last;
-    # overriding `command:` skips the entrypoint entirely and silently
-    # drops both protected-mode-off and all module loading.
+    # Set via VALKEY_EXTRA_FLAGS (not `command:`): the image's entrypoint appends
+    # it to its default `valkey-server`, whose built-in config already has
+    # protected-mode off.
     environment:
-      REDIS_ARGS: "--maxmemory 400mb --maxmemory-policy allkeys-lru"
+      VALKEY_EXTRA_FLAGS: "--maxmemory 400mb --maxmemory-policy allkeys-lru"
     deploy:
       resources:
         limits:
@@ -183,7 +181,8 @@ services:
           memory: 128M
     restart: unless-stopped
     volumes:
-      - redis-data:/data
+      # A new volume: Valkey 9 exits on the RDB Redis 7.4 wrote ("Can't handle RDB format version 12"), and the data is cache.
+      - valkey-data:/data
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
       interval: 10s
@@ -1191,7 +1190,7 @@ services:
 
 volumes:
   postgres-data:
-  redis-data:
+  valkey-data:
   rabbitmq-data:
   analytics-models:
   alloy-data:

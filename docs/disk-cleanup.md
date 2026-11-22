@@ -50,7 +50,7 @@ ops/cleanup/cleanup.sh
    networks, normally near-empty.
 4. `docker builder prune -af --filter until=$BUILD_CACHE_RETENTION` (default 7 days).
 
-**Never touches volumes.** `redis-data`, `rabbitmq-data`, `analytics-models` and every
+**Never touches volumes.** `valkey-data`, `rabbitmq-data`, `analytics-models` and every
 bind-mounted app path are excluded on purpose — this script only reclaims things that are
 safe to lose (logs already shipped to Loki, layers GHCR can re-pull, cache that rebuilds
 itself).
