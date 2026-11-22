@@ -14121,6 +14121,12 @@ export interface components {
              */
             about: string | null;
             /**
+             * Achievement Eval Mode
+             * @default live
+             * @enum {string}
+             */
+            achievement_eval_mode: AppWorkspaceListItemAchievement_eval_mode;
+            /**
              * Boosty Url
              * @default null
              */
@@ -14285,6 +14291,12 @@ export interface components {
              * @default null
              */
             about: string | null;
+            /**
+             * Achievement Eval Mode
+             * @default live
+             * @enum {string}
+             */
+            achievement_eval_mode: AppWorkspaceReadAchievement_eval_mode;
             /**
              * Boosty Url
              * @default null
@@ -20319,10 +20331,7 @@ export interface components {
             display_name: string;
             /** Is Captain */
             is_captain: boolean;
-            /**
-             * Player Id
-             * @description ``players.user.id`` — the key a live stream's ``player.id`` carries.
-             */
+            /** Player Id */
             player_id: number;
             /** Rank */
             rank: number | null;
@@ -24335,6 +24344,11 @@ export interface components {
              * @default null
              */
             about: string | null;
+            /**
+             * Achievement Eval Mode
+             * @default null
+             */
+            achievement_eval_mode: AppWorkspaceUpdateAchievement_eval_modeAnyOf0 | null;
             /**
              * Boosty Url
              * @default null
@@ -31139,6 +31153,11 @@ export interface components {
              * @default null
              */
             stage_id: number | null;
+            /**
+             * Third Place
+             * @default false
+             */
+            third_place: boolean;
         };
         /**
          * PickBanRulesPreviewInput
@@ -85331,9 +85350,19 @@ export enum AppTeamFormatReadSource {
     workspace = "workspace",
     preset = "preset"
 }
+export enum AppWorkspaceListItemAchievement_eval_mode {
+    live = "live",
+    stage_end = "stage_end",
+    manual = "manual"
+}
 export enum AppWorkspaceListItemNewcomer_scope {
     global = "global",
     workspace = "workspace"
+}
+export enum AppWorkspaceReadAchievement_eval_mode {
+    live = "live",
+    stage_end = "stage_end",
+    manual = "manual"
 }
 export enum AppWorkspaceReadNewcomer_scope {
     global = "global",
@@ -85874,6 +85903,11 @@ export enum AppWorkspaceQuotaSetScope {
     workspace = "workspace",
     key = "key",
     session = "session"
+}
+export enum AppWorkspaceUpdateAchievement_eval_modeAnyOf0 {
+    live = "live",
+    stage_end = "stage_end",
+    manual = "manual"
 }
 export enum AppWorkspaceUpdateNewcomer_scopeAnyOf0 {
     global = "global",
