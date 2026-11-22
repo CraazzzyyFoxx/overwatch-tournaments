@@ -512,6 +512,8 @@
       "needs": "First:",
       "run": "Do it",
       "waitStageMatches": "“{name}” has to finish first: {count, plural, one {# match} other {# matches}} left.",
+      "waitStagePlayed": "Every scheduled match of “{name}” is played, but the stage is still active.",
+      "waitStageLock": "Every scheduled match of “{name}” is played; the stage completes once its qualification is locked on its Standings tab.",
       "balancerExportHint": "The teams are not in the tournament yet. Once exported, forming can be completed.",
       "exportTeams": "Next: put the teams into the tournament (export the balance or the draft); then forming can be completed.",
       "blocked": "This step cannot move further right now: check the tournament flow.",
