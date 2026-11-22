@@ -18917,6 +18917,16 @@
           "default": null,
           "title": "About"
         },
+        "achievement_eval_mode": {
+          "default": "live",
+          "enum": [
+            "live",
+            "stage_end",
+            "manual"
+          ],
+          "title": "Achievement Eval Mode",
+          "type": "string"
+        },
         "boosty_url": {
           "anyOf": [
             {
@@ -19647,6 +19657,16 @@
           "default": null,
           "title": "About"
         },
+        "achievement_eval_mode": {
+          "default": "live",
+          "enum": [
+            "live",
+            "stage_end",
+            "manual"
+          ],
+          "title": "Achievement Eval Mode",
+          "type": "string"
+        },
         "boosty_url": {
           "anyOf": [
             {
@@ -20053,6 +20073,23 @@
           ],
           "default": null,
           "title": "About"
+        },
+        "achievement_eval_mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "live",
+                "stage_end",
+                "manual"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Achievement Eval Mode"
         },
         "boosty_url": {
           "anyOf": [
@@ -52011,7 +52048,6 @@
           "type": "boolean"
         },
         "player_id": {
-          "description": "``players.user.id`` — the key a live stream's ``player.id`` carries.",
           "title": "Player Id",
           "type": "integer"
         },

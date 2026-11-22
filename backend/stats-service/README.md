@@ -436,6 +436,9 @@ row; a 429 also sets `deadlock_rank:cooldown`. `rate_limit_per_minute` counts re
 - `stats.ingest.<discipline>` — the ingest request, staged on the outbox with the job, and by every transition to `pending` (tournament-wide requeue, retry, the stall reaper; `stats.ingest.reclaimed` counts reaper outcomes).
 - `process_tournament_logs` — through the outbox, with the admin audit row.
 - `achievement_evaluate` — transactionally enqueued for native observations, new uploads, terminal job statuses and `EncounterCompletedEvent`.
+  The consumer runs it as the workspace's `achievement_eval_mode` allows: `live` every change; `stage_end` only on a
+  tournament-service `reason` of `stage_completed` / `tournament_finished` (every enabled rule over the tournament),
+  or any change once the tournament is finished; `manual` never — a rule edit does not recompute either.
 - `achievement_evaluate.deferred` — through the outbox, with the run row: a manual or `rule_version_bump` run for a workspace whose
   `verification_status` is `unverified`: the run row is created `queued` and the message carries its
   id, so the consumer finishes that row instead of opening a second one. `parse_complete` is never

@@ -519,6 +519,8 @@ Effective set = evaluation ∪ grants − revokes (global / tournament / match p
 
 Runner: `parse_complete` inline; `manual` / `rule_version_bump` on an unverified workspace is deferred. Each rule in a savepoint, and each rule's diff committed before the next rule is evaluated (the rule-row lock its write takes never outlives that rule); a lost DB connection aborts the rest of the run and marks it failed, keeping the rules already committed. Empty/disabled tree wipes results. Incomplete division-grid mapping → 409.
 
+Automatic runs follow `Workspace.achievement_eval_mode` (Settings → General): `live` (default) every data change; `stage_end` a stage node `completed` or the tournament finished (every enabled rule over the tournament), and any change after the finish; `manual` only an admin's run, rule edits included.
+
 ---
 
 ## 12. Analytics

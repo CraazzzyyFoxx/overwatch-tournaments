@@ -29,6 +29,7 @@ if typing.TYPE_CHECKING:
 
 __all__ = (
     "AchievementCategory",
+    "AchievementEvalMode",
     "AchievementGrain",
     "AchievementOverrideAction",
     "AchievementRule",
@@ -79,6 +80,14 @@ class EvaluationRunTrigger(StrEnum):
     parse_complete = "parse_complete"
     manual = "manual"
     rule_version_bump = "rule_version_bump"
+
+
+class AchievementEvalMode(StrEnum):
+    """When a workspace's data changes re-run achievements on their own (``Workspace.achievement_eval_mode``)."""
+
+    live = "live"  # every data change
+    stage_end = "stage_end"  # a stage or the tournament completed; changes after the finish run at once
+    manual = "manual"  # only an admin's run; a rule edit does not recompute either
 
 
 class EvaluationRunStatus(StrEnum):

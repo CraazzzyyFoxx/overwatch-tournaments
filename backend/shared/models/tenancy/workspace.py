@@ -138,6 +138,9 @@ class Workspace(db.TimeStampIntegerMixin):
     # Admin-editable via the same PATCH /workspaces/{id} path as
     # ``branding_enabled``.
     newcomer_scope: Mapped[str] = mapped_column(String(16), server_default="global", nullable=False)
+    # ``shared.models.achievements.AchievementEvalMode``: when data changes re-run achievements on their own.
+    # Plain string, same precedent as ``newcomer_scope``; read by stats-service's achievement consumer.
+    achievement_eval_mode: Mapped[str] = mapped_column(String(16), server_default="live", nullable=False)
     members: Mapped[list[WorkspaceMember]] = relationship(back_populates="workspace", passive_deletes=True)
     division_grid_defaults: Mapped[list[WorkspaceDivisionGridDefault]] = relationship(
         cascade="all, delete-orphan", passive_deletes=True, lazy="selectin"

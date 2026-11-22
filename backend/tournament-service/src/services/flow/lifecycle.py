@@ -169,6 +169,9 @@ class FlowNodeService:
         await enqueue_flow_node_state_changed(session, node, workspace_id=workspace_id, old_status=current.value)
         await flow_engine.recompute(session, node.tournament_id)
         await self.sync_tournament_status(session, node.tournament_id)
+        # A last stage that finished the tournament is already covered by the finish's own run.
+        if kind == FlowNodeKind.STAGE and target == _S.COMPLETED and not tournament.is_finished:
+            await enqueue_achievement_evaluation(session, tournament, [], reason="stage_completed")
         await publish_tournament_invalidation(
             session, node.tournament_id, (Resource.TOURNAMENT_FLOW, Resource.TOURNAMENT_STRUCTURE)
         )
@@ -209,7 +212,13 @@ class FlowNodeService:
         tournament.is_finished = is_finished_for_status(new)
         if tournament.is_finished != was_finished:
             await write_participant_results(session, tournament_id)
-            await enqueue_achievement_evaluation(session, tournament, ["tournament.participant_result"])
+            # A reopen (True -> False) is a plain data change: it must not read as a finish.
+            await enqueue_achievement_evaluation(
+                session,
+                tournament,
+                ["tournament.participant_result"],
+                reason="tournament_finished" if tournament.is_finished else "data_changed",
+            )
         await enqueue_tournament_state_changed(session, tournament, old_status=old.value, new_status=new.value)
         await session.flush()
         return new

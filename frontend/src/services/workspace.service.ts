@@ -1,6 +1,7 @@
 import { apiFetch } from "@/lib/api/fetch";
 import type { PaginatedResponse } from "@/types/pagination.types";
 import {
+  AchievementEvalMode,
   DivisionGridActivationReadiness,
   DivisionGridEntity,
   DivisionGridImportJob,
@@ -145,6 +146,7 @@ export default class workspaceService {
       seo_title?: string | null;
       seo_description?: string | null;
       newcomer_scope?: "global" | "workspace";
+      achievement_eval_mode?: AchievementEvalMode;
       /** Priority order; `[0]` is the workspace's default game. At least one, known codes only. */
       disciplines_enabled?: string[];
     }

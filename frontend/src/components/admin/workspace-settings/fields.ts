@@ -41,6 +41,7 @@ const FIELD_DEFS = {
   // Order is data: `[0]` is the default game for new tournaments, grids and
   // mixes, so a drag that only reorders is a real change.
   disciplines_enabled: field("general", (ws) => ws.disciplines_enabled),
+  achievement_eval_mode: field("general", (ws) => ws.achievement_eval_mode ?? "live"),
 
   branding_enabled: field("branding", (ws) => ws.branding_enabled),
   brand_primary: field("branding", (ws) => ws.brand_primary, trimOrNull),

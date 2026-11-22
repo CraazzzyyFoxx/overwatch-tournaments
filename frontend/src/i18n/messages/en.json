@@ -13481,6 +13481,15 @@
           "twitch": "Twitch",
           "boosty": "Boosty"
         },
+        "achievementMode": {
+          "label": "When achievements are recalculated",
+          "live": "As data arrives",
+          "liveHelp": "Every uploaded log, result or standings change recalculates achievements right away.",
+          "stage_end": "When a stage ends",
+          "stage_endHelp": "Recalculated when a stage (groups, playoff and so on) or the whole tournament completes. Changes to a finished tournament recalculate right away.",
+          "manual": "Manually only",
+          "manualHelp": "Only a run you start on the achievements page recalculates, editing a rule included."
+        },
         "groups": {
           "identity": {
             "title": "Identity",
@@ -13497,6 +13506,10 @@
           "disciplines": {
             "title": "Games",
             "description": "Drag to set the order: the first game is the default for new tournaments, division grids and mixes."
+          },
+          "achievements": {
+            "title": "Achievements",
+            "description": "Recalculating mid-stage can grant and then take back achievements while results are still moving."
           },
           "ownership": {
             "title": "Ownership",
