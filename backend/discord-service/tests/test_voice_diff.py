@@ -392,3 +392,9 @@ class SplitCosmeticTests(TestCase):
             [vd.EditChannel("slot:1:0", name="Матч 1 · B"), vd.EditChannel("slot:1:1", name="Матч 1 · C"), ops[4]],
             cosmetic,
         )
+
+    def test_a_user_limit_riding_on_a_rename_stays_with_access(self) -> None:
+        access, cosmetic = vd.split_cosmetic([vd.EditChannel("team:1", name="Team 1", user_limit=5)])
+
+        self.assertEqual([vd.EditChannel("team:1", user_limit=5)], access)
+        self.assertEqual([vd.EditChannel("team:1", name="Team 1")], cosmetic)
