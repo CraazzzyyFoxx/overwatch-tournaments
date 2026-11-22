@@ -494,6 +494,35 @@ describe("scope resolution", () => {
     expect(resolveSeriesLength(10, -1, [playoffs], []).bestOf).toBe(3);
     // The groups a round scope's slot pool needs follow it.
     expect(resolveSlotCount(10, 3, [playoffs], [])).toBe(5);
+
+    // A bronze sharing the grand final's round stores its length under that round's
+    // `by_round` key; the projection listed it before the grand final, so the title
+    // match read the bronze's Bo3.
+    const withBronze = {
+      ...playoffs,
+      third_place_match: true,
+      best_of: { ...playoffs.best_of, by_round: { "3": 3 } },
+    } as Stage;
+    expect(resolveSeriesLength(10, 3, [withBronze], [])).toEqual({ bestOf: 5, source: "round" });
+    expect(resolveSlotCount(10, 3, [withBronze], [], true)).toBe(3);
+  });
+
+  // A single elimination fed by groups seats nobody until the groups finish, so
+  // the projection fell back to `max_rounds` (5) and read the 4-team final
+  // (round 2) as an ordinary round: Bo3 groups for a Bo5 final.
+  it("sizes a not-yet-seeded single elimination's final from the planned rounds", () => {
+    const playoffs = stage({
+      id: 10,
+      stage_type: "single_elimination",
+      max_rounds: 5,
+      third_place_match: true,
+      best_of: { default: 3, by_round: { "2": 3 }, final: 5, swiss_qualify: null, swiss_eliminate: null },
+    } as Partial<Stage>);
+
+    expect(resolveSeriesLength(10, 2, [playoffs], [], false, [1, 2])).toEqual({ bestOf: 5, source: "round" });
+    expect(resolveSlotCount(10, 2, [playoffs], [], false, [1, 2])).toBe(5);
+    expect(resolveSlotCount(10, 2, [playoffs], [], true, [1, 2])).toBe(3);
+    expect(resolveSlotCount(10, 1, [playoffs], [], false, [1, 2])).toBe(3);
   });
 });
 
