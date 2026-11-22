@@ -50,7 +50,7 @@ Otherwise:
 | Channel | `slot_key` | Exists while | Access when private | Name |
 |---|---|---|---|---|
 | Hub | `hub` | any other channel exists | public | `Общий · <tournament>` |
-| Team | `team:<team_id>` | the team holds a FINAL input of an active non-`individual_swiss` stage; before any stage was published (`Stage.is_published`, sticky) only with `early_teams` | every `Player` row of the team (substitutes and the players they replaced) | team name |
+| Team | `team:<team_id>` | the team holds a FINAL input of a `ready` (preview) or `live` non-`individual_swiss` stage; before any stage was published (`Stage.is_published`, sticky) only with `early_teams` | every `Player` row of the team (substitutes and the players they replaced) | team name |
 | Round slot | `slot:<stage_id>:<index>` | its `individual_swiss` stage is active, not completed and has a round; `index < 2 × encounters of the latest round` (= `teams_per_round`) | the members of the seat assigned to the slot in the latest round | `Матч <n> · <seat name>`: the site's match number (every encounter of the round, in id order) and the seat's team name; listed in slot order (a per-round reorder is a rate-limited Discord call per channel); `Лобби <n> · A/B` for a slot nobody sits in |
 
 Elimination (rule "a"): activating the next stage deactivates the previous one, so a team that did not

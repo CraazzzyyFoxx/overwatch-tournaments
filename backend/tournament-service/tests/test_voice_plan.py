@@ -258,6 +258,16 @@ class VoicePlanTeamTests(VoicePlanCase):
         self.assertEqual(([], {}), (plan.channels, plan.routes))
         self.assertTrue(plan.enabled)
 
+    async def test_a_ready_stage_seats_its_teams_voices_before_it_is_published(self) -> None:
+        """A stage moved to ``ready`` shows its bracket as a preview; its teams get their voices so they can gather
+        before the matches are published. A stage still in draft gives none."""
+        await self.stage(1, kind=IS, status="completed", is_published=True)
+        groups = await self.stage(2, teams=(0, 1))
+        self.assertEqual([], await self.keys())
+
+        await self.flag(groups, status="ready")
+        self.assertEqual(["hub", self.team_key(0), self.team_key(1)], await self.keys())
+
     async def test_nothing_exists_when_disabled_without_a_guild_or_after_the_tournament(self) -> None:
         await self.stage(1, teams=(0, 1), status="live", is_published=True)
         self.assertEqual(3, len(await self.keys()))

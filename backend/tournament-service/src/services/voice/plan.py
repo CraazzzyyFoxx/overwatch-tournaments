@@ -29,6 +29,9 @@ _members = WorkspaceMemberRepository()
 _FINISHED = FINISHED_STATUSES
 _LIVE = enums.FlowNodeStatus.LIVE
 _COMPLETED = enums.FlowNodeStatus.COMPLETED
+#: A stage whose teams get their voice: ``ready`` (seated, its bracket a preview) as well as ``live``, so the teams
+#: can gather before the matches are published.
+_SEATED = frozenset({enums.FlowNodeStatus.READY, _LIVE})
 _NO_DISCORD = "player_without_discord"
 #: Discord's channel name limit.
 _NAME_LIMIT = 100
@@ -44,12 +47,13 @@ def _is_complete(stages: list[sa.Row]) -> bool:
 
 async def _team_rosters(session: AsyncSession, tournament_id: int, stages: list[sa.Row], early_teams: bool):
     """``(team id, name)`` and each team's ``Player`` rows, for the teams that get a voice now, and the ids of those
-    whose every encounter in the live stages is finished (they keep the voice but get no route)."""
+    whose every encounter in the seated (``ready`` or ``live``) stages is finished (they keep the voice but get no
+    route)."""
     playing = [
-        stage.id for stage in stages if stage.status == _LIVE and stage.stage_type != enums.StageType.INDIVIDUAL_SWISS
+        stage.id for stage in stages if stage.status in _SEATED and stage.stage_type != enums.StageType.INDIVIDUAL_SWISS
     ]
     if playing:
-        # ``seat_inputs`` turns every tentative input into a FINAL team: the seats of a live stage.
+        # ``seat_inputs`` (on ``draft → ready``) turns every tentative input into a FINAL team: the stage's seats.
         seated = (
             sa.select(models.StageItemInput.team_id)
             .join(models.StageItem, models.StageItem.id == models.StageItemInput.stage_item_id)
