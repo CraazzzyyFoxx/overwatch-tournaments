@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { StreamEntry, TournamentStreams } from "@/types/stream.types";
 
-import { buildLiveTeamStreams } from "./bracketLiveStreams";
+import { buildLiveTeamStreams, liveStreamForPlayers } from "./bracketLiveStreams";
 
 function entry(overrides: Partial<StreamEntry> & { channel: string }): StreamEntry {
   return {
@@ -148,5 +148,27 @@ describe("buildLiveTeamStreams", () => {
     expect(map.size).toBe(2);
     expect(map.get(7)?.channel).toBe("nova-b");
     expect(map.get(8)?.channel).toBe("void-a");
+  });
+});
+
+describe("liveStreamForPlayers", () => {
+  const onAir = (channel: string, playerId: number, viewerCount: number | null) =>
+    entry({
+      channel,
+      viewer_count: viewerCount,
+      player: { id: playerId, name: channel, avatar_url: null, team: null }
+    });
+
+  it("names the most-watched stream among the seat's players, ignoring everyone else", () => {
+    const result = liveStreamForPlayers(
+      streams({ participants: [onAir("a", 1, 5), onAir("b", 2, 50), onAir("c", 3, 500)] }),
+      new Set([1, 2])
+    );
+    expect(result?.channel).toBe("b");
+  });
+
+  it("is undefined while the query has not resolved or nobody in the seat is on air", () => {
+    expect(liveStreamForPlayers(undefined, new Set([1]))).toBeUndefined();
+    expect(liveStreamForPlayers(streams({ participants: [onAir("a", 9, 1)] }), new Set([1]))).toBeUndefined();
   });
 });

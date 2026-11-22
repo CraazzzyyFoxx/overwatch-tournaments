@@ -43,7 +43,8 @@ def _is_complete(stages: list[sa.Row]) -> bool:
 
 
 async def _team_rosters(session: AsyncSession, tournament_id: int, stages: list[sa.Row], early_teams: bool):
-    """``(team id, name)`` and each team's ``Player`` rows, for the teams that get a voice now."""
+    """``(team id, name)`` and each team's ``Player`` rows, for the teams that get a voice now, and the ids of those
+    whose every encounter in the live stages is finished (they keep the voice but get no route)."""
     playing = [
         stage.id for stage in stages if stage.status == _LIVE and stage.stage_type != enums.StageType.INDIVIDUAL_SWISS
     ]
@@ -62,7 +63,7 @@ async def _team_rosters(session: AsyncSession, tournament_id: int, stages: list[
     elif early_teams and not any(stage.is_published for stage in stages):
         teams_filter = models.Team.tournament_id == tournament_id
     else:
-        return [], {}
+        return [], {}, set()
     teams = (
         await session.execute(
             sa.select(models.Team.id, models.Team.name)
@@ -80,23 +81,52 @@ async def _team_rosters(session: AsyncSession, tournament_id: int, stages: list[
     roster: dict[int, dict[int, str]] = defaultdict(dict)
     for team_id, member_id, name in players:
         roster[team_id].setdefault(member_id, name)
-    return teams, roster
+    finished: set[int] = set()
+    if playing:
+        # A team with no encounter yet (bracket not generated) is not in the result and keeps its route.
+        unfinished = (
+            await session.execute(
+                sa.select(
+                    models.EncounterTeam.team_id,
+                    sa.func.bool_or(models.Encounter.status != enums.EncounterStatus.COMPLETED),
+                )
+                .select_from(models.BracketEncounter)
+                .join(models.Encounter, models.Encounter.id == models.BracketEncounter.encounter_id)
+                .join(
+                    models.EncounterTeam,
+                    sa.and_(
+                        models.EncounterTeam.encounter_id == models.BracketEncounter.encounter_id,
+                        models.EncounterTeam.active.is_(True),
+                    ),
+                )
+                .where(
+                    models.BracketEncounter.stage_id.in_(playing),
+                    models.EncounterTeam.team_id.in_([team.id for team in teams]),
+                )
+                .group_by(models.EncounterTeam.team_id)
+            )
+        ).all()
+        finished = {team_id for team_id, has_unfinished in unfinished if not has_unfinished}
+    return teams, roster, finished
 
 
 async def _round_encounters(session: AsyncSession, stage_id: int):
-    """Every round of an individual Swiss stage as ``Encounter`` sides, the member names of the latest round, and the
-    latest round's seat names by encounter (in encounter order, the order the site numbers its matches in)."""
+    """Every round of an individual Swiss stage as ``Encounter`` sides, the member names of the latest round, the
+    latest round's seat names by encounter (in encounter order, the order the site numbers its matches in), and the
+    members seated in a finished encounter of the latest round."""
     rows = (
         await session.execute(
             sa.select(
                 models.BracketEncounter.round,
                 models.BracketEncounter.encounter_id,
+                models.Encounter.status,
                 models.EncounterTeam.slot,
                 models.EncounterTeam.name,
                 models.EncounterTeamMember.workspace_member_id,
                 models.EncounterTeamMember.display_name_snapshot,
             )
             .select_from(models.BracketEncounter)
+            .join(models.Encounter, models.Encounter.id == models.BracketEncounter.encounter_id)
             .join(
                 models.EncounterTeam,
                 sa.and_(
@@ -118,16 +148,19 @@ async def _round_encounters(session: AsyncSession, stage_id: int):
     tree: dict[int, dict[int, dict[int, list[int]]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     seat_names: dict[int, dict[int, dict[int, str]]] = defaultdict(lambda: defaultdict(dict))
     names: dict[int, str] = {}
-    for round_, encounter_id, slot, seat_name, member_id, name in rows:
+    completed: dict[int, set[int]] = defaultdict(set)
+    for round_, encounter_id, encounter_status, slot, seat_name, member_id, name in rows:
         tree[round_][encounter_id][slot].append(member_id)
         seat_names[round_][encounter_id][slot] = seat_name
         names[member_id] = name
+        if encounter_status == enums.EncounterStatus.COMPLETED:
+            completed[round_].add(member_id)
     rounds: list[list[Encounter]] = [
         [(sides.get(1, []), sides.get(2, [])) for _id, sides in sorted(encounters.items())]
         for _round, encounters in sorted(tree.items())
     ]
     if not tree:
-        return rounds, names, []
+        return rounds, names, [], set()
     latest = max(tree)
     # Numbered over every encounter of the round, rostered or not, exactly as the site numbers its matches.
     order = await session.scalars(
@@ -140,7 +173,7 @@ async def _round_encounters(session: AsyncSession, stage_id: int):
         (number[encounter_id], (seats.get(1, ""), seats.get(2, "")))
         for encounter_id, seats in sorted(seat_names[latest].items())
     ]
-    return rounds, names, labels
+    return rounds, names, labels, completed[latest]
 
 
 async def build_voice_plan(session: AsyncSession, tournament_id: int) -> VoicePlan:
@@ -183,15 +216,16 @@ async def build_voice_plan(session: AsyncSession, tournament_id: int) -> VoicePl
     if _is_complete(stages):
         return plan
 
-    teams, team_roster = await _team_rosters(session, tournament_id, stages, settings.early_teams)
+    teams, team_roster, finished_teams = await _team_rosters(session, tournament_id, stages, settings.early_teams)
 
     # Latest round of each live individual Swiss stage: its seats fill the stage's slots.
     slots: list[tuple[int, dict[int, int], int, dict[int, str]]] = []  # (stage id, member -> slot, slot count, names)
     seat_names: dict[int, str] = {}
+    finished_members: set[int] = set()
     for stage in stages:
         if stage.stage_type != enums.StageType.INDIVIDUAL_SWISS or stage.status != _LIVE:
             continue
-        rounds, names, labels = await _round_encounters(session, stage.id)
+        rounds, names, labels, done = await _round_encounters(session, stage.id)
         if not rounds:
             continue
         seats = assign_round_slots(rounds)[-1]
@@ -204,7 +238,8 @@ async def build_voice_plan(session: AsyncSession, tournament_id: int) -> VoicePl
         }
         slots.append((stage.id, seats, 2 * len(rounds[-1]), slot_names))
         seat_names.update({member_id: names[member_id] for member_id in seats})
-    return await _compose(session, plan, teams, team_roster, slots, seat_names)
+        finished_members |= done
+    return await _compose(session, plan, teams, team_roster, slots, seat_names, finished_teams, finished_members)
 
 
 async def _compose(
@@ -214,6 +249,8 @@ async def _compose(
     team_roster: dict[int, dict[int, str]],
     slots: list[tuple[int, dict[int, int], int, dict[int, str]]],
     seat_names: dict[int, str],
+    finished_teams: set[int],
+    finished_members: set[int],
 ) -> VoicePlan:
     wanted = {member_id for roster in team_roster.values() for member_id in roster} | set(seat_names)
     # One id per member, the smallest if an account somehow carries several.
@@ -249,7 +286,7 @@ async def _compose(
         )
         for member_id, name in roster.items():
             warn(member_id, name, team.id)
-            if member_id in discord:
+            if member_id in discord and team.id not in finished_teams:
                 routes.setdefault(discord[member_id], key)
 
     slot_routes: dict[str, str] = {}
@@ -273,9 +310,11 @@ async def _compose(
             )
             for member_id in members:
                 warn(member_id, seat_names[member_id], None)
-                if member_id in discord:
+                if member_id in discord and member_id not in finished_members:
                     slot_routes.setdefault(discord[member_id], key)
     routes.update(slot_routes)  # a current round slot wins over the team voice
+    for member_id in finished_members:  # a finished Swiss match leaves no route, not even the team voice
+        routes.pop(discord.get(member_id, ""), None)
 
     if channels:
         hub = VoicePlanChannel(

@@ -23,6 +23,7 @@ from shared.messaging.config import (
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.schemas.events import (
     AchievementEvaluateEvent,
+    AchievementEvaluateReason,
     FlowNodeStateChangedEvent,
     PlayerRefreshRequestedEvent,
     TournamentStateChangedEvent,
@@ -421,6 +422,8 @@ async def enqueue_achievement_evaluation(
     session: AsyncSession,
     tournament: models.Tournament,
     changed_tables: Sequence[str],
+    *,
+    reason: AchievementEvaluateReason = "data_changed",
 ) -> None:
     if await is_scrim_container(session, tournament.id):
         return
@@ -430,6 +433,7 @@ async def enqueue_achievement_evaluation(
             workspace_id=tournament.workspace_id,
             tournament_id=tournament.id,
             changed_tables=list(changed_tables),
+            reason=reason,
         ),
         # Default exchange: the routing key IS the queue name.
         exchange=None,

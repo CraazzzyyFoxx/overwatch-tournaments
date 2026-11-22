@@ -13,8 +13,9 @@ Five properties that only exist at the SQL level:
 2. the client's ``fields`` must be ignored, because ``apply_search`` splices each
    entry into ``depth_get_column`` and ILIKEs it (arbitrary column read, 500 on a
    typo) — and because an empty list 400s any search at all;
-3. ``participants_count`` is an aggregate, not a column, so it needs its own
-   ORDER BY, and the outer join's NULLs must not float to the top of a ``desc``;
+3. ``participants_count`` (admitted registrations; player rows for a tournament with no registrations)
+   is an aggregate, not a column, so it needs its own ORDER BY, and a tournament with nobody admitted
+   must sort as 0, not float to the top of a ``desc``;
 4. every sort needs the ``id`` tie-breaker: OFFSET/LIMIT over a non-unique key
    may repeat a row across pages and silently drop another;
 5. ``per_page=-1`` ("every row") stops at 500 rows, not at the shared 10,000.
@@ -40,10 +41,12 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 from shared.core import enums  # noqa: E402
 from shared.models.identity.user import User  # noqa: E402
+from shared.models.registration import Registration, RegistrationEntry  # noqa: E402
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: E402
-from shared.models.tournament import Player, Team, Tournament  # noqa: E402
+from shared.models.tournament import FlowNode, Player, Team, Tournament  # noqa: E402
 from shared.testing import real_db_sessionmaker as _db_sessions  # noqa: E402
 from src import schemas  # noqa: E402
+from src.services.registration.service import registration_service  # noqa: E402
 from src.services.tournament.service import tournament_service  # noqa: E402
 
 
@@ -120,8 +123,47 @@ async def _add_players(session, *, tournament: Tournament, count: int, user_ids:
     await session.flush()
 
 
+async def _add_registrations(session, *, tournament: Tournament, admitted: int, other: int = 0) -> None:
+    """Seed ``admitted`` admitted registrations (checked in, approved, ready) and ``other`` that are not.
+
+    The others each miss exactly one condition, so a dropped clause in the count shows up. One admitted
+    registration has a second entry on another node, which must not count it twice.
+    """
+    node_ids = []
+    for position in range(2):
+        node = FlowNode(tournament_id=tournament.id, kind="registration", name=f"reg-{position}", status="open")
+        session.add(node)
+        await session.flush()
+        node_ids.append(node.id)
+    misses = [
+        {"checked_in": False},
+        {"status": "pending"},
+        {"balancer_status": "not_in_balancer"},
+        {"deleted_at": datetime.now(UTC)},
+    ]
+    specs = [{}] * admitted + [misses[index % len(misses)] for index in range(other)]
+    for index, miss in enumerate(specs):
+        registration = Registration(tournament_id=tournament.id)
+        session.add(registration)
+        await session.flush()
+        fields = {"checked_in": True, "status": "approved", "balancer_status": "ready", **miss}
+        for node_id in node_ids if index == 0 else node_ids[:1]:
+            session.add(RegistrationEntry(registration_node_id=node_id, registration_id=registration.id, **fields))
+    await session.flush()
+
+
 async def _cleanup(session_maker, *, workspace_id: int, user_ids: list[int]) -> None:
     async with session_maker() as session:
+        # An entry's node FK is RESTRICT, so the entries go before the workspace cascade reaches the nodes.
+        await session.execute(
+            sa.delete(RegistrationEntry).where(
+                RegistrationEntry.registration_id.in_(
+                    sa.select(Registration.id)
+                    .join(Tournament, Tournament.id == Registration.tournament_id)
+                    .where(Tournament.workspace_id == workspace_id)
+                )
+            )
+        )
         await session.execute(sa.delete(Workspace).where(Workspace.id == workspace_id))
         if user_ids:
             # players.user is not workspace-scoped, so the cascade above misses it.
@@ -218,14 +260,13 @@ def test_sql_searches_name_even_when_the_client_names_another_column() -> None:
         assert "slug ILIKE" not in sql
 
 
-def test_sql_orders_participants_count_through_a_coalesced_join() -> None:
+def test_sql_orders_participants_count_by_the_admitted_count() -> None:
     page_sql, _ = asyncio.run(_compiled(sort="participants_count", order="desc", per_page=10))
 
-    assert "LEFT OUTER JOIN (SELECT" in page_sql
-    assert "count(" in page_sql
-    # coalesce, not the raw column: NULL from the outer join sorts FIRST on
-    # `desc` in Postgres, i.e. playerless tournaments would lead "most players".
-    assert "ORDER BY coalesce(" in page_sql
+    # A per-row scalar count, never a NULL-producing outer join: nobody admitted sorts as 0, last on `desc`.
+    assert "LEFT OUTER JOIN (SELECT" not in page_sql
+    assert "registration_entry.checked_in IS true" in page_sql
+    assert "ORDER BY CASE WHEN" in page_sql
     assert "DESC" in page_sql
 
 
@@ -237,7 +278,7 @@ def test_sql_always_tie_breaks_on_id() -> None:
     ):
         page_sql, _ = asyncio.run(_compiled(per_page=2, **overrides))
         # Last ORDER BY term, so OFFSET/LIMIT can never repeat or drop a row.
-        order_by = page_sql.split("ORDER BY")[1].strip().split("\n")[0].rstrip()
+        order_by = page_sql.split("ORDER BY")[1].split("LIMIT")[0].strip()
         assert order_by.endswith("tournament.id DESC"), (overrides, order_by)
 
 
@@ -351,7 +392,7 @@ def test_search_ignores_client_fields_and_matches_name_only() -> None:
     assert desc_total == 0
 
 
-def test_sort_by_participants_count_puts_empty_tournaments_last() -> None:
+def test_participants_count_is_the_admitted_count_and_sort_agrees() -> None:
     async def _run():
         async with _db_sessions() as session_maker:
             user_ids: list[int] = []
@@ -359,42 +400,41 @@ def test_sort_by_participants_count_puts_empty_tournaments_last() -> None:
                 ws = await _make_workspace(session)
                 three = await _make_tournament(session, workspace_id=ws.id, name=f"t3-{uuid.uuid4().hex[:8]}")
                 one = await _make_tournament(session, workspace_id=ws.id, name=f"t1-{uuid.uuid4().hex[:8]}")
-                zero = await _make_tournament(session, workspace_id=ws.id, name=f"t0-{uuid.uuid4().hex[:8]}")
-                await _add_players(session, tournament=three, count=3, user_ids=user_ids)
-                await _add_players(session, tournament=one, count=1, user_ids=user_ids)
+                none_admitted = await _make_tournament(session, workspace_id=ws.id, name=f"t0-{uuid.uuid4().hex[:8]}")
+                legacy = await _make_tournament(session, workspace_id=ws.id, name=f"tl-{uuid.uuid4().hex[:8]}")
+                await _add_registrations(session, tournament=three, admitted=3, other=4)
+                await _add_registrations(session, tournament=one, admitted=1)
+                await _add_registrations(session, tournament=none_admitted, admitted=0, other=4)
+                # No registration rows at all: the roster's player rows are the admitted set.
+                await _add_players(session, tournament=legacy, count=2, user_ids=user_ids)
+                # Player rows next to registrations are not counted: only admission is.
+                await _add_players(session, tournament=none_admitted, count=2, user_ids=user_ids)
                 await session.commit()
                 workspace_id = ws.id
-                expected_desc = [three.id, one.id, zero.id]
+                ids = [three.id, legacy.id, one.id, none_admitted.id]
 
             try:
                 async with session_maker() as session:
+                    singles = [await registration_service.get_participants_count_by_tournament(session, i) for i in ids]
+                    bulk = await registration_service.get_participants_count_by_tournament_bulk(session, ids)
                     desc, _ = await tournament_service.get_all(
                         session,
-                        _params(
-                            workspace_id=workspace_id,
-                            per_page=50,
-                            sort="participants_count",
-                            order="desc",
-                        ),
+                        _params(workspace_id=workspace_id, per_page=50, sort="participants_count", order="desc"),
                     )
                     asc, _ = await tournament_service.get_all(
                         session,
-                        _params(
-                            workspace_id=workspace_id,
-                            per_page=50,
-                            sort="participants_count",
-                            order="asc",
-                        ),
+                        _params(workspace_id=workspace_id, per_page=50, sort="participants_count", order="asc"),
                     )
-                return expected_desc, [r.id for r in desc], [r.id for r in asc]
+                return ids, singles, bulk, [r.id for r in desc], [r.id for r in asc]
             finally:
                 await _cleanup(session_maker, workspace_id=workspace_id, user_ids=user_ids)
 
-    expected_desc, desc_ids, asc_ids = asyncio.run(_run())
-    assert desc_ids == expected_desc
-    # The playerless tournament must not lead a descending sort just because its
-    # LEFT JOIN produced NULL.
-    assert asc_ids == list(reversed(expected_desc))
+    ids, singles, bulk, desc_ids, asc_ids = asyncio.run(_run())
+    assert singles == [3, 2, 1, 0]
+    assert bulk == dict(zip(ids, singles, strict=True))
+    # Nobody admitted sorts last on `desc`, not first.
+    assert desc_ids == ids
+    assert asc_ids == list(reversed(ids))
 
 
 def test_pages_do_not_overlap_when_the_sort_key_ties() -> None:

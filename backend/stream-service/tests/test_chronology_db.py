@@ -354,3 +354,122 @@ class ChronologyDbTest(IsolatedAsyncioTestCase):
                 ]
             },
         )
+
+    async def test_swiss_participant_is_found_through_their_seat_membership(self) -> None:
+        # individual_swiss writes no tournament.player / tournament.team rows: the encounter seats' members are
+        # the only link from the streamer to the match. A playoff export later creates Player rows for the
+        # qualified subset only, which must not hide the rest of the Swiss pool.
+        ws = models.Workspace(slug=f"sw-{self.tag}", name=f"sw-{self.tag}", disciplines_enabled=[DISCIPLINE])
+        await self._add(ws)
+        tournament = models.Tournament(
+            workspace_id=ws.id,
+            discipline=DISCIPLINE,
+            name=f"sw {self.tag}",
+            slug=f"sw-{self.tag}",
+            status=enums.TournamentStatus.LIVE,
+            start_date=T0,
+            end_date=T0 + timedelta(days=1),
+        )
+        rule = models.ScoringRule(workspace_id=ws.id, preset="wins", game_formula="win", end_formula="games >= best_of")
+        await self._add(tournament, rule)
+        users = [models.User(name=f"{key}-{self.tag}", stream_visible=True) for key in ("sam", "tim")]
+        await self._add(*users)
+        members = [models.WorkspaceMember(workspace_id=ws.id, player_id=user.id) for user in users]
+        await self._add(*members)
+        stage = models.Stage(
+            tournament_id=tournament.id,
+            scoring_rule_id=rule.id,
+            name="Swiss",
+            stage_type=enums.StageType.INDIVIDUAL_SWISS,
+            order=0,
+            max_rounds=1,
+        )
+        playoff_team = models.Team(tournament_id=tournament.id, name=f"Playoff {self.tag}", balancer_name="p")
+        await self._add(stage, playoff_team)
+        await self._add(
+            *(
+                models.PlayerStanding(
+                    tournament_id=tournament.id,
+                    stage_id=stage.id,
+                    workspace_member_id=member.id,
+                    display_name=user.name,
+                    role="damage",
+                    start_rank=2000,
+                    rank=2000,
+                )
+                for member, user in zip(members, users, strict=True)
+            ),
+            # Tim qualified: he has a roster row now, Sam does not.
+            models.Player(
+                tournament_id=tournament.id,
+                team_id=playoff_team.id,
+                workspace_member_id=members[1].id,
+                name="tim",
+                is_substitution=False,
+                is_newcomer=False,
+                is_newcomer_role=False,
+            ),
+        )
+        encounter = models.Encounter(
+            workspace_id=ws.id,
+            discipline=DISCIPLINE,
+            tournament_id=tournament.id,
+            scoring_rule_id=rule.id,
+            name="Swiss round 1",
+            slot_count=2,
+            started_at=_at(10),
+        )
+        await self._add(encounter)
+        seats = [
+            models.EncounterTeam(
+                encounter_id=encounter.id, tournament_id=tournament.id, slot=slot, name=user.name, active=True
+            )
+            for slot, user in enumerate(users, 1)
+        ]
+        await self._add(*seats)
+        await self._add(
+            *(
+                models.EncounterTeamMember(
+                    encounter_id=encounter.id,
+                    encounter_team_id=seat.id,
+                    active=True,
+                    workspace_member_id=member.id,
+                    display_name_snapshot=user.name,
+                )
+                for seat, member, user in zip(seats, members, users, strict=True)
+            )
+        )
+        sam = users[0]
+        await self.sessions.record_observed(
+            self.session,
+            [
+                StreamSessionObservation(
+                    tournament_id=tournament.id,
+                    user_id=sam.id,
+                    channel="sam",
+                    broadcaster_id="b-sam",
+                    stream_id=f"s-sam-{self.tag}",
+                    started_at=T0,
+                )
+            ],
+            seen_at=_at(60),
+        )
+        (pending,) = await self.sessions.list_unresolved(
+            self.session, seen_since=_at(-600), checked_before=datetime.now(UTC) + timedelta(minutes=1)
+        )
+        await self.sessions.mark_vod_attempts(
+            self.session, attempted=[pending.id], resolved={pending.id: "950"}, checked_at=datetime.now(UTC)
+        )
+        consenting = AsyncMock(
+            return_value={
+                tournament.id: [
+                    ParticipantChannel(player_id=sam.id, login="sam", provider_user_id=None, source="verified")
+                ]
+            }
+        )
+        with patch.object(stream_chronology_reader._targets, "participant_channels_bulk", consenting):
+            read = await reads.encounter_vods(self.session, {"encounter_id": str(encounter.id)})
+
+        (vod,) = read.vods
+        self.assertEqual((vod.vod_id, vod.player.id, vod.player.team), ("950", sam.id, None))
+        self.assertEqual([(c.encounter_id, c.kind) for c in vod.chapters], [(encounter.id, "series")])

@@ -12,6 +12,7 @@ from shared.repository import TournamentRepository
 from shared.services.tournament.visibility import completed_encounters_clauses, visible_tournaments_predicate
 from src import schemas
 from src.core.query_page import execute_page_with_total
+from src.services.admission.participants import participants_count_expr
 
 __all__ = (
     "TournamentService",
@@ -83,22 +84,11 @@ class TournamentService:
         query = self.tournament_repo.select().options(*tournament_entities(params.entities))
         total_query = sa.select(sa.func.count(models.Tournament.id))
         if params.sort == "participants_count":
-            # Not a column: the count lives in `player`, so `apply_pagination_sort`
-            # (which resolves the sort through `Tournament.depth_get_column`) cannot
-            # express it.
-            players_sq = (
-                sa.select(
-                    models.Player.tournament_id,
-                    sa.func.count(models.Player.id).label("n"),
-                )
-                .group_by(models.Player.tournament_id)
-                .subquery()
-            )
-            n = sa.func.coalesce(players_sq.c.n, 0)
-            query = query.join(players_sq, players_sq.c.tournament_id == models.Tournament.id, isouter=True)
-            # coalesce, not the raw column: the outer join leaves NULL for a
-            # tournament with no players, and NULL ordering in Postgres puts those
-            # rows FIRST on `desc()` — the exact opposite of "most participants".
+            # Not a column: it is the admitted-registration count (`participants_count_expr`),
+            # which `apply_pagination_sort` (resolving through `Tournament.depth_get_column`)
+            # cannot express. A scalar subquery per row is never NULL, so a tournament with
+            # nobody admitted sorts as 0 (last on `desc`), not first as a NULL from an outer join would.
+            n = participants_count_expr(models.Tournament.id)
             query = query.order_by(n.desc() if _is_desc(params.order) else n.asc())
             query = params.apply_pagination(query)
         else:

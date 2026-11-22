@@ -114,6 +114,8 @@ class WorkspaceListItem(BaseRead):
     disciplines_enabled: list[str]
     # See ``shared.models.tenancy.workspace.Workspace.newcomer_scope``.
     newcomer_scope: Literal["global", "workspace"] = "global"
+    # See ``shared.models.achievements.AchievementEvalMode``.
+    achievement_eval_mode: Literal["live", "stage_end", "manual"] = "live"
 
 
 class WorkspaceRead(WorkspaceListItem):
@@ -164,6 +166,7 @@ class WorkspaceUpdate(BaseModel):
     seo_description: str | None = None
     disciplines_enabled: list[str] | None = None
     newcomer_scope: Literal["global", "workspace"] | None = None
+    achievement_eval_mode: Literal["live", "stage_end", "manual"] | None = None
 
     @field_validator("disciplines_enabled")
     @classmethod

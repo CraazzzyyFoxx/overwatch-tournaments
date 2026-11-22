@@ -375,10 +375,11 @@ class UserProfileFlowsTests(IsolatedAsyncioTestCase):
             patch.object(
                 users.profile,
                 "get_tournaments_with_stats",
-                AsyncMock(return_value=[(team, 4, 2, 0.75)]),
+                AsyncMock(return_value=[(team.tournament, team, 4, 2, 0.75)]),
             ),
             patch.object(users.encounters, "count_teams_by_tournament_bulk", AsyncMock(return_value={3: 8})),
-            patch.object(users.profile, "get_placements", AsyncMock(return_value={3: 2})),
+            patch.object(users.profile, "get_placements", AsyncMock(return_value={3: (2, 8)})),
+            patch.object(users.profile, "get_individual_standings", AsyncMock(return_value={})),
             patch.object(users.encounters, "get_roster_avg_mvp_bulk", AsyncMock(return_value={})),
             patch.object(users.encounters, "get_roster_top_characters_bulk", AsyncMock(return_value={})),
             # Resolving each tournament's effective grid version is a DB/cache

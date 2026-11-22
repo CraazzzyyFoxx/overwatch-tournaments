@@ -157,6 +157,7 @@ def _player_row(
         team_id=None if team is None else team[0],
         team_name=None if team is None else team[1],
         rosters_formed=(team is not None) if rosters_formed is None else rosters_formed,
+        in_swiss=False,
     )
 
 

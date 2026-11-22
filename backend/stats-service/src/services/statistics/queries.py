@@ -1018,25 +1018,26 @@ class StatisticsQueries(DisciplineQueries):
         self, session: AsyncSession, tournament: models.Tournament, user_id: int
     ) -> tuple[int, float, int, int] | None:
         """A user's tournament win rate as ``(user id, win rate, rank, ranked user count)``,
-        or ``None`` when the user has no encounters in the tournament.
+        or ``None`` when the user has no encounters in the tournament. Team-less seats (an
+        individual Swiss lobby) count beside the team ones.
         """
 
-        seat = Seat(name="winrate_seat")
-        sides = (
-            seat.join(
-                sa.select(
-                    models.WorkspaceMember.player_id.label("user_id"),
-                    seat.maps_won.label("maps_won"),
-                    seat.maps_lost.label("maps_lost"),
-                )
-                .select_from(models.Team)
-                .join(models.Player, models.Player.team_id == models.Team.id)
-                .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id),
-                models.Team.id,
+        seat, loose = Seat(name="winrate_seat"), Seat(name="winrate_loose_seat")
+        team_sides = seat.join(
+            sa.select(
+                models.WorkspaceMember.player_id.label("user_id"),
+                seat.maps_won.label("maps_won"),
+                seat.maps_lost.label("maps_lost"),
             )
-            .where(models.Encounter.tournament_id == tournament.id)
-            .subquery("tournament_winrate_sides")
+            .select_from(models.Team)
+            .join(models.Player, models.Player.team_id == models.Team.id)
+            .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id),
+            models.Team.id,
         )
+        teamless_sides = loose.teamless_sides(models.WorkspaceMember.player_id, loose.maps_won, loose.maps_lost)
+        sides = sa.union_all(
+            *(q.where(models.Encounter.tournament_id == tournament.id) for q in (team_sides, teamless_sides))
+        ).subquery("tournament_winrate_sides")
         winrate = sa.func.coalesce(
             sa.func.sum(sides.c.maps_won)
             / sa.func.nullif(sa.func.sum(sides.c.maps_won) + sa.func.sum(sides.c.maps_lost), 0),

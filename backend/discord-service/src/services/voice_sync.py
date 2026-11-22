@@ -249,23 +249,25 @@ class VoiceSync:
                 result = vd.diff(plan, [_row(r) for r in rows], observe(guild))
                 issues += result.issues
                 await session.commit()  # end the read: what follows waits on Discord
-                # Players first: the routes and round moves only need channels that already exist, so they do not
-                # wait behind renames and reorders Discord may rate-limit for minutes. Channels created below get
-                # their members by a second pass.
-                previous = self._routes.get(tournament_id)
-                self._remember(tournament_id, rows, plan.routes)
-                if previous is not None:
-                    await self._round_moves(guild, tournament_id, plan, previous)
-                previous = self._routes.get(tournament_id)
+                # Access first (creations, category moves, overwrites), then the renames and reorders, then the
+                # routes and round moves: a player lands in a channel already named after their match, and never in a
+                # private lobby still carrying the last round's overwrites. A rename past the 2-per-10-minutes limit is
+                # deferred (``retry_in``) rather than waited for; the moves then go under the old name.
+                access, cosmetic = vd.split_cosmetic(result.ops)
                 applier = _Apply(self, guild, session, tournament_id, {r.slot_key: r for r in rows}, result.categories)
-                await applier.run(result.ops)
+                await applier.run(access)
+                # A slot whose access write Discord refused keeps the last round's overwrites: route nobody there.
+                refused = set(applier.failed)
+                await applier.run(cosmetic)
                 issues += applier.issues
                 retry_in = applier.retry_in
                 rows = await self._models(session, tournament_id)
                 await session.commit()
-                self._remember(tournament_id, rows, plan.routes)
+                routes = {user: key for user, key in plan.routes.items() if key not in refused}
+                previous = self._routes.get(tournament_id)
+                self._remember(tournament_id, rows, routes)
                 if previous is not None:
-                    await self._round_moves(guild, tournament_id, plan, previous)
+                    await self._round_moves(guild, tournament_id, plan, previous, routes)
             await self._report(session, tournament_id, issues, rows)
         return retry_in
 
@@ -324,9 +326,16 @@ class VoiceSync:
     async def hub_joined(self, member: discord.Member, channel: discord.abc.GuildChannel) -> None:
         """A member joined a channel: if it is a tournament's hub, send them to theirs."""
         tournament_id = self._tracked.get(channel.id)
-        channels = self._channels.get(tournament_id, {}) if tournament_id is not None else {}
-        if tournament_id is None or channels.get("hub") != channel.id:
+        if tournament_id is None or self._channels.get(tournament_id, {}).get("hub") != channel.id:
             return
+        if (runner := self._runners.get(tournament_id)) is not None:
+            # A sync is pending or running: until it installs its plan the routes are the old ones, and a match that
+            # just finished (the reason for the sync) must not send its players back from the hub.
+            await asyncio.wait([runner])
+            voice = member.voice
+            if voice is None or voice.channel is None or voice.channel.id != channel.id:
+                return  # left the hub meanwhile, or the sync's own round moves took them
+        channels = self._channels.get(tournament_id, {})
         key = self._routes.get(tournament_id, {}).get(str(member.id))
         target = member.guild.get_channel(channels[key]) if key in channels else None
         if target is None or target.id == channel.id:
@@ -339,7 +348,12 @@ class VoiceSync:
             logger.warning(f"⚠️ Could not send {member.id} from the hub of tournament {tournament_id}: {exc}")
 
     async def _round_moves(
-        self, guild: discord.Guild, tournament_id: int, plan: VoicePlan, previous: dict[str, str]
+        self,
+        guild: discord.Guild,
+        tournament_id: int,
+        plan: VoicePlan,
+        previous: dict[str, str],
+        routes: dict[str, str],
     ) -> None:
         sitting: dict[str, int] = {}
         for channel_id, owner in self._tracked.items():
@@ -348,7 +362,7 @@ class VoiceSync:
                     sitting[str(member.id)] = channel_id
         moves = vd.select_round_moves(
             previous,
-            plan.routes,
+            routes,
             sitting,
             self._channels.get(tournament_id, {}),
             {c.slot_key: c.position for c in plan.channels},
@@ -476,20 +490,28 @@ class _Apply:
         self.issues: list[vd.Issue] = []
         #: Seconds until a deferred rename may be tried.
         self.retry_in: float | None = None
+        #: Slots an operation failed on; a failed access write leaves the channel open to the wrong roster.
+        self.failed: set[str] = set()
 
     async def run(self, ops: Sequence[vd.Op]) -> None:
         for op in ops:
             try:
                 await self._apply(op)
             except discord.Forbidden:
+                self._failed(op)
                 with_overwrites = getattr(op, "overwrites", None) is not None
                 self.issues.append(
                     vd.Issue(f"missing_permission:{'manage_roles' if with_overwrites else 'manage_channels'}")
                 )
             except discord.HTTPException as exc:
+                self._failed(op)
                 self.issues.append(
                     vd.Issue("discord_error", f"{type(op).__name__}: HTTP {exc.status} (code {exc.code})")
                 )
+
+    def _failed(self, op: vd.Op) -> None:
+        if (slot_key := getattr(op, "slot_key", None)) is not None:
+            self.failed.add(slot_key)
 
     async def _submit[T](self, work: Callable[[], Awaitable[T]]) -> T:
         # Never hold a transaction while Discord answers: a rate-limited wait outlives the database's

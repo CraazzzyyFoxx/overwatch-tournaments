@@ -18917,6 +18917,16 @@
           "default": null,
           "title": "About"
         },
+        "achievement_eval_mode": {
+          "default": "live",
+          "enum": [
+            "live",
+            "stage_end",
+            "manual"
+          ],
+          "title": "Achievement Eval Mode",
+          "type": "string"
+        },
         "boosty_url": {
           "anyOf": [
             {
@@ -19647,6 +19657,16 @@
           "default": null,
           "title": "About"
         },
+        "achievement_eval_mode": {
+          "default": "live",
+          "enum": [
+            "live",
+            "stage_end",
+            "manual"
+          ],
+          "title": "Achievement Eval Mode",
+          "type": "string"
+        },
         "boosty_url": {
           "anyOf": [
             {
@@ -20053,6 +20073,23 @@
           ],
           "default": null,
           "title": "About"
+        },
+        "achievement_eval_mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "live",
+                "stage_end",
+                "manual"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Achievement Eval Mode"
         },
         "boosty_url": {
           "anyOf": [
@@ -32479,8 +32516,15 @@
           "type": "integer"
         },
         "map_image_path": {
-          "title": "Map Image Path",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Map Image Path"
         },
         "map_name": {
           "title": "Map Name",
@@ -40321,12 +40365,26 @@
           "default": null
         },
         "team": {
-          "title": "Team",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Team"
         },
         "team_id": {
-          "title": "Team Id",
-          "type": "integer"
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Team Id"
         },
         "won": {
           "title": "Won",
@@ -52010,6 +52068,10 @@
           "title": "Is Captain",
           "type": "boolean"
         },
+        "player_id": {
+          "title": "Player Id",
+          "type": "integer"
+        },
         "rank": {
           "anyOf": [
             {
@@ -52039,6 +52101,7 @@
       },
       "required": [
         "workspace_member_id",
+        "player_id",
         "display_name",
         "role",
         "rank",

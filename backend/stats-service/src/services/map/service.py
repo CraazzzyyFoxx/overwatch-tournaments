@@ -12,6 +12,7 @@ from shared.services.cache_generations import versioned
 from shared.services.user_cache import user_generations
 from src import schemas
 from src.core import config
+from src.services.encounter_seats import teamless_seat_ids
 from src.services.hero.queries import HeroQueries
 from src.services.hero.service import heroes as hero_service
 from src.services.user.service import users as user_service
@@ -31,7 +32,7 @@ class MapService:
         generations=user_generations("{id}"),
         ttl=config.settings.users_cache_ttl,
         key=(
-            "backend:user_maps:{id}:{discipline}:{workspace_id}:{params.page}:{params.per_page}:{params.sort}:"
+            "backend:user_maps:v2:{id}:{discipline}:{workspace_id}:{params.page}:{params.per_page}:{params.sort}:"
             "{params.order}:{params.query}:{params.fields}:{params.min_count}:"
             "{params.mode_id}:{params.tournament_id}:{params.entities}"
         ),
@@ -228,9 +229,10 @@ class MapService:
 
         ``workspace_id`` scopes the stats to a single workspace; ``None`` spans all of them.
         """
-        # The user's match ids, found from their own teams' seats: a superset of the duel rows the OR-join below keeps,
-        # so the duel participant aggregate and its score lookups run for those matches, not every match of the game.
-        user_match_ids = (
+        # The user's match ids, found from their own teams' seats and their team-less ones (an individual Swiss
+        # lobby): a superset of the duel rows kept below, so the duel participant aggregate and its score lookups run
+        # for those matches, not every match of the game.
+        user_match_ids = sa.union(
             sa.select(models.StatsMatchTeam.match_id)
             .join(
                 models.EncounterTeam,
@@ -241,21 +243,23 @@ class MapService:
             )
             .join(models.Player, models.Player.team_id == models.EncounterTeam.team_id)
             .join(models.WorkspaceMember, models.WorkspaceMember.id == models.Player.workspace_member_id)
-            .where(models.WorkspaceMember.player_id == user_id, models.Player.is_substitution.is_(False))
+            .where(models.WorkspaceMember.player_id == user_id, models.Player.is_substitution.is_(False)),
+            sa.select(models.StatsMatchTeam.match_id).where(
+                models.StatsMatchTeam.encounter_team_id.in_(teamless_seat_ids(user_id))
+            ),
         )
-        matches = duel_matches(discipline=discipline, match_ids=user_match_ids)
-        # DISTINCT avoids fan-out when a roster has multiple rows for one player.
-        user_match_teams = (
-            sa.select(
-                matches.c.id.label("match_id"),
-                matches.c.map_entity_id.label("map_id"),
-                matches.c.mode_entity_id.label("mode_id"),
-                matches.c.encounter_id,
-                matches.c.home_tournament_team_id.label("home_team_id"),
-                matches.c.home_score,
-                matches.c.away_score,
-                models.Team.id.label("user_team_id"),
-            )
+        matches = duel_matches(discipline=discipline, match_ids=sa.select(user_match_ids.subquery()))
+        match_columns = (
+            matches.c.id.label("match_id"),
+            matches.c.map_entity_id.label("map_id"),
+            matches.c.mode_entity_id.label("mode_id"),
+            matches.c.encounter_id,
+            matches.c.home_score,
+            matches.c.away_score,
+        )
+        # DISTINCT (UNION) avoids fan-out when a roster has multiple rows for one player.
+        team_sides = (
+            sa.select(*match_columns, (models.Team.id == matches.c.home_tournament_team_id).label("user_is_home"))
             .select_from(matches)
             .join(
                 models.Team,
@@ -276,16 +280,30 @@ class MapService:
                 models.WorkspaceMember.player_id == user_id,
                 models.Player.is_substitution.is_(False),
             )
-            .distinct()
-            .cte("user_match_teams")
         )
+        teamless = teamless_seat_ids(user_id).subquery("user_teamless_seats")
+        teamless_sides = (
+            sa.select(
+                *match_columns,
+                (teamless.c.encounter_team_id == matches.c.home_encounter_team_id).label("user_is_home"),
+            )
+            .select_from(matches)
+            .join(
+                teamless,
+                sa.or_(
+                    teamless.c.encounter_team_id == matches.c.home_encounter_team_id,
+                    teamless.c.encounter_team_id == matches.c.away_encounter_team_id,
+                ),
+            )
+        )
+        user_match_teams = sa.union(team_sides, teamless_sides).cte("user_match_teams")
 
         user_home_score = sa.case(
-            (user_match_teams.c.home_team_id == user_match_teams.c.user_team_id, user_match_teams.c.home_score),
+            (user_match_teams.c.user_is_home, user_match_teams.c.home_score),
             else_=user_match_teams.c.away_score,
         )
         user_away_score = sa.case(
-            (user_match_teams.c.home_team_id == user_match_teams.c.user_team_id, user_match_teams.c.away_score),
+            (user_match_teams.c.user_is_home, user_match_teams.c.away_score),
             else_=user_match_teams.c.home_score,
         )
         user_win = sa.case((user_home_score > user_away_score, 1), else_=0)

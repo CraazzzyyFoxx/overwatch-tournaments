@@ -166,23 +166,6 @@ class TeamService:
             options=PlayerRepository.player_entities(entities),
         )
 
-    async def get_player_count_by_tournament(self, session: AsyncSession, tournament_id: int) -> int:
-        """Return the number of players in one tournament."""
-        return await self.player_repo.count(session, filters=[models.Player.tournament_id == tournament_id])
-
-    async def get_player_count_by_tournament_bulk(
-        self, session: AsyncSession, tournaments_ids: list[int]
-    ) -> dict[int, int]:
-        if not tournaments_ids:
-            return {}
-        query = (
-            sa.select(models.Player.tournament_id, sa.func.count(models.Player.id))
-            .where(models.Player.tournament_id.in_(tournaments_ids))
-            .group_by(models.Player.tournament_id)
-        )
-        result = await session.execute(query)
-        return {row[0]: row[1] for row in result.all()}
-
     async def get_team_count_by_tournament(self, session: AsyncSession, tournament_id: int) -> int:
         """Return the number of teams assigned to one tournament."""
         return await self.team_repo.count(session, filters=[models.Team.tournament_id == tournament_id])

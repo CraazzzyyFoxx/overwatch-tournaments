@@ -157,7 +157,8 @@ def publishable_players(rows: Sequence[StreamRosterRow]) -> dict[int, StreamPlay
 
     Roster gate: before the tournament has rosters every approved registrant on
     air is a participant (streaming during ``check_in``); once ``rosters_formed``
-    (carried by the same SELECT), a teamless participant is dropped.
+    (carried by the same SELECT), a teamless participant is dropped — unless they
+    are in an ``individual_swiss`` stage (``in_swiss``), which has no teams.
 
     Shared with the VOD chronology read, so a player renders with the same team on
     the live block and under their past broadcasts.
@@ -181,6 +182,7 @@ def publishable_players(rows: Sequence[StreamRosterRow]) -> dict[int, StreamPlay
     # Tournament-wide flag, so any row answers for all; ``any`` because ``rows``
     # may be empty.
     rosters_formed = any(row.rosters_formed for row in rows)
+    swiss_users = {row.user_id for row in rows if row.in_swiss}
     return {
         user_id: StreamPlayerRead(
             id=user_id,
@@ -189,7 +191,7 @@ def publishable_players(rows: Sequence[StreamRosterRow]) -> dict[int, StreamPlay
             team=StreamTeamRead(id=row.team_id, name=row.team_name) if row.team_id is not None else None,
         )
         for user_id, (_, row) in best.items()
-        if row.team_id is not None or not rosters_formed
+        if row.team_id is not None or not rosters_formed or user_id in swiss_users
     }
 
 

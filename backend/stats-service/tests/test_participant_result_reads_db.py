@@ -114,13 +114,13 @@ class TwoTeamMemberReadsTests(EncounterWriterCase):
             queries = UserProfileQueries.of(OW)
             for user_index, final_team in ((0, "team1"), (3, "team3")):
                 rows = await queries.get_tournaments_with_stats(s, self.users[user_index], self.ids["ws"])
-                self.assertEqual([self.ids[final_team]], [row[0].id for row in rows])
+                self.assertEqual([self.ids[final_team]], [row[1].id for row in rows])
 
     async def test_placements_are_the_member_result(self) -> None:
         async with self.Session() as s:
             queries = UserProfileQueries.of(OW)
-            self.assertEqual({self.ids["t"]: 1}, await queries.get_placements(s, self.users[0], self.ids["ws"]))
-            self.assertEqual({self.ids["t"]: 3}, await queries.get_placements(s, self.users[3], self.ids["ws"]))
+            self.assertEqual({self.ids["t"]: (1, 4)}, await queries.get_placements(s, self.users[0], self.ids["ws"]))
+            self.assertEqual({self.ids["t"]: (3, 4)}, await queries.get_placements(s, self.users[3], self.ids["ws"]))
 
     async def test_overview_averages_count_the_tournament_once(self) -> None:
         async with self.Session() as s:

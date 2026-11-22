@@ -350,3 +350,32 @@ class DeletionTests(TestCase):
 
         self.assertFalse(vd.deletion_due("category", long_ago, self.NOW, 1))
         self.assertTrue(vd.deletion_due("category", long_ago, self.NOW, 0))
+
+
+class SplitCosmeticTests(TestCase):
+    def test_access_lands_before_the_moves_and_renames_and_reorders_after(self) -> None:
+        overwrites = {("member", 42): (1, 0)}
+        ops = [
+            vd.CreateChannel("slot:1:4", "swiss_slot", "Матч 3 · A", "category:1"),
+            vd.EditChannel("slot:1:0", name="Матч 1 · B", overwrites=overwrites),
+            vd.EditChannel("slot:1:1", name="Матч 1 · C"),
+            vd.EditChannel("slot:1:2", sync=True),
+            vd.Reorder("category:1", ("slot:1:1", "slot:1:0")),
+            vd.MarkDeleting("slot:1:9"),
+        ]
+
+        access, cosmetic = vd.split_cosmetic(ops)
+
+        self.assertEqual(
+            [
+                ops[0],
+                vd.EditChannel("slot:1:0", overwrites=overwrites),
+                vd.EditChannel("slot:1:2", sync=True),
+                ops[5],
+            ],
+            access,
+        )
+        self.assertEqual(
+            [vd.EditChannel("slot:1:0", name="Матч 1 · B"), vd.EditChannel("slot:1:1", name="Матч 1 · C"), ops[4]],
+            cosmetic,
+        )

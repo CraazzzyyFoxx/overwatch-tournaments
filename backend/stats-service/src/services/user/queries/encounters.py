@@ -27,7 +27,7 @@ from shared.services.person_display import game_handle_of
 from src.core.workspace import workspace_filter
 from src.schemas.user import UserMatchViewer
 from src.services.discipline_queries import DisciplineQueries
-from src.services.encounter_seats import Seat
+from src.services.encounter_seats import Seat, user_live_seat_ids
 from src.services.user import _mappers
 
 # An encounter's matches are all of its own game, so its last upload needs no discipline scope.
@@ -61,20 +61,8 @@ def _encounter_match_identity(
     return encounter.id, match_id
 
 
-def _user_player_where(user_id: int):
-    return (
-        models.Player.workspace_member.has(models.WorkspaceMember.player_id == user_id),
-        models.Player.is_substitution.is_(False),
-    )
-
-
 def _user_history_seats(user_id: int, matches: sa.Subquery) -> sa.CompoundSelect:
-    """Current roster seats plus observed participations, including retired history."""
-    live = (
-        sa.select(models.EncounterTeam.id)
-        .join(models.Player, models.Player.team_id == models.EncounterTeam.team_id)
-        .where(models.EncounterTeam.active.is_(True), *_user_player_where(user_id))
-    )
+    """Current roster seats (team-less ones included) plus observed participations, including retired history."""
     observed = (
         sa.select(models.EncounterTeam.id)
         .select_from(models.StatsMatchPlayer)
@@ -96,7 +84,7 @@ def _user_history_seats(user_id: int, matches: sa.Subquery) -> sa.CompoundSelect
         # Mix stats live only inside the mix (mix participations have no tournament).
         .where(models.WorkspaceMember.player_id == user_id, models.EncounterTeam.tournament_id.is_not(None))
     )
-    return live.union(observed)
+    return user_live_seat_ids(user_id, observed)
 
 
 class UserEncounterQueries(DisciplineQueries):
@@ -220,14 +208,7 @@ class UserEncounterQueries(DisciplineQueries):
             if has_logs is not None:
                 q = q.where(models.Encounter.has_logs.is_(has_logs))
             if result in ("win", "loss", "draw"):
-                q = q.where(
-                    seat.team.active.is_(True),
-                    sa.exists(
-                        sa.select(models.Player.id).where(
-                            models.Player.team_id == seat.team.team_id, *_user_player_where(user_id)
-                        )
-                    ),
-                )
+                q = q.where(seat.team.id.in_(user_live_seat_ids(user_id)))
 
             if result == "win":
                 q = q.where(seat.won)
@@ -563,24 +544,22 @@ class UserEncounterQueries(DisciplineQueries):
         *,
         limit: int = 8,
     ):
-        """Most-fought opponents across ALL of the user's encounters: opponent team
-        name + win/loss/draw record, ordered by number of meetings (desc)."""
+        """Most-fought opponents across ALL of the user's encounters, team-less seats (an individual Swiss lobby)
+        included: opponent team name + win/loss/draw record, ordered by number of meetings (desc)."""
         seat = Seat()
         # The snapshot name the opponent seat played under; each other live seat
         # of the encounter is one opponent, so a lobby credits every rival.
         opponent = sa.orm.aliased(models.EncounterTeam, name="opponent_seat")
 
         query = (
-            seat.join(
-                sa.select(
-                    opponent.name.label("name"),
-                    sa.func.sum(seat.count(seat.won)).label("wins"),
-                    sa.func.sum(seat.count(seat.lost)).label("losses"),
-                    sa.func.sum(seat.count(seat.drew)).label("draws"),
-                ).select_from(models.Player),
-                models.Player.team_id,
-                duel=False,
+            sa.select(
+                opponent.name.label("name"),
+                sa.func.sum(seat.count(seat.won)).label("wins"),
+                sa.func.sum(seat.count(seat.lost)).label("losses"),
+                sa.func.sum(seat.count(seat.drew)).label("draws"),
             )
+            .select_from(seat.team)
+            .join(models.Encounter, models.Encounter.id == seat.team.encounter_id)
             .join(
                 opponent,
                 sa.and_(
@@ -589,7 +568,7 @@ class UserEncounterQueries(DisciplineQueries):
                     opponent.id != seat.team.id,
                 ),
             )
-            .where(*_user_player_where(user_id), models.Encounter.discipline == self.discipline)
+            .where(seat.team.id.in_(user_live_seat_ids(user_id)), models.Encounter.discipline == self.discipline)
         )
 
         if workspace_id is not None:
@@ -608,7 +587,7 @@ class UserEncounterQueries(DisciplineQueries):
         workspace_id: int | None = None,
     ):
         """Per-stage (group / playoffs / finals) win-loss record across ALL of the
-        user's encounters. Rows whose stage doesn't classify get a NULL `kind` and
+        user's encounters, team-less seats included. Rows whose stage doesn't classify get a NULL `kind` and
         are ignored by the caller."""
         stage_item = sa.orm.aliased(models.StageItem)
         stage_obj = sa.orm.aliased(models.Stage)
@@ -623,19 +602,17 @@ class UserEncounterQueries(DisciplineQueries):
         seat = Seat()
         bracket = sa.orm.aliased(models.BracketEncounter)
         query = (
-            seat.join(
-                sa.select(
-                    stage_kind.label("kind"),
-                    sa.func.sum(seat.count(seat.won)).label("w"),
-                    sa.func.sum(seat.count(seat.lost)).label("l"),
-                ).select_from(models.Player),
-                models.Player.team_id,
-                duel=False,
+            sa.select(
+                stage_kind.label("kind"),
+                sa.func.sum(seat.count(seat.won)).label("w"),
+                sa.func.sum(seat.count(seat.lost)).label("l"),
             )
+            .select_from(seat.team)
+            .join(models.Encounter, models.Encounter.id == seat.team.encounter_id)
             .outerjoin(bracket, bracket.encounter_id == models.Encounter.id)
             .outerjoin(stage_item, bracket.stage_item_id == stage_item.id)
             .outerjoin(stage_obj, bracket.stage_id == stage_obj.id)
-            .where(*_user_player_where(user_id), models.Encounter.discipline == self.discipline)
+            .where(seat.team.id.in_(user_live_seat_ids(user_id)), models.Encounter.discipline == self.discipline)
         )
 
         if workspace_id is not None:

@@ -935,6 +935,7 @@ class RegistrationLifecycleService:
         for entry in entries:
             entry.exclude_reason = None
             entry.balancer_status = included_balancer_status(rosters.get(entry.registration_id))
+            await self.common._register_registration_changed(session, entry.registration)
         await session.commit()
         return len(entries), len(registration_ids) - len(entries)
 

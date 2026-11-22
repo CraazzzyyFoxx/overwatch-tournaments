@@ -22,6 +22,12 @@ from tests._encounter_layer import EncounterLayerCase, add_stage_node
 _COUNTER = itertools.count(1)
 SE = enums.StageType.SINGLE_ELIMINATION
 IS = enums.StageType.INDIVIDUAL_SWISS
+#: A finished encounter: the schema ties COMPLETED to a confirmed result with a source.
+DONE = {
+    "status": enums.EncounterStatus.COMPLETED,
+    "result_status": enums.EncounterResultStatus.CONFIRMED,
+    "result_source": enums.EncounterResultSource.ADMIN,
+}
 
 
 class VoicePlanCase(EncounterLayerCase):
@@ -179,6 +185,50 @@ class VoicePlanCase(EncounterLayerCase):
                     )
             await s.commit()
 
+    async def seat_teams(self, stage_id: int, pairs: list[tuple[int, int]], *, completed: bool) -> None:
+        """Bracket encounters of ``stage_id`` between source teams (indexes into ``self.teams``)."""
+        async with self.Session() as s:
+            tournament = await s.get_one(models.Tournament, self.tournament_id)
+            for pair in pairs:
+                encounter = Encounter(
+                    workspace_id=tournament.workspace_id,
+                    discipline=tournament.discipline,
+                    tournament_id=tournament.id,
+                    scoring_rule_id=self.rule_id,
+                    name="E",
+                    slot_count=2,
+                    **(DONE if completed else {}),
+                )
+                s.add(encounter)
+                await s.flush()
+                s.add(
+                    BracketEncounter(encounter_id=encounter.id, tournament_id=tournament.id, stage_id=stage_id, round=1)
+                )
+                s.add_all(
+                    EncounterTeam(
+                        encounter_id=encounter.id,
+                        tournament_id=tournament.id,
+                        slot=slot,
+                        team_id=self.teams[index],
+                        name=f"t{index}",
+                    )
+                    for slot, index in enumerate(pair, 1)
+                )
+            await s.commit()
+
+    async def complete_encounters(self, stage_id: int) -> None:
+        async with self.Session() as s:
+            await s.execute(
+                sa.update(Encounter)
+                .where(
+                    Encounter.id.in_(
+                        sa.select(BracketEncounter.encounter_id).where(BracketEncounter.stage_id == stage_id)
+                    )
+                )
+                .values(**DONE)
+            )
+            await s.commit()
+
     async def plan(self):
         async with self.Session() as s:
             return await build_voice_plan(s, self.tournament_id)
@@ -281,6 +331,21 @@ class VoicePlanTeamTests(VoicePlanCase):
             [(w.code, w.workspace_member_id, w.team_id) for w in plan.warnings],
         )
 
+    async def test_a_team_whose_encounters_are_all_finished_has_no_route_but_keeps_its_voice(self) -> None:
+        stage = await self.stage(1, teams=(0, 1, 2), status="live", is_published=True)
+        a, b, c = await self.member("a"), await self.member("b"), await self.member("c")
+        for team, member_id in enumerate((a, b, c)):
+            await self.player(team, member_id)
+        # t0-t1 played; t2 has no encounter yet; the next round gives t1 an unfinished one.
+        await self.seat_teams(stage, [(0, 1)], completed=True)
+        self.assertEqual({self.discord[c]: self.team_key(2)}, (await self.plan()).routes)
+        await self.seat_teams(stage, [(1, 2)], completed=False)
+
+        plan = await self.plan()
+        self.assertEqual({self.discord[b]: self.team_key(1), self.discord[c]: self.team_key(2)}, plan.routes)
+        self.assertEqual(["hub", *(self.team_key(i) for i in range(3))], [ch.slot_key for ch in plan.channels])
+        self.assertEqual([self.discord[a]], plan.channels[1].member_discord_ids)
+
 
 class VoicePlanSwissTests(VoicePlanCase):
     async def test_a_swiss_stage_with_a_playoff_has_team_voices_and_no_round_slots(self) -> None:
@@ -340,6 +405,21 @@ class VoicePlanSwissTests(VoicePlanCase):
         self.assertEqual(3, len(await self.keys()))
         await self.flag(swiss, status="completed")
         self.assertEqual([], await self.keys())
+
+    async def test_a_member_of_a_finished_match_has_no_route_but_the_slot_stays(self) -> None:
+        swiss = await self.stage(1, kind=IS, status="live", is_published=True)
+        await self.stage(1, teams=(0,), status="live", is_published=True)
+        a, b, c, d = [await self.member(name) for name in "abcd"]
+        await self.player(0, a)
+        await self.seat_round(swiss, 1, [([a], [b])])
+        await self.complete_encounters(swiss)
+        await self.seat_round(swiss, 1, [([c], [d])])
+
+        plan = await self.plan()
+        # a's team voice must not catch them either; the finished match's slot keeps its members.
+        self.assertEqual({self.discord[c], self.discord[d]}, set(plan.routes))
+        slot = next(ch for ch in plan.channels if ch.kind == "swiss_slot" and self.discord[a] in ch.member_discord_ids)
+        self.assertEqual([self.discord[a]], slot.member_discord_ids)
 
 
 class VoiceAdminTests(VoicePlanCase):

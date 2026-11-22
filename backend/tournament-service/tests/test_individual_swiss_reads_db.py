@@ -260,6 +260,8 @@ class RoundsReadTests(IndividualSwissReadsCase):
         self.assertEqual(["b", "a", "c"], [m.display_name for m in winner.members])
         self.assertEqual(["tank", "damage", "support"], [m.role for m in winner.members])
         self.assertEqual([True, False, False], [m.is_captain for m in winner.members])
+        # The users.user id, which is what a live stream's `player.id` carries (players b, a, c were created 2nd, 1st, 3rd).
+        self.assertEqual([self.user_ids[1], self.user_ids[0], self.user_ids[2]], [m.player_id for m in winner.members])
         self.assertEqual(("Команда d", 2), (loser.name, loser.placement))
         self.assertEqual(rounds[0].encounters[0].encounter_id, wire[0]["encounters"][0]["encounter_id"])
 

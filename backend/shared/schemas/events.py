@@ -478,6 +478,9 @@ class FetchRankEvent(BaseEvent):
     registration_id: int | None = Field(default=None, description="Registration that triggered it")
 
 
+AchievementEvaluateReason = Literal["data_changed", "stage_completed", "tournament_finished"]
+
+
 class AchievementEvaluateEvent(BaseEvent):
     """Event for triggering achievement evaluation after parsing.
 
@@ -496,6 +499,9 @@ class AchievementEvaluateEvent(BaseEvent):
         ...,
         description="DB tables that changed (e.g. ['stats.fact', 'encounter.encounter'])",
     )
+    # What happened, for a workspace whose ``achievement_eval_mode`` is ``stage_end``: only a completion runs while
+    # the tournament is still going.
+    reason: AchievementEvaluateReason = Field(default="data_changed")
     # Deferred-queue only: the run row already exists (status ``queued``), so the
     # consumer resumes it instead of opening a second audit row, and the slice
     # the caller asked for has to survive the round trip.

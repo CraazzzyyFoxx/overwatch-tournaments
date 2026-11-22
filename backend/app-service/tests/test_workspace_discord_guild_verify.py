@@ -375,6 +375,7 @@ class DiscordGuildVerifyRPCTests(IsolatedAsyncioTestCase):
             default_division_grid_versions={},
             disciplines_enabled=["overwatch"],
             newcomer_scope="global",
+            achievement_eval_mode="live",
         )
         with patch("src.rpc.workspaces.ensure_workspace_permission", MagicMock()):
             result, verify = await self._call(
@@ -449,6 +450,7 @@ class DiscordGuildClearRPCTests(IsolatedAsyncioTestCase):
             default_division_grid_versions={},
             disciplines_enabled=["overwatch"],
             newcomer_scope="global",
+            achievement_eval_mode="live",
         )
         with patch("src.rpc.workspaces.ensure_workspace_permission", MagicMock()):
             result, clear = await self._call(

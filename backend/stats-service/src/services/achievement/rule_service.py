@@ -19,6 +19,7 @@ from shared.domain.achievements.validation import (
     validate_rule_definition,
 )
 from shared.models.achievements.achievement import (
+    AchievementEvalMode,
     AchievementOverride,
     AchievementOverrideAction,
     AchievementRule,
@@ -227,7 +228,7 @@ class AchievementRuleService:
             if errors:
                 raise validation_failure(errors)
         # A workspace can drop a discipline without deleting its rules; those rules are frozen until it is re-enabled.
-        await get_workspace_for_discipline(session, workspace_id, rule.discipline)
+        workspace = await get_workspace_for_discipline(session, workspace_id, rule.discipline)
         if "slug" in update_data:
             await self._require_free_slug(
                 session, workspace_id=workspace_id, slug=update_data["slug"], except_rule_id=rule.id
@@ -247,7 +248,13 @@ class AchievementRuleService:
             update_data.pop("depends_on", None)
         await self.rule_repo.update_fields(session, rule, update_data)
         await session.refresh(rule)
-        if (condition_tree_changed or "enabled" in update_data) and rule.enabled and rule.condition_tree:
+        # ``manual`` means only an admin's run recomputes, a rule edit included.
+        if (
+            (condition_tree_changed or "enabled" in update_data)
+            and rule.enabled
+            and rule.condition_tree
+            and workspace.achievement_eval_mode != AchievementEvalMode.manual
+        ):
             # ``run_evaluation`` owns the commit for this path.
             await self.runner.run_evaluation(
                 session,

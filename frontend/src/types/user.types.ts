@@ -263,8 +263,9 @@ export interface UserTournament {
   name: string;
   workspace_id: number;
   discipline: string;
-  team_id: number;
-  team: string;
+  /** `null` (with no `players`) for a tournament played only in team-less seats, e.g. an individual Swiss stage. */
+  team_id: number | null;
+  team: string | null;
   players: UserTournamentPlayer[];
   closeness: number;
   placement: number;

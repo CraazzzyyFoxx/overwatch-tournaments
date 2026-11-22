@@ -268,8 +268,9 @@ class UserTournament(BaseModel):
     name: str
     workspace_id: int
     discipline: str
-    team_id: int
-    team: str
+    #: ``None`` (with an empty ``players``) where the user played only team-less seats, e.g. an individual Swiss stage.
+    team_id: int | None
+    team: str | None
     players: list[UserTournamentPlayer]
     closeness: float
     placement: int | None
@@ -512,7 +513,7 @@ class CharacterStatBest(BaseModel):
     encounter_id: int
     tournament_name: str
     map_name: str
-    map_image_path: str
+    map_image_path: str | None
     value: float
     display: PersonDisplayRead
 

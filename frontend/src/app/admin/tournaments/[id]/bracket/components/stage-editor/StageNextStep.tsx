@@ -54,9 +54,14 @@ export function StageNextStep({
   const waitFor = (node: PathNode) => {
     const upstream = stages.find((candidate) => candidate.node_id === node.id);
     const progress = upstream ? progressByStageId.get(upstream.id) : undefined;
-    return progress && progress.total > 0
-      ? t("waitStageMatches", { name: node.name, count: progress.total - progress.completed })
-      : t("waitStage", { name: node.name });
+    if (!progress || progress.total === 0) return t("waitStage", { name: node.name });
+    const left = progress.total - progress.completed;
+    if (left > 0) return t("waitStageMatches", { name: node.name, count: left });
+    // The counts cover only matches that exist: a Swiss stage may still have rounds to pair. An individual Swiss
+    // completes only by its qualification lock.
+    return upstream?.stage_type === "individual_swiss"
+      ? t("waitStageLock", { name: node.name })
+      : t("waitStagePlayed", { name: node.name });
   };
   const then = stopAt === waitsOnStage ? waitFor(plan[waitsOnStage].node) : stopAt < plan.length ? t("exportTeams") : null;
 

@@ -101,6 +101,10 @@ class StreamRosterRow(NamedTuple):
     does. It is what lets the caller tell "this player has no team because the
     draft has not happened" from "this player has no team while everyone else
     does" — the first serves, the second is filtered out.
+
+    ``in_swiss`` is the exception to that filter: the user is in an
+    ``individual_swiss`` stage's personal table (``tournament.player_standing``),
+    where nobody has a team, so being teamless says nothing about participation.
     """
 
     user_id: int
@@ -112,6 +116,7 @@ class StreamRosterRow(NamedTuple):
     team_id: int | None
     team_name: str | None
     rosters_formed: bool
+    in_swiss: bool
 
 
 class StreamTargetRepository:
@@ -307,6 +312,12 @@ class StreamTargetRepository:
                 # NULL, so a roster row always carries a team and the existence
                 # of any row is exactly "the teams are formed".
                 sa.exists().where(models.Player.tournament_id == tournament_id).label("rosters_formed"),
+                sa.exists()
+                .where(
+                    models.PlayerStanding.tournament_id == tournament_id,
+                    models.PlayerStanding.workspace_member_id == member.id,
+                )
+                .label("in_swiss"),
             )
             .select_from(user)
             .outerjoin(member, member.player_id == user.id)
@@ -333,6 +344,7 @@ class StreamTargetRepository:
                 team_id=None if row.team_id is None else int(row.team_id),
                 team_name=row.team_name,
                 rosters_formed=bool(row.rosters_formed),
+                in_swiss=bool(row.in_swiss),
             )
             for row in rows
         ]

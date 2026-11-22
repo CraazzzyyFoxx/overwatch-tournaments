@@ -1,18 +1,18 @@
 {
-  "venvPath": ".",
+  "venvPath": "backend",
   "venv": ".venv",
-  "pythonVersion": "3.13",
-  "extraPaths": ["."],
+  "pythonVersion": "3.14",
+  "extraPaths": ["backend"],
   "include": [
-    "shared",
-    "app-service",
-    "identity-service",
-    "stats-service",
-    "tournament-service",
-    "discord-service",
-    "balancer-service",
-    "analytics-service",
-    "stream-service"
+    "backend/shared",
+    "backend/app-service",
+    "backend/identity-service",
+    "backend/stats-service",
+    "backend/tournament-service",
+    "backend/discord-service",
+    "backend/balancer-service",
+    "backend/analytics-service",
+    "backend/stream-service"
   ],
   "exclude": [
     "**/__pycache__",
@@ -20,6 +20,6 @@
     "**/htmlcov",
     "**/logs",
     "**/alembic",
-    "migrations"
+    "backend/migrations"
   ]
 }

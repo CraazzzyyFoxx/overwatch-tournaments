@@ -14,6 +14,8 @@ import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
 import { Combobox, ComboboxCheck, ComboboxMeta } from "@craazzzyyfoxx/admin-kit/ui/combobox";
 import { SaveBar } from "@craazzzyyfoxx/admin-kit/kit/SaveBar";
 import { SettingGroup, SettingRow, SettingsGrid, invalidProps } from "@/components/kit/SettingRow";
+import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   WorkspaceOwnerControl,
   WorkspaceOwnerTransferControl,
@@ -27,6 +29,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
 import { DEFAULT_WORKSPACE_TIMEZONE, getUtcOffsetLabel } from "@/lib/workspace/timezone";
 import workspaceService from "@/services/workspace.service";
+import type { AchievementEvalMode } from "@/types/workspace.types";
 import { SettingsHeaderActions } from "./WorkspaceSettingsShell";
 import { DisciplinesField } from "./DisciplinesField";
 import { LINK_HOSTS } from "./fields";
@@ -47,6 +50,8 @@ const LINK_FIELDS = [
   { key: "twitch_url", labelKey: "linkLabels.twitch" },
   { key: "boosty_url", labelKey: "linkLabels.boosty" }
 ] as const satisfies ReadonlyArray<{ key: keyof typeof LINK_HOSTS; labelKey: string }>;
+
+const ACHIEVEMENT_EVAL_MODES = ["live", "stage_end", "manual"] as const satisfies readonly AchievementEvalMode[];
 
 /**
  * Every IANA zone the runtime knows, searchable by name or offset. The saved
@@ -323,6 +328,36 @@ export function GeneralSection({ workspaceId }: Readonly<{ workspaceId: number |
                   {t("disciplines.help")}
                 </p>
               </div>
+            </SettingGroup>
+
+            <SettingGroup
+              id="achievements"
+              title={t("groups.achievements.title")}
+              description={t("groups.achievements.description")}
+            >
+              <RadioGroup
+                value={values.achievement_eval_mode}
+                onValueChange={(value) => patch({ achievement_eval_mode: value as AchievementEvalMode })}
+                aria-label={t("achievementMode.label")}
+                className="gap-4"
+              >
+                {ACHIEVEMENT_EVAL_MODES.map((mode) => {
+                  const id = `achievement-eval-mode-${mode}`;
+                  return (
+                    <div key={mode} className="flex items-start gap-3">
+                      <RadioGroupItem id={id} value={mode} aria-describedby={`${id}-help`} className="mt-0.5" />
+                      <div className="min-w-0">
+                        <Label htmlFor={id} className="text-sm font-medium">
+                          {t(`achievementMode.${mode}`)}
+                        </Label>
+                        <p id={`${id}-help`} className="mt-0.5 max-w-prose text-xs text-muted-foreground">
+                          {t(`achievementMode.${mode}Help`)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </RadioGroup>
             </SettingGroup>
 
             {/* The transfer row renders nothing for a caller it is not offered

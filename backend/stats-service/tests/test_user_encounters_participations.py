@@ -359,14 +359,21 @@ def test_the_encounter_list_ships_and_reads_only_the_requested_entities(db_sessi
         )
     # The bracket row is always read: it is the encounter's round, not an expansion.
     assert rows[e1].round == 3
-    for table in (r"encounter\.team_member\b", r"tournament\.stage\b", r"tournament\.stage_item\b", r"stats\.fact\b"):
+    # Membership reads ``encounter.team_member`` (a team-less seat has no other record of who sat in it); the roster
+    # expansion is what also reads the members' roles.
+    for table in (
+        r"encounter\.team_member_role\b",
+        r"tournament\.stage\b",
+        r"tournament\.stage_item\b",
+        r"stats\.fact\b",
+    ):
         assert not re.search(table, sql), table
 
     rows, sql = found["streak"]
     assert rows[e1].user_team_id == seed.teams["X"]
     assert [player.user_id for player in rows[e1].teams[0].players] == [seed.users["alice"]]
     assert (rows[e1].tournament, rows[e1].stage, rows[e1].matches) == (None, None, [])
-    assert re.search(r"encounter\.team_member\b", sql) and not re.search(r"tournament\.stage\b", sql)
+    assert re.search(r"encounter\.team_member_role\b", sql) and not re.search(r"tournament\.stage\b", sql)
 
     rows, _sql = found["everything"]
     assert rows[e1].tournament is not None and rows[e1].stage is not None and rows[e1].stage.name == seed.stage_name

@@ -8,7 +8,7 @@ into :class:`Seen`, calls :func:`diff`, and applies the returned operations thro
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 
 import discord
@@ -37,6 +37,7 @@ __all__ = (
     "permission_issues",
     "private_overwrites",
     "select_round_moves",
+    "split_cosmetic",
 )
 
 #: Discord's limit of children per category, foreign channels included.
@@ -173,6 +174,28 @@ class Diff:
     issues: list[Issue] = field(default_factory=list)
     #: ``category:<n>`` -> the Discord category that already exists for it (the organizer's one included).
     categories: dict[str, int] = field(default_factory=dict)
+
+
+def split_cosmetic(ops: Sequence[Op]) -> tuple[list[Op], list[Op]]:
+    """``(access, cosmetic)``: creations, category moves and permission writes, then renames and reorders. The sync
+    applies both before it routes and moves players, access first.
+
+    Access is apart because a failed write there keeps the last round's overwrites on a private lobby, and nobody may
+    be routed into it; a failed rename only leaves an old name. A rename riding on an access edit is split off.
+    """
+    access: list[Op] = []
+    cosmetic: list[Op] = []
+    for op in ops:
+        if isinstance(op, Reorder):
+            cosmetic.append(op)
+        elif isinstance(op, EditChannel) and op.name is not None:
+            rest = replace(op, name=None)
+            if rest.category_ref is not None or rest.sync or rest.overwrites is not None:
+                access.append(rest)
+            cosmetic.append(EditChannel(op.slot_key, name=op.name))
+        else:
+            access.append(op)
+    return access, cosmetic
 
 
 # --- permissions --------------------------------------------------------------------------------

@@ -373,6 +373,9 @@ export function projectStage({
   for (const section of sections) {
     const lastRound = section.rounds[section.rounds.length - 1]?.round;
     for (const option of section.rounds) {
+      // A `by_round` key on the grand final (the bronze's own length when it shares
+      // the title round) lands in "other"; the grand final row below owns that round.
+      if (option.round === grandFinalRound) continue;
       // `final` outranks `by_round` only on an elimination stage's last round,
       // and in double elimination that is the grand final, added below — never
       // the last upper-bracket round.

@@ -12,7 +12,7 @@ from shared import models
 from shared.core import enums, errors, pagination
 from shared.core.chrono import chrono_sort_key
 from shared.core.errors import BaseAPIException
-from shared.disciplines import DISCIPLINES
+from shared.disciplines import DISCIPLINES, discipline
 from shared.division_grid import DivisionGrid
 from shared.repository import TournamentRepository
 from shared.schemas.identity import PersonDisplayRead
@@ -229,6 +229,11 @@ def _compute_better_worse(
         return "better" if subject > baseline else "worse"
 
     return "better" if subject < baseline else "worse"
+
+
+def _individual_role(tournament: models.Tournament, role: str | None) -> RoleRef | None:
+    """An individual Swiss row's role code on its game's rated dimension."""
+    return RoleRef.of(discipline(tournament.discipline).rated_dimension.code, role)
 
 
 class UserService(DisciplineQueries):
@@ -1120,7 +1125,7 @@ class UserService(DisciplineQueries):
     @versioned(
         generations=user_generations("{id}"),
         ttl=config.settings.user_profile_cache_ttl,
-        key="backend:user_profile:v2:{id}:{self._discipline}:{workspace_id}:native",
+        key="backend:user_profile:v3:{id}:{self._discipline}:{workspace_id}:native",
     )
     async def get_profile(
         self,
@@ -1155,38 +1160,29 @@ class UserService(DisciplineQueries):
                 workspace_id=workspace_id,
             )
 
-        teams, _ = await self.profile.get_teams(
-            session,
-            user.id,
-            params=pagination.PaginationSortParams(page=1, per_page=-1, entities=["tournament", "placement"]),
-            workspace_id=workspace_id,
-        )
+        teams, played = await self._played_tournaments(session, user.id, workspace_id)
         member_placements = await self.profile.get_placements(session, user.id, workspace_id=workspace_id)
 
         placements: list[int] = []
         placements_playoff: list[int] = []
         placements_group: list[int] = []
-        tournaments_count: int = 0
         tournaments_won: int = 0
 
         # Narrow tournament summary — only fields the frontend renders on the user overview. Newest event first: the
         # page's "last tournament" is the first card.
-        tournaments = [
-            _mappers.to_user_tournament_summary(tournament)
-            for tournament in sorted((team.tournament for team in teams), key=chrono_sort_key, reverse=True)
-        ]
+        tournaments = [_mappers.to_user_tournament_summary(tournament) for tournament in played]
 
-        for team in teams:
-            # Participation, not scoring: a live tournament has no final placement
-            # yet, but the player is already in it.
-            tournaments_count += 1
-
-            placement = member_placements.get(team.tournament_id)
+        # Participation, not scoring: a live tournament has no final placement yet, but the player is already in it.
+        for tournament in played:
+            placement, _field_size = member_placements.get(tournament.id, (None, None))
             if placement is None:
                 continue
             placements.append(placement)
             if placement == 1:
                 tournaments_won += 1
+        for team in teams:
+            if team.tournament_id not in member_placements:
+                continue
             for standing in team.standings:
                 if standing.buchholz is None:
                     placements_playoff.append(standing.position)
@@ -1194,12 +1190,12 @@ class UserService(DisciplineQueries):
                     placements_group.append(standing.position)
 
         games = (
-            await self._game_summaries(session, user.id, teams, member_placements, workspace_id=workspace_id)
+            await self._game_summaries(session, user.id, played, member_placements, workspace_id=workspace_id)
             if self._discipline is None
             else []
         )
         return schemas.UserProfile(
-            tournaments_count=tournaments_count,
+            tournaments_count=len(played),
             tournaments_won=tournaments_won,
             maps_total=matches_lose + matches_won,
             maps_won=matches_won,
@@ -1252,12 +1248,28 @@ class UserService(DisciplineQueries):
             division_grid_version=current_grid_version,
         )
 
+    async def _played_tournaments(
+        self, session: AsyncSession, user_id: int, workspace_id: int | None
+    ) -> tuple[typing.Sequence[models.Team], list[models.Tournament]]:
+        """The user's teams (one per tournament, standings loaded) and every tournament the user played, newest event
+        first: the teams' and those of team-less seats (an individual Swiss lobby)."""
+        teams, _ = await self.profile.get_teams(
+            session,
+            user_id,
+            params=pagination.PaginationSortParams(page=1, per_page=-1, entities=["tournament", "placement"]),
+            workspace_id=workspace_id,
+        )
+        played = {team.tournament_id: team.tournament for team in teams}
+        for tournament in await self.profile.get_teamless_tournaments(session, user_id, workspace_id=workspace_id):
+            played.setdefault(tournament.id, tournament)
+        return teams, sorted(played.values(), key=chrono_sort_key, reverse=True)
+
     async def _game_summaries(
         self,
         session: AsyncSession,
         user_id: int,
-        teams: typing.Sequence[models.Team],
-        placements: Mapping[int, int],
+        tournaments: typing.Sequence[models.Tournament],
+        placements: Mapping[int, tuple[int, int]],
         *,
         workspace_id: int | None,
     ) -> list[schemas.UserGameSummary]:
@@ -1268,10 +1280,10 @@ class UserService(DisciplineQueries):
         across communities such a game only drops the roles whose own grid is unknown.
         """
         tallies: dict[str, list[int]] = {}
-        for team in teams:
-            tally = tallies.setdefault(team.tournament.discipline, [0, 0])
+        for tournament in tournaments:
+            tally = tallies.setdefault(tournament.discipline, [0, 0])
             tally[0] += 1
-            if placements.get(team.tournament_id) == 1:
+            if placements.get(tournament.id, (None,))[0] == 1:
                 tally[1] += 1
         installed = {code: index for index, code in enumerate(DISCIPLINES)}
         ordered = sorted(tallies, key=lambda code: (-tallies[code][0], installed.get(code, len(installed))))
@@ -1304,7 +1316,7 @@ class UserService(DisciplineQueries):
     @versioned(
         generations=user_generations("{id}"),
         ttl=config.settings.users_cache_ttl,
-        key="backend:user_draft_card:{id}:{self.discipline}:{workspace_id}:native",
+        key="backend:user_draft_card:v2:{id}:{self.discipline}:{workspace_id}:native",
     )
     async def get_draft_card(
         self, session: AsyncSession, id: int, workspace_id: int | None = None
@@ -1350,27 +1362,20 @@ class UserService(DisciplineQueries):
         for (tournament_id, code), _count in weights.most_common():
             played_as.setdefault(tournament_id, (code, ranks[(tournament_id, code)]))
 
-        teams, _ = await self.profile.get_teams(
-            session,
-            user.id,
-            params=pagination.PaginationSortParams(page=1, per_page=-1, entities=["tournament", "placement"]),
-            workspace_id=workspace_id,
-        )
+        teams, played = await self._played_tournaments(session, user.id, workspace_id)
         member_placements = await self.profile.get_placements(session, user.id, workspace_id=workspace_id)
+        team_tournaments = {team.tournament_id for team in teams}
 
         placements: list[int] = []
-        tournaments_count = 0
         tournaments_won = 0
         recent: dict[int, schemas.UserDraftCardTournament] = {}
-        for team in sorted(teams, key=lambda item: chrono_sort_key(item.tournament), reverse=True):
-            tournament = team.tournament
-            tournaments_count += 1
-            placement = member_placements.get(team.tournament_id)
+        for tournament in played:
+            placement, field_size = member_placements.get(tournament.id, (None, None))
             if placement is not None:
                 placements.append(placement)
                 if placement == 1:
                     tournaments_won += 1
-            if len(recent) >= 5 or tournament.id in recent:
+            if len(recent) >= 5:
                 continue
             role_code, rank = played_as.get(tournament.id, (None, None))
             recent[tournament.id] = schemas.UserDraftCardTournament(
@@ -1380,18 +1385,22 @@ class UserService(DisciplineQueries):
                 role=role_code,
                 rank=rank,
                 placement=placement,
-                teams_count=0,
+                # Without a team the place is the member's own, out of the field it was ranked in.
+                teams_count=0 if tournament.id in team_tournaments else field_size or 0,
             )
 
-        teams_counts = await self.encounters.count_teams_by_tournament_bulk(session, list(recent))
+        teams_counts = await self.encounters.count_teams_by_tournament_bulk(
+            session, [tournament_id for tournament_id in recent if tournament_id in team_tournaments]
+        )
         for tournament_id, card in recent.items():
-            card.teams_count = teams_counts.get(tournament_id, 0)
+            if tournament_id in team_tournaments:
+                card.teams_count = teams_counts.get(tournament_id, 0)
 
         hero_rows = await self.encounters.get_user_hero_records(session, user.id, workspace_id=workspace_id)
         mvp_maps = await self.encounters.count_user_mvp_maps(session, user.id, workspace_id=workspace_id)
 
         return schemas.UserDraftCard(
-            tournaments=tournaments_count,
+            tournaments=len(played),
             tournaments_won=tournaments_won,
             maps=maps_won + maps_lost,
             maps_won=maps_won,
@@ -1414,7 +1423,7 @@ class UserService(DisciplineQueries):
     @versioned(
         generations=user_generations("{id}"),
         ttl=config.settings.users_cache_ttl,
-        key="backend:user_tournaments:v3:{id}:{self._discipline}:{workspace_id}:native",
+        key="backend:user_tournaments:v4:{id}:{self._discipline}:{workspace_id}:native",
     )
     async def get_tournaments(
         self, session: AsyncSession, id: int, workspace_id: int | None = None, *, grid: DivisionGrid | None
@@ -1423,6 +1432,10 @@ class UserService(DisciplineQueries):
         Retrieves a user's tournament history with per-event stats (record,
         placement, roster, avg MVP, signature heroes), and each grid version its
         rows' divisions are on, once.
+
+        A tournament played only in team-less seats (an individual Swiss lobby) is a row without a team: role,
+        division and record come from the member's individual Swiss rows, and its ``placement`` / ``count_teams`` are
+        the member's final result and field, so a live stage's provisional position never reads as an event result.
 
         Ships no encounters: the Tournaments tab renders one selected tournament's
         encounters at a time (master-detail dossier), and every tournament's full
@@ -1433,9 +1446,10 @@ class UserService(DisciplineQueries):
         user = await self.get(session, id, [])
         output: list[schemas.UserTournament] = []
         tournaments = await self.profile.get_tournaments_with_stats(session, user.id, workspace_id=workspace_id)
-        tournaments_ids = [tournament[0].tournament_id for tournament in tournaments]
+        tournaments_ids = [tournament.id for tournament, *_ in tournaments]
         placements = await self.encounters.count_teams_by_tournament_bulk(session, tournaments_ids)
         member_placements = await self.profile.get_placements(session, user.id, workspace_id=workspace_id)
+        individual = await self.profile.get_individual_standings(session, user.id, tournaments_ids)
 
         # Per-roster-player enrichment (avg MVP + signature heroes), scoped to the
         # tournaments this history covers. Gather every teammate's canonical user id
@@ -1444,15 +1458,17 @@ class UserService(DisciplineQueries):
         roster_user_ids = list(
             {
                 player.workspace_member.player_id
-                for team, *_ in tournaments
+                for _tournament, team, *_ in tournaments
+                if team is not None
                 for player in team.players
                 if player.workspace_member is not None
             }
         )
         # Roster MVP and characters are facts of each tournament's own game: read per game (one game when bound).
         tournaments_by_game: dict[str, list[int]] = {}
-        for team, *_ in tournaments:
-            tournaments_by_game.setdefault(team.tournament.discipline, []).append(team.tournament_id)
+        for tournament, team, *_ in tournaments:
+            if team is not None:
+                tournaments_by_game.setdefault(tournament.discipline, []).append(tournament.id)
         avg_mvp_map: dict[tuple[int, int], float] = {}
         top_characters_map: dict[tuple[int, int], list[models.CatalogEntity]] = {}
         for game, game_tournament_ids in tournaments_by_game.items():
@@ -1467,21 +1483,23 @@ class UserService(DisciplineQueries):
             {version_id for version_id in version_by_tournament.values() if version_id is not None},
         )
 
-        for team, wins, losses, avg_closeness in tournaments:
+        for event, team, wins, losses, avg_closeness in tournaments:
             user_role: RoleRef | None = None
             user_division: int | None = None
             won: int = 0
             lost: int = 0
             draw: int = 0
-            placement = member_placements.get(team.tournament_id)
+            placement, field_size = member_placements.get(event.id, (None, None))
+            standing = individual.get(event.id)
 
             # Each tournament's divisions live on its own effective grid (own pin,
             # else its workspace default, else the system default) — in the
             # all-workspaces read the request grid is not that grid.
-            effective_version_id = version_by_tournament.get(team.tournament_id)
+            effective_version_id = version_by_tournament.get(event.id)
             tournament_grid = grids_by_version.get(effective_version_id) or grid
 
-            for player in team.players:
+            players = team.players if team is not None else []
+            for player in players:
                 if player.workspace_member is not None and player.workspace_member.player_id == user.id:
                     user_role = player.role_ref
                     user_division = resolve_tournament_division(
@@ -1490,11 +1508,20 @@ class UserService(DisciplineQueries):
                         fallback_grid=grid,
                     )
                     break
+            if team is None and standing is not None:
+                user_role = _individual_role(event, standing.role)
+                user_division = resolve_tournament_division(
+                    standing.start_rank, tournament_grid=tournament_grid, fallback_grid=grid
+                )
 
-            for standing in team.standings:
-                won += standing.win
-                lost += standing.lose
-                draw += standing.draw
+            for team_standing in team.standings if team is not None else []:
+                won += team_standing.win
+                lost += team_standing.lose
+                draw += team_standing.draw
+            if standing is not None:
+                won += standing.wins
+                lost += standing.losses
+                draw += standing.draws
 
             division_grid_version_id = (
                 effective_version_id if effective_version_id in tournament_version_reads else None
@@ -1505,26 +1532,26 @@ class UserService(DisciplineQueries):
                     player,
                     grid=tournament_grid,
                     avg_mvp=(
-                        avg_mvp_map.get((team.tournament_id, player.workspace_member.player_id))
+                        avg_mvp_map.get((event.id, player.workspace_member.player_id))
                         if player.workspace_member is not None
                         else None
                     ),
                     characters=(
-                        top_characters_map.get((team.tournament_id, player.workspace_member.player_id), [])
+                        top_characters_map.get((event.id, player.workspace_member.player_id), [])
                         if player.workspace_member is not None
                         else []
                     ),
                 )
-                for player in team.players
+                for player in players
             ]
 
             tournament = schemas.UserTournament(
-                id=team.tournament.id,
-                name=team.tournament.name,
-                workspace_id=team.tournament.workspace_id,
-                discipline=team.tournament.discipline,
-                team_id=team.id,
-                team=team.name,
+                id=event.id,
+                name=event.name,
+                workspace_id=event.workspace_id,
+                discipline=event.discipline,
+                team_id=team.id if team is not None else None,
+                team=team.name if team is not None else None,
                 players=players_read,
                 closeness=round(avg_closeness, 2) if avg_closeness else 0,
                 maps_won=wins,
@@ -1533,7 +1560,8 @@ class UserService(DisciplineQueries):
                 role=user_role,
                 division=user_division,
                 division_grid_version_id=division_grid_version_id,
-                count_teams=placements[team.tournament_id],
+                # Without a team the place is the member's own, out of the field it was ranked in.
+                count_teams=placements.get(event.id, 0) if team is not None else field_size or 0,
                 won=won,
                 lost=lost,
                 draw=draw,
@@ -1550,7 +1578,7 @@ class UserService(DisciplineQueries):
     @versioned(
         generations=user_generations("{id}"),
         ttl=config.settings.users_cache_ttl,
-        key="backend:user_tournament_encounters:v9:{id}:{self.discipline}:{tournament_id}",
+        key="backend:user_tournament_encounters:v10:{id}:{self.discipline}:{tournament_id}",
     )
     async def get_tournament_encounters(
         self, session: AsyncSession, id: int, tournament_id: int
@@ -1620,23 +1648,36 @@ class UserService(DisciplineQueries):
 
     # ``grid`` is a pure function of ``tournament_id`` (a tournament pins its own
     # division_grid_version), so it stays out of the key; a tournament write that
-    # moves a user aggregate misses every ``user_tournament_stats:v3`` key
+    # moves a user aggregate misses every ``user_tournament_stats:v4`` key
     # (``user_cache.TOURNAMENT_DATA``).
     @versioned(
         generations=user_generations("{id}"),
         ttl=config.settings.users_cache_ttl,
-        key="backend:user_tournament_stats:v3:{id}:{self.discipline}:{tournament_id}:native",
+        key="backend:user_tournament_stats:v4:{id}:{self.discipline}:{tournament_id}:native",
         lock=True,
     )
     async def get_tournament_with_stats(
         self, session: AsyncSession, id: int, tournament_id: int, *, grid: DivisionGrid
     ) -> schemas.UserTournamentWithStats | None:
         """Detailed statistics for a user in one tournament; 404 when the user never
-        played in it.
+        played in it. A player who played it only in team-less seats (an individual Swiss lobby) gets the card too,
+        role and division from the individual Swiss row when there is one, and no group or playoff placement: a
+        personal table's position is not one.
         """
         user = await self.get(session, id, [])
         player = await self.encounters.get_player_by_user_and_tournament(session, user.id, tournament_id)
-        if player is None:
+        standing = None
+        tournament: models.Tournament | None = None
+        if player is not None:
+            tournament = player.team.tournament
+        else:
+            played = await self.profile.get_teamless_tournaments(session, user.id, tournament_id=tournament_id)
+            if played:
+                tournament = played[0]
+                standing = (await self.profile.get_individual_standings(session, user.id, [tournament_id])).get(
+                    tournament_id
+                )
+        if tournament is None:
             raise errors.ApiHTTPException(
                 status_code=404,
                 detail=[
@@ -1646,12 +1687,11 @@ class UserService(DisciplineQueries):
                     )
                 ],
             )
-        team = player.team
-        statistics = await self.profile.get_tournament_stats_overall(session, team.tournament, user.id)
+        statistics = await self.profile.get_tournament_stats_overall(session, tournament, user.id)
         last_playoff_placement: float | None = None
         last_group_placement: float | None = None
         stats: dict[enums.LogStatsName | typing.Literal["winrate"], schemas.UserTournamentStat] = {}
-        winrate = await self.statistics_queries.get_tournament_winrate(session, team.tournament, user.id)
+        winrate = await self.statistics_queries.get_tournament_winrate(session, tournament, user.id)
 
         if winrate:
             stats["winrate"] = schemas.UserTournamentStat(value=winrate[1], rank=winrate[2], total=winrate[3])
@@ -1660,7 +1700,7 @@ class UserService(DisciplineQueries):
 
         stat_rows, mvp_row = await self.statistics_queries.get_tournament_user_ranks(
             session,
-            team.tournament,
+            tournament,
             user.id,
             [name for name in tournament_stats if name != enums.LogStatsName.ImpactRank],
         )
@@ -1675,26 +1715,33 @@ class UserService(DisciplineQueries):
                 value=mvp_row.value, rank=mvp_row.rank, total=mvp_row.total
             )
 
-        for placement in team.standings:
+        for placement in player.team.standings if player is not None else []:
             if placement.buchholz is None:
                 last_playoff_placement = placement.position
             else:
                 last_group_placement = placement.position
 
         return schemas.UserTournamentWithStats(
-            id=team.tournament.id,
-            name=team.tournament.name,
-            workspace_id=team.tournament.workspace_id,
-            discipline=team.tournament.discipline,
+            id=tournament.id,
+            name=tournament.name,
+            workspace_id=tournament.workspace_id,
+            discipline=tournament.discipline,
             division=resolve_tournament_division(
-                player.rank,
+                player.rank if player is not None else standing.start_rank if standing is not None else None,
                 tournament_grid=grid,
             ),
-            division_grid_version=_mappers._division_grid_version(team.tournament),
+            division_grid_version=_mappers._division_grid_version(tournament),
             closeness=round(statistics[2], 2) if statistics[2] else 0,
-            role=player.role_ref,
-            maps=statistics[0] + statistics[1] if statistics[0] else 0,
-            maps_won=statistics[0] if statistics[0] else 0,
+            role=(
+                player.role_ref
+                if player is not None
+                else _individual_role(tournament, standing.role)
+                if standing is not None
+                else None
+            ),
+            # An all-loss run still played its maps.
+            maps=(statistics[0] or 0) + (statistics[1] or 0),
+            maps_won=statistics[0] or 0,
             playtime=round(statistics[3], 2) if statistics[3] else 0,
             group_placement=last_group_placement,
             playoff_placement=last_playoff_placement,
@@ -1985,7 +2032,7 @@ class UserService(DisciplineQueries):
     @versioned(
         generations=user_generations("{id}"),
         ttl=config.settings.users_cache_ttl,
-        key="backend:user_teammates:v2:{id}:{self.discipline}:{workspace_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}",
+        key="backend:user_teammates:v3:{id}:{self.discipline}:{workspace_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}",
     )
     async def get_best_teammates(
         self,
@@ -2022,7 +2069,7 @@ class UserService(DisciplineQueries):
         generations=user_generations("{user_id}"),
         ttl=config.settings.users_cache_ttl,
         key=(
-            "backend:user_encounters:v9:{user_id}:{self._discipline}:{workspace_id}:{params.page}:{params.per_page}:"
+            "backend:user_encounters:v10:{user_id}:{self._discipline}:{workspace_id}:{params.page}:{params.per_page}:"
             "{params.sort}:{params.order}:{params.entities}:{result_filter}:{stage}:{mvp1}:{has_logs}:{opponent}"
         ),
         lock=True,
@@ -2079,7 +2126,7 @@ class UserService(DisciplineQueries):
     @versioned(
         generations=user_generations("{user_id}"),
         ttl=config.settings.users_cache_ttl,
-        key="backend:user_matches_summary:{user_id}:{self.discipline}:{workspace_id}:{opponents_limit}",
+        key="backend:user_matches_summary:v2:{user_id}:{self.discipline}:{workspace_id}:{opponents_limit}",
     )
     async def get_matches_summary(
         self,

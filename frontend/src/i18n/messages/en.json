@@ -512,6 +512,8 @@
       "needs": "First:",
       "run": "Do it",
       "waitStageMatches": "“{name}” has to finish first: {count, plural, one {# match} other {# matches}} left.",
+      "waitStagePlayed": "Every scheduled match of “{name}” is played, but the stage is still active.",
+      "waitStageLock": "Every scheduled match of “{name}” is played; the stage completes once its qualification is locked on its Standings tab.",
       "balancerExportHint": "The teams are not in the tournament yet. Once exported, forming can be completed.",
       "exportTeams": "Next: put the teams into the tournament (export the balance or the draft); then forming can be completed.",
       "blocked": "This step cannot move further right now: check the tournament flow.",
@@ -10819,6 +10821,7 @@
     },
     "individual": {
       "description": "Each role is ranked on its own. Pin a place to keep a player there whatever results arrive; the others fill the free places in computed order. The heavier line marks the playoff cut.",
+      "help": "How the table works",
       "empty": "The table appears once the first round is generated.",
       "place": "Place",
       "player": "Player",
@@ -13481,6 +13484,15 @@
           "twitch": "Twitch",
           "boosty": "Boosty"
         },
+        "achievementMode": {
+          "label": "When achievements are recalculated",
+          "live": "As data arrives",
+          "liveHelp": "Every uploaded log, result or standings change recalculates achievements right away.",
+          "stage_end": "When a stage ends",
+          "stage_endHelp": "Recalculated when a stage (groups, playoff and so on) or the whole tournament completes. Changes to a finished tournament recalculate right away.",
+          "manual": "Manually only",
+          "manualHelp": "Only a run you start on the achievements page recalculates, editing a rule included."
+        },
         "groups": {
           "identity": {
             "title": "Identity",
@@ -13497,6 +13509,10 @@
           "disciplines": {
             "title": "Games",
             "description": "Drag to set the order: the first game is the default for new tournaments, division grids and mixes."
+          },
+          "achievements": {
+            "title": "Achievements",
+            "description": "Recalculating mid-stage can grant and then take back achievements while results are still moving."
           },
           "ownership": {
             "title": "Ownership",

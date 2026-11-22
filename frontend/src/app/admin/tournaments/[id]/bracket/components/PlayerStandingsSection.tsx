@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import type { ColumnDef, Row } from "@tanstack/react-table";
-import { Crown, Lock } from "lucide-react";
+import { Crown, Info, Lock } from "lucide-react";
 
 import { DataTable, columnMeta, readColumnMeta, type DataTableGroup } from "@craazzzyyfoxx/admin-kit/data-table";
 import { ConfirmDialog } from "@craazzzyyfoxx/admin-kit/kit/ConfirmDialog";
@@ -12,6 +12,7 @@ import { FilterBar } from "@craazzzyyfoxx/admin-kit/kit/FilterBar";
 import { useFilters, type FilterDef } from "@craazzzyyfoxx/admin-kit/kit/useFilters";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@craazzzyyfoxx/admin-kit/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@craazzzyyfoxx/admin-kit/ui/popover";
 import { NumberInput } from "@/components/ui/number-input";
 import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 import { useDisciplineMetadata } from "@/hooks/useDisciplineMetadata";
@@ -248,8 +249,6 @@ export function PlayerStandingsSection({
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="max-w-prose text-caption text-muted-foreground">{t("description")}</p>
-
       {lockError ? (
         <Alert tone="danger">
           <AlertDescription>{lockError}</AlertDescription>
@@ -269,15 +268,28 @@ export function PlayerStandingsSection({
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!dirty || saveMutation.isPending}
-          onClick={() => saveMutation.mutate()}
-        >
-          {saveMutation.isPending ? <Spinner /> : null}
-          {t("savePins")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!dirty || saveMutation.isPending}
+            onClick={() => saveMutation.mutate()}
+          >
+            {saveMutation.isPending ? <Spinner /> : null}
+            {t("savePins")}
+          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button type="button" size="icon-sm" variant="ghost" aria-label={t("help")}>
+                <Info aria-hidden className="size-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-80 p-3 text-caption">
+              <p className="mb-1 font-semibold">{t("help")}</p>
+              <p className="text-muted-foreground">{t("description")}</p>
+            </PopoverContent>
+          </Popover>
+        </div>
         <div className="flex flex-wrap items-center gap-3">
           {canLock ? null : <p className="text-caption text-muted-foreground">{t("lockHint")}</p>}
           <Button

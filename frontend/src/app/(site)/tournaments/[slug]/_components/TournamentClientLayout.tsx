@@ -27,7 +27,6 @@ import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useEntityWorkspace } from "@/hooks/useEntityWorkspace";
 import { useTournamentStreamsQuery, useTournamentVodsQuery } from "../_hooks/useTournamentStreams";
 import { useTournamentHasMapPool } from "../_hooks/useTournamentMapPool";
-import type { Tournament } from "@/types/tournament.types";
 
 import { useTranslations } from "next-intl";
 import TournamentSectionNav from "./TournamentSectionNav";
@@ -47,21 +46,6 @@ type TournamentClientLayoutProps = {
   slug: string;
   children: React.ReactNode;
 };
-
-/**
- * The one "players" figure every surface of the page quotes. Registrations
- * count while the field is still forming; once teams exist (`participants_count`
- * is only populated then) the rostered players are the tournament's players —
- * the header and the overview's numbers must not disagree by the withdrawn.
- */
-function tournamentPlayersCount(
-  tournament: Pick<Tournament, "participants_count" | "registrations_count" | "teams_count">
-): number {
-  const rostered = tournament.participants_count ?? 0;
-  return (tournament.teams_count ?? 0) > 0 && rostered > 0
-    ? rostered
-    : (tournament.registrations_count ?? 0);
-}
 
 /**
  * Whether the page's header block — the overview's hero, or the one-row header
@@ -181,7 +165,8 @@ export default function TournamentClientLayout({
 
   const stages = tournament.stages;
   const teamsCount = tournament.teams_count ?? 0;
-  const players = tournamentPlayersCount(tournament);
+  // Admitted people (checked in and ready), not sign-ups: 0 is a real answer while the field forms.
+  const players = tournament.participants_count ?? 0;
 
   const isEnded = isTournamentStatusEnded(tournament.status);
   const statusVariant = getTournamentStatusMeta(displayStatus(tournament)).variant;

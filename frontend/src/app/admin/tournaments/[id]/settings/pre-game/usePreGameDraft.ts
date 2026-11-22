@@ -64,8 +64,6 @@ export function usePreGameDraft({
   // the moment the tournament level is edited again.
   const inheritedDraft = inheritedConfig == null ? null : pickBanDraftFromConfig(inheritedConfig);
 
-  const slotCount = resolveSlotCount(scope.stageId, scope.round, stages, encounters, thirdPlace);
-
   // A stage covers several rounds of the bracket, and a regulation routinely
   // plays different maps in each. A config's scope key is `(stage, round)`, so
   // that is N configs: the stage screen authors all of them at once and fans
@@ -73,10 +71,10 @@ export function usePreGameDraft({
   // sees Round 1's maps next to Round 2's.
   const isStageScope = scope.stageId != null && scope.round == null;
   const stage = stages.find((candidate) => candidate.id === scope.stageId);
-  const { rounds, loading: roundsLoading } = useStageRounds(
-    isStageScope ? stage : null,
-    encounters
-  );
+  // A round scope needs them too: they are the bracket depth that tells the final apart.
+  const { rounds, loading: roundsLoading } = useStageRounds(stage, encounters);
+  const slotCount = resolveSlotCount(scope.stageId, scope.round, stages, encounters, thirdPlace, rounds);
+
   const roundShape = stageRoundShape(scope.stageId, stage?.stage_type, rounds, encounters);
   const roundLabel = useBracketRoundLabel();
   const tBracket = useTranslations("bracket");
@@ -135,7 +133,7 @@ export function usePreGameDraft({
           thirdPlaceRound,
           configs,
           fallback: stored.slots,
-          slotCountFor: (round, bronze) => resolveSlotCount(scope.stageId, round, stages, encounters, bronze)
+          slotCountFor: (round, bronze) => resolveSlotCount(scope.stageId, round, stages, encounters, bronze, rounds)
         })
       };
     }
@@ -168,7 +166,7 @@ export function usePreGameDraft({
     setDraft(baseDraft);
   }
 
-  const series = resolveSeriesLength(scope.stageId, scope.round, stages, encounters, thirdPlace);
+  const series = resolveSeriesLength(scope.stageId, scope.round, stages, encounters, thirdPlace, rounds);
   const issues = validatePickBanDraft(draft);
 
   const patch = (values: Partial<PickBanDraft>) =>
@@ -210,7 +208,7 @@ export function usePreGameDraft({
           thirdPlaceRound,
           configs,
           fallback: draft.slots,
-          slotCountFor: (round, bronze) => resolveSlotCount(scope.stageId, round, stages, encounters, bronze)
+          slotCountFor: (round, bronze) => resolveSlotCount(scope.stageId, round, stages, encounters, bronze, rounds)
         })
       });
     }

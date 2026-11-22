@@ -37,6 +37,24 @@ export function buildLiveTeamStreams(
 }
 
 /**
+ * The stream that speaks for a set of players (an individual-Swiss seat), picked
+ * by the same rule as `buildLiveTeamStreams`. Those teams are per-round seats
+ * with no tournament team id, so the join is `StreamEntry.player.id` (the user
+ * id) against each seat member's `player_id`.
+ */
+export function liveStreamForPlayers(
+  streams: TournamentStreams | undefined,
+  playerIds: ReadonlySet<number>
+): StreamEntry | undefined {
+  let best: StreamEntry | undefined;
+  for (const entry of streams?.participants ?? []) {
+    if (entry.player == null || !playerIds.has(entry.player.id)) continue;
+    if (best === undefined || outranksForTeam(entry, best)) best = entry;
+  }
+  return best;
+}
+
+/**
  * Which of two streams from the same team the bracket names. Audience first,
  * then `channel` as a total order.
  *

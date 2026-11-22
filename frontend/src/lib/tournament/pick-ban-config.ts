@@ -777,13 +777,18 @@ export interface SeriesLength {
  * local `round === max_rounds` guess cannot say that — double elimination's
  * grand final is `upperRounds + 1` (derived from the team count), while
  * `max_rounds` is an independent planning field a new stage defaults to 5.
+ * `plannedRounds` (the stage's rounds as the server predicts them) gives the
+ * projection its depth: a single elimination fed by an earlier stage has no
+ * seated teams yet, and without it `max_rounds` stood in, so the final was
+ * read as an ordinary round and lost its `final` length.
  */
 export function resolveSeriesLength(
   stageId: number | null,
   round: number | null,
   stages: Stage[],
   encounters: PickBanScopeEncounter[] | undefined,
-  thirdPlace = false
+  thirdPlace = false,
+  plannedRounds?: readonly number[]
 ): SeriesLength {
   if (stageId == null) return { bestOf: DEFAULT_BEST_OF, source: "variesByMatch" };
 
@@ -820,6 +825,7 @@ export function resolveSeriesLength(
       stageType: stage.stage_type,
       maxRounds: stage.max_rounds,
       bestOf: stage.best_of,
+      plannedRounds,
     }).rounds.find((candidate) => candidate.round === round);
     if (projected != null) return { bestOf: projected.bestOf, source: "round" };
   }
@@ -846,10 +852,11 @@ export function resolveSlotCount(
   round: number | null,
   stages: Stage[],
   encounters: PickBanScopeEncounter[] | undefined,
-  thirdPlace = false
+  thirdPlace = false,
+  plannedRounds?: readonly number[]
 ): number {
   if (stageId != null && round != null) {
-    return resolveSeriesLength(stageId, round, stages, encounters, thirdPlace).bestOf;
+    return resolveSeriesLength(stageId, round, stages, encounters, thirdPlace, plannedRounds).bestOf;
   }
 
   // Generated encounters are the truth once the bracket exists; the stage's

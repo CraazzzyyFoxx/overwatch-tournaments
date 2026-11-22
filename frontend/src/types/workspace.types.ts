@@ -241,6 +241,8 @@ export interface ManageableDiscordGuild {
   can_manage: boolean;
 }
 
+export type AchievementEvalMode = "live" | "stage_end" | "manual";
+
 export interface Workspace {
   id: number;
   slug: string;
@@ -299,6 +301,9 @@ export interface Workspace {
    * counts any workspace's tournaments, `"workspace"` counts only this
    * workspace's. */
   newcomer_scope: "global" | "workspace";
+  /** When data changes recalculate achievements on their own: on every change, when a stage or the tournament
+   * completes, or only on an admin's run. */
+  achievement_eval_mode: AchievementEvalMode;
 }
 
 /** A row of `GET /api/v1/workspaces`: every field but the grids, which a list of every workspace cannot afford. */

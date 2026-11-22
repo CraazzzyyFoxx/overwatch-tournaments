@@ -30,7 +30,7 @@ const EncounterRow = ({
 }: {
   enc: EncounterWithUserStats;
   selfUserId: number;
-  teamId: number;
+  teamId: number | null;
 }) => {
   const t = useTranslations();
   const { own, opponent: opponentSeat, userScore, oppScore, kind: scoreKind } = encounterPerspective(

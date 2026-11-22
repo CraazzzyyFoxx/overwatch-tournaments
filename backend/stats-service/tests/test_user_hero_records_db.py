@@ -51,16 +51,17 @@ class UserHeroRecordsTest(IsolatedAsyncioTestCase):
         await self.connection.close()
         await self.engine.dispose()
 
-    async def _entity(self, kind: str, tag: str, **columns: object) -> int:
+    async def _entity(self, kind: str, tag: str, image_path: str | None = "", **columns: object) -> int:
         statement = sa.insert(models.CatalogEntity).values(
-            discipline=OW, kind=kind, name=f"{kind} {tag}", slug=f"{kind}-{tag}", image_path="", **columns
+            discipline=OW, kind=kind, name=f"{kind} {tag}", slug=f"{kind}-{tag}", image_path=image_path, **columns
         )
         return (await self.session.execute(statement.returning(models.CatalogEntity.id))).scalar_one()
 
     async def test_record_win_loss_draw_and_all_players_win_rate(self) -> None:
         tag = uuid.uuid4().hex[:10]
         hero_id = await self._entity("character", tag, attrs={"class": "tank"})
-        map_id = await self._entity("map", tag, parent_id=await self._entity("mode", tag))
+        # A map with no picture: its best games still read, with a null image.
+        map_id = await self._entity("map", tag, image_path=None, parent_id=await self._entity("mode", tag))
 
         workspace = models.Workspace(slug=f"hero-{tag}", name=f"hero-{tag}")
         self.session.add(workspace)
@@ -123,4 +124,7 @@ class UserHeroRecordsTest(IsolatedAsyncioTestCase):
             ("damage_blocked", 5000.0, encounter.id),
         )
         self.assertEqual((row_a.record.map_name, row_a.record.tournament_name), (f"map {tag}", f"T {tag}"))
+        [blocked] = [stat for stat in row_a.stats if stat.name == enums.LogStatsName.DamageBlocked]
+        self.assertEqual((blocked.best.value, blocked.best.map_name), (5000.0, f"map {tag}"))
+        self.assertIsNone(blocked.best.map_image_path)
         self.assertIsNone(row_b.record)
