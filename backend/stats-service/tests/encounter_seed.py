@@ -136,14 +136,17 @@ def add_duel(db: Any, **kwargs: Any) -> None:
     db.flush()
 
 
-async def seed_confirmed_games(session: Any, encounter: Encounter, games: Sequence[Sequence[int]]) -> None:
-    """One confirmed game per entry; an entry lists each seat's placement in the game, in slot order."""
+async def seed_confirmed_games(
+    session: Any, encounter: Encounter, games: Sequence[Sequence[int]], *, scored: bool = False
+) -> None:
+    """One confirmed game per entry; an entry lists each seat's placement in the game, in slot order -- or, when
+    ``scored``, its raw score with no placement entered (the place is then derived from the scores)."""
     seats = (
         await session.scalars(
             sa.select(EncounterTeam).where(EncounterTeam.encounter_id == encounter.id).order_by(EncounterTeam.slot)
         )
     ).all()
-    for position, placements in enumerate(games, 1):
+    for position, values in enumerate(games, 1):
         game = EncounterGame(
             encounter_id=encounter.id,
             position=position,
@@ -154,8 +157,14 @@ async def seed_confirmed_games(session: Any, encounter: Encounter, games: Sequen
         session.add(game)
         await session.flush()
         session.add_all(
-            EncounterGameTeam(game_id=game.id, encounter_id=encounter.id, encounter_team_id=seat.id, placement=place)
-            for seat, place in zip(seats, placements, strict=True)
+            EncounterGameTeam(
+                game_id=game.id,
+                encounter_id=encounter.id,
+                encounter_team_id=seat.id,
+                placement=None if scored else value,
+                score=value if scored else None,
+            )
+            for seat, value in zip(seats, values, strict=True)
         )
     await session.flush()
 

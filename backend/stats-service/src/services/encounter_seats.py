@@ -55,6 +55,25 @@ def user_live_seat_ids(user_id: typing.Any, *more: sa.Select[typing.Any]) -> sa.
     return sa.union(teams, loose.teamless_sides(loose.team.id, user_id=user_id, duel=False), *more)
 
 
+def _game_lost(game_team: typing.Any) -> sa.ColumnElement[bool]:
+    """The ``game_team`` row placed below first in its game.
+
+    A place is stored only when the organizer entered one; otherwise it is derived on read
+    (``shared.domain.encounter_scoring.resolve_placements``): a higher raw score places higher.
+    shortcut: a game with neither places nor scores (a formula-only lobby) reads as a draw for all; derive its
+    formula here if such games ever need map records.
+    """
+    rival = aliased(models.EncounterGameTeam)
+    outscored = sa.exists(
+        sa.select(1).where(
+            rival.game_id == game_team.game_id,
+            rival.encounter_team_id != game_team.encounter_team_id,
+            sa.func.coalesce(rival.score, 0) > sa.func.coalesce(game_team.score, 0),
+        )
+    )
+    return sa.or_(game_team.placement > 1, sa.and_(game_team.placement.is_(None), outscored))
+
+
 class Seat:
     """One team's live participation, joined to its encounter.
 
@@ -156,14 +175,21 @@ class Seat:
         """
 
         def won(game_team: typing.Any) -> sa.ColumnElement[bool]:
+            # Sole first place: no rival placed first too / scored as much (see :func:`_game_lost` on places).
             rival = aliased(models.EncounterGameTeam)
             return sa.and_(
-                game_team.placement == 1,
+                sa.or_(game_team.placement == 1, game_team.placement.is_(None)),
                 ~sa.exists(
                     sa.select(1).where(
                         rival.game_id == game_team.game_id,
                         rival.encounter_team_id != game_team.encounter_team_id,
-                        rival.placement == 1,
+                        sa.or_(
+                            sa.and_(game_team.placement.is_not(None), rival.placement == 1),
+                            sa.and_(
+                                game_team.placement.is_(None),
+                                sa.func.coalesce(rival.score, 0) >= sa.func.coalesce(game_team.score, 0),
+                            ),
+                        ),
                     )
                 ),
             )
@@ -189,7 +215,7 @@ class Seat:
             sa.Integer,
         )
         return sa.case(
-            (self._has_games, self._games(lambda game_team: game_team.placement > 1)),
+            (self._has_games, self._games(_game_lost)),
             (self._series_only_wins, series_score),
             else_=0,
         )

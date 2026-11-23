@@ -138,7 +138,8 @@ class _Fixture:
                 "CREATE TABLE encounter.game (id INTEGER PRIMARY KEY, encounter_id INTEGER, state TEXT)"
             )
             conn.exec_driver_sql(
-                "CREATE TABLE encounter.game_team (game_id INTEGER, encounter_team_id INTEGER, placement INTEGER)"
+                "CREATE TABLE encounter.game_team"
+                " (game_id INTEGER, encounter_team_id INTEGER, score INTEGER, placement INTEGER)"
             )
             # The encounters' result is a ``wins`` series score, so ``score`` counts maps.
             conn.exec_driver_sql("INSERT INTO encounter.scoring_rule (id, workspace_id, preset) VALUES (1, 1, 'wins')")
