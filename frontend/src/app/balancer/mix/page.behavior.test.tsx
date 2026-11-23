@@ -295,4 +295,19 @@ describe("mix directory under all communities", () => {
     ]);
     expect(mocks.stats.mock.calls.map((call) => call[0])).toEqual([1, 2]);
   });
+
+  it("asks for a game's scoreboard only from communities that run it", async () => {
+    const owOnly = { id: 1, name: "OW only", disciplines_enabled: ["overwatch"], is_hidden: false, verification_status: "verified" };
+    const both = { id: 2, name: "Both", disciplines_enabled: ["overwatch", "lol"], is_hidden: false, verification_status: "verified" };
+    useWorkspaceStore.setState({ statsScope: "all", workspaces: [owOnly, both] as never });
+    mocks.stats.mockImplementation(async (workspaceId: number) => {
+      if (workspaceId === 1) throw new Error("discipline_not_enabled");
+      return { since: null, members: [], mixes: 0, matches: 0 };
+    });
+
+    const container = await mountPage("/balancer/mix?discipline=lol");
+
+    expect(new Set(mocks.stats.mock.calls.map((call) => call[0]))).toEqual(new Set([2]));
+    expect(container.textContent).not.toContain("Unable to");
+  });
 });
