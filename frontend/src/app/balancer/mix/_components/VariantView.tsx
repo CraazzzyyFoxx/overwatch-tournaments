@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
@@ -11,7 +11,7 @@ import { InlineEditText } from "@/components/kit/InlineEditText";
 import { useDragSensors } from "@/hooks/useDragSensors";
 import { cn } from "@/lib/utils";
 
-import type { MixOwner, PickupTeam, PickupVariant } from "../pickup-lineup";
+import type { MixOwner, PickupSeat, PickupTeam, PickupVariant } from "../pickup-lineup";
 import { SeatDragPreview, SeatRow, type ActiveSeatDrag } from "./SeatRow";
 import { VariantMetrics } from "./VariantMetrics";
 
@@ -83,6 +83,7 @@ export function VariantView({
               team={team}
               owner={owner}
               teamIndex={teamIndex}
+              lanes={variant.lanes?.[teamIndex]}
               showDivider={twoTeams && teamIndex === 0}
               canWrite={canWrite}
               // The pencil is a 28px square on the 28px title line, so
@@ -115,9 +116,11 @@ function TeamColumnAndDivider({
   canDrag,
   activeDrag,
   awayUuids,
-  onMakeCaptain
+  onMakeCaptain,
+  lanes
 }: Readonly<{
   team: PickupTeam;
+  lanes?: string[][];
   owner: MixOwner;
   teamIndex: number;
   showDivider: boolean;
@@ -139,6 +142,7 @@ function TeamColumnAndDivider({
         canDrag={canDrag}
         awayUuids={awayUuids}
         onMakeCaptain={onMakeCaptain}
+        lanes={lanes}
         activeDrag={activeDrag}
       />
       {showDivider ? (
@@ -164,9 +168,11 @@ function TeamColumn({
   canDrag,
   activeDrag,
   awayUuids,
-  onMakeCaptain
+  onMakeCaptain,
+  lanes
 }: Readonly<{
   team: PickupTeam;
+  lanes?: string[][];
   owner: MixOwner;
   teamIndex: number;
   canWrite: boolean;
@@ -196,19 +202,55 @@ function TeamColumn({
         </span>
       </header>
       <ul className="mt-2.5 space-y-1">
-        {team.seats.map((seat) => (
-          <SeatRow
-            key={`${seat.uuid}:${seat.role}`}
-            seat={seat}
-            owner={owner}
-            teamIndex={teamIndex}
-            canDrag={canDrag}
-            activeDrag={activeDrag}
-            away={awayUuids?.has(seat.uuid) ?? false}
-            onMakeCaptain={onMakeCaptain && !seat.isCaptain ? () => onMakeCaptain(seat.uuid) : undefined}
-          />
+        {laneGroups(team.seats, lanes).map(({ lane, seats }) => (
+          <Fragment key={lane ?? "rest"}>
+            {lane == null ? null : (
+              <li className="pt-1.5 first:pt-0">
+                <Eyebrow>{t("lane", { number: lane })}</Eyebrow>
+              </li>
+            )}
+            {seats.map((seat) => (
+              <SeatRow
+                key={`${seat.uuid}:${seat.role}`}
+                seat={seat}
+                owner={owner}
+                teamIndex={teamIndex}
+                canDrag={canDrag}
+                activeDrag={activeDrag}
+                away={awayUuids?.has(seat.uuid) ?? false}
+                onMakeCaptain={onMakeCaptain && !seat.isCaptain ? () => onMakeCaptain(seat.uuid) : undefined}
+              />
+            ))}
+          </Fragment>
         ))}
       </ul>
     </section>
   );
+}
+
+/**
+ * The team's seats grouped under their 1-based lane number, in lane order; a seat no lane names (a stale annotation
+ * after a hand swap) follows unlabelled. Without lanes: one unlabelled group, the seats exactly as they came.
+ */
+function laneGroups(
+  seats: PickupSeat[],
+  lanes: string[][] | undefined,
+): { lane: number | null; seats: PickupSeat[] }[] {
+  if (lanes == null) return [{ lane: null, seats }];
+  const bySeat = new Map(seats.map((seat) => [seat.uuid, seat]));
+  const placed = new Set<string>();
+  const groups = lanes.map((uuids, index) => ({
+    lane: index + 1,
+    seats: uuids.flatMap((uuid) => {
+      const seat = bySeat.get(uuid);
+      if (seat == null || placed.has(uuid)) return [];
+      placed.add(uuid);
+      return [seat];
+    }),
+  }));
+  const rest = seats.filter((seat) => !placed.has(seat.uuid));
+  return [
+    ...groups.filter((group) => group.seats.length > 0),
+    ...(rest.length > 0 ? [{ lane: null, seats: rest }] : []),
+  ];
 }

@@ -3780,6 +3780,16 @@
       "reason": "MVP placement API key (impact_rank) of the tournament/profile stat boards; C4 of the impact_v2 design",
       "owner": "P9",
       "remove_when": "the stat boards read the MVP stat code from the discipline's metadata"
+    },
+    {
+      "path": "frontend/src/app/balancer/mix/_components/VariantView.tsx",
+      "rule": "stat-code",
+      "token": "lane",
+      "context": "<Eyebrow>{t(\"lane\", { number: lane })}</Eyebrow>",
+      "count": 1,
+      "reason": "i18n message key of the mix variant's lane heading (Deadlock lane matchup rule), not a stat read",
+      "owner": "P9",
+      "remove_when": "the mix view takes its lane label from the discipline's metadata"
     }
   ]
 }

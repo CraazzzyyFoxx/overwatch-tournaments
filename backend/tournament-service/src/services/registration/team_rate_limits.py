@@ -101,7 +101,7 @@ async def count_attempt(client: aioredis.Redis, key: str, window_seconds: int) -
     a later hit never extends it, and no failure between the two can leave a
     counter without an expiry -- which would rate-limit the actor forever. ``NX``
     also gives a key some earlier code left without a TTL its expiry back.
-    Needs Redis 7+ (every compose file runs ``redis/redis-stack:latest``, 7.x).
+    Needs Redis 7+ / Valkey (every compose file runs ``valkey/valkey:9.0``).
     """
     async with client.pipeline(transaction=True) as pipe:
         pipe.incr(key)

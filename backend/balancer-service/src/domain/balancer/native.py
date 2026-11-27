@@ -107,6 +107,11 @@ def call_engine(function: str, request_json: str, progress_callback: ProgressCal
     return payload
 
 
+def evaluate_mix_rules(request: Mapping[str, Any]) -> dict[str, Any]:
+    """The mix engine's rules on a fixed seating: ``{request, teams}`` -> ``{rules}``."""
+    return orjson.loads(load_native_module().evaluate_mix_rules(orjson.dumps(request).decode("utf-8")))
+
+
 def deserialize_variants(
     payload: dict[str, Any],
     players: list[Player],
@@ -152,5 +157,6 @@ __all__ = [
     "build_roles",
     "call_engine",
     "deserialize_variants",
+    "evaluate_mix_rules",
     "load_native_module",
 ]

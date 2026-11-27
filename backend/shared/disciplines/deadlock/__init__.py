@@ -193,7 +193,7 @@ def _settings_schema(key: str) -> type[BaseModel] | None:
 
 #: Deadlock ranks are per player, not per position: one rated dimension with one role, and no open slot (``flex``).
 AGENT = DimensionSpec("agent", "Agent", "single", True, (RoleSpec("agent", "Agent"),))
-OPEN_6V6 = TeamFormatPreset("open_6v6", "6v6", 6, 6, dimensions=(FormatDimensionSpec("agent", "off"),))
+OPEN_6V6 = TeamFormatPreset("open_6v6", "6v6", 6, 6, dimensions=(FormatDimensionSpec("agent", "off"),), lanes=(2, 2, 2))
 #: Street Brawl.
 OPEN_4V4 = TeamFormatPreset("open_4v4", "4v4 without roles", 4, 4, dimensions=(FormatDimensionSpec("agent", "off"),))
 

@@ -193,6 +193,9 @@ class TeamFormatPreset:
     substitute_max: int = 0
     dimensions: tuple[FormatDimensionSpec, ...] = ()
     rules: tuple[FormatRuleSpec, ...] = ()
+    #: Seats per lane of one team, lane order (Deadlock 6v6: three duo lanes); ``()`` when the mode has no lanes.
+    #: Read by the mix balancer's lane rule through the format's ``preset_code``; not copied into an owner's format.
+    lanes: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

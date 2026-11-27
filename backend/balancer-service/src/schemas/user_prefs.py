@@ -14,7 +14,7 @@ from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Fie
 
 from shared.disciplines import DISCIPLINES
 from shared.domain.pick_ban_rules import mix_ban_preset
-from src.domain.balancer.config.defaults import MAX_RESULT_VARIANTS, validate_role_settings
+from src.domain.balancer.config.defaults import MAX_RESULT_VARIANTS, MixRules, validate_role_settings
 
 __all__ = (
     "MAX_POINTS_PER_WIN",
@@ -86,6 +86,8 @@ def _valid_formation_games(value: dict[str, MixFormationDefault]) -> dict[str, M
 
 _FormationDefaults = Annotated[dict[str, MixFormationDefault], AfterValidator(_valid_formation_games)]
 
+_RULES_DOC = "Soft rules of the mix engine (Deadlock lane matchup); null keeps every rule's default."
+
 RatingMode = Literal["points", "ranker"]
 
 
@@ -116,6 +118,7 @@ class UserMixPreferencesRead(BaseModel):
     rating_mode: RatingMode = Field(default="points", description=_MODE_DOC)
     hero_ban_presets: dict[str, str] = Field(default_factory=dict, description=_BANS_DOC)
     formation_defaults: dict[str, MixFormationDefault] = Field(default_factory=dict, description=_FORMATION_DOC)
+    mix_rules: MixRules | None = Field(default=None, description=_RULES_DOC)
 
 
 class UserMixPreferencesUpsert(BaseModel):
@@ -131,3 +134,4 @@ class UserMixPreferencesUpsert(BaseModel):
     rating_mode: RatingMode = Field(description=_MODE_DOC)
     hero_ban_presets: _BanPresets = Field(description=_BANS_DOC)
     formation_defaults: _FormationDefaults = Field(description=_FORMATION_DOC)
+    mix_rules: MixRules | None = Field(description=_RULES_DOC)

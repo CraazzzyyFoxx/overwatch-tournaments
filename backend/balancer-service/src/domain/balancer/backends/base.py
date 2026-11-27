@@ -30,6 +30,8 @@ class BalanceMetrics:
     mix_balancer_role_fairness: float | None = None
     mix_balancer_role_points: float | None = None
     mix_balancer_quality_total: float | None = None
+    #: Each soft rule's penalty by kind, in rating units (``mix_rules``).
+    mix_balancer_rules: dict[str, float] | None = None
 
     #: Fields the engine reports in *rating* units. They are computed after
     #: ``RatingNormalizer`` has rescaled every rating to the canonical ceiling,
@@ -53,14 +55,22 @@ class BalanceMetrics:
         see ``native/balancer_native/src/mix.rs``), so scaling the inputs
         scales the output by the same factor.
         """
-        updates = {
+        updates: dict[str, typing.Any] = {
             name: value * factor for name in self._RATING_UNIT_FIELDS if (value := getattr(self, name)) is not None
         }
+        if self.mix_balancer_rules:
+            updates["mix_balancer_rules"] = {kind: value * factor for kind, value in self.mix_balancer_rules.items()}
         return dataclasses.replace(self, **updates) if updates else self
 
-    def to_dict(self) -> dict[str, float]:
-        """Non-``None`` fields only, ready to merge into a response payload."""
-        return {key: value for key, value in dataclasses.asdict(self).items() if value is not None}
+    def to_dict(self) -> dict[str, typing.Any]:
+        """Non-``None`` fields only, rounded to 4 places, ready to merge into a response payload."""
+        return {
+            key: {kind: round(penalty, 4) for kind, penalty in value.items()}
+            if isinstance(value, dict)
+            else round(value, 4)
+            for key, value in dataclasses.asdict(self).items()
+            if value is not None
+        }
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -69,6 +79,9 @@ class BalanceSolution:
 
     teams: list[Team]
     metrics: BalanceMetrics
+    #: Per rule kind, what the rule says about this split beyond its penalty
+    #: (``mix_rules.variant_annotations``); empty for an engine without rules.
+    annotations: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 
 
 @typing.runtime_checkable

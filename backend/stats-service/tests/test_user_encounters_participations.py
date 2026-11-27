@@ -413,6 +413,12 @@ def test_maps_come_from_the_games_and_fall_back_to_a_wins_series_score_only(db_s
             db_session, tournament, wins_rule, [(teams["X"], 9), (teams["Y"], 0)], name="GAMES"
         )
         await seed_confirmed_games(db_session, with_games, [[1, 2], [2, 1]])
+        # Games entered as raw scores, no place stored (the place derives from the score): 3-2 won, 1-2 lost,
+        # 2-2 drawn -- 1 won / 1 lost, whatever the 0-0 seat score says.
+        scored = await seed_encounter(
+            db_session, tournament, wins_rule, [(teams["X"], 0), (teams["Y"], 0)], name="SCORED"
+        )
+        await seed_confirmed_games(db_session, scored, [[3, 2], [1, 2], [2, 2]], scored=True)
         # A wins-preset duel without games: its seat score is the maps (3-2).
         await seed_encounter(db_session, tournament, wins_rule, [(teams["X"], 3), (teams["Y"], 2)], name="SERIES")
         await db_session.commit()
@@ -420,5 +426,6 @@ def test_maps_come_from_the_games_and_fall_back_to_a_wins_series_score_only(db_s
         return await overview_queries.get_overview_map_records(db_session, [seed.users["alice"]], seed.workspace_id)
 
     seed, records = _run(db_session, body)
-    # 4+0 (base) + 1 (GAMES) + 3 (SERIES) won; 5+0 + 1 + 2 lost; PTS adds nothing and is not "played".
-    assert records[seed.users["alice"]] == (8, 8, 5)
+    # 4+0 (base) + 1 (GAMES) + 1 (SCORED) + 3 (SERIES) won; 5+0 + 1 + 1 + 2 lost; PTS adds nothing and is not
+    # "played".
+    assert records[seed.users["alice"]] == (9, 9, 6)

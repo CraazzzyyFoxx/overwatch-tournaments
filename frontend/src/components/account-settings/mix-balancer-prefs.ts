@@ -31,6 +31,24 @@ export const MAX_RESULT_VARIANTS = DEFAULT_RESULT_VARIANTS;
 /** Ceiling the server enforces on the rank-adjustment-per-win. */
 export const MAX_POINTS_PER_WIN = 1000;
 
+/** The lane-matchup rule as the balancer defaults it; `weight` and `cohesion` are 0..`MAX_LANE_WEIGHT`. */
+export const DEFAULT_LANE_RULE = { enabled: true, weight: 0.5, cohesion: 0.25 };
+export const MAX_LANE_WEIGHT = 10;
+
+/** Stored lane rule, each field clamped; a missing rule or field reads as its default. */
+function laneRuleOf(preferences: MixBalancerPreferences | null | undefined): MixPrefsDraft["laneRule"] {
+  const stored = preferences?.mix_rules?.lane_matchup;
+  const weight = (value: unknown, fallback: number) =>
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.min(MAX_LANE_WEIGHT, Math.max(0, value))
+      : fallback;
+  return {
+    enabled: typeof stored?.enabled === "boolean" ? stored.enabled : DEFAULT_LANE_RULE.enabled,
+    weight: weight(stored?.weight, DEFAULT_LANE_RULE.weight),
+    cohesion: weight(stored?.cohesion_weight, DEFAULT_LANE_RULE.cohesion),
+  };
+}
+
 /** Stored tilt, clamped to the range the server enforces. */
 function tiltOf(preferences: MixBalancerPreferences | null | undefined): number {
   const stored = preferences?.mix_comfort_tilt;
@@ -103,6 +121,7 @@ export type MixPrefsDraft = {
   ratingMode: MixRatingMode;
   banPresets: Record<string, string>;
   formationDefaults: MixBalancerPreferences["formation_defaults"];
+  laneRule: { enabled: boolean; weight: number; cohesion: number };
 };
 
 /** The draft a stored row (or an empty one) opens as. */
@@ -115,6 +134,7 @@ export function draftOf(preferences: MixBalancerPreferences | null | undefined):
     ratingMode: preferences?.rating_mode === "ranker" ? "ranker" : "points",
     banPresets: { ...(preferences?.hero_ban_presets ?? {}) },
     formationDefaults: { ...(preferences?.formation_defaults ?? {}) },
+    laneRule: laneRuleOf(preferences),
   };
 }
 
@@ -152,5 +172,17 @@ export function preferencesPayload(draft: MixPrefsDraft): MixBalancerPreferences
         .sort(([left], [right]) => (left < right ? -1 : 1))
         .map(([code, { team_formation, draft_pick_seconds }]) => [code, { team_formation, draft_pick_seconds }]),
     ),
+    mix_rules:
+      draft.laneRule.enabled === DEFAULT_LANE_RULE.enabled &&
+      draft.laneRule.weight === DEFAULT_LANE_RULE.weight &&
+      draft.laneRule.cohesion === DEFAULT_LANE_RULE.cohesion
+        ? null
+        : {
+            lane_matchup: {
+              enabled: draft.laneRule.enabled,
+              weight: draft.laneRule.weight,
+              cohesion_weight: draft.laneRule.cohesion,
+            },
+          },
   };
 }

@@ -380,6 +380,43 @@ def test_the_picture_seats_every_player_under_their_team_with_the_division_they_
     assert (first.average, second.average) == (2850, 2600)
 
 
+def _laned_document() -> dict:
+    document = _document(
+        {"Agent": [("A", 3000), ("B", 2900), ("C", 2800), ("D", 2700), ("E", 2600), ("F", 2500)]},
+        {"Agent": [("G", 3000)]},
+    )
+    return document
+
+
+def test_a_lane_matchup_seats_each_team_lane_by_lane_with_unlisted_seats_last() -> None:
+    document = _laned_document()
+    # F is not in any lane; lanes name seats out of roster order, and one lane has an unknown uuid.
+    document["variants"][0]["annotations"] = {"lane_matchup": {"teams": [[["B", "A"], ["E", "ghost"], ["C"]], [["G"]]]}}
+    picture = _picture(document, discipline="deadlock")
+    first, second = picture.teams
+    assert render_png(picture, {}).startswith(b"\x89PNG")
+
+    assert [(seat.name, seat.lane) for seat in first.seats] == [
+        ("B", 1),
+        ("A", 1),
+        ("E", 2),
+        ("C", 3),
+        ("D", None),
+        ("F", None),
+    ]
+    assert [(seat.name, seat.lane) for seat in second.seats] == [("G", 1)]
+
+
+def test_a_picture_without_lane_annotations_keeps_the_roster_order() -> None:
+    document = _laned_document()
+    plain = _picture(document, discipline="deadlock").teams[0]
+    assert [(seat.name, seat.lane) for seat in plain.seats] == [(name, None) for name in "ABCDEF"]
+
+    for bad in ({"lane_matchup": {"teams": [[["B", 1]]]}}, {"lane_matchup": {"teams": "x"}}, "x"):
+        document["variants"][0]["annotations"] = bad
+        assert _picture(document, discipline="deadlock").teams[0] == plain
+
+
 def test_the_picture_carries_the_gap_the_points_and_the_maps_art() -> None:
     document = _document({"Tank": [("Ana", 3000)]}, {"Tank": [("Bob", 2900)]})
     picture = _picture(

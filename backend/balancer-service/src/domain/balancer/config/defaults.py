@@ -111,6 +111,41 @@ def validate_role_settings(value: typing.Any) -> typing.Any:
 #: stores it — the same split every other ``mix_*`` knob gets.
 MIX_ONLY_ROLE_FIELDS = frozenset({"mix_weight"})
 
+#: Upper bound of a mix rule weight; the rule penalties sit in rating units like
+#: the fairness term (weight 1.0 at the default comfort tilt).
+MAX_MIX_RULE_WEIGHT = 10.0
+
+
+class LaneMatchupRule(BaseModel):
+    """Seat a format's lanes so lane opponents match in strength (``mix.rs`` ``lane_matchup``).
+
+    Applies only to a format whose preset declares ``lanes`` (Deadlock 6v6).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    weight: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=MAX_MIX_RULE_WEIGHT,
+        description="Penalty per rating point between lane opponents, each lane compared strongest to strongest.",
+    )
+    cohesion_weight: float = Field(
+        default=0.25,
+        ge=0.0,
+        le=MAX_MIX_RULE_WEIGHT,
+        description="Penalty per rating point between the players of one lane: strong lane with strong.",
+    )
+
+
+class MixRules(BaseModel):
+    """The mix engine's soft rules, one field per rule kind."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lane_matchup: LaneMatchupRule = Field(default_factory=LaneMatchupRule)
+
 
 def tournament_role_settings(role_settings: Mapping[str, RoleSettings]) -> dict[str, dict[str, float]]:
     """Per-role settings as the operator drawer sees them: mix-only fields dropped."""
@@ -469,6 +504,15 @@ class AlgorithmConfig(BaseSettings):
             "a preferred role; 0.5 reproduces the engine's own defaults."
         ),
     )
+    mix_rules: MixRules = Field(
+        default_factory=MixRules,
+        description="Mix soft rules (lane matchup) and their weights; formats a rule does not fit ignore it.",
+    )
+    # Not a setting: every run overwrites it with its format's lanes, like ``role_mask``.
+    lane_layout: tuple[int, ...] = Field(
+        default=(),
+        description="Per-team lane sizes of the run's team format; empty when the format has no lanes",
+    )
 
     # Rating normalization
     rating_scale_ceiling: int = Field(
@@ -498,6 +542,8 @@ def apply_config_overrides(config: AlgorithmConfig, overrides: Mapping[str, typi
             config.role_settings = merged
         elif key == "open_slot_settings":
             config.open_slot_settings = config.open_slot_settings.model_copy(update=value)
+        elif key == "mix_rules":
+            config.mix_rules = MixRules.model_validate(value)
         else:
             setattr(config, key, value)
     return config

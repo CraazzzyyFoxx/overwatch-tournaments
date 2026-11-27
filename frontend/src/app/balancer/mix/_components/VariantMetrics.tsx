@@ -69,6 +69,14 @@ export function VariantMetrics({ variant }: Readonly<{ variant: PickupVariant }>
           {t("lines", { value: String(Math.round(stats.lineGap)) })}
         </span>
       )}
+      {stats.laneGap == null ? null : (
+        <span
+          title={t("laneGapHint")}
+          className={cn(METRIC_PILL_CLASS, METRIC_NEUTRAL_CLASS)}
+        >
+          {t("laneGap", { value: String(Math.round(stats.laneGap)) })}
+        </span>
+      )}
       <span
         title={offRoleTitle}
         className={cn(

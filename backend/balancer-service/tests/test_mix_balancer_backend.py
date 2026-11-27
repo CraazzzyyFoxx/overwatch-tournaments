@@ -137,6 +137,8 @@ class SolveTests(unittest.TestCase):
                 "fairness_weight": 0.5,
                 "role_fairness_weight": 0.5,
                 "role_priority_weight": 1.5,
+                # No format lanes on this run, so no rule fits.
+                "mix_rules": [],
             },
             request["config"],
         )

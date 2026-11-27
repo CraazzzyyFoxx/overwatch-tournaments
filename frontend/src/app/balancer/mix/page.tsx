@@ -112,9 +112,15 @@ export default function BalancerPickupListPage() {
   // Pinned to the period, not recomputed per render: a `since` that drifted
   // with the clock would be a new query key every render.
   const since = useMemo(() => sinceFor(period, new Date()), [period]);
+  // Stats 422 `discipline_not_enabled` for a game the community does not run; such a community scores nothing for it.
+  const scoredWorkspaces =
+    discipline === null
+      ? visibleWorkspaces
+      : visibleWorkspaces.filter((workspace) => workspace.disciplines_enabled.includes(discipline));
+  const scoredIds = scoredWorkspaces.map((workspace) => workspace.id);
   // The hero always counts all time; the scoreboard follows the period (the same request when it is all time).
   const totalsQueries = useQueries({
-    queries: visibleWorkspaces.map((workspace) => ({
+    queries: scoredWorkspaces.map((workspace) => ({
       queryKey: customGameKeys.stats(workspace.id, null, discipline ?? undefined),
       queryFn: ({ signal }: { signal: AbortSignal }) =>
         customGameService.stats(workspace.id, null, discipline ?? undefined, { signal }),
@@ -123,7 +129,7 @@ export default function BalancerPickupListPage() {
     })),
   });
   const boardQueries = useQueries({
-    queries: visibleWorkspaces.map((workspace) => ({
+    queries: scoredWorkspaces.map((workspace) => ({
       queryKey: customGameKeys.stats(workspace.id, since, discipline ?? undefined),
       queryFn: ({ signal }: { signal: AbortSignal }) =>
         customGameService.stats(workspace.id, since, discipline ?? undefined, { signal }),
@@ -132,19 +138,20 @@ export default function BalancerPickupListPage() {
     })),
   });
 
-  const totalsReady = totalsQueries.length > 0 && totalsQueries.every((query) => query.data !== undefined);
+  // No community running the game is a ready, empty answer, not an endless load.
+  const totalsReady = !pending && totalsQueries.every((query) => query.data !== undefined);
   const totals = totalsReady
     ? {
         mixes: totalsQueries.reduce((sum, query) => sum + (query.data?.mixes ?? 0), 0),
         matches: totalsQueries.reduce((sum, query) => sum + (query.data?.matches ?? 0), 0),
         players: mergeMixStats(
-          totalsQueries.map((query, index) => ({ workspaceId: workspaceIds[index], stats: query.data! }))
+          totalsQueries.map((query, index) => ({ workspaceId: scoredIds[index], stats: query.data! }))
         ).length,
       }
     : null;
-  const boardReady = boardQueries.length > 0 && boardQueries.every((query) => query.data !== undefined);
+  const boardReady = !pending && boardQueries.every((query) => query.data !== undefined);
   const rated = boardReady
-    ? mergeMixStats(boardQueries.map((query, index) => ({ workspaceId: workspaceIds[index], stats: query.data! })))
+    ? mergeMixStats(boardQueries.map((query, index) => ({ workspaceId: scoredIds[index], stats: query.data! })))
     : [];
   const ranked = rated.filter((player) => player.games >= LEADERBOARD_MIN_GAMES);
   const viewer = rated.find((player) => player.playerId !== null && viewerIds.includes(player.playerId)) ?? null;

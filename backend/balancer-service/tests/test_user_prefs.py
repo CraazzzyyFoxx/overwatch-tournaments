@@ -45,6 +45,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
             rating_mode="points",
             hero_ban_presets={},
             formation_defaults={},
+            mix_rules=None,
         )
 
         self.assertEqual(config.config_json, {"mix_comfort_tilt": 0.75})
@@ -63,6 +64,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
             rating_mode="points",
             hero_ban_presets={},
             formation_defaults={},
+            mix_rules=None,
         )
 
         self.assertEqual(config.config_json, {"role_settings": {"tank": {"mix_weight": 2.5}}})
@@ -79,6 +81,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
             rating_mode="points",
             hero_ban_presets={},
             formation_defaults={},
+            mix_rules=None,
         )
 
         self.assertEqual(config.config_json, {})
@@ -96,6 +99,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
             rating_mode="points",
             hero_ban_presets={},
             formation_defaults={},
+            mix_rules=None,
         )
         self.assertEqual(config.config_json, {"open_slot_settings": {"mix_weight": 0.5}})
 
@@ -112,6 +116,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
             rating_mode="points",
             hero_ban_presets={},
             formation_defaults={},
+            mix_rules=None,
         )
 
         self.assertIsNone(config.points_per_win)
@@ -128,6 +133,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
             rating_mode="points",
             hero_ban_presets={"deadlock": "deadlock_hero_bans"},
             formation_defaults={},
+            mix_rules=None,
         )
 
         self.assertEqual({"deadlock": "deadlock_hero_bans"}, config.hero_ban_presets)
@@ -146,10 +152,30 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
             rating_mode="points",
             hero_ban_presets={},
             formation_defaults={"deadlock": {"team_formation": "draft", "draft_pick_seconds": 45}},
+            mix_rules=None,
         )
 
         self.assertEqual({"deadlock": {"team_formation": "draft", "draft_pick_seconds": 45}}, config.formation_defaults)
         self.assertEqual({}, config.config_json)
+
+    async def test_the_lane_rule_stores_in_the_solver_blob(self) -> None:
+        """The mix engine reads ``mix_rules`` straight off ``config_json``, like every other knob."""
+        rule = {"enabled": False, "weight": 1.5, "cohesion_weight": 0.0}
+        config = await self.service.upsert(
+            self.session,
+            user_id=9,
+            mix_comfort_tilt=None,
+            role_settings=None,
+            max_result_variants=None,
+            open_slot_settings=None,
+            points_per_win=None,
+            rating_mode="points",
+            hero_ban_presets={},
+            formation_defaults={},
+            mix_rules={"lane_matchup": rule},
+        )
+
+        self.assertEqual({"mix_rules": {"lane_matchup": rule}}, config.config_json)
 
 
 class UserMixPreferencesBoundsTests(TestCase):
@@ -165,6 +191,7 @@ class UserMixPreferencesBoundsTests(TestCase):
         "rating_mode": "points",
         "hero_ban_presets": {},
         "formation_defaults": {},
+        "mix_rules": None,
     }
 
     def _validate(self, **overrides: object) -> UserMixPreferencesUpsert:
@@ -236,3 +263,9 @@ class UserMixPreferencesBoundsTests(TestCase):
         ):
             with self.subTest(defaults=defaults), self.assertRaises(ValidationError):
                 self._validate(formation_defaults=defaults)
+
+    def test_a_lane_rule_weight_above_the_ceiling_is_rejected(self) -> None:
+        self._validate(mix_rules={"lane_matchup": {"enabled": True, "weight": 10.0, "cohesion_weight": 0.0}})
+        for rule in ({"weight": 10.5}, {"cohesion_weight": -1.0}, {"typo": 1}):
+            with self.subTest(rule=rule), self.assertRaises(ValidationError):
+                self._validate(mix_rules={"lane_matchup": rule})

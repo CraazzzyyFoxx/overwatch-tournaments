@@ -5,13 +5,14 @@ import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
+import { SettingGroup, SettingRow, settingHintId } from "@/components/kit/SettingRow";
 import { cn } from "@/lib/utils";
 import { Label } from "@craazzzyyfoxx/admin-kit/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@craazzzyyfoxx/admin-kit/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -38,8 +39,10 @@ import { Spinner } from "@craazzzyyfoxx/admin-kit/ui/spinner";
 
 import {
   DEFAULT_COMFORT_TILT,
+  DEFAULT_LANE_RULE,
   DEFAULT_RESULT_VARIANTS,
   DEFAULT_ROLE_WEIGHT,
+  MAX_LANE_WEIGHT,
   MAX_POINTS_PER_WIN,
   MAX_RESULT_VARIANTS,
   MAX_ROLE_WEIGHT,
@@ -119,7 +122,7 @@ export default function MixBalancerSection() {
   if (preferencesQuery.isLoading) {
     // The two groups below, row for row: `true` marks a stacked row.
     const groups = [
-      { id: "mixes-balancing", title: t("mixBalancer.balancingTitle"), description: undefined, rows: [true, true, false, false, false] },
+      { id: "mixes-balancing", title: t("mixBalancer.balancingTitle"), description: undefined, rows: [true, true, false, false, false, false, false, false] },
       { id: "mixes-defaults", title: t("mixBalancer.defaultsTitle"), description: t("mixBalancer.defaultsDesc"), rows: [false, true] },
     ];
     return (
@@ -303,6 +306,68 @@ export default function MixBalancerSection() {
             placeholder={t("mixBalancer.points.placeholder")}
             value={draft.pointsPerWin}
             onValueChange={(next) => setDraft((current) => ({ ...current, pointsPerWin: next }))}
+            size="sm"
+            className="w-24"
+          />
+        </SettingRow>
+
+        <SettingRow
+          htmlFor="mix-lane-enabled"
+          label={t("mixBalancer.laneRule.label")}
+          hint={t("mixBalancer.laneRule.hint")}
+        >
+          <Switch
+            id="mix-lane-enabled"
+            aria-describedby={settingHintId("mix-lane-enabled")}
+            checked={draft.laneRule.enabled}
+            onCheckedChange={(enabled) =>
+              setDraft((current) => ({ ...current, laneRule: { ...current.laneRule, enabled } }))
+            }
+          />
+        </SettingRow>
+
+        {/* Kept, not cleared, while the rule is off: switching it back on restores the numbers. */}
+        <SettingRow
+          htmlFor="mix-lane-weight"
+          label={t("mixBalancer.laneRule.weight")}
+          hint={t("mixBalancer.laneRule.weightHint")}
+        >
+          <NumberInput
+            id="mix-lane-weight"
+            min={0}
+            max={MAX_LANE_WEIGHT}
+            disabled={!draft.laneRule.enabled}
+            placeholder={String(DEFAULT_LANE_RULE.weight)}
+            value={draft.laneRule.weight}
+            onValueChange={(next) =>
+              setDraft((current) => ({
+                ...current,
+                laneRule: { ...current.laneRule, weight: next ?? DEFAULT_LANE_RULE.weight },
+              }))
+            }
+            size="sm"
+            className="w-24"
+          />
+        </SettingRow>
+
+        <SettingRow
+          htmlFor="mix-lane-cohesion"
+          label={t("mixBalancer.laneRule.cohesion")}
+          hint={t("mixBalancer.laneRule.cohesionHint")}
+        >
+          <NumberInput
+            id="mix-lane-cohesion"
+            min={0}
+            max={MAX_LANE_WEIGHT}
+            disabled={!draft.laneRule.enabled}
+            placeholder={String(DEFAULT_LANE_RULE.cohesion)}
+            value={draft.laneRule.cohesion}
+            onValueChange={(next) =>
+              setDraft((current) => ({
+                ...current,
+                laneRule: { ...current.laneRule, cohesion: next ?? DEFAULT_LANE_RULE.cohesion },
+              }))
+            }
             size="sm"
             className="w-24"
           />

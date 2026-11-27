@@ -84,7 +84,7 @@ The edge implementation is documented separately in [`gateway/README.md`](./gate
 | Gateway                 | Go 1.26, `net/http`, RabbitMQ, Redis, PostgreSQL/pgx, OpenTelemetry                                           |
 | Backend                 | Python 3.15, FastStream, SQLAlchemy 2, Pydantic 2, Alembic, pytest                                            |
 | Balancing and analytics | Rust `tournament_balancer`, OpenSkill, LightGBM/XGBoost, Bayesian and Monte Carlo workflows                              |
-| Data and messaging      | PostgreSQL 16, Redis Stack, RabbitMQ 3.13, S3-compatible object storage                                       |
+| Data and messaging      | PostgreSQL 16, Valkey 9, RabbitMQ 3.13, S3-compatible object storage                                          |
 | Operations              | Docker Compose, nginx, Prometheus, Grafana, Loki, Tempo, OpenTelemetry Collector, Sentry                      |
 
 ## Repository layout

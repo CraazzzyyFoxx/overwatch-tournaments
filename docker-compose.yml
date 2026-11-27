@@ -27,16 +27,14 @@ services:
           memory: 128M
 
   redis:
-    image: redis/redis-stack:latest
-    # See docker-compose.production.yml for why REDIS_ARGS (not `command:`)
-    # is required: overriding `command:` skips /entrypoint.sh, which is what
-    # sets --protected-mode no and loads the redis-stack modules.
+    image: valkey/valkey:9.0-alpine
+    # See docker-compose.production.yml for VALKEY_EXTRA_FLAGS and the new volume.
     environment:
-      REDIS_ARGS: "--maxmemory 96mb --maxmemory-policy allkeys-lru"
+      VALKEY_EXTRA_FLAGS: "--maxmemory 96mb --maxmemory-policy allkeys-lru"
     ports:
       - "6379:6379"
     volumes:
-      - redis-data:/data
+      - valkey-data:/data
     networks:
       - app-network
     healthcheck:
@@ -874,7 +872,7 @@ services:
 
 volumes:
   postgres-data:
-  redis-data:
+  valkey-data:
   rabbitmq-data:
   analytics-models:
   frontend-node-modules:

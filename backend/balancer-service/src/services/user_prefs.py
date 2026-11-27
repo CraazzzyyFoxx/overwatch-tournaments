@@ -43,6 +43,7 @@ class UserMixPrefsService:
         rating_mode: str,
         hero_ban_presets: Mapping[str, str],
         formation_defaults: Mapping[str, Mapping[str, Any]],
+        mix_rules: Mapping[str, Any] | None,
     ) -> UserBalancerConfig:
         """Replace the account's settings, splitting them the way the row stores them.
 
@@ -66,6 +67,7 @@ class UserMixPrefsService:
             else None,
             "max_result_variants": max_result_variants,
             "open_slot_settings": dict(open_slot_settings) if open_slot_settings else None,
+            "mix_rules": dict(mix_rules) if mix_rules else None,
         }
         payload = normalize_config_payload({key: value for key, value in raw.items() if value is not None})
         fields: dict[str, Any] = {

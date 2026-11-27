@@ -37,9 +37,16 @@ fn run_mix_balancer(
     })
 }
 
+/// Mix engine's rules on a fixed seating: `{request, teams}` -> `{rules}`.
+#[pyfunction]
+fn evaluate_mix_rules(py: Python<'_>, request_json: &str) -> PyResult<String> {
+    common::run_json(py, request_json, mix::evaluate)
+}
+
 #[pymodule]
 fn balancer_native(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(run_moo_optimizer, m)?)?;
     m.add_function(wrap_pyfunction!(run_mix_balancer, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_mix_rules, m)?)?;
     Ok(())
 }

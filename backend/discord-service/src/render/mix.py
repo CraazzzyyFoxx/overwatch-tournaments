@@ -291,7 +291,12 @@ def signup_card(
 
 
 def _picture_seat(
-    bucket: str, uuid: str, player: Mapping[str, Any], board_url: str, ladder: DivisionGrid | None
+    bucket: str,
+    uuid: str,
+    player: Mapping[str, Any],
+    board_url: str,
+    ladder: DivisionGrid | None,
+    lane: int | None = None,
 ) -> LineupSeat:
     # A lobby document's player carries one rating per role bucket (``Tank``, ``Damage``...).
     ratings = player.get("ratings")
@@ -304,18 +309,52 @@ def _picture_seat(
         # The ladders' emblems are site-relative (``/divisions/<slug>.png``), served by the site itself.
         division_icon=urljoin(board_url, icon) if icon else None,
         captain=player.get("is_captain") is True,
+        lane=lane,
     )
 
 
+def _lane_teams(variant: Mapping[str, Any]) -> list[list[list[str]]] | None:
+    """The balancer's ``annotations.lane_matchup.teams`` when well-formed (per team: lanes of seat uuids), else ``None``."""
+    annotations = variant.get("annotations")
+    matchup = annotations.get("lane_matchup") if isinstance(annotations, Mapping) else None
+    teams = matchup.get("teams") if isinstance(matchup, Mapping) else None
+    if isinstance(teams, list) and all(
+        isinstance(team, list)
+        and all(isinstance(lane, list) and all(isinstance(uuid, str) for uuid in lane) for lane in team)
+        for team in teams
+    ):
+        return teams
+    return None
+
+
 def _picture_team(
-    name: str, team: Mapping[str, Any], players: Mapping[str, Any], board_url: str, ladder: DivisionGrid | None
+    name: str,
+    team: Mapping[str, Any],
+    players: Mapping[str, Any],
+    board_url: str,
+    ladder: DivisionGrid | None,
+    lanes: list[list[str]] | None = None,
 ) -> LineupTeam:
     roster = team.get("roster")
-    seats = tuple(
-        _picture_seat(bucket, str(uuid), players.get(str(uuid)) or {}, board_url, ladder)
+    entries = [
+        (bucket, str(uuid))
         for bucket, uuids in (roster.items() if isinstance(roster, Mapping) else ())
         if isinstance(uuids, list)
         for uuid in uuids
+    ]
+    # Laned seats first, lane by lane; the rest keep their roster order after them (the sort is stable).
+    place = {uuid: (i, j) for i, lane in enumerate(lanes or []) for j, uuid in enumerate(lane)}
+    entries.sort(key=lambda entry: place.get(entry[1], (len(lanes or []), 0)))
+    seats = tuple(
+        _picture_seat(
+            bucket,
+            uuid,
+            players.get(uuid) or {},
+            board_url,
+            ladder,
+            place[uuid][0] + 1 if uuid in place else None,
+        )
+        for bucket, uuid in entries
     )
     # The mean of the numbers drawn, so the two averages and their gap are checkable on the picture.
     average = round(sum(seat.rating for seat in seats) / len(seats)) if seats else None
@@ -354,8 +393,16 @@ def lineup_picture(
     """
     ladder = ladder_grid(discipline)
     raw_teams = variant.get("teams")
+    lane_teams = _lane_teams(variant) or []
     teams = tuple(
-        _picture_team(team_names.get(index) or f"Команда {index + 1}", team, players, board_url, ladder)
+        _picture_team(
+            team_names.get(index) or f"Команда {index + 1}",
+            team,
+            players,
+            board_url,
+            ladder,
+            lane_teams[index] if index < len(lane_teams) else None,
+        )
         for index, team in enumerate(raw_teams if isinstance(raw_teams, list) else [])
         if isinstance(team, Mapping)
     )
