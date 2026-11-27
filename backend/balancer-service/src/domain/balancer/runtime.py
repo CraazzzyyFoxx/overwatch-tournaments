@@ -16,6 +16,7 @@ from src.domain.balancer.config.public_contract import normalize_config_payload
 from src.domain.balancer.determinism import build_balancer_seed, derive_balancer_seed
 from src.domain.balancer.entities import Player
 from src.domain.balancer.feasibility_analyzer import analyze_feasibility
+from src.domain.balancer.mix_rules import lane_layout
 from src.domain.balancer.player_loader import load_players_from_dict
 from src.domain.balancer.progress import ProgressCallback, emit_progress
 from src.domain.balancer.rating_normalizer import RatingNormalizer
@@ -95,6 +96,7 @@ def _prepare_balance_context(
 
     if role_mask:
         config.role_mask = role_mask
+    config.lane_layout = lane_layout(team_format)
 
     mask = config.role_mask
     if not mask:
@@ -366,6 +368,7 @@ def balance_teams(
             feasibility=feasibility,
             team_format=team_format,
             ontology=ontology,
+            annotations=solution.annotations,
         )
         for solution in solutions
     ]

@@ -37,6 +37,7 @@ def _to_read(cfg: models.UserBalancerConfig | None) -> schemas.UserMixPreference
         rating_mode=cfg.rating_mode if cfg is not None else "points",
         hero_ban_presets=dict(cfg.hero_ban_presets or {}) if cfg is not None else {},
         formation_defaults=dict(cfg.formation_defaults or {}) if cfg is not None else {},
+        mix_rules=payload.get("mix_rules"),
     )
 
 
@@ -66,6 +67,7 @@ def register(broker: Any, logger: Any) -> None:
                 rating_mode=body.rating_mode,
                 hero_ban_presets=body.hero_ban_presets,
                 formation_defaults={code: value.model_dump() for code, value in body.formation_defaults.items()},
+                mix_rules=body.mix_rules.model_dump() if body.mix_rules else None,
             )
             # The service owns the commit, like the workspace-config upsert.
             return _to_read(cfg)

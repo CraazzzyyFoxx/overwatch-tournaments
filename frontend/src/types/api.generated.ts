@@ -14746,6 +14746,11 @@ export interface components {
              */
             mix_comfort_tilt: number | null;
             /**
+             * @description Mix soft rules (lane matchup) and their weights; formats a rule does not fit ignore it.
+             * @default null
+             */
+            mix_rules: components["schemas"]["balancer.MixRules"] | null;
+            /**
              * Mutation Rate
              * @description Probability that a solution is changed while producing the next generation.
              * @default null
@@ -15689,6 +15694,38 @@ export interface components {
              * @default null
              */
             tournament_id: number | null;
+        };
+        /**
+         * LaneMatchupRule
+         * @description Seat a format's lanes so lane opponents match in strength (``mix.rs`` ``lane_matchup``).
+         *
+         *     Applies only to a format whose preset declares ``lanes`` (Deadlock 6v6).
+         */
+        "balancer.LaneMatchupRule": {
+            /**
+             * Cohesion Weight
+             * @description Penalty per rating point between the players of one lane: strong lane with strong.
+             * @default 0.25
+             */
+            cohesion_weight: number;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Weight
+             * @description Penalty per rating point between lane opponents, each lane compared strongest to strongest.
+             * @default 0.5
+             */
+            weight: number;
+        };
+        /**
+         * MixRules
+         * @description The mix engine's soft rules, one field per rule kind.
+         */
+        "balancer.MixRules": {
+            lane_matchup?: components["schemas"]["balancer.LaneMatchupRule"];
         };
         /**
          * PersonDisplayRead
@@ -25261,6 +25298,11 @@ export interface components {
              * @default null
              */
             mix_comfort_tilt: number | null;
+            /**
+             * @description Soft rules of the mix engine (Deadlock lane matchup); null keeps every rule's default.
+             * @default null
+             */
+            mix_rules: components["schemas"]["balancer.MixRules"] | null;
             /** @default null */
             open_slot_settings: components["schemas"]["balancer.MixRoleSettings"] | null;
             /**
@@ -25314,6 +25356,8 @@ export interface components {
              * @description Trade-off between rank balance (0) and role comfort (1); null leaves the mix engine's own 0.5 weighting in place.
              */
             mix_comfort_tilt: number | null;
+            /** @description Soft rules of the mix engine (Deadlock lane matchup); null keeps every rule's default. */
+            mix_rules: components["schemas"]["balancer.MixRules"] | null;
             open_slot_settings: components["schemas"]["balancer.MixRoleSettings"] | null;
             /**
              * Points Per Win

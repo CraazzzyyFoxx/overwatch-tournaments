@@ -71,6 +71,8 @@ class LineupSeat:
     #: The rank badge's URL, ``None`` for none.
     division_icon: str | None
     captain: bool = False
+    #: 1-based lane of a lane-balanced mix; a divider is drawn where it changes. ``None``: not laned.
+    lane: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -254,6 +256,8 @@ def _team(
     seat_font, rating_font = _font("inter-600", 20), _font("inter-700", 21)
     for index, seat in enumerate(team.seats):
         tile_top = rule_y + 10 + step * index
+        if index and team.seats[index - 1].lane != seat.lane:
+            draw.line((left + 8, tile_top - 3, right - 8, tile_top - 3), fill=(*accent, 255), width=2)
         tile_bottom = tile_top + step - 6
         middle = (tile_top + tile_bottom) // 2
         _panel(image, (left, tile_top, right, tile_bottom), radius=10, fill=(255, 255, 255, 6), outline=(*_BORDER, 255))

@@ -99,6 +99,7 @@ const UNSET: MixBalancerPreferencesRead = {
   rating_mode: "points",
   hero_ban_presets: {},
   formation_defaults: {},
+  mix_rules: null,
 };
 
 /** Longer than the panel's own debounce, so a settled write has fired. */

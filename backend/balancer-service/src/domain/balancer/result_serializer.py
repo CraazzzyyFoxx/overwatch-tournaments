@@ -179,6 +179,7 @@ def _build_response_payload(
     *,
     team_format: TeamFormat | None = None,
     ontology: Ontology | None = None,
+    annotations: typing.Mapping[str, typing.Any] | None = None,
 ) -> dict[str, typing.Any]:
     placed_uuids: set[str] = set()
     for team in result:
@@ -188,9 +189,16 @@ def _build_response_payload(
 
     benched = [player for player in valid_players if player.uuid not in placed_uuids]
     response_payload = teams_to_json(result, mask, benched_players=benched, team_format=team_format, ontology=ontology)
+    if annotations:
+        # Rule groups are keyed by team id; the response orders teams strongest first.
+        order = [team["id"] for team in response_payload["teams"]]
+        response_payload["annotations"] = {
+            kind: {**annotation, "teams": [annotation["teams"][team_id] for team_id in order]}
+            for kind, annotation in annotations.items()
+        }
     stats = response_payload.get("statistics") or {}
     if metrics is not None:
-        stats.update({key: round(value, 4) for key, value in metrics.to_dict().items()})
+        stats.update(metrics.to_dict())
     if feasibility is not None:
         actual_off_role = stats.get("off_role_count", 0)
         stats["off_role_above_minimum"] = max(0, actual_off_role - feasibility.structural_min_off_role)
@@ -274,7 +282,10 @@ def lobby_document(payloads: typing.Iterable[typing.Any]) -> dict[str, typing.An
                     ),
                 }
             )
-        variants.append({"teams": teams, "statistics": stats, "benched": seats(payload.get("benched_players"))})
+        variant = {"teams": teams, "statistics": stats, "benched": seats(payload.get("benched_players"))}
+        if isinstance(annotations := payload.get("annotations"), typing.Mapping) and annotations:
+            variant["annotations"] = dict(annotations)
+        variants.append(variant)
     return {"players": players, "feasibility": feasibility, "variants": variants}
 
 

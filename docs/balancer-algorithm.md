@@ -45,7 +45,7 @@ Where overrides come from:
   (`balancer.tournament_config`) or the defaults; picking a preset replaces its values. The client sends
   it as the job's `config`.
 - **Mix**: the host's own preferences (`balancer.user_config.config_json`: `mix_comfort_tilt`,
-  `role_settings[*].mix_weight`, `open_slot_settings`, `max_result_variants`). A mix run asks for
+  `role_settings[*].mix_weight`, `open_slot_settings`, `max_result_variants`, `mix_rules`). A mix run asks for
   100 variants unless the host set their own count.
 - **Synchronous API** (`balance_inline`): the request's overrides, with `time_limit_ms` capped at 60 000.
 
@@ -244,6 +244,16 @@ pressure towards evenly spread teams.
 
 Errors: `Not enough players for each role` when no split has a playable layout.
 
+**Soft rules** (`config.mix_rules`) add their penalties to `total` after the four terms, under the same
+pruning; none are sent unless a rule fits the run, and without them the engine is the C++ original.
+
+| Rule | Penalty | Fits when |
+| --- | --- | --- |
+| `lane_matchup` | min over lane seatings of `weight` × Σ_lanes Σ_k \|sorted lane₁[k] − sorted lane₂[k]\| + `cohesion_weight` × Σ_lanes,teams (max − min) | the format's preset declares `lanes` summing to the team size (Deadlock 6v6: 2·2·2) and the host left the rule on |
+
+The returned seating per variant is stored as `annotations.lane_matchup.teams` (lanes per team, in
+`variant.teams` order, lane `i` facing lane `i`), the penalty as `statistics.mix_balancer_rules`.
+
 ## Parameters
 
 Defaults are `AlgorithmConfig`'s. The Rust structs carry fallback defaults for missing keys, but Python
@@ -322,6 +332,7 @@ Overwatch defaults:
 | `max_result_variants` | 10 (mixes: 100) | 1–100 | both | Variants returned |
 | `rank_comfort_tilt` | 0.45 | 0–1 | tournament | 0 ranks by balance, 1 by comfort; not read by the search, but changes the seed |
 | `mix_comfort_tilt` | 0.5 | 0–1 | mix | 0 only rank balance, 1 only preferred roles |
+| `mix_rules.lane_matchup` | on, `weight` 0.5, `cohesion_weight` 0.25 | 0–10 | mix | Lane matchup rule (see Mix engine); off or a format without lanes sends nothing |
 
 ### Not operator-editable
 

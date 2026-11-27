@@ -80,6 +80,7 @@ from shared.services.team_format import (
     custom_game_slot_shape,
     team_format_read,
 )
+from src.domain.balancer.mix_rules import evaluate_variant_rules
 from src.domain.balancer.result_serializer import as_lobby_document, seat_rating
 from src.domain.balancer.role_naming import role_slot_code
 from src.domain.draft import ranks as draft_ranks
@@ -3149,6 +3150,7 @@ class CustomGameService:
                 teams[index]["captain_member_id"] = None
         with_captains(result)
         _recompute_variant_stats(variant, _lobby_players(result))
+        evaluate_variant_rules(variant, _lobby_players(result))
 
         lobby.balance_result_json = result
         await session.flush()

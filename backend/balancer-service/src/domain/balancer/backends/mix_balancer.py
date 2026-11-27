@@ -8,11 +8,12 @@ from src.domain.balancer import native
 from src.domain.balancer.backends.base import BalanceMetrics, BalanceSolution
 from src.domain.balancer.config.defaults import AlgorithmConfig
 from src.domain.balancer.entities import Player
+from src.domain.balancer.mix_rules import resolve_mix_rules, variant_annotations
 from src.domain.balancer.progress import ProgressCallback
 
 
-def build_metrics(metrics: dict[str, Any]) -> BalanceMetrics:
-    """The engine's quality terms -> this domain's typed metrics.
+def build_metrics(metrics: dict[str, Any], rules: dict[str, Any] | None = None) -> BalanceMetrics:
+    """The engine's quality terms and rule verdicts -> this domain's typed metrics.
 
     Prefixed fields so they never collide with ``tournament_balancer``'s own
     (``balance_objective``, ``comfort_objective``, ...) on the shared
@@ -24,6 +25,7 @@ def build_metrics(metrics: dict[str, Any]) -> BalanceMetrics:
         mix_balancer_role_fairness=float(metrics["role_fairness"]),
         mix_balancer_role_points=float(metrics["role_points"]),
         mix_balancer_quality_total=float(metrics["total"]),
+        mix_balancer_rules={kind: float(verdict["penalty"]) for kind, verdict in rules.items()} if rules else None,
     )
 
 
@@ -68,6 +70,7 @@ class MixBalancerBackend:
         progress_callback: ProgressCallback | None,
     ) -> list[BalanceSolution]:
         fairness, role_fairness, role_priority = quality_coefficients(config.mix_comfort_tilt)
+        rules = resolve_mix_rules(config)
         request = native.build_request(
             players,
             num_teams,
@@ -82,16 +85,26 @@ class MixBalancerBackend:
                 "fairness_weight": fairness,
                 "role_fairness_weight": role_fairness,
                 "role_priority_weight": role_priority,
+                "mix_rules": rules,
             },
             seed=seed,
             role_assignment=role_assignment,
         )
         logger.info("Running mix_balancer exhaustive engine for a 2-team split")
         payload = native.call_engine("run_mix_balancer", request, progress_callback)
-        return [
-            BalanceSolution(teams=teams, metrics=build_metrics(metrics))
-            for teams, metrics in native.deserialize_variants(payload, players, config.role_mask)
-        ]
+        solutions = []
+        for (teams, metrics), variant in zip(
+            native.deserialize_variants(payload, players, config.role_mask), payload["variants"], strict=True
+        ):
+            verdicts = variant.get("rules") or {}
+            solutions.append(
+                BalanceSolution(
+                    teams=teams,
+                    metrics=build_metrics(metrics, verdicts),
+                    annotations=variant_annotations(rules, verdicts, [team.id for team in teams]),
+                )
+            )
+        return solutions
 
 
 __all__ = ["MixBalancerBackend", "build_metrics", "quality_coefficients"]

@@ -16,6 +16,9 @@ use std::collections::{BTreeMap, BinaryHeap};
 
 use crate::common::*;
 
+mod rules;
+use rules::{Rule, RuleResult, RuleScratch, RuleSpec};
+
 fn one() -> f32 {
     1.0
 }
@@ -68,6 +71,10 @@ pub(crate) struct MixConfig {
     /// always comes back.
     #[serde(default)]
     balance_limit: Option<f32>,
+    /// Soft rules whose penalties join the total (see `rules`); none keeps the
+    /// engine identical to the C++ original.
+    #[serde(default)]
+    mix_rules: Vec<RuleSpec>,
 }
 
 /// Per-role knobs the mix engine reads, flattened into the role entry.
@@ -90,7 +97,30 @@ struct MixMetrics {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct MixResponse {
-    variants: Vec<VariantResponse<MixMetrics>>,
+    variants: Vec<MixVariant>,
+}
+
+#[derive(Debug, Serialize)]
+struct MixVariant {
+    teams: Vec<TeamResponse>,
+    /// `total` includes every rule's penalty.
+    metrics: MixMetrics,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    rules: BTreeMap<&'static str, RuleResult>,
+}
+
+/// `evaluate`'s input: a lobby request plus the two teams to score, each
+/// `{role: [uuid, ...]}`.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct EvaluateRequest {
+    request: MixRequest,
+    teams: Vec<BTreeMap<String, Vec<String>>>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct EvaluateResponse {
+    rules: BTreeMap<&'static str, RuleResult>,
 }
 
 struct Engine {
@@ -105,6 +135,7 @@ struct Engine {
     playable: Vec<Vec<bool>>,
     priority: Vec<Vec<i32>>,
     role_weight: Vec<f32>,
+    rules: Vec<Rule>,
     cfg: MixConfig,
 }
 
@@ -154,6 +185,7 @@ struct Worker {
     limit: usize,
     any_mask_valid: bool,
     any_within_limit: bool,
+    scratch: RuleScratch,
 }
 
 impl Worker {
@@ -163,6 +195,7 @@ impl Worker {
             limit,
             any_mask_valid: false,
             any_within_limit: false,
+            scratch: RuleScratch::default(),
         }
     }
 
@@ -212,8 +245,12 @@ impl Engine {
                 request.players.len()
             ));
         }
-        let cfg = request.config;
+        let mut cfg = request.config;
         let team_size: usize = capacities.iter().sum();
+        let rules = std::mem::take(&mut cfg.mix_rules)
+            .into_iter()
+            .map(|spec| Rule::compile(spec, team_size))
+            .collect::<Result<Vec<_>, _>>()?;
 
         let mut role_masks = Vec::new();
         let mut current = vec![0u8; team_size];
@@ -244,6 +281,7 @@ impl Engine {
             playable,
             priority,
             role_weight,
+            rules,
             cfg,
         })
     }
@@ -382,7 +420,17 @@ impl Engine {
                     continue;
                 }
                 let role_points = self.role_points(&t1, &t2, m1, m2);
-                let total = fairness + role_fairness + role_points + uniformity;
+                let mut total = fairness + role_fairness + role_points + uniformity;
+                if total > threshold {
+                    continue;
+                }
+                // Most expensive last: each rule searches its own seatings.
+                for rule in &self.rules {
+                    total += rule.penalty(&r1, &r2, threshold - total, &mut worker.scratch);
+                    if total > threshold {
+                        break;
+                    }
+                }
                 if total > threshold {
                     continue;
                 }
@@ -413,6 +461,76 @@ impl Engine {
                 .push(self.uuids[p].clone());
         }
         TeamResponse { id, roster }
+    }
+
+    /// Every rule's verdict on one seating, its groups resolved to uuids.
+    fn rule_results(
+        &self,
+        t1: &[usize],
+        t2: &[usize],
+        m1: &[u8],
+        m2: &[u8],
+    ) -> BTreeMap<&'static str, RuleResult> {
+        let mut r1 = vec![0i32; self.team_size];
+        let mut r2 = vec![0i32; self.team_size];
+        self.seat_ratings(t1, m1, &mut r1);
+        self.seat_ratings(t2, m2, &mut r2);
+        let mut scratch = RuleScratch::default();
+        self.rules
+            .iter()
+            .map(|rule| {
+                let mut result = rule.result(&r1, &r2, &mut scratch);
+                result.teams = [t1, t2]
+                    .iter()
+                    .zip(&result.groups)
+                    .map(|(team, groups)| {
+                        groups
+                            .iter()
+                            .map(|group| {
+                                group
+                                    .iter()
+                                    .map(|&seat| self.uuids[team[seat]].clone())
+                                    .collect()
+                            })
+                            .collect()
+                    })
+                    .collect();
+                (rule.kind(), result)
+            })
+            .collect()
+    }
+
+    /// A fixed seating `{role: [uuid]}` per team -> (members, per-seat roles).
+    fn seating(
+        &self,
+        roster: &BTreeMap<String, Vec<String>>,
+    ) -> Result<(Vec<usize>, Vec<u8>), String> {
+        let mut members = Vec::with_capacity(self.team_size);
+        let mut mask = Vec::with_capacity(self.team_size);
+        for (role, uuids) in roster {
+            let r = self
+                .roles
+                .iter()
+                .position(|name| name == role)
+                .ok_or_else(|| format!("unknown role in teams: {role}"))?;
+            for uuid in uuids {
+                let p = self
+                    .uuids
+                    .iter()
+                    .position(|u| u == uuid)
+                    .ok_or_else(|| format!("unknown player in teams: {uuid}"))?;
+                members.push(p);
+                mask.push(r as u8);
+            }
+        }
+        if members.len() != self.team_size {
+            return Err(format!(
+                "a team seats {} players, expected {}",
+                members.len(),
+                self.team_size
+            ));
+        }
+        Ok((members, mask))
     }
 }
 
@@ -476,12 +594,17 @@ pub(crate) fn run(
         .into_iter()
         .map(|candidate| {
             let (t1, t2) = engine.members(splits[candidate.split]);
-            VariantResponse {
+            let (m1, m2) = (
+                engine.role_mask(candidate.mask1),
+                engine.role_mask(candidate.mask2),
+            );
+            MixVariant {
                 teams: vec![
-                    engine.team_response(1, &t1, engine.role_mask(candidate.mask1)),
-                    engine.team_response(2, &t2, engine.role_mask(candidate.mask2)),
+                    engine.team_response(1, &t1, m1),
+                    engine.team_response(2, &t2, m2),
                 ],
                 metrics: candidate.metrics,
+                rules: engine.rule_results(&t1, &t2, m1, m2),
             }
         })
         .collect();
@@ -498,6 +621,29 @@ pub(crate) fn run(
     )?;
 
     Ok(MixResponse { variants })
+}
+
+/// Every rule's verdict on a seating the engine did not choose (a host's
+/// swap), by the same arithmetic as the search.
+pub(crate) fn evaluate(request: EvaluateRequest) -> Result<EvaluateResponse, String> {
+    let engine = Engine::new(request.request)?;
+    let [first, second] = request.teams.as_slice() else {
+        return Err(format!(
+            "teams must hold exactly 2 teams, got {}",
+            request.teams.len()
+        ));
+    };
+    let (t1, m1) = engine.seating(first)?;
+    let (t2, m2) = engine.seating(second)?;
+    let mut seated: Vec<usize> = t1.iter().chain(&t2).copied().collect();
+    seated.sort_unstable();
+    seated.dedup();
+    if seated.len() != t1.len() + t2.len() {
+        return Err("a player is seated twice".to_string());
+    }
+    Ok(EvaluateResponse {
+        rules: engine.rule_results(&t1, &t2, &m1, &m2),
+    })
 }
 
 #[cfg(test)]

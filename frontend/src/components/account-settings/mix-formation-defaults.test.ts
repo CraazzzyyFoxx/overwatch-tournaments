@@ -12,6 +12,7 @@ describe("per-game formation defaults", () => {
     rating_mode: "points" as const,
     hero_ban_presets: {},
     formation_defaults: { deadlock: { team_formation: "draft" as const, draft_pick_seconds: 45 } },
+    mix_rules: null,
   };
 
   it("travel from the stored row through the draft back to the payload", () => {

@@ -380,6 +380,8 @@ type PickupVariantStats = {
    * rescales it out of the solver's canonical scale.
    */
   lineGap: number | null;
+  /** Penalty (rating units, lower = more even) of the lane matchups, from `mix_balancer_rules.lane_matchup`; `null` without the rule. */
+  laneGap: number | null;
   offRoleCount: number | null;
   /**
    * Off-role seats above the pool's structural floor, i.e. the ones the solver
@@ -396,6 +398,8 @@ type PickupVariantStats = {
 export type PickupVariant = {
   teams: PickupTeam[];
   stats: PickupVariantStats;
+  /** Per team, per lane (lane i of team 0 faces lane i of team 1), the seat uuids, stronger player first; `null` without the lane rule. */
+  lanes: string[][][] | null;
   benched: string[];
 };
 
@@ -407,6 +411,19 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function asNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** The lane layout the server annotated an option with; anything off-shape reads as "no lanes" rather than a half-grouped board. */
+function parseLanes(variant: Record<string, unknown>): string[][][] | null {
+  const teams = asRecord(asRecord(variant.annotations)?.lane_matchup)?.teams;
+  if (!Array.isArray(teams)) return null;
+  const isUuid = (value: unknown): value is string => typeof value === "string";
+  const lanes = teams.map((team) =>
+    Array.isArray(team) ? team.map((lane) => (Array.isArray(lane) && lane.every(isUuid) ? lane : null)) : null,
+  );
+  return lanes.every((team) => team != null && team.every((lane) => lane != null))
+    ? (lanes as string[][][])
+    : null;
 }
 
 /** The seat's resolved `display`; absent once the member left the roster, then the stored name stands in (no profile to link). */
@@ -533,6 +550,7 @@ export function parseVariants(
       continue;
     }
     const statistics = asRecord(variant?.statistics) ?? {};
+    const ruleStats = asRecord(statistics.mix_balancer_rules);
     const benched = Array.isArray(variant?.benched) ? variant.benched : [];
     out.push({
       teams: teams
@@ -571,12 +589,14 @@ export function parseVariants(
         mmrStdDev: asNumber(statistics.mmr_std_dev),
         ratingGap: asNumber(statistics.max_total_rating_gap),
         lineGap: asNumber(statistics.mix_balancer_role_fairness),
+        laneGap: asNumber(ruleStats?.lane_matchup),
         offRoleCount: asNumber(statistics.off_role_count),
         offRoleAboveMinimum: asNumber(statistics.off_role_above_minimum),
         offRoleFloor,
         subRoleCollisions: asNumber(statistics.sub_role_collision_count),
         benchedCount: benched.length,
       },
+      lanes: variant == null ? null : parseLanes(variant),
       benched: benched.flatMap((entry) => {
         const name = asRecord(players[String(entry)])?.name;
         return typeof name === "string" ? [name] : [];

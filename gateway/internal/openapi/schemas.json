@@ -21305,6 +21305,18 @@
           "description": "Mix trade-off between rank balance and role comfort. 0 weighs only how evenly the two teams' ranks split, 1 only how many players got a preferred role; 0.5 reproduces the engine's own defaults.",
           "title": "Mix Comfort Tilt"
         },
+        "mix_rules": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/balancer.MixRules"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Mix soft rules (lane matchup) and their weights; formats a rule does not fit ignore it."
+        },
         "mutation_rate": {
           "anyOf": [
             {
@@ -24719,6 +24731,35 @@
       "title": "JobStatusResponse",
       "type": "object"
     },
+    "balancer.LaneMatchupRule": {
+      "additionalProperties": false,
+      "description": "Seat a format's lanes so lane opponents match in strength (``mix.rs`` ``lane_matchup``).\n\nApplies only to a format whose preset declares ``lanes`` (Deadlock 6v6).",
+      "properties": {
+        "cohesion_weight": {
+          "default": 0.25,
+          "description": "Penalty per rating point between the players of one lane: strong lane with strong.",
+          "maximum": 10.0,
+          "minimum": 0.0,
+          "title": "Cohesion Weight",
+          "type": "number"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "weight": {
+          "default": 0.5,
+          "description": "Penalty per rating point between lane opponents, each lane compared strongest to strongest.",
+          "maximum": 10.0,
+          "minimum": 0.0,
+          "title": "Weight",
+          "type": "number"
+        }
+      },
+      "title": "LaneMatchupRule",
+      "type": "object"
+    },
     "balancer.MixFormationDefault": {
       "additionalProperties": false,
       "description": "How a new mix of one game forms its teams (spec \u00a74.3).",
@@ -24768,6 +24809,17 @@
         "mix_weight"
       ],
       "title": "MixRoleSettings",
+      "type": "object"
+    },
+    "balancer.MixRules": {
+      "additionalProperties": false,
+      "description": "The mix engine's soft rules, one field per rule kind.",
+      "properties": {
+        "lane_matchup": {
+          "$ref": "#/components/schemas/balancer.LaneMatchupRule"
+        }
+      },
+      "title": "MixRules",
       "type": "object"
     },
     "balancer.MixSelfSignup": {
@@ -25878,6 +25930,18 @@
           "description": "Trade-off between rank balance (0) and role comfort (1); null leaves the mix engine's own 0.5 weighting in place.",
           "title": "Mix Comfort Tilt"
         },
+        "mix_rules": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/balancer.MixRules"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Soft rules of the mix engine (Deadlock lane matchup); null keeps every rule's default."
+        },
         "open_slot_settings": {
           "anyOf": [
             {
@@ -25982,6 +26046,17 @@
           "description": "Trade-off between rank balance (0) and role comfort (1); null leaves the mix engine's own 0.5 weighting in place.",
           "title": "Mix Comfort Tilt"
         },
+        "mix_rules": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/balancer.MixRules"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Soft rules of the mix engine (Deadlock lane matchup); null keeps every rule's default."
+        },
         "open_slot_settings": {
           "anyOf": [
             {
@@ -26039,7 +26114,8 @@
         "points_per_win",
         "rating_mode",
         "hero_ban_presets",
-        "formation_defaults"
+        "formation_defaults",
+        "mix_rules"
       ],
       "title": "UserMixPreferencesUpsert",
       "type": "object"

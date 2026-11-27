@@ -23,9 +23,10 @@ from src.domain.balancer.config.defaults import AlgorithmConfig, RoleSettings, v
 #   * ``role_mask`` is a projection of the tournament roster shape, resolved per
 #     run by ``_prepare_balance_context`` -- a saved config must not be able to
 #     contradict the shape the tournament actually fields.
+#   * ``lane_layout`` is the same kind of projection, of the format's lanes.
 #   * ``rating_scale_ceiling`` is a rating-normalisation constant applied
 #     Python-side by ``RatingNormalizer``, not a solver knob.
-NON_WRITABLE_CONFIG_KEYS = frozenset({"role_mask", "rating_scale_ceiling"})
+NON_WRITABLE_CONFIG_KEYS = frozenset({"role_mask", "lane_layout", "rating_scale_ceiling"})
 
 #: Keys a saved config or an API request may carry.
 PUBLIC_CONFIG_KEYS = frozenset(AlgorithmConfig.model_fields) - NON_WRITABLE_CONFIG_KEYS

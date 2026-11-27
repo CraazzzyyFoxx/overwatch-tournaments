@@ -76,6 +76,23 @@ approximation, but only for exactly two equal teams. Its parity tests compare it
 C++ engine captured before that was removed (`tests/fixtures/mix`). Without the extension both
 backends fail (`RuntimeError: Native balancer engines require balancer_native to be installed`).
 
+**Mix rules.** The mix engine also takes soft rules (`config.mix_rules`, `src/mix/rules.rs`): each
+adds a non-negative penalty in rating units to a candidate's total, after the four C++ terms and
+under the same pruning, so a rule moves the split itself, not just the seating after it. No rules,
+no change: the parity tests run without any. The one rule today is `lane_matchup`: a format preset
+declares its lanes (`TeamFormatPreset.lanes`, Deadlock 6v6 = three duo lanes), and each team's
+seats are split into lanes so that lane `i` faces lane `i` of the other team. `weight` prices the
+rating gap between opponents (each lane compared strongest to strongest), `cohesion_weight` the gap
+inside one lane (strong lane with strong); dropping cohesion pairs the strongest with the weakest.
+The host's knobs are `mix_rules.lane_matchup` in their mix preferences (on, 0.5, 0.25 by default;
+on random 12-player lobbies these cut the opponent gap per seat by ~11% against lanes assigned after
+the split, for ~4 rating points of team-total gap). `src/domain/balancer/mix_rules.py` resolves them
+against the format, matched by `preset_code` (an edited format whose size no longer fits gets no
+lanes). Each option stores `annotations.lane_matchup = {rule, teams}` with the spec it was scored
+with, plus `statistics.mix_balancer_rules`. A host's seat swap re-scores that frozen spec through
+`balancer_native.evaluate_mix_rules`. A new rule is a `RuleSpec` variant, a `MixRules` field and a
+branch in `resolve_mix_rules`.
+
 ### Role ontology and team-format checks
 
 Saved `balancer.team_slot` rows reference `(role_id, dimension_id)` in the owner's discipline.

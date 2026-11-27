@@ -562,6 +562,7 @@ describe("parseVariants", () => {
       mmrStdDev: 12.34,
       ratingGap: 150,
       lineGap: 120.4,
+      laneGap: null,
       offRoleCount: 1,
       offRoleAboveMinimum: 0,
       offRoleFloor: 1,
@@ -569,6 +570,35 @@ describe("parseVariants", () => {
       benchedCount: 1,
     });
     expect(first.benched).toEqual(["Egor"]);
+  });
+
+  it("reads the lane layout and its penalty, and reads null when the rule did not run or is malformed", () => {
+    const lanes = [
+      [["7", "8"], ["9"]],
+      [["10"], []],
+    ];
+    const withRule = (annotations: unknown) => ({
+      ...payload,
+      variants: [
+        {
+          teams: payload.variants[0].teams,
+          statistics: { mix_balancer_rules: { lane_matchup: 41 } },
+          annotations,
+        },
+      ],
+    });
+
+    const [laned] = parseVariants(withRule({ lane_matchup: { rule: { kind: "lane_matchup" }, teams: lanes } }));
+    expect(laned.lanes).toEqual(lanes);
+    expect(laned.stats.laneGap).toBe(41);
+
+    // Documents from before the rule: no annotations, no rule statistics.
+    const [plain] = parseVariants(payload);
+    expect(plain.lanes).toBeNull();
+    expect(plain.stats.laneGap).toBeNull();
+
+    expect(parseVariants(withRule({ lane_matchup: { teams: [[["7", 8]]] } }))[0].lanes).toBeNull();
+    expect(parseVariants(withRule({ lane_matchup: { teams: "nope" } }))[0].lanes).toBeNull();
   });
 
   it("falls back to the tournament solver's score when the mix engine did not run", () => {
