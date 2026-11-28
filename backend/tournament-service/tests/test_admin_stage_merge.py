@@ -112,10 +112,12 @@ class AdminStageMergeTests(IsolatedAsyncioTestCase):
                     # _merge_pick_ban_configs(kind=HERO): target, then source.
                     _scalars_result([]),
                     _scalars_result([]),
+                    Mock(),  # SET CONSTRAINTS fk_bracket_stage_item DEFERRED
                     # Retarget: Encounter, Standing, ChallongeSource.
                     _scalars_result([encounter_row]),
                     _scalars_result([standing_row]),
                     _scalars_result([challonge_row]),
+                    Mock(),  # SET CONSTRAINTS fk_bracket_stage_item IMMEDIATE
                     _scalars_result([target_stage, playoff_stage]),
                 ]
             ),

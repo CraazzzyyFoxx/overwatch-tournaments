@@ -58,15 +58,17 @@ async def _reseat(
     written, never updated in place, so the games the old occupant played
     stay attached to the row that played them. Returns whether anything moved.
     """
-    changed = False
     current = {seat.slot: seat for seat in await active_teams(session, encounter.id)}
-    for index, team_id in enumerate(team_ids, 1):
-        seat = current.get(index)
-        if seat is not None and seat.team_id == team_id:
-            continue
-        if seat is not None:
+    moves = [
+        (index, team_id)
+        for index, team_id in enumerate(team_ids, 1)
+        if (seat := current.get(index)) is None or seat.team_id != team_id
+    ]
+    # Every old seat is vacated before any new one is placed: the two teams may trade slots.
+    for index, _team_id in moves:
+        if index in current:
             await vacate_slot(session, encounter, slot=index)
-            changed = True
+    for index, team_id in moves:
         if team_id is not None:
             await place_team(
                 session,
@@ -77,8 +79,7 @@ async def _reseat(
                 seed=None,
                 members=(),
             )
-            changed = True
-    return changed
+    return any(index in current or team_id is not None for index, team_id in moves)
 
 
 async def _write_import_result(
@@ -362,7 +363,14 @@ class EncounterUpsertMixin:
             ).scalars()
         )
         was_completed = encounter.status == enums.EncounterStatus.COMPLETED
-        has_local_decision = _has_local_decision(encounter)
+        # Challonge's own earlier result is no local decision: a completed remote restates it -- a score corrected
+        # there, or seats moved here under it.
+        restated = (
+            encounter.result_source == enums.EncounterResultSource.IMPORT
+            and encounter.result_status == enums.EncounterResultStatus.CONFIRMED
+            and status == enums.EncounterStatus.COMPLETED
+        )
+        has_local_decision = _has_local_decision(encounter) and not restated
         before = _encounter_sync_snapshot(encounter, seats, position)
         if has_local_decision:
             local_score = tuple(seat.score for seat in seats)
@@ -424,7 +432,7 @@ class EncounterUpsertMixin:
             await after_encounter_teams_changed(session, encounter, channel=False)
         await self.mapping._ensure_match_mapping(session, source, match.id, encounter, match_lookup)
 
-        if newly_completed:
+        if newly_completed or restated:
             await _write_import_result(session, encounter, [home_score, away_score])
         else:
             # Not complete remotely: the scoreline is the running tally, so it is

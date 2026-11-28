@@ -286,6 +286,28 @@ class StageNodeTests(FlowCase):
         )
         self.assertEqual("draft", await self.node_status(draft))
 
+    async def test_merge_moves_played_groups_with_their_bracket_rows(self) -> None:
+        target, first = await self.seated_stage(order=1, teams=(0, 1))
+        source, second = await self.seated_stage(order=1, teams=(2, 3))
+        async with self.Session() as s:
+            await s.execute(sa.update(models.StageItem).where(models.StageItem.stage_id == source).values(name="B"))
+            await s.commit()
+        await self.move(first, S.READY, S.LIVE)
+        await self.move(second, S.READY, S.LIVE)
+        moved = await self.encounters(source)
+        self.assertGreater(len(moved), 0)
+        async with self.Session() as s:
+            item_b = await s.scalar(sa.select(models.StageItem.id).where(models.StageItem.stage_id == source))
+            # The bracket row names its item AND the item's stage: both move, or the FK refuses the merge.
+            await stage_service.merge_group_stages(s, target_stage_id=target, source_stage_ids=[source])
+        async with self.Session() as s:
+            rows = (
+                await s.scalars(
+                    sa.select(models.BracketEncounter).where(models.BracketEncounter.encounter_id.in_(moved))
+                )
+            ).all()
+        self.assertEqual({(target, item_b)}, {(row.stage_id, row.stage_item_id) for row in rows})
+
     async def test_deleting_the_draft_sink_of_a_completed_tournament_completes_it(self) -> None:
         _, done = await self.seated_stage(order=1, teams=(0, 1))
         pending_id, _ = await self.stage(order=2, name="Later")
