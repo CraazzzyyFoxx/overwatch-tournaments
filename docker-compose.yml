@@ -554,7 +554,7 @@ services:
       - NEXT_PUBLIC_DISCORD_CLIENT_ID=${NEXT_PUBLIC_DISCORD_CLIENT_ID}
       # Build/dev-time list of hosts `next/image` may load from; the default
       # keeps images working without a host-side value.
-      - NEXT_PUBLIC_IMAGE_REMOTE_PATTERNS=${NEXT_PUBLIC_IMAGE_REMOTE_PATTERNS:-https://d15f34w2p8l1cc.cloudfront.net/overwatch/**,https://img.clerk.com/**,https://cdn.discordapp.com/**,https://minio.craazzzyyfoxx.me/aqt/**,https://static.nl.craazzzyyfoxx.me/aqt/**,https://rustfs.craazzzyyfoxx.me/aqt/**,https://s3.twcstorage.ru/**,https://cdn.craazzzyyfoxx.me/**}
+      - NEXT_PUBLIC_IMAGE_REMOTE_PATTERNS=${NEXT_PUBLIC_IMAGE_REMOTE_PATTERNS:-https://d15f34w2p8l1cc.cloudfront.net/overwatch/**,https://img.clerk.com/**,https://cdn.discordapp.com/**,https://minio.craazzzyyfoxx.me/aqt/**,https://static.nl.craazzzyyfoxx.me/aqt/**,https://rustfs.craazzzyyfoxx.me/aqt/**,https://s3.twcstorage.ru/**,https://cdn.craazzzyyfoxx.me/**,https://owt.craazzzyyfoxx.me/media/**}
       # Single gateway origin: the browser uses relative same-origin paths
       # (/api/v1, /api/balancer, /api/analytics, /api/auth, /api/realtime/ws).
       # Only server-side (SSR + route handlers + proxy) fetches need a base.
