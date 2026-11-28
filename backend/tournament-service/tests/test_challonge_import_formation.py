@@ -136,14 +136,14 @@ class ImportedFormationTests(_ImportCase):
         self.assertEqual("balancer", formation.config["mode"])
 
 
-def _match(match_id: int, state: str) -> ChallongeMatch:
+def _match(match_id: int, state: str, *, player1_id: int = 1, player2_id: int = 2) -> ChallongeMatch:
     return ChallongeMatch(
         id=match_id,
         started_at=None,
         created_at=datetime.now(UTC),
         updated_at=None,
-        player1_id=1,
-        player2_id=2,
+        player1_id=player1_id,
+        player2_id=player2_id,
         round=1,
         identifier="A",
         state=state,
@@ -187,6 +187,31 @@ class ImportedStageStartTests(_ImportCase):
             mapped = await s.scalar(sa.select(sa.func.count()).select_from(models.ChallongeMatchMapping))
         self.assertEqual(1, mapped)
         self.assertEqual("draft", await self.node_status(playoff_node))
+
+    async def test_the_start_keeps_the_seats_challonge_gave_its_matches(self) -> None:
+        # The formation (already wired into the stage) lists T0 before T1; Challonge seats T1 first. Going ready must
+        # not re-plan the played match.
+        async with self.Session() as s:
+            stage_id = await s.scalar(sa.select(models.FlowNode.stage_id).where(models.FlowNode.id == self.stage_node))
+            item_id = await s.scalar(sa.select(models.StageItem.id).where(models.StageItem.stage_id == stage_id))
+            await s.execute(
+                sa.update(models.ChallongeSource)
+                .where(models.ChallongeSource.id == self.source_id)
+                .values(stage_id=stage_id, stage_item_id=item_id)
+            )
+            await s.commit()
+        teams = await self.add_teams()
+        await self.sync([_match(1, "complete", player1_id=2, player2_id=1)])
+        self.assertEqual("live", await self.node_status(self.stage_node))
+        async with self.Session() as s:
+            seats = (
+                await s.execute(
+                    sa.select(models.EncounterTeam.team_id, models.EncounterTeam.score)
+                    .where(models.EncounterTeam.active.is_(True))
+                    .order_by(models.EncounterTeam.slot)
+                )
+            ).all()
+        self.assertEqual([(teams[1], 2.0), (teams[0], 1.0)], [tuple(seat) for seat in seats])
 
 
 class AutoSyncCandidatesTests(_ImportCase):

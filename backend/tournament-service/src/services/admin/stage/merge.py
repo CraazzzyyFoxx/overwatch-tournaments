@@ -1,7 +1,7 @@
 """Merging group stages into one, their pick-ban configs included."""
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -203,6 +203,9 @@ class StageMergeMixin(StageServiceBase):
                 kind=kind,
             )
 
+        # A bracket row names its item AND the item's stage (``fk_bracket_stage_item``): the row and the item move to
+        # the target stage in two statements, so the pair agrees only once both have moved.
+        await session.execute(text("SET CONSTRAINTS tournament.fk_bracket_stage_item DEFERRED"))
         for model in (
             # The encounter's stage is its bracket POSITION, so that is the
             # row a merge moves; the encounter itself has no stage.
@@ -239,6 +242,7 @@ class StageMergeMixin(StageServiceBase):
         target_stage.is_published = target_stage.is_published or any(stage.is_published for stage in source_stages)
 
         await session.flush()
+        await session.execute(text("SET CONSTRAINTS tournament.fk_bracket_stage_item IMMEDIATE"))
         for source_stage in source_stages:
             await self.stage_repo.delete(session, source_stage)
 

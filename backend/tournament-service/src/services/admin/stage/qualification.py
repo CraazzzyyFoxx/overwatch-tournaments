@@ -47,6 +47,16 @@ class StageQualificationMixin(StageServiceBase):
         seated = [inp for inp in current.values() if inp.team_id is not None]
         if node is None or not rows or not seated or await input_boundary_tied(session, node.id):
             return 0
+        # Challonge names the seats of the matches it owns (the import wrote them, results included): a re-plan from
+        # the input would swap teams under played matches.
+        if await session.scalar(
+            select(
+                sa.exists()
+                .where(models.ChallongeMatchMapping.encounter_id == models.BracketEncounter.encounter_id)
+                .where(models.BracketEncounter.stage_id == stage_id)
+            )
+        ):
+            return 0
         # An admin's seats (``manual``) never move. A stage that has any only swaps its departed ``flow`` teams, in
         # place, for the input teams nobody holds; otherwise the stage is re-planned from the input.
         manual = any(inp.seat_source == "manual" for inp in seated)

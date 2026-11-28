@@ -1061,6 +1061,30 @@ class ChallongeRoundTripTests(StageLayerCase):
         self.assertEqual([2.0, 1.0], [seat.score for seat in seats])
         self.assertEqual([1, 2], [seat.placement for seat in seats])
 
+    async def test_challonge_restates_a_result_it_imported(self) -> None:
+        """Its own earlier result is no local decision: corrected seats and score replace it."""
+        stage = await self.make_stage(enums.StageType.SINGLE_ELIMINATION)
+        _created, encounter_id = await self._import(self._match(), stage=stage)
+        async with self.Session() as s:
+            version = (await s.get_one(Encounter, encounter_id)).result_version
+
+        result, _ = await self._import(
+            self._match(player1_id=2, player2_id=1, scores_csv="2-0"), stage=stage, existing=encounter_id
+        )
+
+        self.assertEqual("updated", result.action)
+        async with self.Session() as s:
+            row = await s.get_one(Encounter, encounter_id)
+            seats = await active_teams(s, encounter_id)
+        self.assertEqual(
+            ("import", enums.EncounterResultStatus.CONFIRMED, version + 1),
+            (row.result_source, row.result_status, row.result_version),
+        )
+        self.assertEqual(
+            [(self.team_ids[1], 2.0, 1), (self.team_ids[0], 0.0, 2)],
+            [(seat.team_id, seat.score, seat.placement) for seat in seats],
+        )
+
     async def test_an_open_match_leaves_the_running_tally_without_a_standing(self) -> None:
         stage = await self.make_stage(enums.StageType.SINGLE_ELIMINATION)
         _created, encounter_id = await self._import(self._match(state="open", scores_csv="1-0"), stage=stage)

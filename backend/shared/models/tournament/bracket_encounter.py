@@ -43,6 +43,9 @@ class BracketEncounter(db.Base):
             ["tournament.stage_item.id", "tournament.stage_item.stage_id"],
             ondelete="SET NULL (stage_item_id)",
             name="fk_bracket_stage_item",
+            # Deferred only by the group-stage merge, which moves an item and its rows to another stage.
+            deferrable=True,
+            initially="IMMEDIATE",
         ),
         {"schema": "tournament"},
     )
