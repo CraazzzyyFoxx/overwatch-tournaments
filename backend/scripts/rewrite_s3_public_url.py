@@ -31,6 +31,7 @@ COLUMNS = (
     ("public", "workspace", "icon_url"),
     ("public", "division_grid_tier", "icon_url"),
     ("players", "user", "avatar_url"),
+    ("auth", "user", "avatar_url"),
     ("tournament", "tournament", "logo_url"),
     ("tournament", "tournament", "cover_image_url"),
     ("tournament", "team", "image_url"),
