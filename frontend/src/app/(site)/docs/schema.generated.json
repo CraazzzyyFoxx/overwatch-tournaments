@@ -1,6 +1,6 @@
 {
   "_generated_by": "backend/scripts/export_erd.py -- do not edit by hand",
-  "alembic_head": "achmode01",
+  "alembic_head": "stagemerge01",
   "packages": [
     {
       "key": "achievements",
