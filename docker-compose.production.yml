@@ -834,7 +834,7 @@ services:
         NEXT_PUBLIC_YM_ID: ${NEXT_PUBLIC_YM_ID}
         NEXT_PUBLIC_DISCORD_CLIENT_ID: ${NEXT_PUBLIC_DISCORD_CLIENT_ID}
         NEXT_PUBLIC_APP_VERSION: ${IMAGE_TAG:-}
-        NEXT_PUBLIC_IMAGE_REMOTE_PATTERNS: ${NEXT_PUBLIC_IMAGE_REMOTE_PATTERNS:-https://d15f34w2p8l1cc.cloudfront.net/overwatch/**,https://img.clerk.com/**,https://cdn.discordapp.com/**,https://minio.craazzzyyfoxx.me/aqt/**,https://static.nl.craazzzyyfoxx.me/aqt/**,https://rustfs.craazzzyyfoxx.me/aqt/**,https://s3.twcstorage.ru/**,https://cdn.craazzzyyfoxx.me/**}
+        NEXT_PUBLIC_IMAGE_REMOTE_PATTERNS: ${NEXT_PUBLIC_IMAGE_REMOTE_PATTERNS:-https://d15f34w2p8l1cc.cloudfront.net/overwatch/**,https://img.clerk.com/**,https://cdn.discordapp.com/**,https://minio.craazzzyyfoxx.me/aqt/**,https://static.nl.craazzzyyfoxx.me/aqt/**,https://rustfs.craazzzyyfoxx.me/aqt/**,https://s3.twcstorage.ru/**,https://cdn.craazzzyyfoxx.me/**,https://owt.craazzzyyfoxx.me/media/**}
     environment:
       - NEXT_PUBLIC_SITE_URL=${SITE_URL:-https://owt.craazzzyyfoxx.me}
       - NEXT_PUBLIC_SITE_NAME=${SITE_NAME:-OWT}
@@ -1084,6 +1084,9 @@ services:
       # nginx` goes quiet — Grafana is the consumer. Rotation is host-side and
       # must use copytruncate or follow up with `nginx -s reopen`.
       - ./logs/nginx:/var/log/nginx
+      # proxy caches (homepage, OG cards, /media, /_next/image): kept across
+      # container recreation, which every nginx.conf change triggers.
+      - nginx-cache:/var/cache/nginx
     # NGINX_CONF_SHA comes from the Makefile: a changed nginx.conf changes this
     # label, which is what makes `make prod-up` recreate nginx onto the new file.
     labels:
@@ -1194,6 +1197,7 @@ volumes:
   rabbitmq-data:
   analytics-models:
   alloy-data:
+  nginx-cache:
 
 networks:
   app-network:

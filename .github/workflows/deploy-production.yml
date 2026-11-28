@@ -197,7 +197,7 @@ jobs:
             NEXT_PUBLIC_YM_ID=${{ vars.NEXT_PUBLIC_YM_ID }}
             NEXT_PUBLIC_APP_VERSION=${{ needs.meta.outputs.tag }}
             NEXT_PUBLIC_DISCORD_CLIENT_ID=${{ vars.NEXT_PUBLIC_DISCORD_CLIENT_ID }}
-            NEXT_PUBLIC_IMAGE_REMOTE_PATTERNS=https://d15f34w2p8l1cc.cloudfront.net/overwatch/**,https://img.clerk.com/**,https://cdn.discordapp.com/**,https://minio.craazzzyyfoxx.me/aqt/**,https://static.nl.craazzzyyfoxx.me/aqt/**,https://rustfs.craazzzyyfoxx.me/aqt/**,https://s3.twcstorage.ru/**,https://cdn.craazzzyyfoxx.me/**
+            NEXT_PUBLIC_IMAGE_REMOTE_PATTERNS=https://d15f34w2p8l1cc.cloudfront.net/overwatch/**,https://img.clerk.com/**,https://cdn.discordapp.com/**,https://minio.craazzzyyfoxx.me/aqt/**,https://static.nl.craazzzyyfoxx.me/aqt/**,https://rustfs.craazzzyyfoxx.me/aqt/**,https://s3.twcstorage.ru/**,https://cdn.craazzzyyfoxx.me/**,https://owt.craazzzyyfoxx.me/media/**
 
   deploy:
     needs:
